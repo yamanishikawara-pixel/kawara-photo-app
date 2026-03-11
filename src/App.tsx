@@ -9,9 +9,11 @@ import { jsPDF } from 'jspdf';
 
 const ROOF_PARTS = ["本棟", "隅棟", "軒先", "袖右", "袖左", "平部", "流れ壁", "平行壁", "谷", "その他"];
 
-// ★ 定型文（現場でよく使う言葉）
-const PROCESS_SNIPPETS = ["施工前", "施工中", "施工後", "撤去", "清掃", "完了"];
-const DESC_SNIPPETS = ["雪害による棟瓦のズレ", "既存瓦の撤去", "ルーフィング張り", "瓦葺き戻し", "現場清掃・片付け"];
+// ★ 修正：定型文（工程）を3つに厳選
+const PROCESS_SNIPPETS = ["施工前", "施工確認", "施工後"];
+
+// ★ 修正：定型文（説明）を検査用に変更
+const DESC_SNIPPETS = ["基準値：", "実測値："];
 
 const proxyUrl = (url: string) => url ? `/api/image?url=${encodeURIComponent(url)}` : '';
 
@@ -100,8 +102,8 @@ function ProjectListScreen() {
             <div key={p.id} className="relative flex items-center p-5 rounded-2xl border bg-white border-black/5 shadow-sm transition-all">
               <div className="flex-1 cursor-pointer" onClick={() => navigate(`/project/${p.id}`)}>
                 <div className="text-lg font-bold text-gray-900">{p.projectName || "未入力の現場"}</div>
-                <div className="text-sm text-gray-500 mt-2">{p.projectLocation || "場所未登録"}</div>
-                <div className="text-xs text-gray-400 mt-2">作成日: {p.creationDate}</div>
+                <div className="text-xs text-gray-500 mt-2">{p.projectLocation || "場所未登録"}</div>
+                <div className="text-[10px] text-gray-400 mt-2">作成日: {p.creationDate}</div>
               </div>
               <button onClick={(e) => deleteProject(p.id, e)} className="p-3 text-gray-300 hover:text-red-500 transition-colors"><Trash2 className="w-6 h-6" /></button>
             </div>
@@ -175,7 +177,7 @@ function CoverScreen() {
   );
 }
 
-// --- 写真（自動連番、巨大化、順番入れ替え、ワンタップ定型文搭載） ---
+// --- 写真 ---
 function PhotoScreen() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -194,7 +196,7 @@ function PhotoScreen() {
     if (!e.target.files[0]) return;
     setLoadingId(photoId);
     
-    // ★ 自動連番機能：現在登録されている最大の番号を探して+1する
+    // 自動連番機能：現在登録されている最大の番号を探して+1する
     const currentMax = Math.max(0, ...project.photos.map((p: any) => parseInt(p.photoNumber) || 0));
     const targetPhoto = project.photos.find((p: any) => p.id === photoId);
     const newPhotoNum = targetPhoto.photoNumber || String(currentMax + 1);
@@ -210,7 +212,7 @@ function PhotoScreen() {
     });
   };
 
-  // ★ 順番入れ替え機能（↑↓ボタン用）
+  // 順番入れ替え機能（↑↓ボタン用）
   const movePhoto = async (index: number, direction: 'up' | 'down') => {
     if (direction === 'up' && index === 0) return;
     if (direction === 'down' && index === project.photos.length - 1) return;
