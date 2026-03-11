@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useParams } from 'react-router-dom';
-import { Camera, Map, FileText, Trash2, Images, ChevronRight, List, BookOpen, ArrowLeft, Plus, Building2 } from 'lucide-react';
+import { Camera, Map, FileText, Trash2, Images, ChevronRight, List, BookOpen, ArrowLeft, Plus, Building2, ArrowUp, ArrowDown } from 'lucide-react';
 import { db, storage } from './firebase';
 import { doc, getDoc, updateDoc, collection, addDoc, getDocs, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -9,7 +9,10 @@ import { jsPDF } from 'jspdf';
 
 const ROOF_PARTS = ["本棟", "隅棟", "軒先", "袖右", "袖左", "平部", "流れ壁", "平行壁", "谷", "その他"];
 
-// ★ 修正：自作した最強の専用トンネルを通す
+// ★ 定型文（現場でよく使う言葉）
+const PROCESS_SNIPPETS = ["施工前", "施工中", "施工後", "撤去", "清掃", "完了"];
+const DESC_SNIPPETS = ["雪害による棟瓦のズレ", "既存瓦の撤去", "ルーフィング張り", "瓦葺き戻し", "現場清掃・片付け"];
+
 const proxyUrl = (url: string) => url ? `/api/image?url=${encodeURIComponent(url)}` : '';
 
 function compressImage(file: File, callback: (compressedFile: File) => void) {
@@ -35,19 +38,19 @@ function compressImage(file: File, callback: (compressedFile: File) => void) {
 
 function MenuButton({ title, subtitle, icon: Icon, colorClass, onClick }: any) {
   return (
-    <button onClick={onClick} className={`w-full flex items-center gap-4 p-4 rounded-2xl border border-black/5 shadow-sm hover:shadow-md transition-all text-left ${colorClass}`}>
-      <div className="w-[52px] h-[52px] flex-shrink-0 flex items-center justify-center bg-white/95 rounded-[14px] shadow-sm"><Icon className="w-5 h-5 text-gray-800" /></div>
-      <div className="flex-1"><div className="text-lg font-bold text-gray-900">{title}</div><div className="text-xs text-gray-500 line-clamp-2">{subtitle}</div></div>
-      <ChevronRight className="w-5 h-5 text-gray-400" />
+    <button onClick={onClick} className={`w-full flex items-center gap-4 p-5 rounded-2xl border border-black/5 shadow-sm hover:shadow-md transition-all text-left ${colorClass}`}>
+      <div className="w-[58px] h-[58px] flex-shrink-0 flex items-center justify-center bg-white/95 rounded-[16px] shadow-sm"><Icon className="w-6 h-6 text-gray-800" /></div>
+      <div className="flex-1"><div className="text-xl font-bold text-gray-900">{title}</div><div className="text-sm text-gray-500 line-clamp-2 mt-1">{subtitle}</div></div>
+      <ChevronRight className="w-6 h-6 text-gray-400" />
     </button>
   );
 }
 
 function InputField({ label, placeholder, value, onChange, bgColor }: any) {
   return (
-    <div className={`p-4 rounded-xl mb-4 ${bgColor}`}>
-      <label className="block text-sm font-bold text-gray-800 mb-2">{label}</label>
-      <input type="text" className="w-full p-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
+    <div className={`p-5 rounded-xl mb-4 ${bgColor}`}>
+      <label className="block text-base font-bold text-gray-800 mb-2">{label}</label>
+      <input type="text" className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }
@@ -88,19 +91,19 @@ function ProjectListScreen() {
   return (
     <div className="min-h-screen bg-gray-50 p-6 font-sans">
       <div className="max-w-md mx-auto space-y-6 pb-12">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900">現場一覧</h1>
-          <button onClick={addProject} className="flex items-center gap-1 bg-blue-500 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm"><Plus className="w-4 h-4" /> 新規現場</button>
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">現場一覧</h1>
+          <button onClick={addProject} className="flex items-center gap-2 bg-blue-500 text-white px-5 py-3 rounded-xl font-bold text-base shadow-sm"><Plus className="w-5 h-5" /> 新規現場</button>
         </div>
-        <div className="space-y-3">
+        <div className="space-y-4">
           {projects.map((p: any) => (
-            <div key={p.id} className="relative flex items-center p-4 rounded-2xl border bg-white border-black/5 shadow-sm transition-all">
+            <div key={p.id} className="relative flex items-center p-5 rounded-2xl border bg-white border-black/5 shadow-sm transition-all">
               <div className="flex-1 cursor-pointer" onClick={() => navigate(`/project/${p.id}`)}>
-                <div className="font-bold text-gray-900">{p.projectName || "未入力の現場"}</div>
-                <div className="text-xs text-gray-500 mt-1">{p.projectLocation || "場所未登録"}</div>
-                <div className="text-[10px] text-gray-400 mt-1">作成日: {p.creationDate}</div>
+                <div className="text-lg font-bold text-gray-900">{p.projectName || "未入力の現場"}</div>
+                <div className="text-sm text-gray-500 mt-2">{p.projectLocation || "場所未登録"}</div>
+                <div className="text-xs text-gray-400 mt-2">作成日: {p.creationDate}</div>
               </div>
-              <button onClick={(e) => deleteProject(p.id, e)} className="p-2 text-gray-300 hover:text-red-500 transition-colors"><Trash2 className="w-5 h-5" /></button>
+              <button onClick={(e) => deleteProject(p.id, e)} className="p-3 text-gray-300 hover:text-red-500 transition-colors"><Trash2 className="w-6 h-6" /></button>
             </div>
           ))}
         </div>
@@ -117,18 +120,18 @@ function HomeScreen() {
 
   useEffect(() => { getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data())); }, [id]);
 
-  if (!project) return <div className="p-10 text-center">読み込み中...</div>;
+  if (!project) return <div className="p-10 text-center text-lg">読み込み中...</div>;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-orange-50 p-6 font-sans">
       <div className="max-w-md mx-auto space-y-6">
-        <div className="flex flex-col items-center py-8 px-4 bg-white/80 backdrop-blur-sm rounded-3xl border border-black/5 shadow-sm">
-          <div className="w-[78px] h-[78px] bg-blue-100/50 rounded-full flex items-center justify-center mb-4"><Images className="w-8 h-8 text-blue-500" /></div>
-          <h1 className="text-2xl font-bold mb-2 text-gray-900">瓦工事 写真台帳</h1>
-          <p className="text-sm text-gray-500 text-center mb-4">現場ごとに写真と位置図を管理</p>
-          <button onClick={() => navigate('/')} className="flex items-center gap-2 text-xs font-bold text-blue-700 bg-blue-100/80 px-4 py-2 rounded-full hover:bg-blue-200 transition-colors"><Building2 className="w-3 h-3" /> 現場切替: {project.projectName}</button>
+        <div className="flex flex-col items-center py-10 px-4 bg-white/80 backdrop-blur-sm rounded-3xl border border-black/5 shadow-sm">
+          <div className="w-[88px] h-[88px] bg-blue-100/50 rounded-full flex items-center justify-center mb-5"><Images className="w-10 h-10 text-blue-500" /></div>
+          <h1 className="text-3xl font-bold mb-3 text-gray-900">瓦工事 写真台帳</h1>
+          <p className="text-base text-gray-500 text-center mb-6">現場ごとに写真と位置図を管理</p>
+          <button onClick={() => navigate('/')} className="flex items-center gap-2 text-sm font-bold text-blue-700 bg-blue-100/80 px-6 py-3 rounded-full hover:bg-blue-200 transition-colors"><Building2 className="w-4 h-4" /> 現場切替: {project.projectName}</button>
         </div>
-        <div className="space-y-3">
+        <div className="space-y-4">
           <MenuButton title="現場一覧" subtitle="現場の切り替え・新規追加・削除" icon={List} colorClass="bg-teal-100/30" onClick={() => navigate('/')} />
           <MenuButton title="表紙" subtitle="現場名・住所・工期の入力" icon={BookOpen} colorClass="bg-purple-100/30" onClick={() => navigate(`/project/${id}/cover`)} />
           <MenuButton title="写真" subtitle="工事写真の撮影・登録" icon={Camera} colorClass="bg-blue-100/30" onClick={() => navigate(`/project/${id}/photo`)} />
@@ -158,9 +161,9 @@ function CoverScreen() {
   return (
     <div className="min-h-screen bg-gray-50 p-6 font-sans">
       <div className="max-w-md mx-auto pb-12">
-        <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold"><ArrowLeft className="w-5 h-5" /> もどる</button>
-        <h1 className="text-2xl font-bold mb-6 text-gray-900">表紙の入力</h1>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-black/5">
+        <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
+        <h1 className="text-3xl font-bold mb-8 text-gray-900">表紙の入力</h1>
+        <div className="bg-white p-6 rounded-3xl shadow-sm border border-black/5">
           <InputField label="工事件名" placeholder="例: ○○様邸 屋根改修工事" value={project.projectName} onChange={(v: string) => update('projectName', v)} bgColor="bg-blue-50/50" />
           <InputField label="工事場所" placeholder="例: 富山県魚津市○○町" value={project.projectLocation} onChange={(v: string) => update('projectLocation', v)} bgColor="bg-green-50/50" />
           <InputField label="工期" placeholder="例: 令和8年3月〜令和8年4月" value={project.constructionPeriod} onChange={(v: string) => update('constructionPeriod', v)} bgColor="bg-purple-50/50" />
@@ -172,7 +175,7 @@ function CoverScreen() {
   );
 }
 
-// --- 写真 ---
+// --- 写真（自動連番、巨大化、順番入れ替え、ワンタップ定型文搭載） ---
 function PhotoScreen() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -190,15 +193,32 @@ function PhotoScreen() {
   const uploadPhoto = async (e: any, photoId: number) => {
     if (!e.target.files[0]) return;
     setLoadingId(photoId);
+    
+    // ★ 自動連番機能：現在登録されている最大の番号を探して+1する
+    const currentMax = Math.max(0, ...project.photos.map((p: any) => parseInt(p.photoNumber) || 0));
+    const targetPhoto = project.photos.find((p: any) => p.id === photoId);
+    const newPhotoNum = targetPhoto.photoNumber || String(currentMax + 1);
+
     compressImage(e.target.files[0], async (file) => {
       const r = ref(storage, `photos/${id}/${Date.now()}`);
       await uploadBytes(r, file);
       const url = await getDownloadURL(r);
-      const newPhotos = project.photos.map((p: any) => p.id === photoId ? { ...p, image: url, shootingDate: new Date().toLocaleDateString('ja-JP') } : p);
+      const newPhotos = project.photos.map((p: any) => p.id === photoId ? { ...p, image: url, photoNumber: newPhotoNum, shootingDate: new Date().toLocaleDateString('ja-JP') } : p);
       setProject({ ...project, photos: newPhotos });
       await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
       setLoadingId(null);
     });
+  };
+
+  // ★ 順番入れ替え機能（↑↓ボタン用）
+  const movePhoto = async (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === project.photos.length - 1) return;
+    const newPhotos = [...project.photos];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    [newPhotos[index], newPhotos[targetIndex]] = [newPhotos[targetIndex], newPhotos[index]];
+    setProject({ ...project, photos: newPhotos });
+    await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
   };
 
   if (!project) return null;
@@ -206,28 +226,51 @@ function PhotoScreen() {
   return (
     <div className="min-h-screen bg-gray-50 p-6 font-sans">
       <div className="max-w-md mx-auto pb-12">
-        <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold"><ArrowLeft className="w-5 h-5" /> もどる</button>
-        <h1 className="text-2xl font-bold mb-2 text-gray-900">写真の登録</h1>
-        <div className="space-y-6 mt-4">
+        <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
+        <h1 className="text-3xl font-bold mb-6 text-gray-900">写真の登録</h1>
+        <div className="space-y-8 mt-4">
           {project.photos.map((photo: any, index: number) => (
-            <div key={photo.id} className="bg-gray-100/50 p-4 rounded-2xl border border-black/5">
-              <div className="flex gap-4 mb-4">
-                <div className="w-24 h-20 bg-gray-200/50 rounded-xl flex items-center justify-center overflow-hidden border border-gray-300">
-                  {loadingId === photo.id ? <span className="text-xs font-bold text-blue-500">保存中...</span> : photo.image ? <img src={photo.image} className="w-full h-full object-cover" /> : <Camera className="w-6 h-6 text-gray-400" />}
+            <div key={photo.id} className="bg-gray-100/80 p-5 rounded-3xl border border-black/5 shadow-sm relative">
+              
+              {/* 順番入れ替えボタン */}
+              <div className="absolute top-4 right-4 flex gap-2">
+                <button onClick={() => movePhoto(index, 'up')} className="bg-white p-2 rounded-lg shadow border border-gray-200 text-gray-600 hover:bg-gray-50"><ArrowUp className="w-5 h-5" /></button>
+                <button onClick={() => movePhoto(index, 'down')} className="bg-white p-2 rounded-lg shadow border border-gray-200 text-gray-600 hover:bg-gray-50"><ArrowDown className="w-5 h-5" /></button>
+              </div>
+
+              <div className="flex gap-4 mb-6 mt-2">
+                <div className="w-28 h-28 bg-gray-200/80 rounded-2xl flex items-center justify-center overflow-hidden border border-gray-300 shadow-inner">
+                  {loadingId === photo.id ? <span className="text-sm font-bold text-blue-500">保存中...</span> : photo.image ? <img src={photo.image} className="w-full h-full object-cover" /> : <Camera className="w-8 h-8 text-gray-400" />}
                 </div>
-                <div className="flex-1">
-                  <div className="font-bold text-gray-800">写真 {index + 1}</div>
-                  <label className="block w-full mt-2 text-center bg-blue-100/50 text-blue-700 font-bold py-2 rounded-lg cursor-pointer">
+                <div className="flex-1 pt-2">
+                  <div className="font-bold text-gray-800 text-lg">写真 {index + 1}</div>
+                  <label className="block w-full mt-3 text-center bg-blue-100/80 text-blue-700 font-bold py-3 text-lg rounded-xl cursor-pointer shadow-sm">
                     画像を選択 <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadPhoto(e, photo.id)} />
                   </label>
                 </div>
               </div>
-              <div className="space-y-3">
-                <input type="text" placeholder="写真NO 例: 1" className="w-full p-2 border border-gray-300 rounded-lg" value={photo.photoNumber} onChange={(e) => updatePhoto(photo.id, "photoNumber", e.target.value)} />
-                <input type="text" placeholder="撮影位置図 例: A-1" className="w-full p-2 border border-gray-300 rounded-lg" value={photo.locationMap} onChange={(e) => updatePhoto(photo.id, "locationMap", e.target.value)} />
-                <input type="text" placeholder="工程 例: 葺き直し" className="w-full p-2 border border-gray-300 rounded-lg" value={photo.process} onChange={(e) => updatePhoto(photo.id, "process", e.target.value)} />
-                <textarea placeholder="説明（短文）" rows={2} className="w-full p-2 border border-gray-300 rounded-lg" value={photo.description} onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} />
+              
+              <div className="space-y-5">
+                <input type="text" placeholder="写真NO 例: 1" className="w-full p-3.5 text-lg border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500" value={photo.photoNumber} onChange={(e) => updatePhoto(photo.id, "photoNumber", e.target.value)} />
+                <input type="text" placeholder="撮影位置図 例: A-1" className="w-full p-3.5 text-lg border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500" value={photo.locationMap} onChange={(e) => updatePhoto(photo.id, "locationMap", e.target.value)} />
+                
+                <div>
+                  <input type="text" placeholder="工程 例: 葺き直し" className="w-full p-3.5 text-lg border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 mb-2" value={photo.process} onChange={(e) => updatePhoto(photo.id, "process", e.target.value)} />
+                  {/* ★ 定型文ボタン（工程） */}
+                  <div className="flex flex-wrap gap-2">
+                    {PROCESS_SNIPPETS.map(s => <button key={s} onClick={() => updatePhoto(photo.id, "process", s)} className="text-sm bg-blue-100 text-blue-700 px-3 py-2 rounded-lg font-bold shadow-sm">{s}</button>)}
+                  </div>
+                </div>
+
+                <div>
+                  <textarea placeholder="説明（短文）" rows={2} className="w-full p-3.5 text-lg border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 mb-2" value={photo.description} onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} />
+                  {/* ★ 定型文ボタン（説明） */}
+                  <div className="flex flex-wrap gap-2">
+                    {DESC_SNIPPETS.map(s => <button key={s} onClick={() => updatePhoto(photo.id, "description", s)} className="text-sm bg-green-100 text-green-700 px-3 py-2 rounded-lg font-bold shadow-sm">{s}</button>)}
+                  </div>
+                </div>
               </div>
+
             </div>
           ))}
         </div>
@@ -251,7 +294,7 @@ function MapScreen() {
     setUploading(true);
     const newUrls = [...(project.mapUrls || [])];
     for (const f of files) {
-      if (newUrls.length >= 2) break; // 最大2枚
+      if (newUrls.length >= 2) break;
       const r = ref(storage, `maps/${id}/${Date.now()}_${f.name}`);
       await uploadBytes(r, f);
       newUrls.push(await getDownloadURL(r));
@@ -288,36 +331,36 @@ function MapScreen() {
   return (
     <div className="min-h-screen bg-gray-50 p-6 font-sans">
       <div className="max-w-md mx-auto pb-12">
-        <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold"><ArrowLeft className="w-5 h-5" /> もどる</button>
-        <h1 className="text-2xl font-bold mb-6 text-gray-900">位置図の登録</h1>
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-black/5 mb-6">
-          <div className="w-full bg-gray-100 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-300 mb-4 overflow-hidden gap-2 p-2 relative" style={{ minHeight: '12rem' }}>
+        <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
+        <h1 className="text-3xl font-bold mb-8 text-gray-900">位置図の登録</h1>
+        <div className="bg-white p-5 rounded-3xl shadow-sm border border-black/5 mb-6">
+          <div className="w-full bg-gray-100 rounded-2xl flex items-center justify-center border-2 border-dashed border-gray-300 mb-5 overflow-hidden gap-2 p-2 relative" style={{ minHeight: '14rem' }}>
             {project.mapUrls && project.mapUrls.length > 0 ? (
               project.mapUrls.map((u: string, i: number) => (
                 <div key={i} className="w-1/2 h-full relative">
                   <img src={u} className="w-full h-full object-contain" />
-                  <button onClick={() => removeMap(i)} className="absolute top-1 right-1 bg-white rounded-full p-1 text-red-500 shadow"><Trash2 className="w-4 h-4" /></button>
+                  <button onClick={() => removeMap(i)} className="absolute top-2 right-2 bg-white rounded-full p-2 text-red-500 shadow-md"><Trash2 className="w-5 h-5" /></button>
                 </div>
               ))
             ) : (
-              <span className="text-gray-400 font-bold">位置図未登録（2枚まで）</span>
+              <span className="text-gray-400 font-bold text-lg">位置図未登録（2枚まで）</span>
             )}
           </div>
-          <label className="block w-full text-center bg-green-100/50 text-green-700 font-bold py-3 rounded-lg cursor-pointer">
+          <label className="block w-full text-center bg-green-100/50 text-green-700 font-bold py-4 text-lg rounded-xl cursor-pointer shadow-sm">
             {uploading ? "Google倉庫へ保存中..." : "画像を選択（2枚まで同時選択可）"}
             <input type="file" multiple accept="image/*" className="hidden" onChange={uploadMaps} disabled={uploading} />
           </label>
         </div>
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-black/5">
-          <div className="flex justify-between items-center mb-4"><h2 className="font-bold text-gray-800">対応表</h2><button onClick={addMapRow} className="flex items-center gap-1 text-sm bg-gray-100 px-3 py-1 rounded-lg text-gray-700 font-bold"><Plus className="w-4 h-4" /> 行追加</button></div>
-          <div className="space-y-4">{project.mapRows?.map((row: any) => (<div key={row.id} className="p-3 bg-gray-50 border border-gray-200 rounded-lg relative"><button onClick={() => removeMapRow(row.id)} className="absolute top-2 right-2 text-red-400"><Trash2 className="w-4 h-4" /></button><div className="grid grid-cols-2 gap-2 mb-2"><input type="text" placeholder="符号" className="p-2 border rounded text-sm" value={row.symbol} onChange={(e) => updateMapRow(row.id, "symbol", e.target.value)} /><input type="text" placeholder="写真NO" className="p-2 border rounded text-sm" value={row.relatedPhotoNumber} onChange={(e) => updateMapRow(row.id, "relatedPhotoNumber", e.target.value)} /></div><select className="w-full p-2 border rounded text-sm bg-white" value={row.part} onChange={(e) => updateMapRow(row.id, "part", e.target.value)}>{ROOF_PARTS.map(part => <option key={part} value={part}>{part}</option>)}</select></div>))}</div>
+        <div className="bg-white p-5 rounded-3xl shadow-sm border border-black/5">
+          <div className="flex justify-between items-center mb-5"><h2 className="font-bold text-xl text-gray-800">対応表</h2><button onClick={addMapRow} className="flex items-center gap-1 text-base bg-gray-100 px-4 py-2 rounded-xl text-gray-700 font-bold shadow-sm"><Plus className="w-5 h-5" /> 行追加</button></div>
+          <div className="space-y-4">{project.mapRows?.map((row: any) => (<div key={row.id} className="p-4 bg-gray-50 border border-gray-200 rounded-2xl relative"><button onClick={() => removeMapRow(row.id)} className="absolute top-3 right-3 text-red-400 p-1 hover:bg-red-50 rounded"><Trash2 className="w-5 h-5" /></button><div className="grid grid-cols-2 gap-3 mb-3 pr-8"><input type="text" placeholder="符号" className="p-3 border rounded-xl text-base bg-white focus:ring-2 focus:ring-blue-500" value={row.symbol} onChange={(e) => updateMapRow(row.id, "symbol", e.target.value)} /><input type="text" placeholder="写真NO" className="p-3 border rounded-xl text-base bg-white focus:ring-2 focus:ring-blue-500" value={row.relatedPhotoNumber} onChange={(e) => updateMapRow(row.id, "relatedPhotoNumber", e.target.value)} /></div><select className="w-full p-3 border rounded-xl text-base bg-white focus:ring-2 focus:ring-blue-500" value={row.part} onChange={(e) => updateMapRow(row.id, "part", e.target.value)}>{ROOF_PARTS.map(part => <option key={part} value={part}>{part}</option>)}</select></div>))}</div>
         </div>
       </div>
     </div>
   );
 }
 
-// --- PDF出力（自作トンネルを使って画像を確実に表示） ---
+// --- PDF出力（1ミリもデザインを変えていません） ---
 function PDFExportScreen() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -335,11 +378,8 @@ function PDFExportScreen() {
       for (let i = 0; i < pages.length; i++) {
         const pageEl = pages[i] as HTMLElement;
         await new Promise(resolve => setTimeout(resolve, 300));
-        
-        // ★ 修正：useCORSを確実に追加
         await toJpeg(pageEl, { cacheBust: true, useCORS: true }); 
         const dataUrl = await toJpeg(pageEl, { quality: 0.95, pixelRatio: 2, backgroundColor: '#ffffff', useCORS: true });
-        
         const pdfHeight = (pageEl.offsetHeight * pdfWidth) / pageEl.offsetWidth;
         if (i > 0) pdf.addPage();
         pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
@@ -361,7 +401,7 @@ function PDFExportScreen() {
 
   return (
     <div className="min-h-screen bg-gray-200 p-6 font-sans flex flex-col items-center pb-12">
-      <div className="w-full max-w-2xl mb-6 flex justify-between items-center"><button onClick={() => navigate(`/project/${id}`)} className="text-blue-500 font-bold flex items-center gap-2"><ArrowLeft className="w-5 h-5" /> もどる</button><button onClick={handleExport} className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold shadow">ダウンロード</button></div>
+      <div className="w-full max-w-2xl mb-6 flex justify-between items-center"><button onClick={() => navigate(`/project/${id}`)} className="text-blue-500 font-bold flex items-center gap-2 text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button><button onClick={handleExport} className="bg-orange-500 text-white px-8 py-4 rounded-xl font-bold shadow-lg text-lg">ダウンロード</button></div>
       <div className="overflow-auto w-full max-w-2xl bg-gray-300 p-4 rounded-xl flex flex-col gap-8">
         
         {/* 表紙 */}
@@ -384,7 +424,6 @@ function PDFExportScreen() {
           <div className="w-full h-full border-[3px] border-gray-800 p-6 flex flex-col">
             <h2 className="text-2xl font-bold mb-4 border-b-2 border-gray-800 pb-2">位置図</h2>
             <div className="h-[45%] border border-gray-400 mb-6 flex items-center justify-center p-2 bg-gray-50 gap-4">
-              {/* ★ 修正：自作トンネルを使って画像を呼び出す */}
               {project.mapUrls?.map((u: string, i: number) => <img key={i} src={proxyUrl(u)} crossOrigin="anonymous" style={{ maxWidth: '48%', maxHeight: '100%', objectFit: 'contain' }} />)}
             </div>
             <div className="flex-1 flex flex-col">
@@ -397,7 +436,6 @@ function PDFExportScreen() {
 
         {/* 写真 */}
         {photoPages.map((chunk, pageIndex) => (<div key={pageIndex} className="pdf-page bg-white relative shadow-md flex flex-col" style={{ width: '210mm', height: '297mm', padding: '15mm' }}><div className="flex-1 flex flex-col justify-between border-[3px] border-gray-800 p-2">{chunk.map((p: any, i: number) => (<div key={i} className="flex gap-2 h-[32%] border border-gray-400 p-2 rounded"><div className="w-[45%] border border-gray-300 flex items-center justify-center bg-gray-50 overflow-hidden">
-            {/* ★ 修正：自作トンネルを使って画像を呼び出す */}
             {p.image && <img src={proxyUrl(p.image)} crossOrigin="anonymous" className="w-full h-full object-contain" />}
           </div><div className="w-[55%] flex flex-col text-sm border border-gray-300 bg-white"><div className="flex border-b border-gray-300"><div className="w-20 bg-gray-100 p-1 border-r">写真NO</div><div className="p-1 flex-1 font-bold">{p.photoNumber}</div></div><div className="flex border-b border-gray-300"><div className="w-20 bg-gray-100 p-1 border-r">撮影日</div><div className="p-1 flex-1">{p.shootingDate}</div></div><div className="flex border-b border-gray-300"><div className="w-20 bg-gray-100 p-1 border-r">位置図</div><div className="p-1 flex-1">{p.locationMap}</div></div><div className="flex border-b border-gray-300"><div className="w-20 bg-gray-100 p-1 border-r">工程</div><div className="p-1 flex-1">{p.process}</div></div><div className="flex-1 flex"><div className="w-20 bg-gray-100 p-1 border-r">説明</div><div className="p-1 flex-1 text-xs">{p.description}</div></div></div></div>))}</div><div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">- {pageIndex + 3} / {totalPages} -</div></div>))}
       </div>
