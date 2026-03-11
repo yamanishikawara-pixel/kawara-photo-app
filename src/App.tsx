@@ -9,8 +9,8 @@ import { jsPDF } from 'jspdf';
 
 const ROOF_PARTS = ["本棟", "隅棟", "軒先", "袖右", "袖左", "平部", "流れ壁", "平行壁", "谷", "その他"];
 
-// Google倉庫のセキュリティを通過するためのトンネル
-const proxyUrl = (url: string) => url ? `https://corsproxy.io/?${encodeURIComponent(url)}` : '';
+// ★ 修正：自作した最強の専用トンネルを通す
+const proxyUrl = (url: string) => url ? `/api/image?url=${encodeURIComponent(url)}` : '';
 
 function compressImage(file: File, callback: (compressedFile: File) => void) {
   const reader = new FileReader();
@@ -236,7 +236,7 @@ function PhotoScreen() {
   );
 }
 
-// --- 位置図（2枚対応） ---
+// --- 位置図 ---
 function MapScreen() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -317,7 +317,7 @@ function MapScreen() {
   );
 }
 
-// --- PDF出力（エラーとCORSを完全修正） ---
+// --- PDF出力（自作トンネルを使って画像を確実に表示） ---
 function PDFExportScreen() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -335,8 +335,11 @@ function PDFExportScreen() {
       for (let i = 0; i < pages.length; i++) {
         const pageEl = pages[i] as HTMLElement;
         await new Promise(resolve => setTimeout(resolve, 300));
-        await toJpeg(pageEl, { cacheBust: true }); // ★ 復活：iPhone(Safari)の undefined エラー対策
-        const dataUrl = await toJpeg(pageEl, { quality: 0.95, pixelRatio: 2, backgroundColor: '#ffffff' });
+        
+        // ★ 修正：useCORSを確実に追加
+        await toJpeg(pageEl, { cacheBust: true, useCORS: true }); 
+        const dataUrl = await toJpeg(pageEl, { quality: 0.95, pixelRatio: 2, backgroundColor: '#ffffff', useCORS: true });
+        
         const pdfHeight = (pageEl.offsetHeight * pdfWidth) / pageEl.offsetWidth;
         if (i > 0) pdf.addPage();
         pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
@@ -381,7 +384,7 @@ function PDFExportScreen() {
           <div className="w-full h-full border-[3px] border-gray-800 p-6 flex flex-col">
             <h2 className="text-2xl font-bold mb-4 border-b-2 border-gray-800 pb-2">位置図</h2>
             <div className="h-[45%] border border-gray-400 mb-6 flex items-center justify-center p-2 bg-gray-50 gap-4">
-              {/* ★ 修正：プロキシを通してセキュリティを回避し画像を表示 */}
+              {/* ★ 修正：自作トンネルを使って画像を呼び出す */}
               {project.mapUrls?.map((u: string, i: number) => <img key={i} src={proxyUrl(u)} crossOrigin="anonymous" style={{ maxWidth: '48%', maxHeight: '100%', objectFit: 'contain' }} />)}
             </div>
             <div className="flex-1 flex flex-col">
@@ -394,7 +397,7 @@ function PDFExportScreen() {
 
         {/* 写真 */}
         {photoPages.map((chunk, pageIndex) => (<div key={pageIndex} className="pdf-page bg-white relative shadow-md flex flex-col" style={{ width: '210mm', height: '297mm', padding: '15mm' }}><div className="flex-1 flex flex-col justify-between border-[3px] border-gray-800 p-2">{chunk.map((p: any, i: number) => (<div key={i} className="flex gap-2 h-[32%] border border-gray-400 p-2 rounded"><div className="w-[45%] border border-gray-300 flex items-center justify-center bg-gray-50 overflow-hidden">
-            {/* ★ 修正：写真もプロキシを通す */}
+            {/* ★ 修正：自作トンネルを使って画像を呼び出す */}
             {p.image && <img src={proxyUrl(p.image)} crossOrigin="anonymous" className="w-full h-full object-contain" />}
           </div><div className="w-[55%] flex flex-col text-sm border border-gray-300 bg-white"><div className="flex border-b border-gray-300"><div className="w-20 bg-gray-100 p-1 border-r">写真NO</div><div className="p-1 flex-1 font-bold">{p.photoNumber}</div></div><div className="flex border-b border-gray-300"><div className="w-20 bg-gray-100 p-1 border-r">撮影日</div><div className="p-1 flex-1">{p.shootingDate}</div></div><div className="flex border-b border-gray-300"><div className="w-20 bg-gray-100 p-1 border-r">位置図</div><div className="p-1 flex-1">{p.locationMap}</div></div><div className="flex border-b border-gray-300"><div className="w-20 bg-gray-100 p-1 border-r">工程</div><div className="p-1 flex-1">{p.process}</div></div><div className="flex-1 flex"><div className="w-20 bg-gray-100 p-1 border-r">説明</div><div className="p-1 flex-1 text-xs">{p.description}</div></div></div></div>))}</div><div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">- {pageIndex + 3} / {totalPages} -</div></div>))}
       </div>
