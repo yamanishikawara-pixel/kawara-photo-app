@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState,useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useParams } from 'react-router-dom';
 import { Camera, Map, FileText, Trash2, Images, ChevronRight, List, BookOpen, ArrowLeft, Plus, Building2, ArrowUp, ArrowDown } from 'lucide-react';
 import { db, storage } from './firebase';
@@ -8,11 +8,7 @@ import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 
 const ROOF_PARTS = ["本棟", "隅棟", "軒先", "袖右", "袖左", "平部", "流れ壁", "平行壁", "谷", "その他"];
-
-// ★ 修正：定型文（工程）を3つに厳選
 const PROCESS_SNIPPETS = ["施工前", "施工確認", "施工後"];
-
-// ★ 修正：定型文（説明）を検査用に変更
 const DESC_SNIPPETS = ["基準値：", "実測値："];
 
 const proxyUrl = (url: string) => url ? `/api/image?url=${encodeURIComponent(url)}` : '';
@@ -196,7 +192,6 @@ function PhotoScreen() {
     if (!e.target.files[0]) return;
     setLoadingId(photoId);
     
-    // 自動連番機能：現在登録されている最大の番号を探して+1する
     const currentMax = Math.max(0, ...project.photos.map((p: any) => parseInt(p.photoNumber) || 0));
     const targetPhoto = project.photos.find((p: any) => p.id === photoId);
     const newPhotoNum = targetPhoto.photoNumber || String(currentMax + 1);
@@ -212,7 +207,6 @@ function PhotoScreen() {
     });
   };
 
-  // 順番入れ替え機能（↑↓ボタン用）
   const movePhoto = async (index: number, direction: 'up' | 'down') => {
     if (direction === 'up' && index === 0) return;
     if (direction === 'down' && index === project.photos.length - 1) return;
@@ -233,13 +227,10 @@ function PhotoScreen() {
         <div className="space-y-8 mt-4">
           {project.photos.map((photo: any, index: number) => (
             <div key={photo.id} className="bg-gray-100/80 p-5 rounded-3xl border border-black/5 shadow-sm relative">
-              
-              {/* 順番入れ替えボタン */}
               <div className="absolute top-4 right-4 flex gap-2">
                 <button onClick={() => movePhoto(index, 'up')} className="bg-white p-2 rounded-lg shadow border border-gray-200 text-gray-600 hover:bg-gray-50"><ArrowUp className="w-5 h-5" /></button>
                 <button onClick={() => movePhoto(index, 'down')} className="bg-white p-2 rounded-lg shadow border border-gray-200 text-gray-600 hover:bg-gray-50"><ArrowDown className="w-5 h-5" /></button>
               </div>
-
               <div className="flex gap-4 mb-6 mt-2">
                 <div className="w-28 h-28 bg-gray-200/80 rounded-2xl flex items-center justify-center overflow-hidden border border-gray-300 shadow-inner">
                   {loadingId === photo.id ? <span className="text-sm font-bold text-blue-500">保存中...</span> : photo.image ? <img src={photo.image} className="w-full h-full object-cover" /> : <Camera className="w-8 h-8 text-gray-400" />}
@@ -251,28 +242,22 @@ function PhotoScreen() {
                   </label>
                 </div>
               </div>
-              
               <div className="space-y-5">
                 <input type="text" placeholder="写真NO 例: 1" className="w-full p-3.5 text-lg border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500" value={photo.photoNumber} onChange={(e) => updatePhoto(photo.id, "photoNumber", e.target.value)} />
                 <input type="text" placeholder="撮影位置図 例: A-1" className="w-full p-3.5 text-lg border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500" value={photo.locationMap} onChange={(e) => updatePhoto(photo.id, "locationMap", e.target.value)} />
-                
                 <div>
                   <input type="text" placeholder="工程 例: 葺き直し" className="w-full p-3.5 text-lg border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 mb-2" value={photo.process} onChange={(e) => updatePhoto(photo.id, "process", e.target.value)} />
-                  {/* ★ 定型文ボタン（工程） */}
                   <div className="flex flex-wrap gap-2">
                     {PROCESS_SNIPPETS.map(s => <button key={s} onClick={() => updatePhoto(photo.id, "process", s)} className="text-sm bg-blue-100 text-blue-700 px-3 py-2 rounded-lg font-bold shadow-sm">{s}</button>)}
                   </div>
                 </div>
-
                 <div>
                   <textarea placeholder="説明（短文）" rows={2} className="w-full p-3.5 text-lg border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 mb-2" value={photo.description} onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} />
-                  {/* ★ 定型文ボタン（説明） */}
                   <div className="flex flex-wrap gap-2">
                     {DESC_SNIPPETS.map(s => <button key={s} onClick={() => updatePhoto(photo.id, "description", s)} className="text-sm bg-green-100 text-green-700 px-3 py-2 rounded-lg font-bold shadow-sm">{s}</button>)}
                   </div>
                 </div>
               </div>
-
             </div>
           ))}
         </div>
@@ -339,7 +324,7 @@ function MapScreen() {
           <div className="w-full bg-gray-100 rounded-2xl flex items-center justify-center border-2 border-dashed border-gray-300 mb-5 overflow-hidden gap-2 p-2 relative" style={{ minHeight: '14rem' }}>
             {project.mapUrls && project.mapUrls.length > 0 ? (
               project.mapUrls.map((u: string, i: number) => (
-                <div key={i} className="w-1/2 h-full relative">
+                <div key={i} className={project.mapUrls.length === 1 ? "w-full h-full relative" : "w-1/2 h-full relative"}>
                   <img src={u} className="w-full h-full object-contain" />
                   <button onClick={() => removeMap(i)} className="absolute top-2 right-2 bg-white rounded-full p-2 text-red-500 shadow-md"><Trash2 className="w-5 h-5" /></button>
                 </div>
@@ -362,7 +347,7 @@ function MapScreen() {
   );
 }
 
-// --- PDF出力（1ミリもデザインを変えていません） ---
+// --- PDF出力 ---
 function PDFExportScreen() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -370,7 +355,7 @@ function PDFExportScreen() {
 
   useEffect(() => { getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data())); }, [id]);
 
-  const handleExport = async () => {
+ const handleExport = async () => {
     try {
       const pages = document.querySelectorAll('.pdf-page');
       if (pages.length === 0) return;
@@ -380,8 +365,8 @@ function PDFExportScreen() {
       for (let i = 0; i < pages.length; i++) {
         const pageEl = pages[i] as HTMLElement;
         await new Promise(resolve => setTimeout(resolve, 300));
-        await toJpeg(pageEl, { cacheBust: true, useCORS: true }); 
-        const dataUrl = await toJpeg(pageEl, { quality: 0.95, pixelRatio: 2, backgroundColor: '#ffffff', useCORS: true });
+        await toJpeg(pageEl, { cacheBust: true }); 
+        const dataUrl = await toJpeg(pageEl, { quality: 0.95, pixelRatio: 2, backgroundColor: '#ffffff' });
         const pdfHeight = (pageEl.offsetHeight * pdfWidth) / pageEl.offsetWidth;
         if (i > 0) pdf.addPage();
         pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
@@ -425,9 +410,23 @@ function PDFExportScreen() {
         <div className="pdf-page bg-white relative shadow-md flex flex-col" style={{ width: '210mm', height: '297mm', padding: '15mm' }}>
           <div className="w-full h-full border-[3px] border-gray-800 p-6 flex flex-col">
             <h2 className="text-2xl font-bold mb-4 border-b-2 border-gray-800 pb-2">位置図</h2>
+            
+            {/* ★ここで写真が1枚か2枚かを判断して大きさを変えています */}
             <div className="h-[45%] border border-gray-400 mb-6 flex items-center justify-center p-2 bg-gray-50 gap-4">
-              {project.mapUrls?.map((u: string, i: number) => <img key={i} src={proxyUrl(u)} crossOrigin="anonymous" style={{ maxWidth: '48%', maxHeight: '100%', objectFit: 'contain' }} />)}
+              {project.mapUrls?.map((u: string, i: number) => (
+                <img 
+                  key={i} 
+                  src={proxyUrl(u)} 
+                  crossOrigin="anonymous" 
+                  style={{ 
+                    width: project.mapUrls.length === 1 ? '100%' : '48%', 
+                    height: '100%', 
+                    objectFit: 'contain' 
+                  }} 
+                />
+              ))}
             </div>
+
             <div className="flex-1 flex flex-col">
               <div className="flex bg-gray-200 border border-gray-800 font-bold text-center text-sm"><div className="w-1/4 border-r border-gray-800 p-2">符号</div><div className="w-1/2 border-r border-gray-800 p-2">部位</div><div className="w-1/4 p-2">写真NO</div></div>
               {project.mapRows?.map((row: any) => (<div key={row.id} className="flex border-b border-l border-r border-gray-800 text-center text-sm"><div className="w-1/4 border-r border-gray-800 p-2">{row.symbol || "-"}</div><div className="w-1/2 border-r border-gray-800 p-2">{row.part}</div><div className="w-1/4 p-2">{row.relatedPhotoNumber || "-"}</div></div>))}
