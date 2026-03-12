@@ -1,6 +1,6 @@
-import { useState,useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useParams } from 'react-router-dom';
-import { Camera, Map, FileText, Trash2, Images, ChevronRight, List, BookOpen, ArrowLeft, Plus, Building2, ArrowUp, ArrowDown } from 'lucide-react';
+import { Camera, Map, FileText, Trash2, Images, ChevronRight, List, BookOpen, ArrowLeft, Plus, Building2, ArrowUp, ArrowDown, UploadCloud } from 'lucide-react';
 import { db, storage } from './firebase';
 import { doc, getDoc, updateDoc, collection, addDoc, getDocs, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -71,7 +71,7 @@ function ProjectListScreen() {
     const docRef = await addDoc(collection(db, "projects"), {
       projectName: "新規現場", projectLocation: "", constructionPeriod: "", contractorName: "山西瓦店",
       creationDate: new Date().toLocaleDateString('ja-JP'),
-      photos: Array.from({ length: 40 }, (_, i) => ({ id: i, image: null, photoNumber: "", shootingDate: "", locationMap: "", process: "", description: "" })),
+      photos: Array.from({ length: 40 }, (_, i) => ({ id: i, image: null, photoNumber: String(i + 1), shootingDate: "", locationMap: "", process: "", description: "" })),
       mapUrls: [], mapRows: [{ id: 1, symbol: "", part: "本棟", relatedPhotoNumber: "" }],
       createdAt: new Date().toISOString()
     });
@@ -179,6 +179,10 @@ function PhotoScreen() {
   const navigate = useNavigate();
   const [project, setProject] = useState<any>(null);
   const [loadingId, setLoadingId] = useState<number | null>(null);
+  
+  // 一括アップロード用の状態
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState(0);
 
   useEffect(() => { getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data())); }, [id]);
 
@@ -188,33 +192,81 @@ function PhotoScreen() {
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
   };
 
-  const uploadPhoto = async (e: any, photoId: number) => {
+  // 1枚アップロード
+  const uploadPhoto = async (e: any, index: number) => {
     if (!e.target.files[0]) return;
+    const photoId = project.photos[index].id;
     setLoadingId(photoId);
-    
-    const currentMax = Math.max(0, ...project.photos.map((p: any) => parseInt(p.photoNumber) || 0));
-    const targetPhoto = project.photos.find((p: any) => p.id === photoId);
-    const newPhotoNum = targetPhoto.photoNumber || String(currentMax + 1);
 
     compressImage(e.target.files[0], async (file) => {
       const r = ref(storage, `photos/${id}/${Date.now()}`);
       await uploadBytes(r, file);
       const url = await getDownloadURL(r);
-      const newPhotos = project.photos.map((p: any) => p.id === photoId ? { ...p, image: url, photoNumber: newPhotoNum, shootingDate: new Date().toLocaleDateString('ja-JP') } : p);
+      const newPhotos = project.photos.map((p: any, i: number) => p.id === photoId ? { ...p, image: url, photoNumber: String(i + 1), shootingDate: new Date().toLocaleDateString('ja-JP') } : p);
       setProject({ ...project, photos: newPhotos });
       await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
       setLoadingId(null);
     });
   };
 
+  // ★ 複数枚一括アップロード
+  const handleBulkUpload = async (e: any) => {
+    const files = Array.from(e.target.files as FileList);
+    if (files.length === 0) return;
+
+    setBulkUploading(true);
+    let newPhotos = [...project.photos];
+    // 画像が入っていない空枠のインデックスを探す
+    let emptyIndices = newPhotos.map((p, i) => !p.image ? i : -1).filter(i => i !== -1);
+
+    let uploadedCount = 0;
+    for (let i = 0; i < files.length; i++) {
+      if (i >= emptyIndices.length) break; // 空枠が足りなくなったら終了
+      const targetIndex = emptyIndices[i];
+      const file = files[i];
+
+      await new Promise<void>((resolve) => {
+        compressImage(file, async (compressed) => {
+          const r = ref(storage, `photos/${id}/${Date.now()}_bulk_${i}`);
+          await uploadBytes(r, compressed);
+          const url = await getDownloadURL(r);
+          newPhotos[targetIndex] = {
+            ...newPhotos[targetIndex],
+            image: url,
+            photoNumber: String(targetIndex + 1),
+            shootingDate: new Date().toLocaleDateString('ja-JP')
+          };
+          resolve();
+        });
+      });
+      uploadedCount++;
+      setBulkProgress(uploadedCount);
+    }
+
+    setProject({ ...project, photos: newPhotos });
+    await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+    setBulkUploading(false);
+    setBulkProgress(0);
+  };
+
+  // ★ 順番入れ替え（自動番号振り直し機能付き）
   const movePhoto = async (index: number, direction: 'up' | 'down') => {
     if (direction === 'up' && index === 0) return;
     if (direction === 'down' && index === project.photos.length - 1) return;
     const newPhotos = [...project.photos];
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    
+    // 入れ替え
     [newPhotos[index], newPhotos[targetIndex]] = [newPhotos[targetIndex], newPhotos[index]];
-    setProject({ ...project, photos: newPhotos });
-    await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+    
+    // 入れ替え後に、上から順に「1, 2, 3...」と番号を振り直す
+    const renumberedPhotos = newPhotos.map((p, i) => ({
+      ...p,
+      photoNumber: String(i + 1)
+    }));
+
+    setProject({ ...project, photos: renumberedPhotos });
+    await updateDoc(doc(db, "projects", id!), { photos: renumberedPhotos });
   };
 
   if (!project) return null;
@@ -224,6 +276,17 @@ function PhotoScreen() {
       <div className="max-w-md mx-auto pb-12">
         <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
         <h1 className="text-3xl font-bold mb-6 text-gray-900">写真の登録</h1>
+        
+        {/* ★ 一括アップロードボタン */}
+        <div className="bg-white p-5 rounded-3xl border border-black/5 shadow-sm mb-6">
+          <label className="flex items-center justify-center gap-2 w-full bg-blue-500 text-white font-bold py-4 text-lg rounded-xl cursor-pointer shadow-md hover:bg-blue-600 transition-colors">
+            <UploadCloud className="w-6 h-6" />
+            {bulkUploading ? `一括アップロード中... (${bulkProgress}枚完了)` : "複数写真を一括追加する"}
+            <input type="file" multiple accept="image/*" className="hidden" onChange={handleBulkUpload} disabled={bulkUploading} />
+          </label>
+          <p className="text-xs text-gray-500 text-center mt-3">※空いている枠に自動で順番に入ります</p>
+        </div>
+
         <div className="space-y-8 mt-4">
           {project.photos.map((photo: any, index: number) => (
             <div key={photo.id} className="bg-gray-100/80 p-5 rounded-3xl border border-black/5 shadow-sm relative">
@@ -238,7 +301,7 @@ function PhotoScreen() {
                 <div className="flex-1 pt-2">
                   <div className="font-bold text-gray-800 text-lg">写真 {index + 1}</div>
                   <label className="block w-full mt-3 text-center bg-blue-100/80 text-blue-700 font-bold py-3 text-lg rounded-xl cursor-pointer shadow-sm">
-                    画像を選択 <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadPhoto(e, photo.id)} />
+                    画像を選択 <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadPhoto(e, index)} />
                   </label>
                 </div>
               </div>
@@ -355,7 +418,7 @@ function PDFExportScreen() {
 
   useEffect(() => { getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data())); }, [id]);
 
- const handleExport = async () => {
+  const handleExport = async () => {
     try {
       const pages = document.querySelectorAll('.pdf-page');
       if (pages.length === 0) return;
@@ -394,6 +457,10 @@ function PDFExportScreen() {
         {/* 表紙 */}
         <div className="pdf-page bg-white relative shadow-md flex flex-col" style={{ width: '210mm', height: '297mm', padding: '20mm' }}>
           <div className="w-full h-full border-[3px] border-gray-800 p-12 flex flex-col relative">
+            
+            {/* ★ ここに山西瓦店様のロゴを追加！ */}
+            <img src="/kawara-icon.png" alt="logo" className="absolute top-[15mm] right-[15mm] w-[25mm] h-[25mm] object-contain" />
+
             <div className="mt-[30mm] mb-[40mm] text-center">
               <h1 className="text-4xl font-serif tracking-[0.5em] font-bold mb-4">工事写真報告書</h1>
               <div className="w-[110mm] mx-auto border-b-[2px] border-gray-800"></div>
@@ -410,8 +477,6 @@ function PDFExportScreen() {
         <div className="pdf-page bg-white relative shadow-md flex flex-col" style={{ width: '210mm', height: '297mm', padding: '15mm' }}>
           <div className="w-full h-full border-[3px] border-gray-800 p-6 flex flex-col">
             <h2 className="text-2xl font-bold mb-4 border-b-2 border-gray-800 pb-2">位置図</h2>
-            
-            {/* ★ここで写真が1枚か2枚かを判断して大きさを変えています */}
             <div className="h-[45%] border border-gray-400 mb-6 flex items-center justify-center p-2 bg-gray-50 gap-4">
               {project.mapUrls?.map((u: string, i: number) => (
                 <img 
@@ -426,7 +491,6 @@ function PDFExportScreen() {
                 />
               ))}
             </div>
-
             <div className="flex-1 flex flex-col">
               <div className="flex bg-gray-200 border border-gray-800 font-bold text-center text-sm"><div className="w-1/4 border-r border-gray-800 p-2">符号</div><div className="w-1/2 border-r border-gray-800 p-2">部位</div><div className="w-1/4 p-2">写真NO</div></div>
               {project.mapRows?.map((row: any) => (<div key={row.id} className="flex border-b border-l border-r border-gray-800 text-center text-sm"><div className="w-1/4 border-r border-gray-800 p-2">{row.symbol || "-"}</div><div className="w-1/2 border-r border-gray-800 p-2">{row.part}</div><div className="w-1/4 p-2">{row.relatedPhotoNumber || "-"}</div></div>))}
