@@ -9,7 +9,9 @@ import { jsPDF } from 'jspdf';
 
 const ROOF_PARTS = ["本棟", "隅棟", "軒先", "袖右", "袖左", "平部", "流れ壁", "平行壁", "谷", "その他"];
 const PROCESS_SNIPPETS = ["施工前", "施工確認", "施工後"];
-const DESC_SNIPPETS = ["基準値：", "実測値："];
+
+// ★ 改善②：雪害や瓦工事に特化した定型文を大幅追加！
+const DESC_SNIPPETS = ["基準値：", "実測値：", "雪害による瓦割れ", "凍害による剥離", "漆喰の劣化・剥がれ", "瓦のズレ修正", "ビス打ち補強", "清掃・片付け"];
 
 const proxyUrl = (url: string) => url ? `/api/image?url=${encodeURIComponent(url)}` : '';
 
@@ -180,7 +182,6 @@ function PhotoScreen() {
   const [project, setProject] = useState<any>(null);
   const [loadingId, setLoadingId] = useState<number | null>(null);
   
-  // 一括アップロード用の状態
   const [bulkUploading, setBulkUploading] = useState(false);
   const [bulkProgress, setBulkProgress] = useState(0);
 
@@ -192,7 +193,15 @@ function PhotoScreen() {
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
   };
 
-  // 1枚アップロード
+  // ★ 改善①：写真を空にする（クリア）機能
+  const clearPhoto = async (photoId: number) => {
+    if (window.confirm('この枠の写真を削除しますか？（文字は残ります）')) {
+      const newPhotos = project.photos.map((p: any) => p.id === photoId ? { ...p, image: null } : p);
+      setProject({ ...project, photos: newPhotos });
+      await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+    }
+  };
+
   const uploadPhoto = async (e: any, index: number) => {
     if (!e.target.files[0]) return;
     const photoId = project.photos[index].id;
@@ -209,19 +218,17 @@ function PhotoScreen() {
     });
   };
 
-  // ★ 複数枚一括アップロード
   const handleBulkUpload = async (e: any) => {
     const files = Array.from(e.target.files as FileList);
     if (files.length === 0) return;
 
     setBulkUploading(true);
     let newPhotos = [...project.photos];
-    // 画像が入っていない空枠のインデックスを探す
     let emptyIndices = newPhotos.map((p, i) => !p.image ? i : -1).filter(i => i !== -1);
 
     let uploadedCount = 0;
     for (let i = 0; i < files.length; i++) {
-      if (i >= emptyIndices.length) break; // 空枠が足りなくなったら終了
+      if (i >= emptyIndices.length) break;
       const targetIndex = emptyIndices[i];
       const file = files[i];
 
@@ -249,17 +256,14 @@ function PhotoScreen() {
     setBulkProgress(0);
   };
 
-  // ★ 順番入れ替え（自動番号振り直し機能付き）
   const movePhoto = async (index: number, direction: 'up' | 'down') => {
     if (direction === 'up' && index === 0) return;
     if (direction === 'down' && index === project.photos.length - 1) return;
     const newPhotos = [...project.photos];
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     
-    // 入れ替え
     [newPhotos[index], newPhotos[targetIndex]] = [newPhotos[targetIndex], newPhotos[index]];
     
-    // 入れ替え後に、上から順に「1, 2, 3...」と番号を振り直す
     const renumberedPhotos = newPhotos.map((p, i) => ({
       ...p,
       photoNumber: String(i + 1)
@@ -277,7 +281,6 @@ function PhotoScreen() {
         <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
         <h1 className="text-3xl font-bold mb-6 text-gray-900">写真の登録</h1>
         
-        {/* ★ 一括アップロードボタン */}
         <div className="bg-white p-5 rounded-3xl border border-black/5 shadow-sm mb-6">
           <label className="flex items-center justify-center gap-2 w-full bg-blue-500 text-white font-bold py-4 text-lg rounded-xl cursor-pointer shadow-md hover:bg-blue-600 transition-colors">
             <UploadCloud className="w-6 h-6" />
@@ -295,8 +298,20 @@ function PhotoScreen() {
                 <button onClick={() => movePhoto(index, 'down')} className="bg-white p-2 rounded-lg shadow border border-gray-200 text-gray-600 hover:bg-gray-50"><ArrowDown className="w-5 h-5" /></button>
               </div>
               <div className="flex gap-4 mb-6 mt-2">
-                <div className="w-28 h-28 bg-gray-200/80 rounded-2xl flex items-center justify-center overflow-hidden border border-gray-300 shadow-inner">
-                  {loadingId === photo.id ? <span className="text-sm font-bold text-blue-500">保存中...</span> : photo.image ? <img src={photo.image} className="w-full h-full object-cover" /> : <Camera className="w-8 h-8 text-gray-400" />}
+                {/* ★ 改善①：相対位置（relative）を追加し、右上にゴミ箱ボタンを配置 */}
+                <div className="w-28 h-28 bg-gray-200/80 rounded-2xl flex items-center justify-center overflow-hidden border border-gray-300 shadow-inner relative">
+                  {loadingId === photo.id ? (
+                    <span className="text-sm font-bold text-blue-500">保存中...</span>
+                  ) : photo.image ? (
+                    <>
+                      <img src={photo.image} className="w-full h-full object-cover" />
+                      <button onClick={() => clearPhoto(photo.id)} className="absolute top-1 right-1 bg-white/90 rounded-full p-1.5 text-red-500 shadow-sm hover:bg-white">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
+                  ) : (
+                    <Camera className="w-8 h-8 text-gray-400" />
+                  )}
                 </div>
                 <div className="flex-1 pt-2">
                   <div className="font-bold text-gray-800 text-lg">写真 {index + 1}</div>
@@ -457,10 +472,6 @@ function PDFExportScreen() {
         {/* 表紙 */}
         <div className="pdf-page bg-white relative shadow-md flex flex-col" style={{ width: '210mm', height: '297mm', padding: '20mm' }}>
           <div className="w-full h-full border-[3px] border-gray-800 p-12 flex flex-col relative">
-            
-            {/* ★ ここに山西瓦店様のロゴを追加！ */}
-            
-
             <div className="mt-[30mm] mb-[40mm] text-center">
               <h1 className="text-4xl font-serif tracking-[0.5em] font-bold mb-4">工事写真報告書</h1>
               <div className="w-[110mm] mx-auto border-b-[2px] border-gray-800"></div>
