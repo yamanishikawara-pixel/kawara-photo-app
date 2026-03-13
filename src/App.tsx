@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useParams } from 'react-router-dom';
-import { Camera, Map, FileText, Trash2, Images, ChevronRight, List, BookOpen, ArrowLeft, Plus, Building2, ArrowUp, ArrowDown, UploadCloud, MapPin, X } from 'lucide-react';
+import { Camera, Map, FileText, Trash2, Images, ChevronRight, List, BookOpen, ArrowLeft, Plus, Building2, ArrowUp, ArrowDown, UploadCloud, MapPin, X, CornerDownRight } from 'lucide-react';
 import { db, storage } from './firebase';
 import { doc, getDoc, updateDoc, collection, addDoc, getDocs, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -57,7 +57,7 @@ function InputField({ label, placeholder, value, onChange, bgColor }: any) {
   );
 }
 
-// ★ 新規：ピンの自由移動を実現するためのドラッグ処理用の部品
+// ピンの自由移動を実現するためのドラッグ処理用の部品
 function useDraggablePin(initialX: number, initialY: number, onDragEnd: (x: number, y: number) => void) {
   const [position, setPosition] = useState({ x: initialX, y: initialY });
   const [dragging, setDragging] = useState(false);
@@ -73,19 +73,14 @@ function useDraggablePin(initialX: number, initialY: number, onDragEnd: (x: numb
 
   const onMouseMove = useRef((e: any) => {
     if (!dragging) return;
-    const parent = e.currentTarget.parentElement;
-    const parentRect = parent.getBoundingClientRect();
     const dx = e.clientX - dragStart.current.x;
     const dy = e.clientY - dragStart.current.y;
-    
-    // パーセント単位での移動量を計算
+    const parentRect = e.currentTarget.parentElement.getBoundingClientRect();
     const newX = elementStart.current.x + (dx / parentRect.width) * 100;
     const newY = elementStart.current.y + (dy / parentRect.height) * 100;
-
-    // 範囲制限 (0% - 100%)
+    // 範囲制限 (0-100%)
     const clampedX = Math.max(0, Math.min(100, newX));
     const clampedY = Math.max(0, Math.min(100, newY));
-
     setPosition({ x: clampedX, y: clampedY });
   }).current;
 
@@ -107,7 +102,7 @@ function useDraggablePin(initialX: number, initialY: number, onDragEnd: (x: numb
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [dragging, onMouseMove, onMouseUp]);
+  }, [dragging]);
 
   return { position, onMouseDown, dragging };
 }
@@ -132,7 +127,7 @@ function ProjectListScreen() {
       creationDate: new Date().toLocaleDateString('ja-JP'),
       photos: [{ id: Date.now(), image: null, photoNumber: "1", shootingDate: "", locationMap: "", process: "", description: "" }],
       mapUrls: [], mapRows: [{ id: 1, symbol: "", part: "本棟", relatedPhotoNumber: "" }],
-      mapPins: [], // ★ 新規：ピン（符号）のデータを保存する場所
+      mapPins: [], // ピン（符号）のデータを保存する場所
       createdAt: new Date().toISOString()
     });
     navigate(`/project/${docRef.id}`);
@@ -193,7 +188,7 @@ function HomeScreen() {
           <MenuButton title="現場一覧" subtitle="現場の切り替え・新規追加・削除" icon={List} colorClass="bg-teal-100/30" onClick={() => navigate('/')} />
           <MenuButton title="表紙" subtitle="現場名・住所・工期の入力" icon={BookOpen} colorClass="bg-purple-100/30" onClick={() => navigate(`/project/${id}/cover`)} />
           <MenuButton title="写真" subtitle="工事写真の撮影・登録" icon={Camera} colorClass="bg-blue-100/30" onClick={() => navigate(`/project/${id}/photo`)} />
-          <MenuButton title="位置図" subtitle="図面登録と符号ピン打ち" icon={Map} colorClass="bg-green-100/30" onClick={() => navigate(`/project/${id}/map`)} />
+          <MenuButton title="位置図" subtitle="図面登録とピンの自由移動" icon={Map} colorClass="bg-green-100/30" onClick={() => navigate(`/project/${id}/map`)} />
           <MenuButton title="PDF出力" subtitle="黄金比レイアウトで書き出し" icon={FileText} colorClass="bg-orange-100/30" onClick={() => navigate(`/project/${id}/pdf`)} />
         </div>
       </div>
@@ -222,7 +217,7 @@ function CoverScreen() {
         <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
         <h1 className="text-3xl font-bold mb-8 text-gray-900">表紙の入力</h1>
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-black/5">
-          <InputField label="工事件名" placeholder="例: ○○様邸 屋根改修工事" value={project.projectName} onChange={(v: string) => update('projectName', v)} bgColor="bg-blue-50/50" />
+          <InputField label="工事件名" placeholder="例: ○○○邸 屋根改修工事" value={project.projectName} onChange={(v: string) => update('projectName', v)} bgColor="bg-blue-50/50" />
           <InputField label="工事場所" placeholder="例: 富山県魚津市○○町" value={project.projectLocation} onChange={(v: string) => update('projectLocation', v)} bgColor="bg-green-50/50" />
           <InputField label="工期" placeholder="例: 令和8年3月〜令和8年4月" value={project.constructionPeriod} onChange={(v: string) => update('constructionPeriod', v)} bgColor="bg-purple-50/50" />
           <InputField label="施工業者" placeholder="例: 山西瓦店" value={project.contractorName} onChange={(v: string) => update('contractorName', v)} bgColor="bg-orange-50/50" />
@@ -234,14 +229,14 @@ function CoverScreen() {
 }
 
 // --- 写真 ---
-// ★ 変更：符号選択用のポップアップ部品
+// ★ 変更：符号選択用のポップアップ部品（ドラッグで配置した符号だけが出ます）
 function PinSelectModal({ isOpen, onClose, pins, onSelect }: any) {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-xl space-y-5" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center pb-2 border-b">
-          <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2"><MapPin className="text-red-500 w-6 h-6"/> 符号を選択</h3>
+          <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2"><MapPin className="text-red-500 w-6 h-6"/> 符号（ピン）を選択</h3>
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600"><X className="w-6 h-6"/></button>
         </div>
         {pins && pins.length > 0 ? (
@@ -263,9 +258,12 @@ function PinSelectModal({ isOpen, onClose, pins, onSelect }: any) {
             </button>
           </div>
         ) : (
-          <div className="text-center py-10 px-4 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
-            <p className="text-gray-500 font-bold">位置図画面で<br/>符号ピンを打ってください</p>
-            <p className="text-xs text-gray-400 mt-2">（A-1、①など）</p>
+          <div className="text-center py-10 px-4 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 overflow-hidden relative">
+            {/* ★ 山西瓦店様のロゴの「山」マーク */}
+            <svg className="absolute inset-0 w-full h-full text-gray-100 -rotate-12 transform scale-150" viewBox="0 0 100 100" fill="currentColor">
+              <path d="M50 10 L10 50 L20 60 L35 45 L35 90 L65 90 L65 45 L80 60 L90 50 Z" />
+            </svg>
+            <p className="text-gray-500 font-bold z-10 relative">位置図画面で<br/>符号ピンをドラッグして<br/>配置してください</p>
           </div>
         )}
       </div>
@@ -397,7 +395,7 @@ function PhotoScreen() {
   if (!project) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 font-sans overflow-x-hidden">
+    <div className="min-h-screen bg-gray-50 p-6 font-sans">
       <div className="max-w-md mx-auto pb-12">
         <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
         <h1 className="text-3xl font-bold mb-6 text-gray-900">写真の登録</h1>
@@ -452,7 +450,7 @@ function PhotoScreen() {
                   onClick={() => { setCurrentPhotoId(photo.id); setModalOpen(true); }}
                   className={`w-full p-3.5 text-lg border rounded-xl bg-white text-left flex justify-between items-center ${photo.locationMap ? 'text-red-700 font-bold border-red-300 bg-red-50' : 'text-gray-500 border-gray-300'}`}
                 >
-                  {photo.locationMap || '▼ 位置図の符号を選択（タップ）'}
+                  {photo.locationMap || '▼ 符号ピンを選択（タップ）'}
                   <MapPin className={`w-5 h-5 ${photo.locationMap ? 'text-red-500' : 'text-gray-400'}`} />
                 </button>
 
@@ -491,12 +489,8 @@ function PhotoScreen() {
 }
 
 // --- 位置図 ---
-// ★ 変更：自由移動（ドラッグ）に対応したピン部品
-function DraggablePin({ pin, mapWidth, onDragEnd, onRemove }: any) {
-  // ピンのサイズをA4サイズに合わせて少し調整（ここではA4の幅に対するパーセントで近似）
-  // 3mmをパーセントに換算 (3mm / 210mm * 100 ≒ 1.4%)
-  const pinSizePercent = 1.4;
-  
+// ★ 変更：自由移動（ドラッグ）に対応した符号ピン部品
+function DraggablePin({ pin, onDragEnd, onRemove, onLabelChange }: any) {
   const { position, onMouseDown, dragging } = useDraggablePin(pin.x, pin.y, onDragEnd);
 
   return (
@@ -506,26 +500,28 @@ function DraggablePin({ pin, mapWidth, onDragEnd, onRemove }: any) {
       style={{ 
         left: `${position.x}%`, 
         top: `${position.y}%`, 
-        width: `${pinSizePercent * mapWidth / 100}px`,
-        height: `${pinSizePercent * mapWidth / 100}px`,
         transform: 'translate(-50%, -50%)',
-        // ドラッグ中は大きく表示して見やすくする
-        transformOrigin: dragging ? 'center' : 'center',
-        scale: dragging ? '1.5' : '1'
+        opacity: dragging ? 0.7 : 1,
+        // ドラッグ中は少し大きくして見やすくする
+        scale: dragging ? '1.2' : '1'
       }}
-      className={`absolute bg-red-500 text-white rounded-full flex items-center justify-center font-bold shadow-lg border-2 border-white select-none ${dragging ? 'z-30 cursor-grabbing' : 'z-10 cursor-grab hover:bg-red-600'}`}
+      className={`absolute group bg-red-500 text-white rounded-full h-8 flex items-center justify-center font-bold shadow-lg border-2 border-white select-none ${dragging ? 'z-30 cursor-grabbing' : 'z-10 cursor-grab hover:bg-red-600'}`}
     >
-      <span style={{ fontSize: `${pinSizePercent * mapWidth / 100 * 0.6}px` }}>{pin.label}</span>
+      {/* ★ 山西瓦店様の「山」ロゴマークをピンの左に配置 */}
+      <svg className="w-4 h-4 ml-2 mr-1 text-white/70" viewBox="0 0 100 100" fill="currentColor">
+        <path d="M50 10 L10 50 L20 60 L35 45 L35 90 L65 90 L65 45 L80 60 L90 50 Z" />
+      </svg>
       
-      {/* 削除ボタン（ドラッグ中は非表示） */}
-      {!dragging && (
-        <button 
-          onClick={(e) => { e.stopPropagation(); onRemove(); }} 
-          className="absolute -top-1 -right-1 bg-white/90 rounded-full p-0.5 text-red-500 shadow-sm border border-gray-200"
-        >
-          <X style={{ width: `${pinSizePercent * mapWidth / 100 * 0.4}px`, height: `${pinSizePercent * mapWidth / 100 * 0.4}px` }} />
-        </button>
-      )}
+      {/* 符号テキスト (例: A-1)。タップで文字変更可能 */}
+      <span onClick={() => { const newLabel = window.prompt("符号を変更", pin.label); if(newLabel) onLabelChange(newLabel); }} className="px-2">{pin.label}</span>
+      
+      {/* 削除ボタン（ホバー時に出現） */}
+      <button 
+        onClick={(e) => { e.stopPropagation(); onRemove(); }} 
+        className="absolute -top-1.5 -right-1.5 bg-white rounded-full p-0.5 text-red-500 shadow-sm border border-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
     </div>
   );
 }
@@ -535,66 +531,54 @@ function MapScreen() {
   const navigate = useNavigate();
   const [project, setProject] = useState<any>(null);
   const [uploading, setUploading] = useState(false);
-  
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const [mapWidth, setMapWidth] = useState(0);
 
   useEffect(() => { getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data())); }, [id]);
-  
-  // 画面リサイズ時にピンのサイズを再計算
-  useEffect(() => {
-    if (!mapContainerRef.current) return;
-    const updateWidth = () => setMapWidth(mapContainerRef.current?.offsetWidth || 0);
-    updateWidth();
-    window.addEventListener('resize', updateWidth);
-    return () => window.removeEventListener('resize', updateWidth);
-  }, [project]);
 
   const uploadMaps = async (e: any) => {
     const files = Array.from(e.target.files as FileList).slice(0, 2);
     if (files.length === 0) return;
     setUploading(true);
     const newUrls = [...(project.mapUrls || [])];
-    for (const f of files) {
+    const newPins = [...(project.mapPins || [])];
+    
+    for (let i = 0; i < files.length; i++) {
       if (newUrls.length >= 2) break;
+      const f = files[i];
       const r = ref(storage, `maps/${id}/${Date.now()}_${f.name}`);
       await uploadBytes(r, f);
       newUrls.push(await getDownloadURL(r));
+      
+      // ★ 山西様ご要望：図面アップロード時に、自動で左上に符号ピンを配置！
+      // 1枚目なら「A-1」、2枚目なら「B-2」
+      const label = newUrls.length === 1 ? 'A-1' : 'B-2';
+      // 左上 (10%, 10%の位置に配置)
+      newPins.push({ id: Date.now() + i, mapIndex: newUrls.length - 1, x: 10, y: 10, label });
     }
-    setProject({ ...project, mapUrls: newUrls });
-    await updateDoc(doc(db, "projects", id!), { mapUrls: newUrls });
+    
+    setProject({ ...project, mapUrls: newUrls, mapPins: newPins });
+    await updateDoc(doc(db, "projects", id!), { mapUrls: newUrls, mapPins: newPins });
     setUploading(false);
   };
 
   const removeMap = async (index: number) => {
-    if(!window.confirm('この位置図を削除しますか？\n（打った符号ピンもすべて削除されます）')) return;
+    if(!window.confirm('この位置図を削除しますか？\n（配置した符号ピンもすべて削除されます）')) return;
     const newUrls = project.mapUrls.filter((_: any, i: number) => i !== index);
     const newPins = (project.mapPins || []).filter((p: any) => p.mapIndex !== index);
     setProject({ ...project, mapUrls: newUrls, mapPins: newPins });
     await updateDoc(doc(db, "projects", id!), { mapUrls: newUrls, mapPins: newPins });
   };
 
-  // ★ 新規：図面をタップした時に符号ピンを打つ機能
-  const addPin = async (e: any, mapIndex: number) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    
-    // ポップアップでピンの名前（符号）を聞く
-    const label = window.prompt("この場所の符号を入力してください\n（例: A-1, ①、北など）");
-    if (!label) return;
-
-    const newPins = [...(project.mapPins || []), { id: Date.now(), mapIndex, x, y, label }];
+  // ★ 新規：ピンの自由移動（ドラッグ）が終了した時の処理
+  const handlePinDragEnd = async (pinId: number, x: number, y: number) => {
+    const newPins = (project.mapPins || []).map((p: any) => p.id === pinId ? { ...p, x, y } : p);
     setProject({ ...project, mapPins: newPins });
     await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
   };
 
-  // ★ 新規：ピンの自由移動（ドラッグ）が終了した時の処理
-  const handlePinDragEnd = async (pinId: number, x: number, y: number) => {
-    const newPins = (project.mapPins || []).map((p: any) => p.id === pinId ? { ...p, x, y } : p);
-    // Stateは更新するが、毎回Firestoreに送ると重くなるので、画面移動時や定期保存が理想。
-    // ここではデモのため都度保存とするが、現場運用で重ければ要調整。
-    setProject(prev => ({ ...prev, mapPins: newPins }));
+  // ★ 新規：ピンの符号文字を変更する機能
+  const handlePinLabelChange = async (pinId: number, label: string) => {
+    const newPins = (project.mapPins || []).map((p: any) => p.id === pinId ? { ...p, label } : p);
+    setProject({ ...project, mapPins: newPins });
     await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
   };
 
@@ -608,41 +592,39 @@ function MapScreen() {
   if (!project) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 font-sans overflow-x-hidden">
+    <div className="min-h-screen bg-gray-50 p-6 font-sans">
       <div className="max-w-md mx-auto pb-12">
         <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
         <h1 className="text-3xl font-bold mb-8 text-gray-900">位置図の登録</h1>
         
-        <div className="bg-white p-5 rounded-3xl shadow-sm border border-black/5 mb-6">
-          <label className="block w-full text-center bg-green-100/50 text-green-700 font-bold py-4 text-lg rounded-xl cursor-pointer shadow-sm mb-6 z-10 relative">
-            {uploading ? "Google倉庫へ保存中..." : "図面画像を追加（2枚まで）"}
+        <div className="bg-white p-5 rounded-3xl shadow-sm border border-black/5 mb-6 relative">
+          
+          <label className="flex items-center justify-center gap-2 w-full text-center bg-green-100 text-green-700 font-bold py-4 text-lg rounded-xl cursor-pointer shadow-sm mb-6 z-10 relative">
+            <Images className="w-6 h-6" />
+            {uploading ? "Google倉庫へ保存中..." : "図面を追加（2枚まで）"}
             <input type="file" multiple accept="image/*" className="hidden" onChange={uploadMaps} disabled={uploading} />
           </label>
+          <p className="text-xs text-gray-500 text-center -mt-3 mb-6 relative z-10">※アップすると自動でA-1などの符号ピンが置かれます</p>
 
           {project.mapUrls && project.mapUrls.length > 0 ? (
             <div className="space-y-8">
               <p className="text-sm font-bold text-red-500 bg-red-50 p-4 rounded-xl border border-red-100 flex items-start gap-2.5">
                 <MapPin className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                <span>
-                  **符号ピンの使い方**<br/>
-                  1. 図面をタップして符号を入力（A-1、①など）<br/>
-                  2. ピンを指でドラッグして**自由に移動**<br/>
-                  3. ピンの「❌」で削除
-                </span>
+                <span>**符号ピンの使い方**<br/>山西様：図面の上に置かれた符号ピンを、指でドラッグして**自由に移動**させてください。<br/>（符号をタップで文字変更、❌で削除）</span>
               </p>
               
               {project.mapUrls.map((u: string, i: number) => (
-                <div key={i} ref={mapContainerRef} className="relative w-full border-2 border-gray-300 rounded-xl bg-gray-100 shadow-inner group">
-                  {/* ★ 画像。タップでピンを追加 */}
-                  <img src={u} onClick={(e) => addPin(e, i)} className="w-full h-auto cursor-crosshair block" />
+                <div key={i} className="relative w-full border-2 border-gray-300 rounded-xl bg-gray-100 shadow-inner group overflow-visible">
+                  {/* 画像 */}
+                  <img src={u} className="w-full h-auto block rounded-xl z-0" />
                   
                   {/* ★ 打ったピンを画像の上に表示（自由移動対応） */}
                   {(project.mapPins || []).filter((p: any) => p.mapIndex === i).map((pin: any) => (
                     <DraggablePin 
                       key={pin.id} 
                       pin={pin} 
-                      mapWidth={mapWidth} 
                       onDragEnd={(x: number, y: number) => handlePinDragEnd(pin.id, x, y)}
+                      onLabelChange={(label: string) => handlePinLabelChange(pin.id, label)}
                       onRemove={() => removePin(pin.id)} 
                     />
                   ))}
@@ -715,7 +697,7 @@ function PDFExportScreen() {
   const totalPages = 1 + mapCount + photoPages.length;
 
   return (
-    <div className="min-h-screen bg-gray-200 p-6 font-sans flex flex-col items-center pb-12 overflow-x-hidden">
+    <div className="min-h-screen bg-gray-200 p-6 font-sans flex flex-col items-center pb-12">
       <div className="w-full max-w-2xl mb-6 flex justify-between items-center"><button onClick={() => navigate(`/project/${id}`)} className="text-blue-500 font-bold flex items-center gap-2 text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button><button onClick={handleExport} className="bg-orange-500 text-white px-8 py-4 rounded-xl font-bold shadow-lg text-lg">ダウンロード</button></div>
       <div className="overflow-auto w-full max-w-2xl bg-gray-300 p-4 rounded-xl flex flex-col gap-8">
         
@@ -734,7 +716,7 @@ function PDFExportScreen() {
           <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">- 1 / {totalPages} -</div>
         </div>
 
-        {/* 位置図 (1枚1ページの大迫力版 ＋ 山西瓦店専用・自由配置ピン対応版！) */}
+        {/* 位置図 (1枚1ページの大迫力版 ＋ 山西瓦店専用・ドラッグ配置ピン対応版！) */}
         {mapUrlsToRender.map((u: string, mapIndex: number) => (
           <div key={`map-page-${mapIndex}`} className="pdf-page bg-white relative shadow-md flex flex-col" style={{ width: '210mm', height: '297mm', padding: '15mm' }}>
             <div className="w-full h-full border-[3px] border-gray-800 p-6 flex flex-col">
@@ -745,7 +727,7 @@ function PDFExportScreen() {
                   <div className="relative inline-block" style={{ maxWidth: '100%', maxHeight: '100%' }}>
                     {/* 画像本体 */}
                     <img src={proxyUrl(u)} crossOrigin="anonymous" className="block w-auto h-auto" style={{ maxWidth: '100%', maxHeight: '180mm', objectFit: 'contain' }} />
-                    {/* ★ PDFにも赤い符号ピンを合成！ドラッグで配置した場所にそのまま出ます！ */}
+                    {/* ★ PDFにも赤い符号ピンを合成！山西様がドラッグで配置した場所にそのまま出ます！ */}
                     {(project.mapPins || []).filter((p: any) => p.mapIndex === mapIndex).map((pin: any) => (
                       <div 
                         key={pin.id} 
@@ -754,7 +736,9 @@ function PDFExportScreen() {
                           top: `${pin.y}%`, 
                           transform: 'translate(-50%, -50%)' 
                         }}
-                        className="absolute bg-red-500 text-white rounded-full w-[10mm] h-[10mm] flex items-center justify-center font-bold text-[18px] border-[1.5px] border-white z-10 shadow-lg"
+                        className="absolute bg-red-500 text-white rounded-full flex items-center justify-center font-bold border-[1.5px] border-white z-10 shadow-lg"
+                        // ピンのサイズもA4に合わせて調整
+                        style={{ width: '8mm', height: '8mm', fontSize: '12px' }}
                       >
                         {pin.label}
                       </div>
