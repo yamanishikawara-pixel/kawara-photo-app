@@ -4,7 +4,8 @@ import { Camera, Map, FileText, Trash2, Images, ChevronRight, List, BookOpen, Ar
 import { db, storage } from './firebase';
 import { doc, getDoc, updateDoc, collection, addDoc, getDocs, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { toJpeg } from 'html-to-image';
+// ★ 修正：iPhoneバグを防ぐため、html2canvasという別の道具を使います
+import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
 const ROOF_PARTS = ["本棟", "隅棟", "軒先", "袖右", "袖左", "平部", "流れ壁", "平行壁", "谷", "その他"];
@@ -71,7 +72,6 @@ function ProjectListScreen() {
     const docRef = await addDoc(collection(db, "projects"), {
       projectName: "新規現場", projectLocation: "", constructionPeriod: "", contractorName: "山西瓦店",
       creationDate: new Date().toLocaleDateString('ja-JP'),
-      // ★ 変更：最初はスッキリ「1枠」だけにします
       photos: [{ id: Date.now(), image: null, photoNumber: "1", shootingDate: "", locationMap: "", process: "", description: "" }],
       mapUrls: [], mapRows: [{ id: 1, symbol: "", part: "本棟", relatedPhotoNumber: "" }],
       createdAt: new Date().toISOString()
@@ -192,7 +192,6 @@ function PhotoScreen() {
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
   };
 
-  // ★ 変更：枠そのものを完全に削除し、番号を振り直す
   const deletePhotoSlot = async (photoId: number) => {
     if (window.confirm('この写真枠を完全に削除しますか？')) {
       const newPhotos = project.photos.filter((p: any) => p.id !== photoId);
@@ -202,7 +201,14 @@ function PhotoScreen() {
     }
   };
 
-  // ★ 新規：手動で空の枠を1つ追加する
+  const clearPhoto = async (photoId: number) => {
+    if (window.confirm('この枠の写真を削除しますか？（文字は残ります）')) {
+      const newPhotos = project.photos.map((p: any) => p.id === photoId ? { ...p, image: null } : p);
+      setProject({ ...project, photos: newPhotos });
+      await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+    }
+  };
+
   const addPhotoSlot = async () => {
     const newPhotos = [...project.photos, { 
       id: Date.now(), image: null, photoNumber: String(project.photos.length + 1), shootingDate: "", locationMap: "", process: "", description: "" 
@@ -227,7 +233,6 @@ function PhotoScreen() {
     });
   };
 
-  // ★ 変更：選んだ写真の枚数分だけ、足りない枠を自動で追加して流し込む
   const handleBulkUpload = async (e: any) => {
     const files = Array.from(e.target.files as FileList);
     if (files.length === 0) return;
@@ -318,7 +323,7 @@ function PhotoScreen() {
                   ) : photo.image ? (
                     <>
                       <img src={photo.image} className="w-full h-full object-cover" />
-                      <button onClick={() => deletePhotoSlot(photo.id)} className="absolute top-1 right-1 bg-white/90 rounded-full p-1.5 text-red-500 shadow-sm hover:bg-white">
+                      <button onClick={() => clearPhoto(photo.id)} className="absolute top-1 right-1 bg-white/90 rounded-full p-1.5 text-red-500 shadow-sm hover:bg-white">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </>
@@ -328,7 +333,6 @@ function PhotoScreen() {
                 </div>
                 <div className="flex-1 pt-2 relative">
                   <div className="font-bold text-gray-800 text-lg">写真 {index + 1}</div>
-                  {/* ★ 画像がない空枠の時だけ、枠ごと消すゴミ箱をここに表示 */}
                   {!photo.image && (
                     <button onClick={() => deletePhotoSlot(photo.id)} className="absolute top-0 right-0 p-2 text-gray-400 hover:text-red-500 transition-colors">
                       <Trash2 className="w-5 h-5" />
@@ -359,7 +363,6 @@ function PhotoScreen() {
           ))}
         </div>
         
-        {/* ★ 新規：手動で枠を追加するボタン */}
         <button onClick={addPhotoSlot} className="w-full mt-6 bg-gray-200 text-gray-700 font-bold py-4 text-lg rounded-xl shadow-sm hover:bg-gray-300 transition-colors flex items-center justify-center gap-2">
           <Plus className="w-6 h-6" /> 写真枠を1つ追加する
         </button>
@@ -458,29 +461,42 @@ function PDFExportScreen() {
 
   useEffect(() => { getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data())); }, [id]);
 
+  // ★ 修正：iOS（iPhone）のバグを防ぐため、html2canvasを使用してPDFを生成します
   const handleExport = async () => {
     try {
       const pages = document.querySelectorAll('.pdf-page');
       if (pages.length === 0) return;
-      alert(`PDF作成中...`);
+      
+      alert(`PDF作成中...スマホの画面をそのままにして少しお待ちください`);
+      
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
+      
       for (let i = 0; i < pages.length; i++) {
         const pageEl = pages[i] as HTMLElement;
         await new Promise(resolve => setTimeout(resolve, 300));
-        await toJpeg(pageEl, { cacheBust: true }); 
-        const dataUrl = await toJpeg(pageEl, { quality: 0.95, pixelRatio: 2, backgroundColor: '#ffffff' });
-        const pdfHeight = (pageEl.offsetHeight * pdfWidth) / pageEl.offsetWidth;
+        
+        const canvas = await html2canvas(pageEl, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff'
+        });
+        
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        
         if (i > 0) pdf.addPage();
         pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
       }
+      
       pdf.save(`${project.projectName || '写真台帳'}.pdf`);
-    } catch (error: any) { alert("エラー: " + error.message); }
+    } catch (error: any) { 
+      alert("エラー: " + error.message); 
+    }
   };
 
   if (!project) return null;
 
-  // ★ 変更：完全に空っぽの枠はPDFに出力しないように賢くフィルター
   const activePhotos = project.photos?.filter((p: any) => p.image || p.process || p.description) || [];
   const photoPages = [];
   for (let i = 0; i < (activePhotos.length || 3); i += 3) {
