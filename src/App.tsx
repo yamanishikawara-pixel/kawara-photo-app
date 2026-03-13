@@ -4,15 +4,16 @@ import { Camera, Map, FileText, Trash2, Images, ChevronRight, List, BookOpen, Ar
 import { db, storage } from './firebase';
 import { doc, getDoc, updateDoc, collection, addDoc, getDocs, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-// ★ 修正：iPhoneバグを防ぐため、html2canvasという別の道具を使います
-import html2canvas from 'html2canvas';
+// ★ 色エラーを起こさない優秀な元の部品に戻します
+import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 
 const ROOF_PARTS = ["本棟", "隅棟", "軒先", "袖右", "袖左", "平部", "流れ壁", "平行壁", "谷", "その他"];
 const PROCESS_SNIPPETS = ["施工前", "施工確認", "施工後"];
 const DESC_SNIPPETS = ["基準値：", "実測値：", "雪害による瓦割れ", "凍害による剥離", "漆喰の劣化・剥がれ", "瓦のズレ修正", "ビス打ち補強", "清掃・片付け"];
 
-const proxyUrl = (url: string) => url ? `/api/image?url=${encodeURIComponent(url)}` : '';
+// ★ 修正：iPhone(Safari)が写真を使い回すバグを防ぐため、末尾にランダムな文字(&_t=...)を付けます！
+const proxyUrl = (url: string) => url ? `/api/image?url=${encodeURIComponent(url)}&_t=${Math.random()}` : '';
 
 function compressImage(file: File, callback: (compressedFile: File) => void) {
   const reader = new FileReader();
@@ -461,7 +462,6 @@ function PDFExportScreen() {
 
   useEffect(() => { getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data())); }, [id]);
 
-  // ★ 修正：iOS（iPhone）のバグを防ぐため、html2canvasを使用してPDFを生成します
   const handleExport = async () => {
     try {
       const pages = document.querySelectorAll('.pdf-page');
@@ -476,14 +476,10 @@ function PDFExportScreen() {
         const pageEl = pages[i] as HTMLElement;
         await new Promise(resolve => setTimeout(resolve, 300));
         
-        const canvas = await html2canvas(pageEl, {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: '#ffffff'
-        });
-        
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        // ★ iPhoneのバグ回避のため1回空打ちします
+        await toJpeg(pageEl, { cacheBust: true }); 
+        const dataUrl = await toJpeg(pageEl, { quality: 0.95, pixelRatio: 2, backgroundColor: '#ffffff' });
+        const pdfHeight = (pageEl.offsetHeight * pdfWidth) / pageEl.offsetWidth;
         
         if (i > 0) pdf.addPage();
         pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
@@ -511,7 +507,7 @@ function PDFExportScreen() {
       <div className="w-full max-w-2xl mb-6 flex justify-between items-center"><button onClick={() => navigate(`/project/${id}`)} className="text-blue-500 font-bold flex items-center gap-2 text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button><button onClick={handleExport} className="bg-orange-500 text-white px-8 py-4 rounded-xl font-bold shadow-lg text-lg">ダウンロード</button></div>
       <div className="overflow-auto w-full max-w-2xl bg-gray-300 p-4 rounded-xl flex flex-col gap-8">
         
-        {/* 表紙 */}
+        {/* 表紙（ロゴなしのスッキリデザイン） */}
         <div className="pdf-page bg-white relative shadow-md flex flex-col" style={{ width: '210mm', height: '297mm', padding: '20mm' }}>
           <div className="w-full h-full border-[3px] border-gray-800 p-12 flex flex-col relative">
             <div className="mt-[30mm] mb-[40mm] text-center">
