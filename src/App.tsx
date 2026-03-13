@@ -459,7 +459,7 @@ function PDFExportScreen() {
           <div className="w-full h-full border-[3px] border-gray-800 p-12 flex flex-col relative">
             
             {/* ★ ここに山西瓦店様のロゴを追加！ */}
-            <img src="/kawara-icon.png" alt="logo" className="absolute top-[15mm] right-[15mm] w-[25mm] h-[25mm] object-contain" />
+            
 
             <div className="mt-[30mm] mb-[40mm] text-center">
               <h1 className="text-4xl font-serif tracking-[0.5em] font-bold mb-4">工事写真報告書</h1>
