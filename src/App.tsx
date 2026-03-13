@@ -77,6 +77,7 @@ function ProjectListScreen() {
       creationDate: new Date().toLocaleDateString('ja-JP'),
       photos: [{ id: Date.now(), image: null, photoNumber: "1", shootingDate: "", locationMap: "", process: "", description: "" }],
       mapUrls: [], mapRows: [{ id: 1, symbol: "", part: "本棟", relatedPhotoNumber: "" }],
+      mapPins: [], // ★ 新規：図面に打つピンのデータを保存する場所
       createdAt: new Date().toISOString()
     });
     navigate(`/project/${docRef.id}`);
@@ -137,7 +138,7 @@ function HomeScreen() {
           <MenuButton title="現場一覧" subtitle="現場の切り替え・新規追加・削除" icon={List} colorClass="bg-teal-100/30" onClick={() => navigate('/')} />
           <MenuButton title="表紙" subtitle="現場名・住所・工期の入力" icon={BookOpen} colorClass="bg-purple-100/30" onClick={() => navigate(`/project/${id}/cover`)} />
           <MenuButton title="写真" subtitle="工事写真の撮影・登録" icon={Camera} colorClass="bg-blue-100/30" onClick={() => navigate(`/project/${id}/photo`)} />
-          <MenuButton title="位置図" subtitle="図面登録（2枚まで）と対応表" icon={Map} colorClass="bg-green-100/30" onClick={() => navigate(`/project/${id}/map`)} />
+          <MenuButton title="位置図" subtitle="図面登録とピン打ち" icon={Map} colorClass="bg-green-100/30" onClick={() => navigate(`/project/${id}/map`)} />
           <MenuButton title="PDF出力" subtitle="黄金比レイアウトで書き出し" icon={FileText} colorClass="bg-orange-100/30" onClick={() => navigate(`/project/${id}/pdf`)} />
         </div>
       </div>
@@ -309,7 +310,6 @@ function PhotoScreen() {
             {bulkUploading ? `一括アップロード中... (${bulkProgress}枚完了)` : "複数写真を一括追加する"}
             <input type="file" multiple accept="image/*" className="hidden" onChange={handleBulkUpload} disabled={bulkUploading} />
           </label>
-          <p className="text-xs text-gray-500 text-center mt-3">※枠が足りない場合は自動で追加されます</p>
         </div>
 
         <div className="space-y-8 mt-4">
@@ -348,7 +348,21 @@ function PhotoScreen() {
               </div>
               <div className="space-y-5">
                 <input type="text" placeholder="写真NO 例: 1" className="w-full p-3.5 text-lg border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500" value={photo.photoNumber} onChange={(e) => updatePhoto(photo.id, "photoNumber", e.target.value)} />
-                <input type="text" placeholder="撮影位置図 例: A-1" className="w-full p-3.5 text-lg border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500" value={photo.locationMap} onChange={(e) => updatePhoto(photo.id, "locationMap", e.target.value)} />
+                
+                {/* ★ 変更：位置図入力を「文字打ち込み」から「プルダウン選択」に変更！ */}
+                <div>
+                  <select 
+                    className="w-full p-3.5 text-lg border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 appearance-none font-bold text-blue-700" 
+                    value={photo.locationMap} 
+                    onChange={(e) => updatePhoto(photo.id, "locationMap", e.target.value)}
+                  >
+                    <option value="">▼ 位置図ピンを選択（タップ）</option>
+                    {(project.mapPins || []).map((pin: any) => (
+                      <option key={pin.id} value={pin.label}>{pin.label}</option>
+                    ))}
+                  </select>
+                </div>
+
                 <div>
                   <input type="text" placeholder="工程 例: 葺き直し" className="w-full p-3.5 text-lg border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 mb-2" value={photo.process} onChange={(e) => updatePhoto(photo.id, "process", e.target.value)} />
                   <div className="flex flex-wrap gap-2">
@@ -406,20 +420,29 @@ function MapScreen() {
     await updateDoc(doc(db, "projects", id!), { mapUrls: newUrls });
   };
 
-  const updateMapRow = async (rowId: number, field: string, value: any) => {
-    const newRows = project.mapRows.map((r: any) => r.id === rowId ? { ...r, [field]: value } : r);
-    setProject({ ...project, mapRows: newRows });
-    await updateDoc(doc(db, "projects", id!), { mapRows: newRows });
+  // ★ 新規：図面をタップした時に赤いピンを打つ機能
+  const addPin = async (e: any, mapIndex: number) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    
+    // ポップアップでピンの名前（符号）を聞く
+    const label = window.prompt("この場所の符号を入力してください\n（例: A-1, ①など）");
+    if (!label) return;
+
+    const newPins = [...(project.mapPins || []), { id: Date.now(), mapIndex, x, y, label }];
+    setProject({ ...project, mapPins: newPins });
+    await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
   };
-  const addMapRow = async () => {
-    const newRows = [...project.mapRows, { id: Date.now(), symbol: "", part: "本棟", relatedPhotoNumber: "" }];
-    setProject({ ...project, mapRows: newRows });
-    await updateDoc(doc(db, "projects", id!), { mapRows: newRows });
-  };
-  const removeMapRow = async (rowId: number) => {
-    const newRows = project.mapRows.filter((r: any) => r.id !== rowId);
-    setProject({ ...project, mapRows: newRows });
-    await updateDoc(doc(db, "projects", id!), { mapRows: newRows });
+
+  // ★ 新規：ピンをタップした時に削除する機能
+  const removePin = async (e: any, pinId: number) => {
+    e.stopPropagation(); // これがないと画像タップ判定もされてしまう
+    if (window.confirm('このピンを削除しますか？')) {
+      const newPins = (project.mapPins || []).filter((p: any) => p.id !== pinId);
+      setProject({ ...project, mapPins: newPins });
+      await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
+    }
   };
 
   if (!project) return null;
@@ -429,27 +452,41 @@ function MapScreen() {
       <div className="max-w-md mx-auto pb-12">
         <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
         <h1 className="text-3xl font-bold mb-8 text-gray-900">位置図の登録</h1>
+        
         <div className="bg-white p-5 rounded-3xl shadow-sm border border-black/5 mb-6">
-          <div className="w-full bg-gray-100 rounded-2xl flex items-center justify-center border-2 border-dashed border-gray-300 mb-5 overflow-hidden gap-2 p-2 relative" style={{ minHeight: '14rem' }}>
-            {project.mapUrls && project.mapUrls.length > 0 ? (
-              project.mapUrls.map((u: string, i: number) => (
-                <div key={i} className={project.mapUrls.length === 1 ? "w-full h-full relative" : "w-1/2 h-full relative"}>
-                  <img src={u} className="w-full h-full object-contain" />
-                  <button onClick={() => removeMap(i)} className="absolute top-2 right-2 bg-white rounded-full p-2 text-red-500 shadow-md"><Trash2 className="w-5 h-5" /></button>
-                </div>
-              ))
-            ) : (
-              <span className="text-gray-400 font-bold text-lg">位置図未登録（2枚まで）</span>
-            )}
-          </div>
-          <label className="block w-full text-center bg-green-100/50 text-green-700 font-bold py-4 text-lg rounded-xl cursor-pointer shadow-sm">
-            {uploading ? "Google倉庫へ保存中..." : "画像を選択（2枚まで同時選択可）"}
+          <label className="block w-full text-center bg-green-100/50 text-green-700 font-bold py-4 text-lg rounded-xl cursor-pointer shadow-sm mb-6">
+            {uploading ? "Google倉庫へ保存中..." : "画像を追加（2枚まで）"}
             <input type="file" multiple accept="image/*" className="hidden" onChange={uploadMaps} disabled={uploading} />
           </label>
-        </div>
-        <div className="bg-white p-5 rounded-3xl shadow-sm border border-black/5">
-          <div className="flex justify-between items-center mb-5"><h2 className="font-bold text-xl text-gray-800">対応表</h2><button onClick={addMapRow} className="flex items-center gap-1 text-base bg-gray-100 px-4 py-2 rounded-xl text-gray-700 font-bold shadow-sm"><Plus className="w-5 h-5" /> 行追加</button></div>
-          <div className="space-y-4">{project.mapRows?.map((row: any) => (<div key={row.id} className="p-4 bg-gray-50 border border-gray-200 rounded-2xl relative"><button onClick={() => removeMapRow(row.id)} className="absolute top-3 right-3 text-red-400 p-1 hover:bg-red-50 rounded"><Trash2 className="w-5 h-5" /></button><div className="grid grid-cols-2 gap-3 mb-3 pr-8"><input type="text" placeholder="符号" className="p-3 border rounded-xl text-base bg-white focus:ring-2 focus:ring-blue-500" value={row.symbol} onChange={(e) => updateMapRow(row.id, "symbol", e.target.value)} /><input type="text" placeholder="写真NO" className="p-3 border rounded-xl text-base bg-white focus:ring-2 focus:ring-blue-500" value={row.relatedPhotoNumber} onChange={(e) => updateMapRow(row.id, "relatedPhotoNumber", e.target.value)} /></div><select className="w-full p-3 border rounded-xl text-base bg-white focus:ring-2 focus:ring-blue-500" value={row.part} onChange={(e) => updateMapRow(row.id, "part", e.target.value)}>{ROOF_PARTS.map(part => <option key={part} value={part}>{part}</option>)}</select></div>))}</div>
+
+          {project.mapUrls && project.mapUrls.length > 0 ? (
+            <div className="space-y-8">
+              <p className="text-sm font-bold text-red-500 bg-red-50 p-3 rounded-lg">💡 図面をタップすると番号ピンを打てます！<br/>打ったピンは写真画面の「位置図」欄で選べるようになります。</p>
+              {project.mapUrls.map((u: string, i: number) => (
+                <div key={i} className="relative w-full border-2 border-gray-300 rounded-xl overflow-hidden bg-gray-100">
+                  {/* ★ 画像。タップでピンを追加 */}
+                  <img src={u} onClick={(e) => addPin(e, i)} className="w-full h-auto cursor-crosshair block" />
+                  
+                  {/* ★ 打ったピンを画像の上に表示 */}
+                  {(project.mapPins || []).filter((p: any) => p.mapIndex === i).map((pin: any) => (
+                    <div 
+                      key={pin.id} 
+                      onClick={(e) => removePin(e, pin.id)}
+                      style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: 'translate(-50%, -50%)' }}
+                      className="absolute bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold text-sm shadow-md border-2 border-white cursor-pointer hover:bg-red-600 z-10"
+                    >
+                      {pin.label}
+                    </div>
+                  ))}
+                  <button onClick={() => removeMap(i)} className="absolute top-2 right-2 bg-white/90 rounded-full p-2 text-red-500 shadow-sm z-20"><Trash2 className="w-5 h-5" /></button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="w-full bg-gray-100 rounded-2xl flex items-center justify-center border-2 border-dashed border-gray-300 overflow-hidden p-8">
+              <span className="text-gray-400 font-bold text-lg">位置図未登録</span>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -494,7 +531,6 @@ function PDFExportScreen() {
 
   if (!project) return null;
 
-  // ★ ページ番号の計算を正しく行うための準備
   const mapUrlsToRender = project.mapUrls && project.mapUrls.length > 0 ? project.mapUrls : [''];
   const mapCount = mapUrlsToRender.length;
   
@@ -506,7 +542,6 @@ function PDFExportScreen() {
     photoPages.push(chunk);
   }
   
-  // 総ページ数 = 表紙(1) + 位置図の枚数(mapCount) + 写真のページ数
   const totalPages = 1 + mapCount + photoPages.length;
 
   return (
@@ -529,36 +564,33 @@ function PDFExportScreen() {
           <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">- 1 / {totalPages} -</div>
         </div>
 
-        {/* ★ 修正：位置図を「1枚につき1ページ」のVIP待遇に変更！ */}
+        {/* 位置図 (1枚1ページの大迫力版 ＋ 赤ピン付き！) */}
         {mapUrlsToRender.map((u: string, mapIndex: number) => (
           <div key={`map-page-${mapIndex}`} className="pdf-page bg-white relative shadow-md flex flex-col" style={{ width: '210mm', height: '297mm', padding: '15mm' }}>
             <div className="w-full h-full border-[3px] border-gray-800 p-6 flex flex-col">
               <h2 className="text-2xl font-bold mb-4 border-b-2 border-gray-800 pb-2">位置図 {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}</h2>
               
-              {/* 写真をA4用紙の限界(高さ65%)までドカンと大きく表示！ */}
-              <div className="h-[65%] border border-gray-400 mb-6 flex items-center justify-center p-2 bg-gray-50">
+              <div className="border border-gray-400 p-2 bg-gray-50 flex-1 flex items-center justify-center overflow-hidden">
                 {u ? (
-                  <img 
-                    src={proxyUrl(u)} 
-                    crossOrigin="anonymous" 
-                    style={{ 
-                      width: '100%', 
-                      height: '100%', 
-                      objectFit: 'contain' 
-                    }} 
-                  />
+                  <div className="relative inline-block" style={{ maxWidth: '100%', maxHeight: '100%' }}>
+                    {/* 画像本体 */}
+                    <img src={proxyUrl(u)} crossOrigin="anonymous" className="block w-auto h-auto" style={{ maxWidth: '100%', maxHeight: '180mm', objectFit: 'contain' }} />
+                    {/* ★ PDFにも赤いピンを合成！ */}
+                    {(project.mapPins || []).filter((p: any) => p.mapIndex === mapIndex).map((pin: any) => (
+                      <div 
+                        key={pin.id} 
+                        style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: 'translate(-50%, -50%)' }}
+                        className="absolute bg-red-500 text-white rounded-full w-[8mm] h-[8mm] flex items-center justify-center font-bold text-[14px] border-[1.5px] border-white z-10"
+                      >
+                        {pin.label}
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <span className="text-gray-400 font-bold">位置図未登録</span>
                 )}
               </div>
-              
-              {/* 対応表は下部にスッキリ配置 */}
-              <div className="flex-1 flex flex-col">
-                <div className="flex bg-gray-200 border border-gray-800 font-bold text-center text-sm"><div className="w-1/4 border-r border-gray-800 p-2">符号</div><div className="w-1/2 border-r border-gray-800 p-2">部位</div><div className="w-1/4 p-2">写真NO</div></div>
-                {project.mapRows?.map((row: any) => (<div key={row.id} className="flex border-b border-l border-r border-gray-800 text-center text-sm"><div className="w-1/4 border-r border-gray-800 p-2">{row.symbol || "-"}</div><div className="w-1/2 border-r border-gray-800 p-2">{row.part}</div><div className="w-1/4 p-2">{row.relatedPhotoNumber || "-"}</div></div>))}
-              </div>
             </div>
-            {/* ページ番号（表紙が1なので、位置図は2からスタート） */}
             <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">- {2 + mapIndex} / {totalPages} -</div>
           </div>
         ))}
@@ -567,7 +599,6 @@ function PDFExportScreen() {
         {photoPages.map((chunk, pageIndex) => (<div key={pageIndex} className="pdf-page bg-white relative shadow-md flex flex-col" style={{ width: '210mm', height: '297mm', padding: '15mm' }}><div className="flex-1 flex flex-col justify-between border-[3px] border-gray-800 p-2">{chunk.map((p: any, i: number) => (<div key={i} className="flex gap-2 h-[32%] border border-gray-400 p-2 rounded"><div className="w-[45%] border border-gray-300 flex items-center justify-center bg-gray-50 overflow-hidden">
             {p.image && <img src={proxyUrl(p.image)} crossOrigin="anonymous" className="w-full h-full object-contain" />}
           </div><div className="w-[55%] flex flex-col text-sm border border-gray-300 bg-white"><div className="flex border-b border-gray-300"><div className="w-20 bg-gray-100 p-1 border-r">写真NO</div><div className="p-1 flex-1 font-bold">{p.photoNumber}</div></div><div className="flex border-b border-gray-300"><div className="w-20 bg-gray-100 p-1 border-r">撮影日</div><div className="p-1 flex-1">{p.shootingDate}</div></div><div className="flex border-b border-gray-300"><div className="w-20 bg-gray-100 p-1 border-r">位置図</div><div className="p-1 flex-1">{p.locationMap}</div></div><div className="flex border-b border-gray-300"><div className="w-20 bg-gray-100 p-1 border-r">工程</div><div className="p-1 flex-1">{p.process}</div></div><div className="flex-1 flex"><div className="w-20 bg-gray-100 p-1 border-r">説明</div><div className="p-1 flex-1 text-xs">{p.description}</div></div></div></div>))}</div>
-          {/* ページ番号（写真のページは位置図の後に続くように計算） */}
           <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">- {2 + mapCount + pageIndex} / {totalPages} -</div>
         </div>))}
       </div>
