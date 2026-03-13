@@ -11,8 +11,6 @@ const ROOF_PARTS = ["本棟", "隅棟", "軒先", "袖右", "袖左", "平部", 
 const PROCESS_SNIPPETS = ["施工前", "施工確認", "施工後"];
 const DESC_SNIPPETS = ["基準値：", "実測値：", "雪害による瓦割れ", "凍害による剥離", "漆喰の劣化・剥がれ", "瓦のズレ修正", "ビス打ち補強", "清掃・片付け"];
 
-// ★ 修正：Vercel専用の機械を外し、直接Google倉庫から画像をもらうようにしました。
-// （iPhoneのダブりバグを防ぐための暗号「cb=...」だけを付けています）
 const proxyUrl = (url: string) => {
   if (!url) return '';
   const separator = url.includes('?') ? '&' : '?';
@@ -480,7 +478,6 @@ function PDFExportScreen() {
         const pageEl = pages[i] as HTMLElement;
         await new Promise(resolve => setTimeout(resolve, 300));
         
-        // ★ iPhoneのバグ回避のため1回空打ちします
         await toJpeg(pageEl, { cacheBust: true }); 
         const dataUrl = await toJpeg(pageEl, { quality: 0.95, pixelRatio: 2, backgroundColor: '#ffffff' });
         const pdfHeight = (pageEl.offsetHeight * pdfWidth) / pageEl.offsetWidth;
@@ -497,6 +494,10 @@ function PDFExportScreen() {
 
   if (!project) return null;
 
+  // ★ ページ番号の計算を正しく行うための準備
+  const mapUrlsToRender = project.mapUrls && project.mapUrls.length > 0 ? project.mapUrls : [''];
+  const mapCount = mapUrlsToRender.length;
+  
   const activePhotos = project.photos?.filter((p: any) => p.image || p.process || p.description) || [];
   const photoPages = [];
   for (let i = 0; i < (activePhotos.length || 3); i += 3) {
@@ -504,7 +505,9 @@ function PDFExportScreen() {
     while (chunk.length < 3) chunk.push({ id: Math.random(), image: null, photoNumber: "", shootingDate: "", locationMap: "", process: "", description: "" });
     photoPages.push(chunk);
   }
-  const totalPages = 2 + photoPages.length;
+  
+  // 総ページ数 = 表紙(1) + 位置図の枚数(mapCount) + 写真のページ数
+  const totalPages = 1 + mapCount + photoPages.length;
 
   return (
     <div className="min-h-screen bg-gray-200 p-6 font-sans flex flex-col items-center pb-12">
@@ -526,36 +529,47 @@ function PDFExportScreen() {
           <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">- 1 / {totalPages} -</div>
         </div>
 
-        {/* 位置図 */}
-        <div className="pdf-page bg-white relative shadow-md flex flex-col" style={{ width: '210mm', height: '297mm', padding: '15mm' }}>
-          <div className="w-full h-full border-[3px] border-gray-800 p-6 flex flex-col">
-            <h2 className="text-2xl font-bold mb-4 border-b-2 border-gray-800 pb-2">位置図</h2>
-            <div className="h-[45%] border border-gray-400 mb-6 flex items-center justify-center p-2 bg-gray-50 gap-4">
-              {project.mapUrls?.map((u: string, i: number) => (
-                <img 
-                  key={i} 
-                  src={proxyUrl(u)} 
-                  crossOrigin="anonymous" 
-                  style={{ 
-                    width: project.mapUrls.length === 1 ? '100%' : '48%', 
-                    height: '100%', 
-                    objectFit: 'contain' 
-                  }} 
-                />
-              ))}
+        {/* ★ 修正：位置図を「1枚につき1ページ」のVIP待遇に変更！ */}
+        {mapUrlsToRender.map((u: string, mapIndex: number) => (
+          <div key={`map-page-${mapIndex}`} className="pdf-page bg-white relative shadow-md flex flex-col" style={{ width: '210mm', height: '297mm', padding: '15mm' }}>
+            <div className="w-full h-full border-[3px] border-gray-800 p-6 flex flex-col">
+              <h2 className="text-2xl font-bold mb-4 border-b-2 border-gray-800 pb-2">位置図 {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}</h2>
+              
+              {/* 写真をA4用紙の限界(高さ65%)までドカンと大きく表示！ */}
+              <div className="h-[65%] border border-gray-400 mb-6 flex items-center justify-center p-2 bg-gray-50">
+                {u ? (
+                  <img 
+                    src={proxyUrl(u)} 
+                    crossOrigin="anonymous" 
+                    style={{ 
+                      width: '100%', 
+                      height: '100%', 
+                      objectFit: 'contain' 
+                    }} 
+                  />
+                ) : (
+                  <span className="text-gray-400 font-bold">位置図未登録</span>
+                )}
+              </div>
+              
+              {/* 対応表は下部にスッキリ配置 */}
+              <div className="flex-1 flex flex-col">
+                <div className="flex bg-gray-200 border border-gray-800 font-bold text-center text-sm"><div className="w-1/4 border-r border-gray-800 p-2">符号</div><div className="w-1/2 border-r border-gray-800 p-2">部位</div><div className="w-1/4 p-2">写真NO</div></div>
+                {project.mapRows?.map((row: any) => (<div key={row.id} className="flex border-b border-l border-r border-gray-800 text-center text-sm"><div className="w-1/4 border-r border-gray-800 p-2">{row.symbol || "-"}</div><div className="w-1/2 border-r border-gray-800 p-2">{row.part}</div><div className="w-1/4 p-2">{row.relatedPhotoNumber || "-"}</div></div>))}
+              </div>
             </div>
-            <div className="flex-1 flex flex-col">
-              <div className="flex bg-gray-200 border border-gray-800 font-bold text-center text-sm"><div className="w-1/4 border-r border-gray-800 p-2">符号</div><div className="w-1/2 border-r border-gray-800 p-2">部位</div><div className="w-1/4 p-2">写真NO</div></div>
-              {project.mapRows?.map((row: any) => (<div key={row.id} className="flex border-b border-l border-r border-gray-800 text-center text-sm"><div className="w-1/4 border-r border-gray-800 p-2">{row.symbol || "-"}</div><div className="w-1/2 border-r border-gray-800 p-2">{row.part}</div><div className="w-1/4 p-2">{row.relatedPhotoNumber || "-"}</div></div>))}
-            </div>
+            {/* ページ番号（表紙が1なので、位置図は2からスタート） */}
+            <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">- {2 + mapIndex} / {totalPages} -</div>
           </div>
-          <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">- 2 / {totalPages} -</div>
-        </div>
+        ))}
 
         {/* 写真 */}
         {photoPages.map((chunk, pageIndex) => (<div key={pageIndex} className="pdf-page bg-white relative shadow-md flex flex-col" style={{ width: '210mm', height: '297mm', padding: '15mm' }}><div className="flex-1 flex flex-col justify-between border-[3px] border-gray-800 p-2">{chunk.map((p: any, i: number) => (<div key={i} className="flex gap-2 h-[32%] border border-gray-400 p-2 rounded"><div className="w-[45%] border border-gray-300 flex items-center justify-center bg-gray-50 overflow-hidden">
             {p.image && <img src={proxyUrl(p.image)} crossOrigin="anonymous" className="w-full h-full object-contain" />}
-          </div><div className="w-[55%] flex flex-col text-sm border border-gray-300 bg-white"><div className="flex border-b border-gray-300"><div className="w-20 bg-gray-100 p-1 border-r">写真NO</div><div className="p-1 flex-1 font-bold">{p.photoNumber}</div></div><div className="flex border-b border-gray-300"><div className="w-20 bg-gray-100 p-1 border-r">撮影日</div><div className="p-1 flex-1">{p.shootingDate}</div></div><div className="flex border-b border-gray-300"><div className="w-20 bg-gray-100 p-1 border-r">位置図</div><div className="p-1 flex-1">{p.locationMap}</div></div><div className="flex border-b border-gray-300"><div className="w-20 bg-gray-100 p-1 border-r">工程</div><div className="p-1 flex-1">{p.process}</div></div><div className="flex-1 flex"><div className="w-20 bg-gray-100 p-1 border-r">説明</div><div className="p-1 flex-1 text-xs">{p.description}</div></div></div></div>))}</div><div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">- {pageIndex + 3} / {totalPages} -</div></div>))}
+          </div><div className="w-[55%] flex flex-col text-sm border border-gray-300 bg-white"><div className="flex border-b border-gray-300"><div className="w-20 bg-gray-100 p-1 border-r">写真NO</div><div className="p-1 flex-1 font-bold">{p.photoNumber}</div></div><div className="flex border-b border-gray-300"><div className="w-20 bg-gray-100 p-1 border-r">撮影日</div><div className="p-1 flex-1">{p.shootingDate}</div></div><div className="flex border-b border-gray-300"><div className="w-20 bg-gray-100 p-1 border-r">位置図</div><div className="p-1 flex-1">{p.locationMap}</div></div><div className="flex border-b border-gray-300"><div className="w-20 bg-gray-100 p-1 border-r">工程</div><div className="p-1 flex-1">{p.process}</div></div><div className="flex-1 flex"><div className="w-20 bg-gray-100 p-1 border-r">説明</div><div className="p-1 flex-1 text-xs">{p.description}</div></div></div></div>))}</div>
+          {/* ページ番号（写真のページは位置図の後に続くように計算） */}
+          <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">- {2 + mapCount + pageIndex} / {totalPages} -</div>
+        </div>))}
       </div>
     </div>
   );
