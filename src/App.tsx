@@ -9,8 +9,6 @@ import { jsPDF } from 'jspdf';
 
 const ROOF_PARTS = ["本棟", "隅棟", "軒先", "袖右", "袖左", "平部", "流れ壁", "平行壁", "谷", "その他"];
 const PROCESS_SNIPPETS = ["施工前", "施工確認", "施工後"];
-
-// ★ 改善②：雪害や瓦工事に特化した定型文を大幅追加！
 const DESC_SNIPPETS = ["基準値：", "実測値：", "雪害による瓦割れ", "凍害による剥離", "漆喰の劣化・剥がれ", "瓦のズレ修正", "ビス打ち補強", "清掃・片付け"];
 
 const proxyUrl = (url: string) => url ? `/api/image?url=${encodeURIComponent(url)}` : '';
@@ -73,7 +71,8 @@ function ProjectListScreen() {
     const docRef = await addDoc(collection(db, "projects"), {
       projectName: "新規現場", projectLocation: "", constructionPeriod: "", contractorName: "山西瓦店",
       creationDate: new Date().toLocaleDateString('ja-JP'),
-      photos: Array.from({ length: 40 }, (_, i) => ({ id: i, image: null, photoNumber: String(i + 1), shootingDate: "", locationMap: "", process: "", description: "" })),
+      // ★ 変更：最初はスッキリ「1枠」だけにします
+      photos: [{ id: Date.now(), image: null, photoNumber: "1", shootingDate: "", locationMap: "", process: "", description: "" }],
       mapUrls: [], mapRows: [{ id: 1, symbol: "", part: "本棟", relatedPhotoNumber: "" }],
       createdAt: new Date().toISOString()
     });
@@ -193,13 +192,23 @@ function PhotoScreen() {
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
   };
 
-  // ★ 改善①：写真を空にする（クリア）機能
-  const clearPhoto = async (photoId: number) => {
-    if (window.confirm('この枠の写真を削除しますか？（文字は残ります）')) {
-      const newPhotos = project.photos.map((p: any) => p.id === photoId ? { ...p, image: null } : p);
-      setProject({ ...project, photos: newPhotos });
-      await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+  // ★ 変更：枠そのものを完全に削除し、番号を振り直す
+  const deletePhotoSlot = async (photoId: number) => {
+    if (window.confirm('この写真枠を完全に削除しますか？')) {
+      const newPhotos = project.photos.filter((p: any) => p.id !== photoId);
+      const renumbered = newPhotos.map((p: any, i: number) => ({ ...p, photoNumber: String(i + 1) }));
+      setProject({ ...project, photos: renumbered });
+      await updateDoc(doc(db, "projects", id!), { photos: renumbered });
     }
+  };
+
+  // ★ 新規：手動で空の枠を1つ追加する
+  const addPhotoSlot = async () => {
+    const newPhotos = [...project.photos, { 
+      id: Date.now(), image: null, photoNumber: String(project.photos.length + 1), shootingDate: "", locationMap: "", process: "", description: "" 
+    }];
+    setProject({ ...project, photos: newPhotos });
+    await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
   };
 
   const uploadPhoto = async (e: any, index: number) => {
@@ -218,19 +227,25 @@ function PhotoScreen() {
     });
   };
 
+  // ★ 変更：選んだ写真の枚数分だけ、足りない枠を自動で追加して流し込む
   const handleBulkUpload = async (e: any) => {
     const files = Array.from(e.target.files as FileList);
     if (files.length === 0) return;
 
     setBulkUploading(true);
     let newPhotos = [...project.photos];
-    let emptyIndices = newPhotos.map((p, i) => !p.image ? i : -1).filter(i => i !== -1);
-
     let uploadedCount = 0;
+
     for (let i = 0; i < files.length; i++) {
-      if (i >= emptyIndices.length) break;
-      const targetIndex = emptyIndices[i];
       const file = files[i];
+      let targetIndex = newPhotos.findIndex(p => !p.image);
+      
+      if (targetIndex === -1) {
+        newPhotos.push({
+          id: Date.now() + Math.random(), image: null, photoNumber: String(newPhotos.length + 1), shootingDate: "", locationMap: "", process: "", description: ""
+        });
+        targetIndex = newPhotos.length - 1;
+      }
 
       await new Promise<void>((resolve) => {
         compressImage(file, async (compressed) => {
@@ -240,7 +255,6 @@ function PhotoScreen() {
           newPhotos[targetIndex] = {
             ...newPhotos[targetIndex],
             image: url,
-            photoNumber: String(targetIndex + 1),
             shootingDate: new Date().toLocaleDateString('ja-JP')
           };
           resolve();
@@ -287,7 +301,7 @@ function PhotoScreen() {
             {bulkUploading ? `一括アップロード中... (${bulkProgress}枚完了)` : "複数写真を一括追加する"}
             <input type="file" multiple accept="image/*" className="hidden" onChange={handleBulkUpload} disabled={bulkUploading} />
           </label>
-          <p className="text-xs text-gray-500 text-center mt-3">※空いている枠に自動で順番に入ります</p>
+          <p className="text-xs text-gray-500 text-center mt-3">※枠が足りない場合は自動で追加されます</p>
         </div>
 
         <div className="space-y-8 mt-4">
@@ -298,14 +312,13 @@ function PhotoScreen() {
                 <button onClick={() => movePhoto(index, 'down')} className="bg-white p-2 rounded-lg shadow border border-gray-200 text-gray-600 hover:bg-gray-50"><ArrowDown className="w-5 h-5" /></button>
               </div>
               <div className="flex gap-4 mb-6 mt-2">
-                {/* ★ 改善①：相対位置（relative）を追加し、右上にゴミ箱ボタンを配置 */}
                 <div className="w-28 h-28 bg-gray-200/80 rounded-2xl flex items-center justify-center overflow-hidden border border-gray-300 shadow-inner relative">
                   {loadingId === photo.id ? (
                     <span className="text-sm font-bold text-blue-500">保存中...</span>
                   ) : photo.image ? (
                     <>
                       <img src={photo.image} className="w-full h-full object-cover" />
-                      <button onClick={() => clearPhoto(photo.id)} className="absolute top-1 right-1 bg-white/90 rounded-full p-1.5 text-red-500 shadow-sm hover:bg-white">
+                      <button onClick={() => deletePhotoSlot(photo.id)} className="absolute top-1 right-1 bg-white/90 rounded-full p-1.5 text-red-500 shadow-sm hover:bg-white">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </>
@@ -313,8 +326,14 @@ function PhotoScreen() {
                     <Camera className="w-8 h-8 text-gray-400" />
                   )}
                 </div>
-                <div className="flex-1 pt-2">
+                <div className="flex-1 pt-2 relative">
                   <div className="font-bold text-gray-800 text-lg">写真 {index + 1}</div>
+                  {/* ★ 画像がない空枠の時だけ、枠ごと消すゴミ箱をここに表示 */}
+                  {!photo.image && (
+                    <button onClick={() => deletePhotoSlot(photo.id)} className="absolute top-0 right-0 p-2 text-gray-400 hover:text-red-500 transition-colors">
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  )}
                   <label className="block w-full mt-3 text-center bg-blue-100/80 text-blue-700 font-bold py-3 text-lg rounded-xl cursor-pointer shadow-sm">
                     画像を選択 <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadPhoto(e, index)} />
                   </label>
@@ -339,6 +358,12 @@ function PhotoScreen() {
             </div>
           ))}
         </div>
+        
+        {/* ★ 新規：手動で枠を追加するボタン */}
+        <button onClick={addPhotoSlot} className="w-full mt-6 bg-gray-200 text-gray-700 font-bold py-4 text-lg rounded-xl shadow-sm hover:bg-gray-300 transition-colors flex items-center justify-center gap-2">
+          <Plus className="w-6 h-6" /> 写真枠を1つ追加する
+        </button>
+
       </div>
     </div>
   );
@@ -455,7 +480,8 @@ function PDFExportScreen() {
 
   if (!project) return null;
 
-  const activePhotos = project.photos?.filter((p: any) => p.image || p.photoNumber) || [];
+  // ★ 変更：完全に空っぽの枠はPDFに出力しないように賢くフィルター
+  const activePhotos = project.photos?.filter((p: any) => p.image || p.process || p.description) || [];
   const photoPages = [];
   for (let i = 0; i < (activePhotos.length || 3); i += 3) {
     const chunk = activePhotos.slice(i, i + 3);
