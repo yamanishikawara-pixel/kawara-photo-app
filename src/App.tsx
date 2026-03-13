@@ -11,7 +11,8 @@ const ROOF_PARTS = ["本棟", "隅棟", "軒先", "袖右", "袖左", "平部", 
 const PROCESS_SNIPPETS = ["施工前", "施工確認", "施工後"];
 const DESC_SNIPPETS = ["基準値：", "実測値：", "雪害による瓦割れ", "凍害による剥離", "漆喰の劣化・剥がれ", "瓦のズレ修正", "ビス打ち補強", "清掃・片付け"];
 
-const proxyUrl = (url: string) => url ? `${url}${url.includes('?') ? '&' : '?'}cb=${Math.random()}` : '';
+// ★修正：毎回ランダムな暗号をつけるのをやめ、写真ごとの固定IDを使うようにしました（これで真っ白バグが直ります）
+const proxyUrl = (url: string, id: string | number) => url ? `${url}${url.includes('?') ? '&' : '?'}cb=${id}` : '';
 
 function compressImage(file: File, callback: (compressedFile: File) => void) {
   const reader = new FileReader();
@@ -51,7 +52,6 @@ function InputField({ label, placeholder, value, onChange, bgColor }: any) {
   );
 }
 
-// 指スワイプ対応ドラッグ部品
 function useDraggablePin(initialX: number, initialY: number, onDragEnd: (x: number, y: number) => void) {
   const [position, setPosition] = useState({ x: initialX, y: initialY });
   const [dragging, setDragging] = useState(false);
@@ -104,7 +104,6 @@ function useDraggablePin(initialX: number, initialY: number, onDragEnd: (x: numb
   return { position, onMouseDown, onTouchStart, dragging, containerRef };
 }
 
-// --- 現場一覧 ---
 function ProjectListScreen() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<any[]>([]);
@@ -161,7 +160,6 @@ function ProjectListScreen() {
   );
 }
 
-// --- トップメニュー ---
 function HomeScreen() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -218,7 +216,6 @@ function CoverScreen() {
   );
 }
 
-// --- 写真に打つ「赤丸」コンポーネント ---
 function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChange, onRemove }: any) {
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(circle.x, circle.y, onDragEnd);
 
@@ -229,11 +226,11 @@ function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChan
         onMouseDown={(e) => { onSelect(); onMouseDown(e); }}
         onTouchStart={(e) => { onSelect(); onTouchStart(e); }}
         style={{ left: `${position.x}%`, top: `${position.y}%`, width: `${circle.size}%`, transform: 'translate(-50%, -50%)', touchAction: 'none' }}
-        className={`absolute aspect-square rounded-full border-[3px] border-red-500 shadow-sm ${dragging ? 'z-30 opacity-70 scale-110' : 'z-20 cursor-pointer'} ${isSelected ? 'border-dashed bg-red-500/10' : ''}`}
+        className={`absolute aspect-square rounded-full border-[3px] border-red-500 shadow-sm ${dragging ? 'z-30 opacity-70 scale-110' : 'z-20 cursor-pointer'} ${isSelected ? 'border-dashed bg-red-500/20' : ''}`}
       />
       {isSelected && !dragging && (
         <div style={{ left: `${position.x}%`, top: `${position.y + circle.size/2 + 5}%`, transform: 'translateX(-50%)' }} className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden">
-          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.min(50, circle.size * 1.3))}} className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700">+</button>
+          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.min(60, circle.size * 1.3))}} className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700">+</button>
           <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.max(5, circle.size * 0.7))}} className="px-4 py-2 text-xl font-bold border-l border-r hover:bg-gray-100 text-gray-700">-</button>
           <button onClick={(e) => {e.stopPropagation(); onRemove()}} className="px-4 py-2 text-red-500 hover:bg-red-50"><Trash2 className="w-5 h-5"/></button>
         </div>
@@ -287,7 +284,6 @@ function PhotoScreen() {
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
   };
 
-  // ★ 復元：枠を削除する機能
   const deletePhotoSlot = async (photoId: number) => {
     if (window.confirm('この写真枠を完全に削除しますか？')) {
       const newPhotos = project.photos.filter((p: any) => p.id !== photoId);
@@ -297,7 +293,6 @@ function PhotoScreen() {
     }
   };
 
-  // ★ 復元：画像だけをクリアする機能
   const clearPhoto = async (photoId: number) => {
     if (window.confirm('この枠の画像を削除しますか？（文字は残ります）')) {
       const newPhotos = project.photos.map((p: any) => p.id === photoId ? { ...p, image: null, circles: [] } : p);
@@ -306,7 +301,6 @@ function PhotoScreen() {
     }
   };
 
-  // ★ 復元：枠を追加する機能
   const addPhotoSlot = async () => {
     const newPhotos = [...project.photos, { 
       id: Date.now(), image: null, photoNumber: String(project.photos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [] 
@@ -315,7 +309,6 @@ function PhotoScreen() {
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
   };
 
-  // ★ 復元：画像の上下移動機能
   const movePhoto = async (index: number, direction: 'up' | 'down') => {
     if (direction === 'up' && index === 0) return;
     if (direction === 'down' && index === project.photos.length - 1) return;
@@ -333,7 +326,6 @@ function PhotoScreen() {
     await updateDoc(doc(db, "projects", id!), { photos: renumberedPhotos });
   };
 
-  // ★ 復元：一括アップロード機能
   const handleBulkUpload = async (e: any) => {
     const files = Array.from(e.target.files as FileList);
     if (files.length === 0) return;
@@ -392,6 +384,7 @@ function PhotoScreen() {
     });
   };
 
+  // ★修正：赤丸の基準を「写真そのもののサイズ」に合わせました！これでズレません！
   const addCircleToPhoto = async (e: any, photoId: number) => {
     if (selectedCircleId !== null) {
       setSelectedCircleId(null);
@@ -432,7 +425,6 @@ function PhotoScreen() {
         <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
         <h1 className="text-3xl font-bold mb-6 text-gray-900">写真の登録と赤丸記入</h1>
 
-        {/* ★ 一括アップロードボタン復元 */}
         <div className="bg-white p-5 rounded-3xl border border-black/5 shadow-sm mb-6">
           <label className="flex items-center justify-center gap-2 w-full bg-blue-500 text-white font-bold py-4 text-lg rounded-xl cursor-pointer shadow-md hover:bg-blue-600 transition-colors">
             <UploadCloud className="w-6 h-6" />
@@ -445,21 +437,22 @@ function PhotoScreen() {
           {project.photos.map((photo: any, index: number) => (
             <div key={photo.id} className="bg-white p-5 rounded-3xl border border-black/5 shadow-md relative">
               
-              {/* ★ 上下移動ボタン復元 */}
               <div className="absolute top-4 right-4 flex gap-2 z-10">
                 <button onClick={() => movePhoto(index, 'up')} className="bg-white p-2 rounded-lg shadow border border-gray-200 text-gray-600 hover:bg-gray-50"><ArrowUp className="w-5 h-5" /></button>
                 <button onClick={() => movePhoto(index, 'down')} className="bg-white p-2 rounded-lg shadow border border-gray-200 text-gray-600 hover:bg-gray-50"><ArrowDown className="w-5 h-5" /></button>
               </div>
 
-              <div 
-                className="w-full h-56 mt-10 bg-gray-100 rounded-2xl flex items-center justify-center overflow-hidden border-2 border-dashed border-gray-300 relative mb-4"
-                onClick={(e) => photo.image && addCircleToPhoto(e, photo.id)}
-              >
+              {/* ★修正：赤丸ズレ防止のため、画像にピッタリ合うラッパーを作成！ */}
+              <div className="w-full h-64 mt-10 bg-gray-100 rounded-2xl flex items-center justify-center overflow-hidden border-2 border-dashed border-gray-300 relative mb-4 p-2">
                 {loadingId === photo.id ? (
                   <span className="text-lg font-bold text-blue-500">保存中...</span>
                 ) : photo.image ? (
-                  <>
-                    <img src={photo.image} className="w-full h-full object-cover" />
+                  <div 
+                    className="relative inline-block" 
+                    style={{ maxWidth: '100%', maxHeight: '100%' }}
+                    onClick={(e) => addCircleToPhoto(e, photo.id)}
+                  >
+                    <img src={photo.image} className="block max-w-full max-h-[14rem] object-contain pointer-events-none rounded shadow-sm" />
                     {(photo.circles || []).map((circle: any) => (
                       <PhotoCircleMarker 
                         key={circle.id} circle={circle} isSelected={selectedCircleId === circle.id}
@@ -469,8 +462,8 @@ function PhotoScreen() {
                         onRemove={() => removeCircle(photo.id, circle.id)}
                       />
                     ))}
-                    <div className="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded font-bold pointer-events-none">タップで赤丸を追加</div>
-                  </>
+                    <div className="absolute -top-3 -left-3 bg-black/70 text-white text-xs px-2 py-1 rounded-full font-bold pointer-events-none shadow">タップで赤丸追加</div>
+                  </div>
                 ) : (
                   <div className="text-center text-gray-400">
                     <Camera className="w-10 h-10 mx-auto mb-2 opacity-50" />
@@ -482,7 +475,6 @@ function PhotoScreen() {
               <div className="flex justify-between items-center mb-5 pb-4 border-b border-gray-100">
                 <div className="font-bold text-gray-800 text-xl">写真 {index + 1}</div>
                 <div className="flex gap-2">
-                  {/* ★ 削除ボタン（ゴミ箱）復元 */}
                   {photo.image ? (
                     <button onClick={() => clearPhoto(photo.id)} className="p-2.5 text-gray-400 hover:text-red-500 bg-gray-50 rounded-xl border border-gray-200"><Trash2 className="w-5 h-5"/></button>
                   ) : (
@@ -506,7 +498,6 @@ function PhotoScreen() {
           ))}
         </div>
         
-        {/* ★ 写真枠追加ボタン復元 */}
         <button onClick={addPhotoSlot} className="w-full mt-8 bg-gray-800 text-white font-bold py-4 text-lg rounded-xl shadow-lg flex items-center justify-center gap-2 hover:bg-gray-700">
           <Plus className="w-6 h-6" /> 写真枠を1つ追加する
         </button>
@@ -683,21 +674,27 @@ function MapScreen() {
                 <ul className="text-sm text-red-700 font-medium space-y-1 list-disc pl-5">
                   <li>図面を<b>タップ</b>すると、赤丸が打てます。</li>
                   <li>赤丸を<b>ドラッグ</b>で自由に移動できます。</li>
-                  <li>赤丸を<b>もう一度タップ</b>すると、<b>「矢印」</b>への変更や、向き・文字の変更ができます。</li>
+                  <li>赤丸を<b>もう一度タップ</b>すると、<b>「矢印」</b>への変更や文字の変更ができます。</li>
                 </ul>
               </div>
               
+              {/* ★修正：位置図の赤丸ズレ防止のため、画像にピッタリ合うラッパーを作成！ */}
               {project.mapUrls.map((u: string, i: number) => (
-                <div key={i} className="relative w-full border-2 border-gray-300 rounded-xl bg-gray-100 shadow-inner group overflow-hidden">
-                  <img src={u} onClick={(e) => addPin(e, i)} className="w-full h-auto block z-0 cursor-crosshair" />
-                  {(project.mapPins || []).filter((p: any) => p.mapIndex === i).map((pin: any) => (
-                    <MapMarker 
-                      key={pin.id} 
-                      pin={pin} 
-                      onDragEnd={(x: number, y: number) => savePin({...pin, x, y})}
-                      onClick={() => setEditingPin(pin)}
-                    />
-                  ))}
+                <div key={i} className="relative w-full border-2 border-gray-300 rounded-xl bg-gray-100 shadow-inner group overflow-hidden flex items-center justify-center p-2">
+                  <div 
+                    className="relative inline-block" 
+                    style={{ maxWidth: '100%' }}
+                    onClick={(e) => addPin(e, i)}
+                  >
+                    <img src={u} className="block max-w-full h-auto pointer-events-none rounded shadow-sm" />
+                    {(project.mapPins || []).filter((p: any) => p.mapIndex === i).map((pin: any) => (
+                      <MapMarker 
+                        key={pin.id} pin={pin} 
+                        onDragEnd={(x: number, y: number) => savePin({...pin, x, y})}
+                        onClick={() => setEditingPin(pin)}
+                      />
+                    ))}
+                  </div>
                   <button onClick={() => removeMap(i)} className="absolute top-2 right-2 bg-white/90 rounded-full p-2 text-red-500 shadow-sm z-20"><Trash2 className="w-5 h-5" /></button>
                 </div>
               ))}
@@ -726,18 +723,31 @@ function PDFExportScreen() {
     try {
       const pages = document.querySelectorAll('.pdf-page');
       if (pages.length === 0) return;
-      alert(`PDF作成中...スマホの画面をそのままにして少しお待ちください`);
+      
+      alert(`PDF作成中...スマホの画面をそのままにして少しお待ちください\n（写真が多い場合は10秒ほどかかります）`);
+      
+      // ★修正：真っ白バグ防止のため、一番上にスクロールしてから少し長めに待機
+      window.scrollTo(0, 0);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
+      
       for (let i = 0; i < pages.length; i++) {
         const pageEl = pages[i] as HTMLElement;
-        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // ★修正：真っ白バグ防止のため、該当ページを画面内にスクロールして確実に表示させる
+        pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
+        await new Promise(resolve => setTimeout(resolve, 600)); 
+        
         await toJpeg(pageEl, { cacheBust: true }); 
         const dataUrl = await toJpeg(pageEl, { quality: 0.95, pixelRatio: 2, backgroundColor: '#ffffff' });
         const pdfHeight = (pageEl.offsetHeight * pdfWidth) / pageEl.offsetWidth;
+        
         if (i > 0) pdf.addPage();
         pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
       }
+      
       pdf.save(`${project.projectName || '写真台帳'}.pdf`);
     } catch (error: any) { alert("エラー: " + error.message); }
   };
@@ -786,7 +796,8 @@ function PDFExportScreen() {
               <div className="border border-gray-400 p-2 bg-gray-50 flex-1 flex items-center justify-center overflow-hidden">
                 {u ? (
                   <div className="relative inline-block" style={{ maxWidth: '100%', maxHeight: '100%' }}>
-                    <img src={proxyUrl(u)} crossOrigin="anonymous" className="block w-auto h-auto" style={{ maxWidth: '100%', maxHeight: '180mm', objectFit: 'contain' }} />
+                    {/* ★修正：真っ白バグ防止のID付きURL */}
+                    <img src={proxyUrl(u, mapIndex)} crossOrigin="anonymous" className="block w-auto h-auto" style={{ maxWidth: '100%', maxHeight: '180mm', objectFit: 'contain' }} />
                     
                     {/* PDF用マーカー */}
                     {(project.mapPins || []).filter((p: any) => p.mapIndex === mapIndex).map((pin: any) => (
@@ -818,11 +829,12 @@ function PDFExportScreen() {
         {photoPages.map((chunk, pageIndex) => (<div key={pageIndex} className="pdf-page bg-white relative shadow-md flex flex-col" style={{ width: '210mm', height: '297mm', padding: '15mm' }}><div className="flex-1 flex flex-col justify-between border-[3px] border-gray-800 p-2">{chunk.map((p: any, i: number) => (<div key={i} className="flex gap-2 h-[32%] border border-gray-400 p-2 rounded"><div className="w-[45%] border border-gray-300 flex items-center justify-center bg-gray-50 overflow-hidden relative">
             
             {p.image && (
-              <div className="relative w-full h-full flex items-center justify-center">
-                <img src={proxyUrl(p.image)} crossOrigin="anonymous" className="max-w-full max-h-full object-contain" />
-                {/* PDF用の写真赤丸 */}
+              <div className="relative inline-block" style={{ maxWidth: '100%', maxHeight: '100%' }}>
+                {/* ★修正：真っ白バグ防止のID付きURL */}
+                <img src={proxyUrl(p.image, p.id)} crossOrigin="anonymous" className="block max-w-full max-h-[80mm] object-contain" />
+                {/* ★修正：PDFでも赤丸がズレない設定 */}
                 {(p.circles || []).map((circle: any) => (
-                  <div key={circle.id} style={{ left: `${circle.x}%`, top: `${circle.y}%`, width: `${circle.size}%`, transform: 'translate(-50%, -50%)' }} className="absolute aspect-square rounded-full border-[3px] border-red-600" />
+                  <div key={circle.id} style={{ left: `${circle.x}%`, top: `${circle.y}%`, width: `${circle.size}%`, transform: 'translate(-50%, -50%)' }} className="absolute aspect-square rounded-full border-[3px] border-red-600 bg-red-600/10" />
                 ))}
               </div>
             )}
