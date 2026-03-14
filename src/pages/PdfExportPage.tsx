@@ -12,25 +12,20 @@ export default function PdfExportPage() {
   const navigate = useNavigate();
   const [project, setProject] = useState<any>(null);
   
-  // ★スマホの画面幅に合わせて縮小するための機能
   const [scale, setScale] = useState(1);
 
   useEffect(() => {
     getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data()));
   }, [id]);
 
-  // ★画面サイズが変わった時に縮小率を自動計算する機能
   useEffect(() => {
     const calculateScale = () => {
-      // 画面の横幅から左右の少しの余白(約32px)を引いた幅
+      // 画面の横幅から左右の余白を引いた幅
       const availableWidth = window.innerWidth - 32;
-      // A4用紙のピクセル幅（約794px）
+      // A4用紙のピクセル幅（794px）
       const a4Width = 794;
-      
-      // 画面がA4より小さい場合のみ縮小（最大1倍）
       setScale(Math.min(1, availableWidth / a4Width));
     };
-
     calculateScale();
     window.addEventListener('resize', calculateScale);
     return () => window.removeEventListener('resize', calculateScale);
@@ -55,7 +50,7 @@ export default function PdfExportPage() {
         pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
         await new Promise(resolve => setTimeout(resolve, 600)); 
         
-        // ★重要: 高画質でPDF化する瞬間だけ、縮小を解除して1倍（等倍）に戻す
+        // ★重要: PDF化する瞬間だけ、強制的に縮小を解除して高画質にする
         const currentTransform = pageEl.style.transform;
         pageEl.style.transform = 'scale(1)';
         
@@ -66,11 +61,9 @@ export default function PdfExportPage() {
           backgroundColor: '#ffffff'
         });
         
-        // PDF出力が終わったら元の縮小状態に戻す
         pageEl.style.transform = currentTransform;
 
         const pdfHeight = (pageEl.offsetHeight * pdfWidth) / pageEl.offsetWidth;
-        
         if (i > 0) pdf.addPage();
         pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
       }
@@ -95,7 +88,7 @@ export default function PdfExportPage() {
   const totalPages = 1 + mapCount + photoPages.length;
 
   return (
-    <div className="min-h-screen bg-gray-200 p-4 sm:p-6 font-sans flex flex-col items-center pb-12 overflow-x-hidden">
+    <div className="min-h-screen bg-gray-200 p-4 sm:p-6 font-sans flex flex-col items-center pb-12 overflow-x-hidden w-full">
       <div className="w-full max-w-2xl mb-6 flex justify-between items-center">
         <button onClick={() => navigate(`/project/${id}`)} className="text-blue-500 font-bold flex items-center gap-2 text-lg">
           <ArrowLeft className="w-6 h-6" /> もどる
@@ -108,9 +101,9 @@ export default function PdfExportPage() {
       <div className="flex flex-col gap-8 items-center w-full">
         
         {/* 表紙 */}
-        {/* ★追加：スケール（縮小率）に合わせて親枠のサイズを縮めることで、不自然な余白をなくす */}
-        <div style={{ width: `${794 * scale}px`, height: `${1123 * scale}px` }} className="relative shadow-md bg-white">
-          <div className="pdf-page bg-white relative flex flex-col origin-top-left" style={{ width: '210mm', height: '297mm', padding: '20mm', transform: `scale(${scale})` }}>
+        {/* ★修正: 親枠をぴったりスマホサイズに固定し、中身を「絶対配置 (absolute)」にすることで画面の押し広がりを防ぐ！ */}
+        <div style={{ width: `${794 * scale}px`, height: `${1123 * scale}px` }} className="relative bg-white shadow-md shrink-0">
+          <div className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left" style={{ width: '794px', height: '1123px', padding: '20mm', transform: `scale(${scale})` }}>
             <div className="w-full h-full border-[3px] border-gray-800 p-12 flex flex-col relative">
               <div className="mt-[30mm] mb-[40mm] text-center">
                 <h1 className="text-4xl font-serif tracking-[0.5em] font-bold mb-4">工事写真報告書</h1>
@@ -127,16 +120,14 @@ export default function PdfExportPage() {
 
         {/* 位置図 */}
         {mapUrlsToRender.map((u: string, mapIndex: number) => (
-          <div key={`map-page-${mapIndex}`} style={{ width: `${794 * scale}px`, height: `${1123 * scale}px` }} className="relative shadow-md bg-white">
-            <div className="pdf-page bg-white relative flex flex-col origin-top-left" style={{ width: '210mm', height: '297mm', padding: '15mm', transform: `scale(${scale})` }}>
+          <div key={`map-page-${mapIndex}`} style={{ width: `${794 * scale}px`, height: `${1123 * scale}px` }} className="relative bg-white shadow-md shrink-0">
+            <div className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left" style={{ width: '794px', height: '1123px', padding: '15mm', transform: `scale(${scale})` }}>
               <div className="w-full h-full border-[3px] border-gray-800 p-6 flex flex-col">
                 <h2 className="text-2xl font-bold mb-4 border-b-2 border-gray-800 pb-2">位置図 {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}</h2>
-                
                 <div className="border border-gray-400 p-2 bg-gray-50 flex-1 flex items-center justify-center overflow-hidden">
                   {u ? (
                     <div className="relative inline-block" style={{ maxWidth: '100%', maxHeight: '100%' }}>
                       <img src={proxyUrl(u, mapIndex)} crossOrigin="anonymous" className="block w-auto h-auto" style={{ maxWidth: '100%', maxHeight: '180mm', objectFit: 'contain' }} />
-                      
                       {(project.mapPins || []).filter((p: any) => p.mapIndex === mapIndex).map((pin: any) => (
                         <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: 'translate(-50%, -50%)' }} className="absolute z-10">
                           {pin.type === 'arrow' ? (
@@ -165,8 +156,8 @@ export default function PdfExportPage() {
 
         {/* 写真 */}
         {photoPages.map((chunk, pageIndex) => (
-          <div key={pageIndex} style={{ width: `${794 * scale}px`, height: `${1123 * scale}px` }} className="relative shadow-md bg-white">
-            <div className="pdf-page bg-white relative flex flex-col origin-top-left" style={{ width: '210mm', height: '297mm', padding: '15mm', transform: `scale(${scale})` }}>
+          <div key={pageIndex} style={{ width: `${794 * scale}px`, height: `${1123 * scale}px` }} className="relative bg-white shadow-md shrink-0">
+            <div className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left" style={{ width: '794px', height: '1123px', padding: '15mm', transform: `scale(${scale})` }}>
               <div className="flex-1 flex flex-col justify-between border-[3px] border-gray-800 p-2">
                 {chunk.map((p: any, i: number) => (
                   <div key={i} className="flex gap-2 h-[32%] border border-gray-400 p-2 rounded">
