@@ -117,8 +117,7 @@ function ProjectListScreen() {
       projectName: "新規現場", projectLocation: "", constructionPeriod: "", contractorName: "山西瓦店",
       creationDate: new Date().toLocaleDateString('ja-JP'),
       photos: [{ id: Date.now(), image: null, photoNumber: "1", shootingDate: "", locationMap: "", process: "", description: "", circles: [] }],
-      mapUrls: [], mapRows: [{ id: 1, symbol: "", part: "本棟", relatedPhotoNumber: "" }],
-      mapPins: [], 
+      mapUrls: [], mapRows: [], mapPins: [], 
       createdAt: new Date().toISOString()
     });
     navigate(`/project/${docRef.id}`);
@@ -584,6 +583,25 @@ function MapScreen() {
     await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
   };
 
+  // ★ 新規：位置図の説明欄（表）の操作機能
+  const addMapRow = async () => {
+    const newRows = [...(project.mapRows || []), { id: Date.now(), symbol: "", part: "", photoNo: "", remarks: "" }];
+    setProject({ ...project, mapRows: newRows });
+    await updateDoc(doc(db, "projects", id!), { mapRows: newRows });
+  };
+
+  const updateMapRow = async (rowId: number, field: string, value: string) => {
+    const newRows = (project.mapRows || []).map((r: any) => r.id === rowId ? { ...r, [field]: value } : r);
+    setProject({ ...project, mapRows: newRows });
+    await updateDoc(doc(db, "projects", id!), { mapRows: newRows });
+  };
+
+  const removeMapRow = async (rowId: number) => {
+    const newRows = (project.mapRows || []).filter((r: any) => r.id !== rowId);
+    setProject({ ...project, mapRows: newRows });
+    await updateDoc(doc(db, "projects", id!), { mapRows: newRows });
+  };
+
   if (!project) return null;
 
   return (
@@ -621,6 +639,26 @@ function MapScreen() {
                   <button onClick={() => removeMap(i)} className="absolute top-2 right-2 bg-white/90 rounded-full p-2 text-red-500 shadow-sm z-20"><Trash2 className="w-5 h-5" /></button>
                 </div>
               ))}
+              
+              {/* ★ 新規追加：位置図 説明欄エディタ */}
+              <div className="mt-8 pt-6 border-t border-gray-200">
+                <h2 className="text-xl font-bold mb-4 text-gray-900">位置図 説明欄</h2>
+                <div className="space-y-3">
+                  {(project.mapRows || []).map((row: any) => (
+                    <div key={row.id} className="flex gap-2 items-center bg-gray-50 p-2 rounded-xl border border-gray-200">
+                      <div className="flex-1 grid grid-cols-12 gap-2">
+                        <input type="text" placeholder="番号" className="col-span-3 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.symbol || ''} onChange={e => updateMapRow(row.id, 'symbol', e.target.value)} />
+                        <input type="text" placeholder="部位" className="col-span-5 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.part || ''} onChange={e => updateMapRow(row.id, 'part', e.target.value)} />
+                        <input type="text" placeholder="写真NO" className="col-span-4 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.photoNo || row.relatedPhotoNumber || ''} onChange={e => updateMapRow(row.id, 'photoNo', e.target.value)} />
+                        <input type="text" placeholder="備考（説明）" className="col-span-12 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.remarks || ''} onChange={e => updateMapRow(row.id, 'remarks', e.target.value)} />
+                      </div>
+                      <button onClick={() => removeMapRow(row.id)} className="p-2 text-red-500 bg-white border border-red-100 rounded-lg hover:bg-red-50"><Trash2 className="w-5 h-5" /></button>
+                    </div>
+                  ))}
+                  <button onClick={addMapRow} className="w-full py-4 bg-gray-100 text-gray-700 font-bold rounded-xl mt-2 border-2 border-dashed border-gray-300 hover:bg-gray-200 transition-colors">+ 説明行を追加</button>
+                </div>
+              </div>
+
             </div>
           ) : (
              <div className="w-full bg-gray-100 rounded-2xl flex flex-col items-center justify-center border-2 border-dashed border-gray-300 overflow-hidden p-10 gap-3">
@@ -716,6 +754,7 @@ function PDFExportScreen() {
       
       <div className="flex flex-col gap-8 items-center w-full">
         
+        {/* 表紙 */}
         <div style={{ width: `${794 * scale}px`, height: `${1123 * scale}px` }} className="relative bg-white shadow-md shrink-0">
           <div className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left" style={{ width: '794px', height: '1123px', padding: '20mm', transform: `scale(${scale})` }}>
             <div className="w-full h-full border-[3px] border-gray-800 p-12 flex flex-col relative">
@@ -732,34 +771,68 @@ function PDFExportScreen() {
           </div>
         </div>
 
+        {/* 位置図 */}
         {mapUrlsToRender.map((u: string, mapIndex: number) => (
           <div key={`map-page-${mapIndex}`} style={{ width: `${794 * scale}px`, height: `${1123 * scale}px` }} className="relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left" style={{ width: '794px', height: '1123px', padding: '15mm', transform: `scale(${scale})` }}>
               <div className="w-full h-full border-[3px] border-gray-800 p-6 flex flex-col">
                 <h2 className="text-2xl font-bold mb-4 border-b-2 border-gray-800 pb-2">位置図 {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}</h2>
-                <div className="border border-gray-400 p-2 bg-gray-50 flex-1 flex items-center justify-center overflow-hidden">
-                  {u ? (
-                    <div className="relative inline-block" style={{ maxWidth: '100%', maxHeight: '100%' }}>
-                      <img src={proxyUrl(u, mapIndex)} crossOrigin="anonymous" className="block w-auto h-auto" style={{ maxWidth: '100%', maxHeight: '180mm', objectFit: 'contain' }} />
-                      {(project.mapPins || []).filter((p: any) => p.mapIndex === mapIndex).map((pin: any) => (
-                        <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: 'translate(-50%, -50%)' }} className="absolute z-10">
-                          {pin.type === 'arrow' ? (
-                            <div className="flex items-center gap-1 bg-white/70 px-1 rounded border border-red-200">
-                              <span className="text-red-600 font-black text-[24px]" style={{ transform: `rotate(${pin.rotation || 0}deg)` }}>➡</span>
-                              <span className="text-red-600 font-bold text-[20px]">{pin.label}</span>
-                            </div>
-                          ) : (
-                            <div className="relative flex items-center justify-center">
-                              <div className="w-[14mm] h-[14mm] rounded-full border-[4px] border-red-600 bg-red-600/10"></div>
-                              <span className="absolute text-red-600 font-bold text-[18px] bg-white/70 px-1 rounded">{pin.label}</span>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                
+                {/* ★ 修正：図面と表を分割してレイアウト */}
+                <div className="border border-gray-400 p-2 bg-gray-50 flex-1 flex flex-col items-center justify-start overflow-hidden">
+                  
+                  {/* 図面本体 */}
+                  <div className="relative inline-block flex-1 w-full flex items-center justify-center min-h-0">
+                    {u ? (
+                      <>
+                        <img src={proxyUrl(u, mapIndex)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-full object-contain" />
+                        {(project.mapPins || []).filter((p: any) => p.mapIndex === mapIndex).map((pin: any) => (
+                          <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: 'translate(-50%, -50%)' }} className="absolute z-10">
+                            {pin.type === 'arrow' ? (
+                              <div className="flex items-center gap-1 bg-white/70 px-1 rounded border border-red-200">
+                                <span className="text-red-600 font-black text-[24px]" style={{ transform: `rotate(${pin.rotation || 0}deg)` }}>➡</span>
+                                <span className="text-red-600 font-bold text-[20px]">{pin.label}</span>
+                              </div>
+                            ) : (
+                              <div className="relative flex items-center justify-center">
+                                <div className="w-[14mm] h-[14mm] rounded-full border-[4px] border-red-600 bg-red-600/10"></div>
+                                <span className="absolute text-red-600 font-bold text-[18px] bg-white/70 px-1 rounded">{pin.label}</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </>
+                    ) : (
+                      <span className="text-gray-400 font-bold">位置図未登録</span>
+                    )}
+                  </div>
+
+                  {/* ★ 新規追加：位置図 説明表（黄金比） */}
+                  {project.mapRows && project.mapRows.length > 0 && (
+                    <div className="w-full mt-4 shrink-0">
+                      <table className="w-full border-collapse border border-gray-800 text-[12px] bg-white">
+                        <thead>
+                          <tr className="bg-gray-100 text-center">
+                            <th className="border border-gray-800 p-1.5 w-[10%]">番号</th>
+                            <th className="border border-gray-800 p-1.5 w-[20%]">部位</th>
+                            <th className="border border-gray-800 p-1.5 w-[15%]">写真NO</th>
+                            <th className="border border-gray-800 p-1.5 w-[55%]">備考</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {project.mapRows.map((row: any, i: number) => (
+                            <tr key={i} className="text-center h-8">
+                              <td className="border border-gray-800 p-1.5 font-bold">{row.symbol}</td>
+                              <td className="border border-gray-800 p-1.5">{row.part}</td>
+                              <td className="border border-gray-800 p-1.5">{row.photoNo || row.relatedPhotoNumber}</td>
+                              <td className="border border-gray-800 p-1.5 text-left">{row.remarks}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  ) : (
-                    <span className="text-gray-400 font-bold">位置図未登録</span>
                   )}
+
                 </div>
               </div>
               <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">- {2 + mapIndex} / {totalPages} -</div>
@@ -767,6 +840,7 @@ function PDFExportScreen() {
           </div>
         ))}
 
+        {/* 写真 */}
         {photoPages.map((chunk, pageIndex) => (
           <div key={pageIndex} style={{ width: `${794 * scale}px`, height: `${1123 * scale}px` }} className="relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left" style={{ width: '794px', height: '1123px', padding: '15mm', transform: `scale(${scale})` }}>
