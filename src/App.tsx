@@ -558,12 +558,16 @@ function MapScreen() {
     await updateDoc(doc(db, "projects", id!), { mapUrls: newUrls, mapPins: newPins });
   };
 
+  // ★ 修正：図面をタップした時、1枚目は「A-」、2枚目は「B-」を自動付与！
   const addPin = async (e: any, mapIndex: number) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
+    
     const currentPins = (project.mapPins || []).filter((p: any) => p.mapIndex === mapIndex);
-    const label = String(currentPins.length + 1);
+    const prefix = mapIndex === 0 ? 'A-' : 'B-';
+    const label = `${prefix}${currentPins.length + 1}`;
+
     const newPin = { id: Date.now(), mapIndex, x, y, label, type: 'circle', rotation: 0 };
     const newPins = [...(project.mapPins || []), newPin];
     setProject({ ...project, mapPins: newPins });
@@ -583,9 +587,13 @@ function MapScreen() {
     await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
   };
 
-  // ★ 変更：どの位置図に対する説明行かを記録するために mapIndex を追加
+  // ★ 修正：説明行を追加した時も、自動で「A-1」「B-1」などを入力！
   const addMapRow = async (mapIndex: number) => {
-    const newRows = [...(project.mapRows || []), { id: Date.now(), mapIndex, symbol: "", part: "", photoNo: "", remarks: "" }];
+    const currentRows = (project.mapRows || []).filter((r: any) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0));
+    const prefix = mapIndex === 0 ? 'A-' : 'B-';
+    const symbol = `${prefix}${currentRows.length + 1}`;
+    
+    const newRows = [...(project.mapRows || []), { id: Date.now(), mapIndex, symbol, part: "", photoNo: "", remarks: "" }];
     setProject({ ...project, mapRows: newRows });
     await updateDoc(doc(db, "projects", id!), { mapRows: newRows });
   };
@@ -629,7 +637,6 @@ function MapScreen() {
               </div>
               
               {project.mapUrls.map((u: string, i: number) => {
-                // ★ 新規：この図面用の説明行だけを抜き出す
                 const currentRows = (project.mapRows || []).filter((r: any) => r.mapIndex === i || (r.mapIndex === undefined && i === 0));
                 
                 return (
@@ -642,7 +649,6 @@ function MapScreen() {
                   </div>
                   <button onClick={() => removeMap(i)} className="absolute top-2 right-2 bg-white/90 rounded-full p-2 text-red-500 shadow-sm z-20"><Trash2 className="w-5 h-5" /></button>
 
-                  {/* ★ 変更：図面ごとに独立した説明表 */}
                   <div className="w-full mt-6 pt-4 border-t border-gray-300">
                     <h3 className="text-lg font-bold mb-3 text-gray-800">位置図 {i + 1} の説明表</h3>
                     <div className="space-y-3">
@@ -759,7 +765,6 @@ function PDFExportScreen() {
       
       <div className="flex flex-col gap-8 items-center w-full">
         
-        {/* 表紙 */}
         <div style={{ width: `${794 * scale}px`, height: `${1123 * scale}px` }} className="relative bg-white shadow-md shrink-0">
           <div className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left" style={{ width: '794px', height: '1123px', padding: '20mm', transform: `scale(${scale})` }}>
             <div className="w-full h-full border-[3px] border-gray-800 p-12 flex flex-col relative">
@@ -776,16 +781,12 @@ function PDFExportScreen() {
           </div>
         </div>
 
-        {/* 位置図 */}
         {mapUrlsToRender.map((u: string, mapIndex: number) => (
           <div key={`map-page-${mapIndex}`} style={{ width: `${794 * scale}px`, height: `${1123 * scale}px` }} className="relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left" style={{ width: '794px', height: '1123px', padding: '15mm', transform: `scale(${scale})` }}>
               <div className="w-full h-full border-[3px] border-gray-800 p-6 flex flex-col">
                 <h2 className="text-2xl font-bold mb-4 border-b-2 border-gray-800 pb-2">位置図 {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}</h2>
-                
                 <div className="border border-gray-400 p-2 bg-gray-50 flex-1 flex flex-col items-center justify-start overflow-hidden">
-                  
-                  {/* 図面本体 */}
                   <div className="relative inline-block w-full flex items-center justify-center min-h-0">
                     {u ? (
                       <>
@@ -810,12 +811,9 @@ function PDFExportScreen() {
                       <span className="text-gray-400 font-bold">位置図未登録</span>
                     )}
                   </div>
-
-                  {/* ★ 変更：この位置図専用の説明表 */}
                   {(() => {
                     const currentRows = (project.mapRows || []).filter((r: any) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0));
                     if (currentRows.length === 0) return null;
-                    
                     return (
                       <div className="w-full mt-4 shrink-0">
                         <table className="w-full border-collapse border border-gray-800 text-[12px] bg-white">
@@ -841,7 +839,6 @@ function PDFExportScreen() {
                       </div>
                     );
                   })()}
-
                 </div>
               </div>
               <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">- {2 + mapIndex} / {totalPages} -</div>
@@ -849,7 +846,6 @@ function PDFExportScreen() {
           </div>
         ))}
 
-        {/* 写真 */}
         {photoPages.map((chunk, pageIndex) => (
           <div key={pageIndex} style={{ width: `${794 * scale}px`, height: `${1123 * scale}px` }} className="relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left" style={{ width: '794px', height: '1123px', padding: '15mm', transform: `scale(${scale})` }}>
