@@ -4,7 +4,7 @@ import { ArrowLeft, Images, MapPin, X, Trash2 } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
-import LoadingSpinner from '../shared/LoadingSpinner';
+import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { proxyUrl } from '../shared/utils';
 
 function useDraggablePin(initialX: number, initialY: number, onDragEnd: (x: number, y: number) => void) {
@@ -232,12 +232,14 @@ export default function MapPage() {
                 const currentRows = (project.mapRows || []).filter((r: any) => r.mapIndex === i || (r.mapIndex === undefined && i === 0));
                 
                 return (
-                <div key={i} className="relative w-full border-2 border-gray-300 rounded-xl bg-gray-100 shadow-inner group overflow-hidden flex items-center justify-center p-2 flex-col">
-                  <div className="relative inline-block" onClick={(e) => addPin(e, i)}>
-                    <img src={proxyUrl(u, i)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[60vh] mx-auto pointer-events-none rounded shadow-sm" />
-                    {(project.mapPins || []).filter((p: any) => p.mapIndex === i).map((pin: any) => (
-                      <MapMarker key={pin.id} pin={pin} onDragEnd={(x: number, y: number) => savePin({...pin, x, y})} onClick={() => setEditingPin(pin)} />
-                    ))}
+                <div key={i} className="relative w-full border-2 border-gray-300 rounded-xl bg-gray-100 shadow-inner group overflow-hidden flex flex-col p-2">
+                  <div className="flex items-center justify-center overflow-hidden">
+                    <div className="relative inline-block" onClick={(e) => addPin(e, i)}>
+                      <img src={proxyUrl(u, i)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[60vh] pointer-events-none rounded shadow-sm" alt="" />
+                      {(project.mapPins || []).filter((p: any) => p.mapIndex === i).map((pin: any) => (
+                        <MapMarker key={pin.id} pin={pin} onDragEnd={(x: number, y: number) => savePin({...pin, x, y})} onClick={() => setEditingPin(pin)} />
+                      ))}
+                    </div>
                   </div>
                   <button onClick={() => removeMap(i)} className="absolute top-2 right-2 bg-white/90 rounded-full p-2 text-red-500 shadow-sm z-20"><Trash2 className="w-5 h-5" /></button>
 

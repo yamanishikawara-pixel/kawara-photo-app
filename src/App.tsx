@@ -3,8 +3,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ProjectListPage } from './pages/ProjectListPage';
 import { HomePage } from './pages/HomePage';
 import { CoverPage } from './pages/CoverPage';
-import { PhotoPage } from './pages/PhotoPage';
-import { MapPage } from './pages/MapPage';
+import PhotoPage from './pages/PhotoPage';
+import MapPage from './pages/MapPage';
 import PdfExportPage from './pages/PdfExportPage';
 
 export default function App() {
