@@ -4,8 +4,7 @@ import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, 
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
-import LoadingSpinner from '../shared/LoadingSpinner';
-import { proxyUrl } from '../shared/utils'; // ★これも追加しました！
+import { proxyUrl } from '../shared/utils';
 
 function compressImage(file: File, callback: (compressedFile: File) => void) {
   const reader = new FileReader();
@@ -67,7 +66,7 @@ function useDraggablePin(initialX: number, initialY: number, onDragEnd: (x: numb
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('mouseup', onEnd);
-      window.removeEventListener('touchmove', onEnd);
+      window.removeEventListener('touchend', onEnd);
     };
   }, [dragging, position.x, position.y, onDragEnd]);
 
@@ -246,7 +245,7 @@ export default function PhotoPage() {
     setSelectedCircleId(null);
   };
 
-  if (!project) return <LoadingSpinner />;
+  if (!project) return <div className="p-10 text-center font-bold text-gray-500">読み込み中...</div>;
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 font-sans overflow-x-hidden" onClick={() => setSelectedCircleId(null)}>

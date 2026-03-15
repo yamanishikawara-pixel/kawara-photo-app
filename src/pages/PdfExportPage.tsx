@@ -5,15 +5,17 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
-import { proxyUrl, A4_WIDTH_PX, A4_HEIGHT_PX, getPreviewScale } from '../shared/utils';
-import LoadingSpinner from '../shared/LoadingSpinner';
-import ErrorMessage from '../shared/ErrorMessage';
+
+// ★外部ファイルが消えても動くように、必要なものをすべて内部で定義！
+const A4_WIDTH_PX = 794;
+const A4_HEIGHT_PX = 1123;
+const getPreviewScale = (paddingPx: number) => Math.min(1, (window.innerWidth - paddingPx) / A4_WIDTH_PX);
+const proxyUrl = (url: string, id: string | number) => url ? `${url}${url.includes('?') ? '&' : '?'}cb=${id}` : '';
 
 export default function PdfExportPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  // ★修正: ビルドクラッシュを防ぐため、外部の型（types.ts）に依存せず any で処理します
   const [project, setProject] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,9 +43,7 @@ export default function PdfExportPage() {
   }, [id]);
 
   useEffect(() => {
-    const handleResize = () => {
-      setScale(getPreviewScale(32));
-    };
+    const handleResize = () => setScale(getPreviewScale(32));
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -89,8 +89,13 @@ export default function PdfExportPage() {
     }
   };
 
-  if (loading) return <LoadingSpinner />;
-  if (error) return <ErrorMessage message={error} onClose={() => navigate('/')} />;
+  if (loading) return <div className="p-10 text-center font-bold text-gray-500">読み込み中...</div>;
+  if (error) return (
+    <div className="p-10 text-center text-red-500 font-bold">
+      エラー: {error}<br/>
+      <button onClick={() => navigate('/')} className="mt-4 bg-gray-200 text-black px-4 py-2 rounded">もどる</button>
+    </div>
+  );
   if (!project) return null;
 
   const mapUrlsToRender = project.mapUrls && project.mapUrls.length > 0 ? project.mapUrls : [''];
@@ -111,7 +116,7 @@ export default function PdfExportPage() {
   return (
     <div className="min-h-screen bg-gray-200 p-4 sm:p-6 font-sans flex flex-col items-center pb-12 overflow-x-hidden w-full">
       <div className="w-full max-w-2xl mb-6 flex justify-between items-center">
-        <button onClick={() => navigate(`/project/${id}`)} className="text-blue-500 font-bold flex items-center gap-2 text-lg" aria-label="もどる">
+        <button onClick={() => navigate(`/project/${id}`)} className="text-blue-500 font-bold flex items-center gap-2 text-lg">
           <ArrowLeft className="w-6 h-6" /> もどる
         </button>
         <button
@@ -124,7 +129,6 @@ export default function PdfExportPage() {
       </div>
 
       <div className="flex flex-col gap-8 items-center w-full">
-
         <div style={{ width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` }} className="relative bg-white shadow-md shrink-0">
           <div className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left" style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '20mm', transform: `scale(${scale})` }}>
             <div className="w-full h-full border-[3px] border-gray-800 p-12 flex flex-col relative">
@@ -210,7 +214,6 @@ export default function PdfExportPage() {
                         </table>
                       </div>
                     )}
-
                   </div>
                 </div>
                 <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">- {2 + mapIndex} / {totalPages} -</div>

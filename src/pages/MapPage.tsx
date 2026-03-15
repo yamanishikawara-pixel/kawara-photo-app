@@ -4,8 +4,7 @@ import { ArrowLeft, Images, MapPin, X, Trash2 } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
-import LoadingSpinner from '../shared/LoadingSpinner';
-import { proxyUrl } from '../shared/utils'; // ★これが抜けてパニックになっていました！
+import { proxyUrl } from '../shared/utils';
 
 function useDraggablePin(initialX: number, initialY: number, onDragEnd: (x: number, y: number) => void) {
   const [position, setPosition] = useState({ x: initialX, y: initialY });
@@ -202,7 +201,7 @@ export default function MapPage() {
     await updateDoc(doc(db, "projects", id!), { mapRows: newRows });
   };
 
-  if (!project) return <LoadingSpinner />;
+  if (!project) return <div className="p-10 text-center font-bold text-gray-500">読み込み中...</div>;
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 font-sans overflow-x-hidden">
@@ -234,7 +233,7 @@ export default function MapPage() {
                 return (
                 <div key={i} className="relative w-full border-2 border-gray-300 rounded-xl bg-gray-100 shadow-inner group overflow-hidden flex items-center justify-center p-2 flex-col">
                   <div className="relative inline-block" onClick={(e) => addPin(e, i)}>
-                    <img src={u} className="block w-auto h-auto max-w-full max-h-[60vh] mx-auto pointer-events-none rounded shadow-sm" />
+                    <img src={proxyUrl(u, i)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[60vh] mx-auto pointer-events-none rounded shadow-sm" />
                     {(project.mapPins || []).filter((p: any) => p.mapIndex === i).map((pin: any) => (
                       <MapMarker key={pin.id} pin={pin} onDragEnd={(x: number, y: number) => savePin({...pin, x, y})} onClick={() => setEditingPin(pin)} />
                     ))}
