@@ -15,11 +15,7 @@ import {
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 
-interface ProjectWithOptionals extends Project {
-  photos?: Photo[];
-  mapPins?: MapPin[];
-  mapUrls?: string[];
-}
+type ProjectWithOptionals = Project;
 
 const COVER_FIELDS: { label: string; key: keyof Project }[] = [
   { label: '工事件名', key: 'projectName' },
