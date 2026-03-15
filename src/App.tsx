@@ -583,9 +583,9 @@ function MapScreen() {
     await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
   };
 
-  // ★ 新規：位置図の説明欄（表）の操作機能
-  const addMapRow = async () => {
-    const newRows = [...(project.mapRows || []), { id: Date.now(), symbol: "", part: "", photoNo: "", remarks: "" }];
+  // ★ 変更：どの位置図に対する説明行かを記録するために mapIndex を追加
+  const addMapRow = async (mapIndex: number) => {
+    const newRows = [...(project.mapRows || []), { id: Date.now(), mapIndex, symbol: "", part: "", photoNo: "", remarks: "" }];
     setProject({ ...project, mapRows: newRows });
     await updateDoc(doc(db, "projects", id!), { mapRows: newRows });
   };
@@ -628,36 +628,41 @@ function MapScreen() {
                 </ul>
               </div>
               
-              {project.mapUrls.map((u: string, i: number) => (
-                <div key={i} className="relative w-full border-2 border-gray-300 rounded-xl bg-gray-100 shadow-inner group overflow-hidden flex items-center justify-center p-2">
-                  <div className="relative inline-block" style={{ maxWidth: '100%' }} onClick={(e) => addPin(e, i)}>
-                    <img src={u} className="block max-w-full h-auto pointer-events-none rounded shadow-sm" />
+              {project.mapUrls.map((u: string, i: number) => {
+                // ★ 新規：この図面用の説明行だけを抜き出す
+                const currentRows = (project.mapRows || []).filter((r: any) => r.mapIndex === i || (r.mapIndex === undefined && i === 0));
+                
+                return (
+                <div key={i} className="relative w-full border-2 border-gray-300 rounded-xl bg-gray-100 shadow-inner group overflow-hidden flex items-center justify-center p-2 flex-col">
+                  <div className="relative inline-block w-full" onClick={(e) => addPin(e, i)}>
+                    <img src={u} className="block max-w-full h-auto mx-auto pointer-events-none rounded shadow-sm" />
                     {(project.mapPins || []).filter((p: any) => p.mapIndex === i).map((pin: any) => (
                       <MapMarker key={pin.id} pin={pin} onDragEnd={(x: number, y: number) => savePin({...pin, x, y})} onClick={() => setEditingPin(pin)} />
                     ))}
                   </div>
                   <button onClick={() => removeMap(i)} className="absolute top-2 right-2 bg-white/90 rounded-full p-2 text-red-500 shadow-sm z-20"><Trash2 className="w-5 h-5" /></button>
-                </div>
-              ))}
-              
-              {/* ★ 新規追加：位置図 説明欄エディタ */}
-              <div className="mt-8 pt-6 border-t border-gray-200">
-                <h2 className="text-xl font-bold mb-4 text-gray-900">位置図 説明欄</h2>
-                <div className="space-y-3">
-                  {(project.mapRows || []).map((row: any) => (
-                    <div key={row.id} className="flex gap-2 items-center bg-gray-50 p-2 rounded-xl border border-gray-200">
-                      <div className="flex-1 grid grid-cols-12 gap-2">
-                        <input type="text" placeholder="番号" className="col-span-3 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.symbol || ''} onChange={e => updateMapRow(row.id, 'symbol', e.target.value)} />
-                        <input type="text" placeholder="部位" className="col-span-5 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.part || ''} onChange={e => updateMapRow(row.id, 'part', e.target.value)} />
-                        <input type="text" placeholder="写真NO" className="col-span-4 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.photoNo || row.relatedPhotoNumber || ''} onChange={e => updateMapRow(row.id, 'photoNo', e.target.value)} />
-                        <input type="text" placeholder="備考（説明）" className="col-span-12 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.remarks || ''} onChange={e => updateMapRow(row.id, 'remarks', e.target.value)} />
-                      </div>
-                      <button onClick={() => removeMapRow(row.id)} className="p-2 text-red-500 bg-white border border-red-100 rounded-lg hover:bg-red-50"><Trash2 className="w-5 h-5" /></button>
+
+                  {/* ★ 変更：図面ごとに独立した説明表 */}
+                  <div className="w-full mt-6 pt-4 border-t border-gray-300">
+                    <h3 className="text-lg font-bold mb-3 text-gray-800">位置図 {i + 1} の説明表</h3>
+                    <div className="space-y-3">
+                      {currentRows.map((row: any) => (
+                        <div key={row.id} className="flex gap-2 items-center bg-white p-2 rounded-xl border border-gray-200 shadow-sm">
+                          <div className="flex-1 grid grid-cols-12 gap-2">
+                            <input type="text" placeholder="番号" className="col-span-3 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.symbol || ''} onChange={e => updateMapRow(row.id, 'symbol', e.target.value)} />
+                            <input type="text" placeholder="部位" className="col-span-5 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.part || ''} onChange={e => updateMapRow(row.id, 'part', e.target.value)} />
+                            <input type="text" placeholder="写真NO" className="col-span-4 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.photoNo || row.relatedPhotoNumber || ''} onChange={e => updateMapRow(row.id, 'photoNo', e.target.value)} />
+                            <input type="text" placeholder="備考" className="col-span-12 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.remarks || ''} onChange={e => updateMapRow(row.id, 'remarks', e.target.value)} />
+                          </div>
+                          <button onClick={() => removeMapRow(row.id)} className="p-2 text-red-500 bg-white border border-red-100 rounded-lg hover:bg-red-50"><Trash2 className="w-5 h-5" /></button>
+                        </div>
+                      ))}
+                      <button onClick={() => addMapRow(i)} className="w-full py-3 bg-white text-blue-600 font-bold rounded-xl mt-2 border-2 border-dashed border-blue-200 hover:bg-blue-50 transition-colors">+ 説明行を追加</button>
                     </div>
-                  ))}
-                  <button onClick={addMapRow} className="w-full py-4 bg-gray-100 text-gray-700 font-bold rounded-xl mt-2 border-2 border-dashed border-gray-300 hover:bg-gray-200 transition-colors">+ 説明行を追加</button>
+                  </div>
+
                 </div>
-              </div>
+              )})}
 
             </div>
           ) : (
@@ -778,11 +783,10 @@ function PDFExportScreen() {
               <div className="w-full h-full border-[3px] border-gray-800 p-6 flex flex-col">
                 <h2 className="text-2xl font-bold mb-4 border-b-2 border-gray-800 pb-2">位置図 {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}</h2>
                 
-                {/* ★ 修正：図面と表を分割してレイアウト */}
                 <div className="border border-gray-400 p-2 bg-gray-50 flex-1 flex flex-col items-center justify-start overflow-hidden">
                   
                   {/* 図面本体 */}
-                  <div className="relative inline-block flex-1 w-full flex items-center justify-center min-h-0">
+                  <div className="relative inline-block w-full flex items-center justify-center min-h-0">
                     {u ? (
                       <>
                         <img src={proxyUrl(u, mapIndex)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-full object-contain" />
@@ -807,31 +811,36 @@ function PDFExportScreen() {
                     )}
                   </div>
 
-                  {/* ★ 新規追加：位置図 説明表（黄金比） */}
-                  {project.mapRows && project.mapRows.length > 0 && (
-                    <div className="w-full mt-4 shrink-0">
-                      <table className="w-full border-collapse border border-gray-800 text-[12px] bg-white">
-                        <thead>
-                          <tr className="bg-gray-100 text-center">
-                            <th className="border border-gray-800 p-1.5 w-[10%]">番号</th>
-                            <th className="border border-gray-800 p-1.5 w-[20%]">部位</th>
-                            <th className="border border-gray-800 p-1.5 w-[15%]">写真NO</th>
-                            <th className="border border-gray-800 p-1.5 w-[55%]">備考</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {project.mapRows.map((row: any, i: number) => (
-                            <tr key={i} className="text-center h-8">
-                              <td className="border border-gray-800 p-1.5 font-bold">{row.symbol}</td>
-                              <td className="border border-gray-800 p-1.5">{row.part}</td>
-                              <td className="border border-gray-800 p-1.5">{row.photoNo || row.relatedPhotoNumber}</td>
-                              <td className="border border-gray-800 p-1.5 text-left">{row.remarks}</td>
+                  {/* ★ 変更：この位置図専用の説明表 */}
+                  {(() => {
+                    const currentRows = (project.mapRows || []).filter((r: any) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0));
+                    if (currentRows.length === 0) return null;
+                    
+                    return (
+                      <div className="w-full mt-4 shrink-0">
+                        <table className="w-full border-collapse border border-gray-800 text-[12px] bg-white">
+                          <thead>
+                            <tr className="bg-gray-100 text-center">
+                              <th className="border border-gray-800 p-1.5 w-[10%]">番号</th>
+                              <th className="border border-gray-800 p-1.5 w-[20%]">部位</th>
+                              <th className="border border-gray-800 p-1.5 w-[15%]">写真NO</th>
+                              <th className="border border-gray-800 p-1.5 w-[55%]">備考</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                          </thead>
+                          <tbody>
+                            {currentRows.map((row: any, i: number) => (
+                              <tr key={i} className="text-center h-8">
+                                <td className="border border-gray-800 p-1.5 font-bold">{row.symbol}</td>
+                                <td className="border border-gray-800 p-1.5">{row.part}</td>
+                                <td className="border border-gray-800 p-1.5">{row.photoNo || row.relatedPhotoNumber}</td>
+                                <td className="border border-gray-800 p-1.5 text-left">{row.remarks}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
 
                 </div>
               </div>
