@@ -4,6 +4,7 @@ import { ArrowLeft, Images, MapPin, X, Trash2 } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
+import LoadingSpinner from '../shared/LoadingSpinner';
 import { proxyUrl } from '../shared/utils';
 
 function useDraggablePin(initialX: number, initialY: number, onDragEnd: (x: number, y: number) => void) {
@@ -201,7 +202,7 @@ export default function MapPage() {
     await updateDoc(doc(db, "projects", id!), { mapRows: newRows });
   };
 
-  if (!project) return <div className="p-10 text-center font-bold text-gray-500">読み込み中...</div>;
+  if (!project) return <LoadingSpinner />;
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 font-sans overflow-x-hidden">
