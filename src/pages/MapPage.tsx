@@ -7,6 +7,9 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import type { MapPin, MapPinType, Project } from '../types';
 import { useDraggablePin } from '../shared/utils';
+import { LoadingSpinner } from '../shared/LoadingSpinner';
+import { ErrorMessage } from '../shared/ErrorMessage';
+import { ConfirmModal } from '../shared/ConfirmModal';
 
 interface ProjectWithPins extends Omit<Project, 'mapPins' | 'mapUrls'> {
   mapPins: MapPin[];
@@ -104,7 +107,7 @@ function MarkerEditModal({
       >
         <div className="flex justify-between items-center border-b pb-3">
           <h3 className="text-xl font-bold text-gray-900">マーカーの設定</h3>
-          <button onClick={onClose}>
+          <button type="button" onClick={onClose} aria-label="閉じる">
             <X className="w-6 h-6 text-gray-400" />
           </button>
         </div>
@@ -209,17 +212,22 @@ export function MapPage() {
   const [project, setProject] = useState<ProjectWithPins | null>(null);
   const [uploading, setUploading] = useState(false);
   const [editingPin, setEditingPin] = useState<MapPin | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmRemoveMap, setConfirmRemoveMap] = useState<number | null>(null);
 
   useEffect(() => {
     if (!id) return;
-    getDoc(doc(db, 'projects', id)).then((d) => {
-      if (d.exists()) {
-        const data = d.data() as ProjectWithPins;
-        data.mapPins = data.mapPins || [];
-        data.mapUrls = data.mapUrls || [];
-        setProject(data);
-      }
-    });
+    setError(null);
+    getDoc(doc(db, 'projects', id))
+      .then((d) => {
+        if (d.exists()) {
+          const data = d.data() as ProjectWithPins;
+          data.mapPins = data.mapPins || [];
+          data.mapUrls = data.mapUrls || [];
+          setProject(data);
+        }
+      })
+      .catch(() => setError('位置図データの読み込みに失敗しました。'));
   }, [id]);
 
   const uploadMaps = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -227,43 +235,46 @@ export function MapPage() {
     const files = Array.from(e.target.files || []).slice(0, 2);
     if (files.length === 0) return;
     setUploading(true);
-    const newUrls = [...(project.mapUrls || [])];
-    for (const f of files) {
-      if (newUrls.length >= 2) break;
-      // eslint-disable-next-line no-await-in-loop
-      const r = ref(storage, `maps/${id}/${Date.now()}_${f.name}`);
-      // eslint-disable-next-line no-await-in-loop
-      await uploadBytes(r, f);
-      // eslint-disable-next-line no-await-in-loop
-      newUrls.push(await getDownloadURL(r));
+    setError(null);
+    try {
+      const newUrls = [...(project.mapUrls || [])];
+      for (const f of files) {
+        if (newUrls.length >= 2) break;
+        const r = ref(storage, `maps/${id}/${Date.now()}_${f.name}`);
+        await uploadBytes(r, f);
+        newUrls.push(await getDownloadURL(r));
+      }
+      const updated = { ...project, mapUrls: newUrls };
+      setProject(updated);
+      await updateDoc(doc(db, 'projects', id), { mapUrls: newUrls });
+    } catch {
+      setError('図面のアップロードに失敗しました。');
+    } finally {
+      setUploading(false);
     }
-    const updated = { ...project, mapUrls: newUrls };
-    setProject(updated);
-    await updateDoc(doc(db, 'projects', id), { mapUrls: newUrls });
-    setUploading(false);
   };
 
   const removeMap = async (index: number) => {
     if (!project || !id) return;
-    if (
-      !window.confirm(
-        'この位置図を削除しますか？\n（配置したマーカーもすべて削除されます）',
-      )
-    )
-      return;
-    const newUrls = project.mapUrls.filter((_, i) => i !== index);
-    const newPins = (project.mapPins || []).filter(
-      (p) => p.mapIndex !== index,
-    );
-    const updated = { ...project, mapUrls: newUrls, mapPins: newPins };
-    setProject(updated);
-    await updateDoc(doc(db, 'projects', id), {
-      mapUrls: newUrls,
-      mapPins: newPins,
-    });
+    setError(null);
+    try {
+      const newUrls = project.mapUrls.filter((_, i) => i !== index);
+      const newPins = (project.mapPins || []).filter(
+        (p) => p.mapIndex !== index,
+      );
+      const updated = { ...project, mapUrls: newUrls, mapPins: newPins };
+      setProject(updated);
+      await updateDoc(doc(db, 'projects', id), {
+        mapUrls: newUrls,
+        mapPins: newPins,
+      });
+    } catch {
+      setError('位置図の削除に失敗しました。');
+    }
+    setConfirmRemoveMap(null);
   };
 
-  const addPin = (
+  const addPin = async (
     e: React.MouseEvent<HTMLDivElement>,
     mapIndex: number,
   ) => {
@@ -289,7 +300,11 @@ export function MapPage() {
     const newPins = [...(project.mapPins || []), newPin];
     const updated = { ...project, mapPins: newPins };
     setProject(updated);
-    updateDoc(doc(db, 'projects', id), { mapPins: newPins });
+    try {
+      await updateDoc(doc(db, 'projects', id), { mapPins: newPins });
+    } catch {
+      setError('マーカーの追加に失敗しました。');
+    }
     setEditingPin(newPin);
   };
 
@@ -300,7 +315,11 @@ export function MapPage() {
     );
     const updated = { ...project, mapPins: newPins };
     setProject(updated);
-    await updateDoc(doc(db, 'projects', id), { mapPins: newPins });
+    try {
+      await updateDoc(doc(db, 'projects', id), { mapPins: newPins });
+    } catch {
+      setError('マーカーの保存に失敗しました。');
+    }
   };
 
   const removePin = async (pinId: number) => {
@@ -308,17 +327,24 @@ export function MapPage() {
     const newPins = (project.mapPins || []).filter((p) => p.id !== pinId);
     const updated = { ...project, mapPins: newPins };
     setProject(updated);
-    await updateDoc(doc(db, 'projects', id), { mapPins: newPins });
+    try {
+      await updateDoc(doc(db, 'projects', id), { mapPins: newPins });
+    } catch {
+      setError('マーカーの削除に失敗しました。');
+    }
   };
 
-  if (!project) return null;
+  if (!project) return <LoadingSpinner />;
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 font-sans overflow-x-hidden">
       <div className="max-w-md mx-auto pb-12">
+        {error && <ErrorMessage message={error} onDismiss={() => setError(null)} />}
         <button
+          type="button"
           onClick={() => navigate(`/project/${id}`)}
           className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg"
+          aria-label="現場メニューにもどる"
         >
           <ArrowLeft className="w-6 h-6" /> もどる
         </button>
@@ -388,8 +414,10 @@ export function MapPage() {
                       ))}
                   </div>
                   <button
-                    onClick={() => removeMap(i)}
+                    type="button"
+                    onClick={() => setConfirmRemoveMap(i)}
                     className="absolute top-2 right-2 bg-white/90 rounded-full p-2 text-red-500 shadow-sm z-20"
+                    aria-label="この位置図を削除"
                   >
                     <Trash2 className="w-5 h-5" />
                   </button>
@@ -411,6 +439,14 @@ export function MapPage() {
         onClose={() => setEditingPin(null)}
         onSave={savePin}
         onRemove={removePin}
+      />
+      <ConfirmModal
+        isOpen={confirmRemoveMap !== null}
+        title="位置図の削除"
+        message="この位置図を削除しますか？\n（配置したマーカーもすべて削除されます）"
+        confirmLabel="削除する"
+        onConfirm={() => confirmRemoveMap !== null && removeMap(confirmRemoveMap)}
+        onCancel={() => setConfirmRemoveMap(null)}
       />
     </div>
   );

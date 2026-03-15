@@ -1,3 +1,4 @@
+import type { MouseEvent as RMouseEvent, TouchEvent as RTouchEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 export const ROOF_PARTS = [
@@ -25,6 +26,20 @@ export const DESC_SNIPPETS = [
   'ビス打ち補強',
   '清掃・片付け',
 ];
+
+/** A4サイズのピクセル幅（96dpi想定: 210mm ≒ 794px） */
+export const A4_WIDTH_PX = 794;
+/** A4サイズのピクセル高さ（96dpi想定: 297mm ≒ 1123px） */
+export const A4_HEIGHT_PX = 1123;
+
+/**
+ * プレビュー用の scale を算出する（画面幅に収める）
+ * @param paddingPx 左右の余白合計（デフォルト 32）
+ */
+export function getPreviewScale(paddingPx = 32): number {
+  const availableWidth = typeof window !== 'undefined' ? window.innerWidth - paddingPx : A4_WIDTH_PX;
+  return Math.min(1, availableWidth / A4_WIDTH_PX);
+}
 
 // ★修正：毎回ランダムな暗号をつけるのをやめ、写真ごとの固定IDを使うようにしました（これで真っ白バグが直ります）
 export const proxyUrl = (url: string, id: string | number) =>
@@ -74,6 +89,10 @@ export function useDraggablePin(
   const dragStart = useRef({ x: 0, y: 0 });
   const elementStart = useRef({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const onDragEndRef = useRef(onDragEnd);
+  const positionRef = useRef({ x: initialX, y: initialY });
+  onDragEndRef.current = onDragEnd;
+  positionRef.current = position;
 
   const handleStart = (clientX: number, clientY: number) => {
     setDragging(true);
@@ -81,12 +100,12 @@ export function useDraggablePin(
     elementStart.current = { x: position.x, y: position.y };
   };
 
-  const onMouseDown = (e: any) => {
+  const onMouseDown = (e: RMouseEvent<HTMLDivElement>) => {
     e.stopPropagation();
     handleStart(e.clientX, e.clientY);
   };
 
-  const onTouchStart = (e: any) => {
+  const onTouchStart = (e: RTouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
     handleStart(e.touches[0].clientX, e.touches[0].clientY);
   };
@@ -102,10 +121,12 @@ export function useDraggablePin(
       const newX = elementStart.current.x + (dx / parentRect.width) * 100;
       const newY = elementStart.current.y + (dy / parentRect.height) * 100;
 
-      setPosition({
+      const next = {
         x: Math.max(0, Math.min(100, newX)),
         y: Math.max(0, Math.min(100, newY)),
-      });
+      };
+      positionRef.current = next;
+      setPosition(next);
     };
 
     const onMouseMove = (e: MouseEvent) => {
@@ -121,7 +142,7 @@ export function useDraggablePin(
     const onEnd = () => {
       if (dragging) {
         setDragging(false);
-        onDragEnd(position.x, position.y);
+        onDragEndRef.current(positionRef.current.x, positionRef.current.y);
       }
     };
 
@@ -138,7 +159,7 @@ export function useDraggablePin(
       window.removeEventListener('mouseup', onEnd);
       window.removeEventListener('touchend', onEnd);
     };
-  }, [dragging, position.x, position.y, onDragEnd]);
+  }, [dragging]);
 
   return { position, onMouseDown, onTouchStart, dragging, containerRef };
 }

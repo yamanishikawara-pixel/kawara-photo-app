@@ -1,4 +1,13 @@
+import type React from 'react';
 import { ChevronRight } from 'lucide-react';
+
+type MenuButtonProps = {
+  title: string;
+  subtitle: string;
+  icon: React.ComponentType<{ className?: string }>;
+  colorClass: string;
+  onClick: () => void;
+};
 
 export function MenuButton({
   title,
@@ -6,10 +15,12 @@ export function MenuButton({
   icon: Icon,
   colorClass,
   onClick,
-}: any) {
+}: MenuButtonProps) {
   return (
     <button
+      type="button"
       onClick={onClick}
+      aria-label={title}
       className={`w-full flex items-center gap-4 p-5 rounded-2xl border border-black/5 shadow-sm hover:shadow-md transition-all text-left ${colorClass}`}
     >
       <div className="w-[58px] h-[58px] flex-shrink-0 flex items-center justify-center bg-white/95 rounded-[16px] shadow-sm">
@@ -26,19 +37,31 @@ export function MenuButton({
   );
 }
 
+type InputFieldProps = {
+  label: string;
+  placeholder?: string;
+  value: string;
+  onChange: (v: string) => void;
+  bgColor?: string;
+  id?: string;
+};
+
 export function InputField({
   label,
   placeholder,
   value,
   onChange,
   bgColor,
-}: any) {
+  id,
+}: InputFieldProps) {
+  const fieldId = id ?? `input-${label.replace(/\s/g, '-')}`;
   return (
-    <div className={`p-5 rounded-xl mb-4 ${bgColor}`}>
-      <label className="block text-base font-bold text-gray-800 mb-2">
+    <div className={`p-5 rounded-xl mb-4 ${bgColor ?? ''}`}>
+      <label htmlFor={fieldId} className="block text-base font-bold text-gray-800 mb-2">
         {label}
       </label>
       <input
+        id={fieldId}
         type="text"
         className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
         placeholder={placeholder}

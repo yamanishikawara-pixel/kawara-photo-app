@@ -25,6 +25,9 @@ import {
 import { db, storage } from '../firebase';
 import type { Circle, Photo, Project } from '../types';
 import { compressImage, useDraggablePin } from '../shared/utils';
+import { LoadingSpinner } from '../shared/LoadingSpinner';
+import { ErrorMessage } from '../shared/ErrorMessage';
+import { ConfirmModal } from '../shared/ConfirmModal';
 
 interface ProjectWithOptionalPhotos extends Omit<Project, 'photos'> {
   photos: Photo[];
@@ -81,29 +84,35 @@ function PhotoCircleMarker({
           className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden"
         >
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               onSizeChange(Math.min(60, circle.size * 1.3));
             }}
             className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700"
+            aria-label="赤丸を大きくする"
           >
             +
           </button>
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               onSizeChange(Math.max(5, circle.size * 0.7));
             }}
             className="px-4 py-2 text-xl font-bold border-l border-r hover:bg-gray-100 text-gray-700"
+            aria-label="赤丸を小さくする"
           >
             -
           </button>
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               onRemove();
             }}
             className="px-4 py-2 text-red-500 hover:bg-red-50"
+            aria-label="赤丸を削除"
           >
             <Trash2 className="w-5 h-5" />
           </button>
@@ -139,8 +148,10 @@ function PinSelectModal({
             <MapPin className="text-red-500 w-6 h-6" /> 位置図の場所を選択
           </h3>
           <button
+            type="button"
             onClick={onClose}
             className="p-1 text-gray-400 hover:text-gray-600"
+            aria-label="閉じる"
           >
             <X className="w-6 h-6" />
           </button>
@@ -197,33 +208,43 @@ export function PhotoPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [currentPhotoId, setCurrentPhotoId] = useState<number | null>(null);
   const [selectedCircleId, setSelectedCircleId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ type: 'deleteSlot' | 'clearImage'; photoId: number } | null>(null);
 
   useEffect(() => {
     if (!id) return;
-    getDoc(doc(db, 'projects', id)).then((d) => {
-      if (d.exists()) {
-        const data = d.data() as ProjectWithOptionalPhotos;
-        setProject(data);
-      }
-    });
+    setError(null);
+    getDoc(doc(db, 'projects', id))
+      .then((d) => {
+        if (d.exists()) {
+          const data = d.data() as ProjectWithOptionalPhotos;
+          setProject(data);
+        }
+      })
+      .catch(() => setError('写真データの読み込みに失敗しました。'));
   }, [id]);
 
   const updatePhoto = async (
     photoId: number,
     field: keyof Photo,
-    value: any,
+    value: string,
   ) => {
     if (!project || !id) return;
     const newPhotos = project.photos.map((p) =>
       p.id === photoId ? { ...p, [field]: value } : p,
     );
     setProject({ ...project, photos: newPhotos });
-    await updateDoc(doc(db, 'projects', id), { photos: newPhotos });
+    try {
+      await updateDoc(doc(db, 'projects', id), { photos: newPhotos });
+    } catch {
+      setError('保存に失敗しました。');
+    }
   };
 
   const deletePhotoSlot = async (photoId: number) => {
     if (!project || !id) return;
-    if (window.confirm('この写真枠を完全に削除しますか？')) {
+    setError(null);
+    try {
       const newPhotos = project.photos.filter((p) => p.id !== photoId);
       const renumbered = newPhotos.map((p, i) => ({
         ...p,
@@ -231,18 +252,25 @@ export function PhotoPage() {
       }));
       setProject({ ...project, photos: renumbered });
       await updateDoc(doc(db, 'projects', id), { photos: renumbered });
+    } catch {
+      setError('削除に失敗しました。');
     }
+    setConfirm(null);
   };
 
   const clearPhoto = async (photoId: number) => {
     if (!project || !id) return;
-    if (window.confirm('この枠の画像を削除しますか？（文字は残ります）')) {
+    setError(null);
+    try {
       const newPhotos = project.photos.map((p) =>
         p.id === photoId ? { ...p, image: null, circles: [] } : p,
       );
       setProject({ ...project, photos: newPhotos });
       await updateDoc(doc(db, 'projects', id), { photos: newPhotos });
+    } catch {
+      setError('画像の削除に失敗しました。');
     }
+    setConfirm(null);
   };
 
   const addPhotoSlot = async () => {
@@ -426,7 +454,7 @@ export function PhotoPage() {
     setSelectedCircleId(null);
   };
 
-  if (!project) return null;
+  if (!project) return <LoadingSpinner />;
 
   return (
     <div
@@ -434,9 +462,12 @@ export function PhotoPage() {
       onClick={() => setSelectedCircleId(null)}
     >
       <div className="max-w-md mx-auto pb-12">
+        {error && <ErrorMessage message={error} onDismiss={() => setError(null)} />}
         <button
+          type="button"
           onClick={() => navigate(`/project/${id}`)}
           className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg"
+          aria-label="現場メニューにもどる"
         >
           <ArrowLeft className="w-6 h-6" /> もどる
         </button>
@@ -469,14 +500,18 @@ export function PhotoPage() {
             >
               <div className="absolute top-4 right-4 flex gap-2 z-10">
                 <button
+                  type="button"
                   onClick={() => movePhoto(index, 'up')}
                   className="bg-white p-2 rounded-lg shadow border border-gray-200 text-gray-600 hover:bg-gray-50"
+                  aria-label="写真を上に移動"
                 >
                   <ArrowUp className="w-5 h-5" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => movePhoto(index, 'down')}
                   className="bg-white p-2 rounded-lg shadow border border-gray-200 text-gray-600 hover:bg-gray-50"
+                  aria-label="写真を下に移動"
                 >
                   <ArrowDown className="w-5 h-5" />
                 </button>
@@ -532,15 +567,19 @@ export function PhotoPage() {
                 <div className="flex gap-2">
                   {photo.image ? (
                     <button
-                      onClick={() => clearPhoto(photo.id)}
+                      type="button"
+                      onClick={() => setConfirm({ type: 'clearImage', photoId: photo.id })}
                       className="p-2.5 text-gray-400 hover:text-red-500 bg-gray-50 rounded-xl border border-gray-200"
+                      aria-label="この写真の画像を削除"
                     >
                       <Trash2 className="w-5 h-5" />
                     </button>
                   ) : (
                     <button
-                      onClick={() => deletePhotoSlot(photo.id)}
+                      type="button"
+                      onClick={() => setConfirm({ type: 'deleteSlot', photoId: photo.id })}
                       className="p-2.5 text-gray-400 hover:text-red-500 bg-gray-50 rounded-xl border border-gray-200"
+                      aria-label="この写真枠を削除"
                     >
                       <Trash2 className="w-5 h-5" />
                     </button>
@@ -619,6 +658,22 @@ export function PhotoPage() {
             label,
           )
         }
+      />
+      <ConfirmModal
+        isOpen={!!confirm}
+        title={confirm?.type === 'deleteSlot' ? '写真枠の削除' : '画像の削除'}
+        message={
+          confirm?.type === 'deleteSlot'
+            ? 'この写真枠を完全に削除しますか？'
+            : 'この枠の画像を削除しますか？（文字は残ります）'
+        }
+        confirmLabel="削除する"
+        onConfirm={() => {
+          if (!confirm) return;
+          if (confirm.type === 'deleteSlot') deletePhotoSlot(confirm.photoId);
+          else clearPhoto(confirm.photoId);
+        }}
+        onCancel={() => setConfirm(null)}
       />
     </div>
   );
