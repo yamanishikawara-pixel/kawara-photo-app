@@ -5,7 +5,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
-import type { Circle, MapPin, Photo, Project } from '../types';
+import type { Circle, Photo, Project } from '../types';
 import {
   A4_HEIGHT_PX,
   A4_WIDTH_PX,
