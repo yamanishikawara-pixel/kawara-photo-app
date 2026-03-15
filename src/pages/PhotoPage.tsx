@@ -1,77 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
-import { proxyUrl } from '../shared/utils';
-
-function compressImage(file: File, callback: (compressedFile: File) => void) {
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const MAX_WIDTH = 800;
-      let width = img.width; let height = img.height;
-      if (width > MAX_WIDTH) { height = Math.round((height * MAX_WIDTH) / width); width = MAX_WIDTH; }
-      canvas.width = width; canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (ctx) ctx.drawImage(img, 0, 0, width, height);
-      canvas.toBlob((blob) => { if (blob) callback(new File([blob], file.name, { type: 'image/jpeg' })); }, 'image/jpeg', 0.8);
-    };
-    if (typeof e.target?.result === 'string') img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
-}
-
-function useDraggablePin(initialX: number, initialY: number, onDragEnd: (x: number, y: number) => void) {
-  const [position, setPosition] = useState({ x: initialX, y: initialY });
-  const [dragging, setDragging] = useState(false);
-  const dragStart = useRef({ x: 0, y: 0 });
-  const elementStart = useRef({ x: 0, y: 0 });
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const handleStart = (clientX: number, clientY: number) => {
-    setDragging(true);
-    dragStart.current = { x: clientX, y: clientY };
-    elementStart.current = { x: position.x, y: position.y };
-  };
-
-  const onMouseDown = (e: any) => { e.stopPropagation(); handleStart(e.clientX, e.clientY); };
-  const onTouchStart = (e: any) => { e.stopPropagation(); handleStart(e.touches[0].clientX, e.touches[0].clientY); };
-
-  useEffect(() => {
-    const handleMove = (clientX: number, clientY: number) => {
-      if (!containerRef.current || !containerRef.current.parentElement) return;
-      const parentRect = containerRef.current.parentElement.getBoundingClientRect();
-      const dx = clientX - dragStart.current.x;
-      const dy = clientY - dragStart.current.y;
-      const newX = elementStart.current.x + (dx / parentRect.width) * 100;
-      const newY = elementStart.current.y + (dy / parentRect.height) * 100;
-      setPosition({ x: Math.max(0, Math.min(100, newX)), y: Math.max(0, Math.min(100, newY)) });
-    };
-
-    const onMouseMove = (e: MouseEvent) => { if (dragging) handleMove(e.clientX, e.clientY); };
-    const onTouchMove = (e: TouchEvent) => { if (dragging) { e.preventDefault(); handleMove(e.touches[0].clientX, e.touches[0].clientY); } };
-    const onEnd = () => { if (dragging) { setDragging(false); onDragEnd(position.x, position.y); } };
-
-    if (dragging) {
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('touchmove', onTouchMove, { passive: false });
-      window.addEventListener('mouseup', onEnd);
-      window.addEventListener('touchend', onEnd);
-    }
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('mouseup', onEnd);
-      window.removeEventListener('touchend', onEnd);
-    };
-  }, [dragging, position.x, position.y, onDragEnd]);
-
-  return { position, onMouseDown, onTouchStart, dragging, containerRef };
-}
+import { compressImage, proxyUrl, useDraggablePin } from '../shared/utils';
 
 function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChange, onRemove }: any) {
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(circle.x, circle.y, onDragEnd);
