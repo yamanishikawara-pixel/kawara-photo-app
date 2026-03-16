@@ -77,8 +77,51 @@ export default function MapPage() {
   const [project, setProject] = useState<any>(null);
   const [uploading, setUploading] = useState(false);
   const [editingPin, setEditingPin] = useState<any>(null);
+  const [initializedRows, setInitializedRows] = useState(false);
 
   useEffect(() => { getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data())); }, [id]);
+
+  // 位置図ごとに「説明表」を最初から1行表示にする（必要なら自動で1行作成）
+  useEffect(() => {
+    if (!project || initializedRows) return;
+    const mapUrls: unknown = project.mapUrls;
+    if (!Array.isArray(mapUrls) || mapUrls.length === 0) return;
+
+    const existingRows: any[] = Array.isArray(project.mapRows) ? project.mapRows : [];
+
+    const missingMapIndexes: number[] = [];
+    for (let mapIndex = 0; mapIndex < mapUrls.length; mapIndex++) {
+      const hasRow = existingRows.some(
+        (r: any) =>
+          r?.mapIndex === mapIndex ||
+          (r?.mapIndex === undefined && mapIndex === 0),
+      );
+      if (!hasRow) missingMapIndexes.push(mapIndex);
+    }
+
+    if (missingMapIndexes.length === 0) {
+      setInitializedRows(true);
+      return;
+    }
+
+    const newRows = [...existingRows];
+    for (const mapIndex of missingMapIndexes) {
+      const prefix = mapIndex === 0 ? 'A-' : 'B-';
+      newRows.push({
+        id: Date.now() + Math.random(),
+        mapIndex,
+        symbol: `${prefix}1`,
+        part: "",
+        photoNo: "",
+        remarks: "",
+      });
+    }
+
+    setProject({ ...project, mapRows: newRows });
+    updateDoc(doc(db, "projects", id!), { mapRows: newRows }).finally(() => {
+      setInitializedRows(true);
+    });
+  }, [project, id, initializedRows]);
 
   const uploadMaps = async (e: any) => {
     const files = Array.from(e.target.files as FileList).slice(0, 2);
@@ -201,10 +244,10 @@ export default function MapPage() {
                       {currentRows.map((row: any) => (
                         <div key={row.id} className="flex gap-2 items-center bg-white p-2 rounded-xl border border-gray-200 shadow-sm">
                           <div className="flex-1 grid grid-cols-12 gap-2">
-                            <input type="text" placeholder="番号" className="col-span-3 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.symbol || ''} onChange={e => updateMapRow(row.id, 'symbol', e.target.value)} />
-                            <input type="text" placeholder="部位" className="col-span-5 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.part || ''} onChange={e => updateMapRow(row.id, 'part', e.target.value)} />
-                            <input type="text" placeholder="写真NO" className="col-span-4 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.photoNo || row.relatedPhotoNumber || ''} onChange={e => updateMapRow(row.id, 'photoNo', e.target.value)} />
-                            <input type="text" placeholder="備考" className="col-span-12 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.remarks || ''} onChange={e => updateMapRow(row.id, 'remarks', e.target.value)} />
+                            <input type="text" placeholder="符号" className="col-span-2 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.symbol || ''} onChange={e => updateMapRow(row.id, 'symbol', e.target.value)} />
+                            <input type="text" placeholder="部位" className="col-span-3 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.part || ''} onChange={e => updateMapRow(row.id, 'part', e.target.value)} />
+                            <input type="text" placeholder="写真NO" className="col-span-2 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.photoNo || row.relatedPhotoNumber || ''} onChange={e => updateMapRow(row.id, 'photoNo', e.target.value)} />
+                            <input type="text" placeholder="備考" className="col-span-5 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.remarks || ''} onChange={e => updateMapRow(row.id, 'remarks', e.target.value)} />
                           </div>
                           <button onClick={() => removeMapRow(row.id)} className="p-2 text-red-500 bg-white border border-red-100 rounded-lg hover:bg-red-50"><Trash2 className="w-5 h-5" /></button>
                         </div>
