@@ -291,16 +291,16 @@ export default function PdfExportPage() {
                   <div className="text-base font-bold mb-2">項目欄</div>
                   <div className="border-2 border-gray-800">
                     <div className="grid grid-cols-12 border-b-2 border-gray-800 bg-gray-100 text-sm font-bold">
-                      <div className="col-span-2 border-r-2 border-gray-800 p-2">
+                      <div className="col-span-1 border-r-2 border-gray-800 p-2">
                         符号
                       </div>
-                      <div className="col-span-3 border-r-2 border-gray-800 p-2">
+                      <div className="col-span-2 border-r-2 border-gray-800 p-2">
                         部位
                       </div>
                       <div className="col-span-2 border-r-2 border-gray-800 p-2">
                         写真NO
                       </div>
-                      <div className="col-span-5 p-2">備考</div>
+                      <div className="col-span-7 p-2">備考</div>
                     </div>
                     {(() => {
                       const rows = (project as any).mapRows ?? [];
@@ -323,16 +323,16 @@ export default function PdfExportPage() {
                           key={row.id ?? idx}
                           className="grid grid-cols-12 border-b border-gray-400 text-sm"
                         >
-                          <div className="col-span-2 border-r border-gray-400 p-2 font-bold text-red-700 whitespace-nowrap overflow-hidden">
+                          <div className="col-span-1 border-r border-gray-400 p-2 font-bold text-red-700 whitespace-nowrap overflow-hidden">
                             {row.symbol ?? '　'}
                           </div>
-                          <div className="col-span-3 border-r border-gray-400 p-2 whitespace-nowrap overflow-hidden">
+                          <div className="col-span-2 border-r border-gray-400 p-2 whitespace-nowrap overflow-hidden">
                             {row.part ?? '　'}
                           </div>
                           <div className="col-span-2 border-r border-gray-400 p-2 whitespace-nowrap overflow-hidden">
                             {row.photoNo ?? row.relatedPhotoNumber ?? '　'}
                           </div>
-                          <div className="col-span-5 p-2 overflow-hidden">
+                          <div className="col-span-7 p-2 overflow-hidden">
                             {row.remarks ?? '　'}
                           </div>
                         </div>
