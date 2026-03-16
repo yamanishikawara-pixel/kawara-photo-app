@@ -199,7 +199,7 @@ export default function PdfExportPage() {
               {/* 上段：タイトル / ロゴ（同一行で整列） */}
               <div className="relative flex items-start justify-between">
                 <div className="pt-[2mm]">
-                  <h1 className="text-[46px] leading-[1.05] font-extrabold tracking-[0.08em] text-gray-950">
+                  <h1 className="text-[42px] leading-[1.06] font-extrabold tracking-[0.08em] text-gray-950">
                     工事写真報告書
                   </h1>
                   <div className="mt-3">
@@ -225,12 +225,12 @@ export default function PdfExportPage() {
                     {COVER_FIELDS.map((item, idx) => (
                       <div key={idx} className="flex items-center gap-6">
                         <div className="w-[34mm] flex-shrink-0">
-                          <div className="text-[12px] font-bold tracking-[0.18em] text-gray-700 whitespace-nowrap">
+                          <div className="text-[11px] font-bold tracking-[0.18em] text-gray-700 whitespace-nowrap">
                             {item.label}
                           </div>
                         </div>
                         <div className="flex-1 min-w-0 border-b border-gray-300 pb-2">
-                          <div className="text-[22px] font-bold text-gray-950 whitespace-nowrap overflow-hidden text-ellipsis">
+                          <div className="text-[21px] font-bold text-gray-950 whitespace-nowrap overflow-hidden text-ellipsis">
                             {String(project[item.key] ?? '　')}
                           </div>
                         </div>
