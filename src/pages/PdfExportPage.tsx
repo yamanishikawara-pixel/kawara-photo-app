@@ -85,12 +85,18 @@ export default function PdfExportPage() {
         const currentTransform = pageEl.style.transform;
         pageEl.style.transform = 'scale(1)';
 
+        // ==========================================
+        // ★修正ポイント：Mac/iPhone対策の「空打ち」復活！
+        // 1回シャッターを空切りして、画像を強制的に準備させます
+        await toJpeg(pageEl, { cacheBust: true });
+        
+        // 2回目のシャッターが本番です！
         const dataUrl = await toJpeg(pageEl, {
-          cacheBust: true,
           quality: 0.95,
           pixelRatio: 2,
           backgroundColor: '#ffffff',
         });
+        // ==========================================
 
         pageEl.style.transform = currentTransform;
 
