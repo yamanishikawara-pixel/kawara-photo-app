@@ -183,30 +183,59 @@ export default function PdfExportPage() {
             className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left"
             style={{ ...pageStyle, padding: '20mm' }}
           >
-            <div className="w-full h-full border-[3px] border-gray-800 p-12 flex flex-col relative">
-              <div className="mt-[30mm] mb-[40mm] text-center">
-                <h1 className="text-4xl font-serif tracking-[0.5em] font-bold mb-4">
+            <div className="w-full h-full border-[3px] border-gray-900 p-10 flex flex-col relative overflow-hidden">
+              {/* 背景アクセント */}
+              <div className="absolute -top-[26mm] -right-[26mm] w-[90mm] h-[90mm] rounded-[28mm] bg-orange-100" />
+              <div className="absolute -bottom-[30mm] -left-[30mm] w-[110mm] h-[110mm] rounded-[34mm] bg-blue-50" />
+
+              {/* ヘッダー */}
+              <div className="relative mt-[10mm]">
+                <div className="inline-flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-gray-900" />
+                  <div className="text-sm font-bold tracking-[0.35em] text-gray-700">
+                    PHOTO REPORT
+                  </div>
+                </div>
+                <h1 className="mt-4 text-[44px] leading-tight font-black tracking-[0.12em] text-gray-950">
                   工事写真報告書
                 </h1>
-                <div className="w-[110mm] mx-auto border-b-[2px] border-gray-800" />
-                <div className="w-[110mm] mx-auto border-b-[1px] border-gray-800 mt-1" />
+                <div className="mt-4 flex items-center gap-4">
+                  <div className="h-[2px] w-[72mm] bg-gray-900" />
+                  <div className="h-[2px] w-[18mm] bg-orange-500" />
+                </div>
               </div>
-              <div className="flex-1 px-4 space-y-14">
-                {COVER_FIELDS.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-baseline border-b-2 border-gray-800 pb-1"
-                  >
-                    <div className="w-[50mm] flex-shrink-0 flex justify-between text-[20px] font-bold pr-16">
-                      {item.label.split('').map((c, i) => (
-                        <span key={i}>{c}</span>
-                      ))}
-                    </div>
-                    <div className="flex-1 text-[20px] font-medium whitespace-nowrap overflow-hidden">
-                      {String(project[item.key] ?? '　')}
-                    </div>
+
+              {/* 本文（項目は変更しない） */}
+              <div className="relative mt-[22mm] flex-1">
+                <div className="rounded-[18px] border-2 border-gray-900 bg-white/80 backdrop-blur p-8">
+                  <div className="space-y-7">
+                    {COVER_FIELDS.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-5">
+                        <div className="w-[38mm] flex-shrink-0">
+                          <div className="text-[13px] font-extrabold tracking-[0.25em] text-gray-700">
+                            {item.label}
+                          </div>
+                          <div className="mt-2 h-[2px] w-[22mm] bg-gray-900" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[22px] font-bold text-gray-950 whitespace-nowrap overflow-hidden text-ellipsis">
+                            {String(project[item.key] ?? '　')}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
+              </div>
+
+              {/* フッターアクセント */}
+              <div className="relative mt-6 flex items-end justify-between">
+                <div className="text-xs font-bold tracking-[0.35em] text-gray-500">
+                  KAWARA PHOTO APP
+                </div>
+                <div className="text-xs text-gray-500">
+                  {String(project.creationDate ?? '　')}
+                </div>
               </div>
             </div>
             <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">
