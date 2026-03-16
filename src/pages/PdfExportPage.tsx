@@ -184,51 +184,52 @@ export default function PdfExportPage() {
             className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left"
             style={{ ...pageStyle, padding: '20mm' }}
           >
-            <div className="w-full h-full border-[3px] border-gray-900 p-10 flex flex-col relative overflow-hidden">
-              {/* ロゴ透かし（背景） */}
+            <div className="w-full h-full border-[2px] border-gray-900 px-[16mm] pt-[14mm] pb-[12mm] flex flex-col relative overflow-hidden">
+              {/* ロゴ透かし（背景）: “存在感はあるが邪魔しない” */}
               <div className="absolute inset-0 pointer-events-none">
                 <img
                   src={kawaraLogo}
                   alt=""
-                  className="absolute right-[-10mm] bottom-[-18mm] w-[150mm] h-[150mm] object-contain opacity-[0.06]"
-                  style={{ transform: 'rotate(-12deg)' }}
+                  className="absolute left-[6mm] bottom-[-30mm] w-[190mm] h-[190mm] object-contain opacity-[0.035]"
+                  style={{ transform: 'rotate(-6deg)' }}
                   crossOrigin="anonymous"
                 />
               </div>
 
-              {/* ロゴ */}
-              <div className="absolute top-[10mm] right-[10mm]">
-                <img
-                  src={kawaraLogo}
-                  alt=""
-                  className="block w-[26mm] h-[26mm] object-contain"
-                  crossOrigin="anonymous"
-                />
-              </div>
+              {/* 上段：タイトル / ロゴ（同一行で整列） */}
+              <div className="relative flex items-start justify-between">
+                <div className="pt-[2mm]">
+                  <h1 className="text-[46px] leading-[1.05] font-extrabold tracking-[0.08em] text-gray-950">
+                    工事写真報告書
+                  </h1>
+                  <div className="mt-3">
+                    <div className="h-[2px] w-[92mm] bg-gray-900" />
+                    <div className="mt-[2mm] h-[1px] w-[58mm] bg-gray-900/60" />
+                  </div>
+                </div>
 
-              {/* ヘッダー */}
-              <div className="relative mt-[18mm]">
-                <h1 className="text-[44px] leading-tight font-black tracking-[0.12em] text-gray-950">
-                  工事写真報告書
-                </h1>
-                <div className="mt-4 flex items-center gap-4">
-                  <div className="h-[2px] w-[86mm] bg-gray-900" />
+                <div className="shrink-0">
+                  <img
+                    src={kawaraLogo}
+                    alt=""
+                    className="block w-[22mm] h-[22mm] object-contain"
+                    crossOrigin="anonymous"
+                  />
                 </div>
               </div>
 
               {/* 本文（項目は変更しない） */}
-              <div className="relative mt-[22mm] flex-1">
-                <div className="rounded-[18px] border-2 border-gray-900 bg-white p-8">
-                  <div className="space-y-7">
+              <div className="relative mt-[20mm] flex-1 flex items-start justify-center">
+                <div className="w-full max-w-[165mm] rounded-[16px] border-[1.5px] border-gray-900 bg-white px-8 py-7">
+                  <div className="space-y-5">
                     {COVER_FIELDS.map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-5">
-                        <div className="w-[38mm] flex-shrink-0">
-                          <div className="text-[13px] font-extrabold tracking-[0.25em] text-gray-700">
+                      <div key={idx} className="flex items-center gap-6">
+                        <div className="w-[34mm] flex-shrink-0">
+                          <div className="text-[12px] font-bold tracking-[0.18em] text-gray-700 whitespace-nowrap">
                             {item.label}
                           </div>
-                          <div className="mt-2 h-[2px] w-[22mm] bg-gray-900" />
                         </div>
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 border-b border-gray-300 pb-2">
                           <div className="text-[22px] font-bold text-gray-950 whitespace-nowrap overflow-hidden text-ellipsis">
                             {String(project[item.key] ?? '　')}
                           </div>
@@ -237,6 +238,11 @@ export default function PdfExportPage() {
                     ))}
                   </div>
                 </div>
+              </div>
+
+              {/* さりげないフッターライン（文字なし） */}
+              <div className="relative mt-auto pt-[8mm]">
+                <div className="h-[1px] w-full bg-gray-900/25" />
               </div>
             </div>
             <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">
