@@ -49,9 +49,24 @@ export function compressImage(
   file: File,
   callback: (compressedFile: File) => void,
 ) {
+  const safeCallback = (f: File) => {
+    try {
+      callback(f);
+    } catch {
+      // ignore callback errors
+    }
+  };
+
+  if (!file.type.startsWith('image/')) {
+    safeCallback(file);
+    return;
+  }
+
   const reader = new FileReader();
+  reader.onerror = () => safeCallback(file);
   reader.onload = (e) => {
     const img = new Image();
+    img.onerror = () => safeCallback(file);
     img.onload = () => {
       const canvas = document.createElement('canvas');
       const MAX_WIDTH = 800;
@@ -64,11 +79,23 @@ export function compressImage(
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d');
-      if (ctx) ctx.drawImage(img, 0, 0, width, height);
+      if (!ctx) {
+        safeCallback(file);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
       canvas.toBlob(
         (blob) => {
-          if (blob)
-            callback(new File([blob], file.name, { type: 'image/jpeg' }));
+          if (!blob) {
+            safeCallback(file);
+            return;
+          }
+          safeCallback(
+            new File([blob], file.name, {
+              type: 'image/jpeg',
+              lastModified: file.lastModified,
+            }),
+          );
         },
         'image/jpeg',
         0.8,
@@ -94,6 +121,13 @@ export function useDraggablePin(
   onDragEndRef.current = onDragEnd;
   positionRef.current = position;
 
+  useEffect(() => {
+    if (dragging) return;
+    const next = { x: initialX, y: initialY };
+    positionRef.current = next;
+    setPosition(next);
+  }, [initialX, initialY, dragging]);
+
   const handleStart = (clientX: number, clientY: number) => {
     setDragging(true);
     dragStart.current = { x: clientX, y: clientY };
@@ -107,7 +141,9 @@ export function useDraggablePin(
 
   const onTouchStart = (e: RTouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
-    handleStart(e.touches[0].clientX, e.touches[0].clientY);
+    const t = e.touches[0];
+    if (!t) return;
+    handleStart(t.clientX, t.clientY);
   };
 
   useEffect(() => {
@@ -115,6 +151,7 @@ export function useDraggablePin(
       if (!containerRef.current || !containerRef.current.parentElement) return;
       const parentRect =
         containerRef.current.parentElement.getBoundingClientRect();
+      if (!parentRect.width || !parentRect.height) return;
       const dx = clientX - dragStart.current.x;
       const dy = clientY - dragStart.current.y;
 
@@ -135,7 +172,9 @@ export function useDraggablePin(
     const onTouchMove = (e: TouchEvent) => {
       if (dragging) {
         e.preventDefault();
-        handleMove(e.touches[0].clientX, e.touches[0].clientY);
+        const t = e.touches[0];
+        if (!t) return;
+        handleMove(t.clientX, t.clientY);
       }
     };
 

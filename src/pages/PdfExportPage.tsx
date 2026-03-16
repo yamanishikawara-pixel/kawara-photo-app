@@ -238,7 +238,7 @@ export default function PdfExportPage() {
                         <img
                           src={proxyUrl(u, mapIndex)}
                           crossOrigin="anonymous"
-                          className="block w-auto h-auto max-w-full max-h-[180mm]"
+                          className="block w-auto h-auto max-w-full max-h-[150mm]"
                           alt=""
                         />
                         {(project.mapPins ?? [])
@@ -285,6 +285,61 @@ export default function PdfExportPage() {
                     </span>
                   )}
                 </div>
+
+                {/* 項目欄（説明表） */}
+                <div className="mt-4">
+                  <div className="text-base font-bold mb-2">項目欄</div>
+                  <div className="border-2 border-gray-800">
+                    <div className="grid grid-cols-12 border-b-2 border-gray-800 bg-gray-100 text-sm font-bold">
+                      <div className="col-span-2 border-r-2 border-gray-800 p-2">
+                        符号
+                      </div>
+                      <div className="col-span-4 border-r-2 border-gray-800 p-2">
+                        部位
+                      </div>
+                      <div className="col-span-2 border-r-2 border-gray-800 p-2">
+                        写真NO
+                      </div>
+                      <div className="col-span-4 p-2">備考</div>
+                    </div>
+                    {(() => {
+                      const rows = (project as any).mapRows ?? [];
+                      const currentRows = rows.filter(
+                        (r: any) =>
+                          r.mapIndex === mapIndex ||
+                          (r.mapIndex === undefined && mapIndex === 0),
+                      );
+                      const displayRows =
+                        currentRows.length > 0
+                          ? currentRows.slice(0, 6)
+                          : Array.from({ length: 6 }, () => ({
+                              symbol: '　',
+                              part: '　',
+                              photoNo: '　',
+                              remarks: '　',
+                            }));
+                      return displayRows.map((row: any, idx: number) => (
+                        <div
+                          key={row.id ?? idx}
+                          className="grid grid-cols-12 border-b border-gray-400 text-sm"
+                        >
+                          <div className="col-span-2 border-r border-gray-400 p-2 font-bold text-red-700 whitespace-nowrap overflow-hidden">
+                            {row.symbol ?? '　'}
+                          </div>
+                          <div className="col-span-4 border-r border-gray-400 p-2 whitespace-nowrap overflow-hidden">
+                            {row.part ?? '　'}
+                          </div>
+                          <div className="col-span-2 border-r border-gray-400 p-2 whitespace-nowrap overflow-hidden">
+                            {row.photoNo ?? row.relatedPhotoNumber ?? '　'}
+                          </div>
+                          <div className="col-span-4 p-2 overflow-hidden">
+                            {row.remarks ?? '　'}
+                          </div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
               </div>
               <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">
                 - {2 + mapIndex} / {totalPages} -
@@ -308,16 +363,17 @@ export default function PdfExportPage() {
                 {chunk.map((p, i) => (
                   <div
                     key={i}
-                    className="flex gap-2 h-[32%] border border-gray-400 p-2 rounded"
+                    className="flex gap-2 h-[32%] border border-gray-500 p-2 rounded"
                   >
-                    <div className="w-[45%] border border-gray-300 flex items-center justify-center bg-gray-50 overflow-hidden relative min-h-0">
-                      {p.image && (
+                    {/* 写真（拡大） */}
+                    <div className="w-[60%] border-2 border-gray-700 flex items-center justify-center bg-gray-50 overflow-hidden relative min-h-0">
+                      {p.image ? (
                         <div className="flex items-center justify-center w-full h-full">
                           <div className="relative inline-block">
                             <img
                               src={proxyUrl(p.image, p.id)}
                               crossOrigin="anonymous"
-                              className="block w-auto h-auto max-w-full max-h-[70mm]"
+                              className="block w-auto h-auto max-w-full max-h-[88mm]"
                               alt=""
                             />
                             {(p.circles ?? []).map((circle) => (
@@ -334,43 +390,51 @@ export default function PdfExportPage() {
                             ))}
                           </div>
                         </div>
+                      ) : (
+                        <span className="text-gray-400 font-bold">
+                          写真未登録
+                        </span>
                       )}
                     </div>
-                    <div className="w-[55%] flex flex-col text-sm border border-gray-300 bg-white">
-                      <div className="flex border-b border-gray-300">
-                        <div className="w-20 bg-gray-100 p-1 border-r">
+
+                    {/* 説明欄（少し縮小） */}
+                    <div className="w-[40%] flex flex-col text-xs border-2 border-gray-700 bg-white">
+                      <div className="flex border-b border-gray-400">
+                        <div className="w-16 bg-gray-100 p-1.5 border-r border-gray-400 font-bold">
                           写真NO
                         </div>
-                        <div className="p-1 flex-1 font-bold">
-                          {p.photoNumber}
+                        <div className="p-1.5 flex-1 font-bold text-sm">
+                          {p.photoNumber || '　'}
                         </div>
                       </div>
-                      <div className="flex border-b border-gray-300">
-                        <div className="w-20 bg-gray-100 p-1 border-r">
+                      <div className="flex border-b border-gray-400">
+                        <div className="w-16 bg-gray-100 p-1.5 border-r border-gray-400 font-bold">
                           撮影日
                         </div>
-                        <div className="p-1 flex-1">{p.shootingDate}</div>
+                        <div className="p-1.5 flex-1">
+                          {p.shootingDate || '　'}
+                        </div>
                       </div>
-                      <div className="flex border-b border-gray-300">
-                        <div className="w-20 bg-gray-100 p-1 border-r">
+                      <div className="flex border-b border-gray-400">
+                        <div className="w-16 bg-gray-100 p-1.5 border-r border-gray-400 font-bold">
                           位置図
                         </div>
-                        <div className="p-1 flex-1 font-bold text-red-700">
-                          {p.locationMap}
+                        <div className="p-1.5 flex-1 font-bold text-red-700">
+                          {p.locationMap || '　'}
                         </div>
                       </div>
-                      <div className="flex border-b border-gray-300">
-                        <div className="w-20 bg-gray-100 p-1 border-r">
+                      <div className="flex border-b border-gray-400">
+                        <div className="w-16 bg-gray-100 p-1.5 border-r border-gray-400 font-bold">
                           工程
                         </div>
-                        <div className="p-1 flex-1">{p.process}</div>
+                        <div className="p-1.5 flex-1">{p.process || '　'}</div>
                       </div>
                       <div className="flex-1 flex min-h-0">
-                        <div className="w-20 bg-gray-100 p-1 border-r">
+                        <div className="w-16 bg-gray-100 p-1.5 border-r border-gray-400 font-bold">
                           説明
                         </div>
-                        <div className="p-1 flex-1 text-xs overflow-auto">
-                          {p.description}
+                        <div className="p-1.5 flex-1 whitespace-pre-wrap overflow-hidden">
+                          {p.description || '　'}
                         </div>
                       </div>
                     </div>
