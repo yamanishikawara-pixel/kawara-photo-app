@@ -196,14 +196,8 @@ export default function PdfExportPage() {
               </div>
 
               {/* ヘッダー */}
-              <div className="relative mt-[16mm]">
-                <div className="inline-flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-gray-900" />
-                  <div className="text-sm font-bold tracking-[0.35em] text-gray-700">
-                    PHOTO REPORT
-                  </div>
-                </div>
-                <h1 className="mt-4 text-[44px] leading-tight font-black tracking-[0.12em] text-gray-950">
+              <div className="relative mt-[18mm]">
+                <h1 className="text-[44px] leading-tight font-black tracking-[0.12em] text-gray-950">
                   工事写真報告書
                 </h1>
                 <div className="mt-4 flex items-center gap-4">
@@ -231,16 +225,6 @@ export default function PdfExportPage() {
                       </div>
                     ))}
                   </div>
-                </div>
-              </div>
-
-              {/* フッターアクセント */}
-              <div className="relative mt-6 flex items-end justify-between">
-                <div className="text-xs font-bold tracking-[0.35em] text-gray-500">
-                  KAWARA PHOTO APP
-                </div>
-                <div className="text-xs text-gray-500">
-                  {String(project.creationDate ?? '　')}
                 </div>
               </div>
             </div>
