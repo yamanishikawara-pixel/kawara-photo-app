@@ -6,6 +6,7 @@ import { db } from '../firebase';
 import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import type { Circle, Photo, Project } from '../types';
+import kawaraLogo from '../assets/kawara-logo.png';
 import {
   A4_HEIGHT_PX,
   A4_WIDTH_PX,
@@ -184,12 +185,18 @@ export default function PdfExportPage() {
             style={{ ...pageStyle, padding: '20mm' }}
           >
             <div className="w-full h-full border-[3px] border-gray-900 p-10 flex flex-col relative overflow-hidden">
-              {/* 背景アクセント */}
-              <div className="absolute -top-[26mm] -right-[26mm] w-[90mm] h-[90mm] rounded-[28mm] bg-orange-100" />
-              <div className="absolute -bottom-[30mm] -left-[30mm] w-[110mm] h-[110mm] rounded-[34mm] bg-blue-50" />
+              {/* ロゴ */}
+              <div className="absolute top-[10mm] right-[10mm]">
+                <img
+                  src={kawaraLogo}
+                  alt=""
+                  className="block w-[26mm] h-[26mm] object-contain"
+                  crossOrigin="anonymous"
+                />
+              </div>
 
               {/* ヘッダー */}
-              <div className="relative mt-[10mm]">
+              <div className="relative mt-[16mm]">
                 <div className="inline-flex items-center gap-3">
                   <div className="w-3 h-3 rounded-full bg-gray-900" />
                   <div className="text-sm font-bold tracking-[0.35em] text-gray-700">
@@ -200,14 +207,13 @@ export default function PdfExportPage() {
                   工事写真報告書
                 </h1>
                 <div className="mt-4 flex items-center gap-4">
-                  <div className="h-[2px] w-[72mm] bg-gray-900" />
-                  <div className="h-[2px] w-[18mm] bg-orange-500" />
+                  <div className="h-[2px] w-[86mm] bg-gray-900" />
                 </div>
               </div>
 
               {/* 本文（項目は変更しない） */}
               <div className="relative mt-[22mm] flex-1">
-                <div className="rounded-[18px] border-2 border-gray-900 bg-white/80 backdrop-blur p-8">
+                <div className="rounded-[18px] border-2 border-gray-900 bg-white p-8">
                   <div className="space-y-7">
                     {COVER_FIELDS.map((item, idx) => (
                       <div key={idx} className="flex items-center gap-5">
