@@ -62,6 +62,104 @@ export function compressImage(
     return;
   }
 
+  // EXIFの向き（回転）を反映してから描画したい。
+  // createImageBitmap({ imageOrientation: 'from-image' }) が使える環境では、
+  // 向き補正済みの bitmap を得られるので、それを優先する。
+  if (typeof createImageBitmap === 'function') {
+    (async () => {
+      try {
+        const bitmap = await createImageBitmap(file, {
+          // TS lib / Safari などの差分吸収のため any に落とす
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          imageOrientation: 'from-image',
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any);
+
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800;
+        let width = bitmap.width;
+        let height = bitmap.height;
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          bitmap.close?.();
+          safeCallback(file);
+          return;
+        }
+        ctx.drawImage(bitmap, 0, 0, width, height);
+        bitmap.close?.();
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              safeCallback(file);
+              return;
+            }
+            safeCallback(
+              new File([blob], file.name, {
+                type: 'image/jpeg',
+                lastModified: file.lastModified,
+              }),
+            );
+          },
+          'image/jpeg',
+          0.8,
+        );
+      } catch {
+        // fallback to FileReader path below
+        //（向き補正はされない可能性があるが、失敗よりマシ）
+        const reader = new FileReader();
+        reader.onerror = () => safeCallback(file);
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onerror = () => safeCallback(file);
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 800;
+            let width = img.width;
+            let height = img.height;
+            if (width > MAX_WIDTH) {
+              height = Math.round((height * MAX_WIDTH) / width);
+              width = MAX_WIDTH;
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              safeCallback(file);
+              return;
+            }
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob(
+              (blob) => {
+                if (!blob) {
+                  safeCallback(file);
+                  return;
+                }
+                safeCallback(
+                  new File([blob], file.name, {
+                    type: 'image/jpeg',
+                    lastModified: file.lastModified,
+                  }),
+                );
+              },
+              'image/jpeg',
+              0.8,
+            );
+          };
+          if (typeof e.target?.result === 'string') img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    })();
+    return;
+  }
+
   const reader = new FileReader();
   reader.onerror = () => safeCallback(file);
   reader.onload = (e) => {
