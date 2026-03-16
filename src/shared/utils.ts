@@ -236,9 +236,10 @@ async function getOrientation(file: File): Promise<number> {
   }
 }
 
-export function compressImage(
+function compressImageImpl(
   file: File,
   callback: (compressedFile: File) => void,
+  opts?: { skipExifOrientation?: boolean },
 ) {
   const safeCallback = (f: File) => {
     try {
@@ -264,7 +265,8 @@ export function compressImage(
           // ブラウザでデコードできる場合は canvas 経由でJPEG化する。
           imageFileToJpegViaImgElement(
             file,
-            (jpeg) => compressImage(jpeg, callback),
+            // HEICから作ったJPEGは「見た目が正」のことが多いので、EXIF回転は信用しない
+            (jpeg) => compressImageImpl(jpeg, callback, { skipExifOrientation: true }),
             () => safeCallback(file),
           );
           return;
@@ -282,11 +284,12 @@ export function compressImage(
           file.name.replace(/\.(heic|heif)$/i, '.jpg'),
           { type: 'image/jpeg', lastModified: file.lastModified },
         );
-        compressImage(jpegFile, callback);
+        // HEICから作ったJPEGは「見た目が正」のことが多いので、EXIF回転は信用しない
+        compressImageImpl(jpegFile, callback, { skipExifOrientation: true });
       } catch {
         imageFileToJpegViaImgElement(
           file,
-          (jpeg) => compressImage(jpeg, callback),
+          (jpeg) => compressImageImpl(jpeg, callback, { skipExifOrientation: true }),
           () => safeCallback(file),
         );
       }
@@ -300,7 +303,7 @@ export function compressImage(
   if (typeof createImageBitmap === 'function') {
     (async () => {
       try {
-        const orientation = await getOrientation(file);
+        const orientation = opts?.skipExifOrientation ? 1 : await getOrientation(file);
         const bitmap = await createImageBitmap(file, {
           // TS lib / Safari などの差分吸収のため any に落とす
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -355,7 +358,7 @@ export function compressImage(
       } catch {
         // fallback to FileReader path below
         //（iOS等でcreateImageBitmapの向き補正が効かない場合があるので、EXIFを手動で補正する）
-        const orientation = await getOrientation(file);
+        const orientation = opts?.skipExifOrientation ? 1 : await getOrientation(file);
         const reader = new FileReader();
         reader.onerror = () => safeCallback(file);
         reader.onload = (e) => {
@@ -364,7 +367,11 @@ export function compressImage(
           img.onload = () => {
             const canvas = document.createElement('canvas');
             const MAX_WIDTH = 800;
-            const rotated = orientation === 6 || orientation === 8;
+            const rotated =
+              orientation === 5 ||
+              orientation === 6 ||
+              orientation === 7 ||
+              orientation === 8;
             const baseW = rotated ? img.height : img.width;
             const baseH = rotated ? img.width : img.height;
             let outW = baseW;
@@ -415,10 +422,14 @@ export function compressImage(
     img.onerror = () => safeCallback(file);
     img.onload = () => {
       (async () => {
-        const orientation = await getOrientation(file);
+        const orientation = opts?.skipExifOrientation ? 1 : await getOrientation(file);
         const canvas = document.createElement('canvas');
         const MAX_WIDTH = 800;
-        const rotated = orientation === 6 || orientation === 8;
+        const rotated =
+          orientation === 5 ||
+          orientation === 6 ||
+          orientation === 7 ||
+          orientation === 8;
         const baseW = rotated ? img.height : img.width;
         const baseH = rotated ? img.width : img.height;
         let outW = baseW;
@@ -458,6 +469,13 @@ export function compressImage(
     if (typeof e.target?.result === 'string') img.src = e.target.result;
   };
   reader.readAsDataURL(file);
+}
+
+export function compressImage(
+  file: File,
+  callback: (compressedFile: File) => void,
+) {
+  compressImageImpl(file, callback);
 }
 
 export function useDraggablePin(
