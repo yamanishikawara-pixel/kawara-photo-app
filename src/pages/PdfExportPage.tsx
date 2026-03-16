@@ -164,7 +164,7 @@ export default function PdfExportPage() {
           type="button"
           onClick={handleExport}
           disabled={isExporting}
-          className="bg-orange-500 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg text-base sm:text-lg disabled:opacity-60 disabled:cursor-not-allowed"
+          className="bg-black text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg text-base sm:text-lg disabled:opacity-60 disabled:cursor-not-allowed hover:bg-gray-800"
           aria-busy={isExporting}
         >
           {isExporting ? 'PDF作成中...' : 'ダウンロード'}
@@ -178,78 +178,50 @@ export default function PdfExportPage() {
       )}
 
       <div className="flex flex-col gap-8 items-center w-full">
-        {/* 表紙 */}
+        
+        {/* =========================================
+            ★ここが新しい「完全白黒・特大文字」の表紙です！
+           ========================================= */}
         <div style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
           <div
-            className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left"
-            style={{ ...pageStyle, padding: '20mm' }}
+            className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left text-black"
+            style={{ ...pageStyle, padding: '25mm' }}
           >
-            <div className="w-full h-full border-[2px] border-gray-900 px-[16mm] pt-[14mm] pb-[12mm] flex flex-col relative overflow-hidden">
-              {/* ロゴ透かし（背景）: “存在感はあるが邪魔しない” */}
-              <div className="absolute inset-0 pointer-events-none">
-                <img
-                  src={kawaraLogo}
-                  alt=""
-                  className="absolute left-[6mm] bottom-[-30mm] w-[190mm] h-[190mm] object-contain opacity-[0.035]"
-                  style={{ transform: 'rotate(-6deg)' }}
-                  crossOrigin="anonymous"
-                />
+            <div className="w-full h-full flex flex-col items-center relative">
+              
+              {/* 中央上のロゴ（白黒化して配置） */}
+              <div className="mt-[15mm] mb-[20mm]">
+                <img src={kawaraLogo} alt="ロゴ" crossOrigin="anonymous" className="h-[35mm] w-auto grayscale object-contain" />
               </div>
 
-              {/* 上段：タイトル / ロゴ（同一行で整列） */}
-              <div className="relative flex items-start justify-between">
-                <div className="pt-[2mm]">
-                  <h1 className="text-[42px] leading-[1.06] font-extrabold tracking-[0.08em] text-gray-950">
-                    工事写真報告書
-                  </h1>
-                  <div className="mt-3">
-                    <div className="h-[2px] w-[92mm] bg-gray-900" />
-                    <div className="mt-[2mm] h-[1px] w-[58mm] bg-gray-900/60" />
+              {/* タイトル（極太・特大） */}
+              <div className="mb-[30mm] text-center w-full">
+                <h1 className="text-[52px] font-black tracking-[0.4em] mb-4">工事写真報告書</h1>
+                <div className="w-[160mm] mx-auto border-b-[4px] border-black"></div>
+                <div className="w-[160mm] mx-auto border-b-[1px] border-black mt-1.5"></div>
+              </div>
+
+              {/* 現場情報（四角い枠をなくし、文字サイズを極限まで大きく） */}
+              <div className="w-[150mm] space-y-[18mm]">
+                {COVER_FIELDS.map((item, idx) => (
+                  <div key={idx} className="flex items-end border-b-2 border-black pb-2">
+                    {/* 項目名（均等割付風） */}
+                    <div className="w-[45mm] flex-shrink-0 flex justify-between text-[24px] font-bold pr-8">
+                      {item.label.split('').map((c: string, i: number) => <span key={i}>{c}</span>)}
+                    </div>
+                    {/* 入力内容（特大・極太） */}
+                    <div className="flex-1 text-[32px] font-black whitespace-nowrap overflow-hidden">
+                      {String(project[item.key] ?? '　')}
+                    </div>
                   </div>
-                </div>
-
-                <div className="shrink-0">
-                  <img
-                    src={kawaraLogo}
-                    alt=""
-                    className="block w-[22mm] h-[22mm] object-contain"
-                    crossOrigin="anonymous"
-                  />
-                </div>
+                ))}
               </div>
 
-              {/* 本文（項目は変更しない） */}
-              <div className="relative mt-[20mm] flex-1 flex items-start justify-center">
-                <div className="w-full max-w-[165mm] rounded-[16px] border-[1.5px] border-gray-900 bg-white px-8 py-7">
-                  <div className="space-y-5">
-                    {COVER_FIELDS.map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-6">
-                        <div className="w-[34mm] flex-shrink-0">
-                          <div className="text-[11px] font-bold tracking-[0.18em] text-gray-700 whitespace-nowrap">
-                            {item.label}
-                          </div>
-                        </div>
-                        <div className="flex-1 min-w-0 border-b border-gray-300 pb-2">
-                          <div className="text-[21px] font-bold text-gray-950 whitespace-nowrap overflow-hidden text-ellipsis">
-                            {String(project[item.key] ?? '　')}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* さりげないフッターライン（文字なし） */}
-              <div className="relative mt-auto pt-[8mm]">
-                <div className="h-[1px] w-full bg-gray-900/25" />
-              </div>
             </div>
-            <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">
-              - 1 / {totalPages} -
-            </div>
+            <div className="absolute bottom-[10mm] right-[15mm] text-[16px] font-bold">- 1 / {totalPages} -</div>
           </div>
         </div>
+        {/* ========================================= */}
 
         {/* 位置図 */}
         {mapUrlsToRender.map((u, mapIndex) => (
@@ -354,7 +326,7 @@ export default function PdfExportPage() {
                               photoNo: '　',
                               remarks: '　',
                             }));
-                      return displayRows.map((row, idx: number) => (
+                     return displayRows.map((row: any, idx: number) => (
                         <div
                           key={row.id ?? idx}
                           className="grid grid-cols-12 border-b border-gray-400 text-sm"
