@@ -14,6 +14,7 @@ export interface Photo {
   process: string;
   description: string;
   circles: Circle[];
+  rotation?: number;
 }
 
 export interface MapRow {

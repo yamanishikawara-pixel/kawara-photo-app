@@ -405,7 +405,13 @@ export default function PdfExportPage() {
                     <div className="w-[60%] border-2 border-gray-700 flex items-center justify-center bg-gray-50 overflow-hidden relative min-h-0">
                       {p.image ? (
                         <div className="flex items-center justify-center w-full h-full">
-                          <div className="relative inline-block">
+                          <div
+                            className="relative inline-block"
+                            style={{
+                              transform: `rotate(${(p as Photo).rotation ?? 0}deg)`,
+                              transformOrigin: 'center center',
+                            }}
+                          >
                             <img
                               src={proxyUrl(p.image, p.id)}
                               crossOrigin="anonymous"

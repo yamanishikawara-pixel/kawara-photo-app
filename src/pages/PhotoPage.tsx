@@ -125,7 +125,20 @@ export default function PhotoPage() {
 
   const addPhotoSlot = async () => {
     if (!project) return;
-    const newPhotos: Photo[] = [...project.photos, { id: Date.now(), image: null, photoNumber: String(project.photos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [] }];
+    const newPhotos: Photo[] = [
+      ...project.photos,
+      {
+        id: Date.now(),
+        image: null,
+        photoNumber: String(project.photos.length + 1),
+        shootingDate: "",
+        locationMap: "",
+        process: "",
+        description: "",
+        circles: [],
+        rotation: 0,
+      },
+    ];
     setProject({ ...project, photos: newPhotos });
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
   };
@@ -153,7 +166,17 @@ export default function PhotoPage() {
       const file = files[i];
       let targetIndex = newPhotos.findIndex(p => !p.image);
       if (targetIndex === -1) {
-        newPhotos.push({ id: Date.now() + Math.random(), image: null, photoNumber: String(newPhotos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [] });
+        newPhotos.push({
+          id: Date.now() + Math.random(),
+          image: null,
+          photoNumber: String(newPhotos.length + 1),
+          shootingDate: "",
+          locationMap: "",
+          process: "",
+          description: "",
+          circles: [],
+          rotation: 0,
+        });
         targetIndex = newPhotos.length - 1;
       }
       await new Promise<void>((resolve) => {
@@ -220,6 +243,21 @@ export default function PhotoPage() {
     setSelectedCircleId(null);
   };
 
+  const rotatePhoto = async (photoId: number, direction: 'left' | 'right') => {
+    if (!project) return;
+    const delta = direction === 'left' ? -90 : 90;
+    const newPhotos = project.photos.map((p) =>
+      p.id === photoId
+        ? {
+            ...p,
+            rotation: (((p.rotation ?? 0) + delta + 360) % 360),
+          }
+        : p,
+    );
+    setProject({ ...project, photos: newPhotos });
+    await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+  };
+
   if (!project) return <div className="p-10 text-center font-bold text-gray-500">読み込み中...</div>;
 
   return (
@@ -249,7 +287,16 @@ export default function PhotoPage() {
                   <span className="text-lg font-bold text-blue-500">保存中...</span>
                 ) : photo.image ? (
                   <div className="relative inline-block" onClick={(e) => addCircleToPhoto(e, photo.id)}>
-                    <img src={proxyUrl(photo.image, photo.id)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[60vh] pointer-events-none rounded shadow-sm" alt="" />
+                    <img
+                      src={proxyUrl(photo.image, photo.id)}
+                      crossOrigin="anonymous"
+                      className="block w-auto h-auto max-w-full max-h-[60vh] pointer-events-none rounded shadow-sm"
+                      style={{
+                        transform: `rotate(${photo.rotation ?? 0}deg)`,
+                        transformOrigin: 'center center',
+                      }}
+                      alt=""
+                    />
                     {(photo.circles || []).map((circle) => (
                       <PhotoCircleMarker key={circle.id} circle={circle} isSelected={selectedCircleId === circle.id} onSelect={() => setSelectedCircleId(circle.id)} onDragEnd={(x: number, y: number) => updateCircle(photo.id, circle.id, { x, y })} onSizeChange={(size: number) => updateCircle(photo.id, circle.id, { size })} onRemove={() => removeCircle(photo.id, circle.id)} />
                     ))}
@@ -266,6 +313,22 @@ export default function PhotoPage() {
               <div className="flex justify-between items-center mb-5 pb-4 border-b border-gray-100">
                 <div className="font-bold text-gray-800 text-xl">写真 {index + 1}</div>
                 <div className="flex gap-2">
+                  <div className="flex gap-1 mr-1">
+                    <button
+                      type="button"
+                      onClick={() => rotatePhoto(photo.id, 'left')}
+                      className="p-2.5 text-gray-500 bg-gray-50 rounded-xl border border-gray-200 hover:bg-gray-100"
+                    >
+                      ↺
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => rotatePhoto(photo.id, 'right')}
+                      className="p-2.5 text-gray-500 bg-gray-50 rounded-xl border border-gray-200 hover:bg-gray-100"
+                    >
+                      ↻
+                    </button>
+                  </div>
                   {photo.image ? (
                     <button onClick={() => clearPhoto(photo.id)} className="p-2.5 text-gray-400 hover:text-red-500 bg-gray-50 rounded-xl border border-gray-200"><Trash2 className="w-5 h-5"/></button>
                   ) : (
