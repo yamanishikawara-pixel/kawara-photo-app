@@ -5,7 +5,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
-import type { Circle, Photo, Project } from '../types';
+import type { Circle, MapRow, Photo, Project } from '../types';
 import kawaraLogo from '../assets/kawara-logo.png';
 import {
   A4_HEIGHT_PX,
@@ -85,8 +85,8 @@ export default function PdfExportPage() {
         const currentTransform = pageEl.style.transform;
         pageEl.style.transform = 'scale(1)';
 
-        await toJpeg(pageEl, { cacheBust: true });
         const dataUrl = await toJpeg(pageEl, {
+          cacheBust: true,
           quality: 0.95,
           pixelRatio: 2,
           backgroundColor: '#ffffff',
@@ -339,9 +339,9 @@ export default function PdfExportPage() {
                       <div className="col-span-7 p-2">備考</div>
                     </div>
                     {(() => {
-                      const rows = (project as any).mapRows ?? [];
+                      const rows: MapRow[] = project.mapRows ?? [];
                       const currentRows = rows.filter(
-                        (r: any) =>
+                        (r) =>
                           r.mapIndex === mapIndex ||
                           (r.mapIndex === undefined && mapIndex === 0),
                       );
@@ -354,7 +354,7 @@ export default function PdfExportPage() {
                               photoNo: '　',
                               remarks: '　',
                             }));
-                      return displayRows.map((row: any, idx: number) => (
+                      return displayRows.map((row, idx: number) => (
                         <div
                           key={row.id ?? idx}
                           className="grid grid-cols-12 border-b border-gray-400 text-sm"

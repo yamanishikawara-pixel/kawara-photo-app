@@ -5,8 +5,24 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { compressImage, proxyUrl, useDraggablePin } from '../shared/utils';
+import type { Circle, MapPin, Photo, Project } from '../types';
+import type { ChangeEvent, MouseEvent } from 'react';
 
-function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChange, onRemove }: any) {
+function PhotoCircleMarker({
+  circle,
+  isSelected,
+  onSelect,
+  onDragEnd,
+  onSizeChange,
+  onRemove,
+}: {
+  circle: Circle;
+  isSelected: boolean;
+  onSelect: () => void;
+  onDragEnd: (x: number, y: number) => void;
+  onSizeChange: (size: number) => void;
+  onRemove: () => void;
+}) {
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(circle.x, circle.y, onDragEnd);
 
   return (
@@ -29,7 +45,17 @@ function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChan
   )
 }
 
-function PinSelectModal({ isOpen, onClose, pins, onSelect }: any) {
+function PinSelectModal({
+  isOpen,
+  onClose,
+  pins,
+  onSelect,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  pins: MapPin[] | undefined;
+  onSelect: (label: string) => void;
+}) {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6 backdrop-blur-sm" onClick={onClose}>
@@ -40,7 +66,7 @@ function PinSelectModal({ isOpen, onClose, pins, onSelect }: any) {
         </div>
         {pins && pins.length > 0 ? (
           <div className="grid grid-cols-3 gap-3 max-h-[60vh] overflow-y-auto pr-2">
-            {pins.map((pin: any) => (
+            {pins.map((pin) => (
               <button key={pin.id} onClick={() => { onSelect(pin.label); onClose(); }} className="bg-gray-100 text-gray-800 border-2 border-gray-200 font-bold py-3 text-center rounded-xl text-lg shadow-sm hover:border-red-400 hover:bg-red-50 hover:text-red-700 transition-all">{pin.label}</button>
             ))}
             <button onClick={() => { onSelect(""); onClose(); }} className="col-span-3 bg-gray-50 text-gray-500 font-bold py-3 text-center rounded-xl text-sm shadow-inner mt-2">選択を解除</button>
@@ -56,7 +82,7 @@ function PinSelectModal({ isOpen, onClose, pins, onSelect }: any) {
 export default function PhotoPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [project, setProject] = useState<any>(null);
+  const [project, setProject] = useState<Project | null>(null);
   const [loadingId, setLoadingId] = useState<number | null>(null);
   const [bulkUploading, setBulkUploading] = useState(false);
   const [bulkProgress, setBulkProgress] = useState(0);
@@ -64,18 +90,25 @@ export default function PhotoPage() {
   const [currentPhotoId, setCurrentPhotoId] = useState<number | null>(null);
   const [selectedCircleId, setSelectedCircleId] = useState<number | null>(null);
 
-  useEffect(() => { getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data())); }, [id]);
+  useEffect(() => { getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data() as Project)); }, [id]);
 
-  const updatePhoto = async (photoId: number, field: string, value: any) => {
-    const newPhotos = project.photos.map((p: any) => p.id === photoId ? { ...p, [field]: value } : p);
+  type EditablePhotoField = keyof Pick<
+    Photo,
+    'image' | 'photoNumber' | 'shootingDate' | 'locationMap' | 'process' | 'description' | 'circles'
+  >;
+
+  const updatePhoto = async (photoId: number, field: EditablePhotoField, value: Photo[EditablePhotoField]) => {
+    if (!project) return;
+    const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, [field]: value } : p);
     setProject({ ...project, photos: newPhotos });
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
   };
 
   const deletePhotoSlot = async (photoId: number) => {
     if (window.confirm('この写真枠を完全に削除しますか？')) {
-      const newPhotos = project.photos.filter((p: any) => p.id !== photoId);
-      const renumbered = newPhotos.map((p: any, i: number) => ({ ...p, photoNumber: String(i + 1) }));
+      if (!project) return;
+      const newPhotos = project.photos.filter((p) => p.id !== photoId);
+      const renumbered = newPhotos.map((p, i: number) => ({ ...p, photoNumber: String(i + 1) }));
       setProject({ ...project, photos: renumbered });
       await updateDoc(doc(db, "projects", id!), { photos: renumbered });
     }
@@ -83,19 +116,22 @@ export default function PhotoPage() {
 
   const clearPhoto = async (photoId: number) => {
     if (window.confirm('この枠の画像を削除しますか？（文字は残ります）')) {
-      const newPhotos = project.photos.map((p: any) => p.id === photoId ? { ...p, image: null, circles: [] } : p);
+      if (!project) return;
+      const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, image: null, circles: [] } : p);
       setProject({ ...project, photos: newPhotos });
       await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
     }
   };
 
   const addPhotoSlot = async () => {
-    const newPhotos = [...project.photos, { id: Date.now(), image: null, photoNumber: String(project.photos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [] }];
+    if (!project) return;
+    const newPhotos: Photo[] = [...project.photos, { id: Date.now(), image: null, photoNumber: String(project.photos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [] }];
     setProject({ ...project, photos: newPhotos });
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
   };
 
   const movePhoto = async (index: number, direction: 'up' | 'down') => {
+    if (!project) return;
     if (direction === 'up' && index === 0) return;
     if (direction === 'down' && index === project.photos.length - 1) return;
     const newPhotos = [...project.photos];
@@ -106,7 +142,8 @@ export default function PhotoPage() {
     await updateDoc(doc(db, "projects", id!), { photos: renumberedPhotos });
   };
 
-  const handleBulkUpload = async (e: any) => {
+  const handleBulkUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    if (!project) return;
     const files = Array.from(e.target.files as FileList);
     if (files.length === 0) return;
     setBulkUploading(true);
@@ -137,27 +174,30 @@ export default function PhotoPage() {
     setBulkProgress(0);
   };
 
-  const uploadPhoto = async (e: any, index: number) => {
-    if (!e.target.files[0]) return;
+  const uploadPhoto = async (e: ChangeEvent<HTMLInputElement>, index: number) => {
+    if (!project) return;
+    const f = e.target.files?.[0];
+    if (!f) return;
     const photoId = project.photos[index].id;
     setLoadingId(photoId);
-    compressImage(e.target.files[0], async (file) => {
+    compressImage(f, async (file) => {
       const r = ref(storage, `photos/${id}/${Date.now()}`);
       await uploadBytes(r, file);
       const url = await getDownloadURL(r);
-      const newPhotos = project.photos.map((p: any, i: number) => p.id === photoId ? { ...p, image: url, photoNumber: String(i + 1), shootingDate: new Date().toLocaleDateString('ja-JP'), circles: [] } : p);
+      const newPhotos = project.photos.map((p, i: number) => p.id === photoId ? { ...p, image: url, photoNumber: String(i + 1), shootingDate: new Date().toLocaleDateString('ja-JP'), circles: [] } : p);
       setProject({ ...project, photos: newPhotos });
       await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
       setLoadingId(null);
     });
   };
 
-  const addCircleToPhoto = async (e: any, photoId: number) => {
+  const addCircleToPhoto = async (e: MouseEvent<HTMLDivElement>, photoId: number) => {
+    if (!project) return;
     if (selectedCircleId !== null) { setSelectedCircleId(null); return; }
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
-    const newPhotos = project.photos.map((p: any) => {
+    const newPhotos = project.photos.map((p) => {
       if (p.id === photoId) return { ...p, circles: [...(p.circles || []), { id: Date.now(), x, y, size: 20 }] };
       return p;
     });
@@ -165,14 +205,16 @@ export default function PhotoPage() {
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
   };
 
-  const updateCircle = async (photoId: number, circleId: number, newProps: any) => {
-    const newPhotos = project.photos.map((p: any) => p.id === photoId ? { ...p, circles: p.circles.map((c: any) => c.id === circleId ? { ...c, ...newProps } : c) } : p);
+  const updateCircle = async (photoId: number, circleId: number, newProps: Partial<Circle>) => {
+    if (!project) return;
+    const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: p.circles.map((c) => c.id === circleId ? { ...c, ...newProps } : c) } : p);
     setProject({ ...project, photos: newPhotos });
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
   };
   
   const removeCircle = async (photoId: number, circleId: number) => {
-    const newPhotos = project.photos.map((p: any) => p.id === photoId ? { ...p, circles: p.circles.filter((c: any) => c.id !== circleId) } : p);
+    if (!project) return;
+    const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: p.circles.filter((c) => c.id !== circleId) } : p);
     setProject({ ...project, photos: newPhotos });
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
     setSelectedCircleId(null);
@@ -195,7 +237,7 @@ export default function PhotoPage() {
         </div>
 
         <div className="space-y-8 mt-4">
-          {project.photos.map((photo: any, index: number) => (
+          {project.photos.map((photo, index: number) => (
             <div key={photo.id} className="bg-white p-5 rounded-3xl border border-black/5 shadow-md relative">
               <div className="absolute top-4 right-4 flex gap-2 z-10">
                 <button onClick={() => movePhoto(index, 'up')} className="bg-white p-2 rounded-lg shadow border border-gray-200 text-gray-600 hover:bg-gray-50"><ArrowUp className="w-5 h-5" /></button>
@@ -208,7 +250,7 @@ export default function PhotoPage() {
                 ) : photo.image ? (
                   <div className="relative inline-block" onClick={(e) => addCircleToPhoto(e, photo.id)}>
                     <img src={proxyUrl(photo.image, photo.id)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[60vh] pointer-events-none rounded shadow-sm" alt="" />
-                    {(photo.circles || []).map((circle: any) => (
+                    {(photo.circles || []).map((circle) => (
                       <PhotoCircleMarker key={circle.id} circle={circle} isSelected={selectedCircleId === circle.id} onSelect={() => setSelectedCircleId(circle.id)} onDragEnd={(x: number, y: number) => updateCircle(photo.id, circle.id, { x, y })} onSizeChange={(size: number) => updateCircle(photo.id, circle.id, { size })} onRemove={() => removeCircle(photo.id, circle.id)} />
                     ))}
                     <div className="absolute -top-3 -left-3 bg-black/70 text-white text-xs px-2 py-1 rounded-full font-bold pointer-events-none shadow">タップで赤丸追加</div>

@@ -6,8 +6,17 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { proxyUrl, useDraggablePin } from '../shared/utils';
+import type { MapPin as MapPinT, MapPinType, MapRow, Project } from '../types';
 
-function MapMarker({ pin, onDragEnd, onClick }: any) {
+function MapMarker({
+  pin,
+  onDragEnd,
+  onClick,
+}: {
+  pin: MapPinT;
+  onDragEnd: (x: number, y: number) => void;
+  onClick: () => void;
+}) {
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(pin.x, pin.y, onDragEnd);
   return (
     <div ref={containerRef} onMouseDown={onMouseDown} onTouchStart={onTouchStart} onClick={(e) => { e.stopPropagation(); if(!dragging) onClick(); }} style={{ left: `${position.x}%`, top: `${position.y}%`, transform: 'translate(-50%, -50%)', touchAction: 'none' }} className={`absolute flex items-center justify-center cursor-pointer transition-transform ${dragging ? 'z-30 scale-125 opacity-80' : 'z-10 hover:scale-110'}`}>
@@ -26,9 +35,21 @@ function MapMarker({ pin, onDragEnd, onClick }: any) {
   )
 }
 
-function MarkerEditModal({ pin, isOpen, onClose, onSave, onRemove }: any) {
+function MarkerEditModal({
+  pin,
+  isOpen,
+  onClose,
+  onSave,
+  onRemove,
+}: {
+  pin: MapPinT | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (pin: MapPinT) => void;
+  onRemove: (pinId: number) => void;
+}) {
   const [label, setLabel] = useState("");
-  const [type, setType] = useState("circle");
+  const [type, setType] = useState<MapPinType>("circle");
   const [rotation, setRotation] = useState(0);
 
   useEffect(() => { if (pin) { setLabel(pin.label); setType(pin.type || 'circle'); setRotation(pin.rotation || 0); } }, [pin]);
@@ -74,12 +95,12 @@ function MarkerEditModal({ pin, isOpen, onClose, onSave, onRemove }: any) {
 export default function MapPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [project, setProject] = useState<any>(null);
+  const [project, setProject] = useState<Project | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [editingPin, setEditingPin] = useState<any>(null);
+  const [editingPin, setEditingPin] = useState<MapPinT | null>(null);
   const [initializedRows, setInitializedRows] = useState(false);
 
-  useEffect(() => { getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data())); }, [id]);
+  useEffect(() => { getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data() as Project)); }, [id]);
 
   // 位置図ごとに「説明表」を最初から1行表示にする（必要なら自動で1行作成）
   useEffect(() => {
@@ -87,14 +108,12 @@ export default function MapPage() {
     const mapUrls: unknown = project.mapUrls;
     if (!Array.isArray(mapUrls) || mapUrls.length === 0) return;
 
-    const existingRows: any[] = Array.isArray(project.mapRows) ? project.mapRows : [];
+    const existingRows: MapRow[] = Array.isArray(project.mapRows) ? project.mapRows : [];
 
     const missingMapIndexes: number[] = [];
     for (let mapIndex = 0; mapIndex < mapUrls.length; mapIndex++) {
       const hasRow = existingRows.some(
-        (r: any) =>
-          r?.mapIndex === mapIndex ||
-          (r?.mapIndex === undefined && mapIndex === 0),
+        (r) => r?.mapIndex === mapIndex || (r?.mapIndex === undefined && mapIndex === 0),
       );
       if (!hasRow) missingMapIndexes.push(mapIndex);
     }
@@ -111,9 +130,9 @@ export default function MapPage() {
         id: Date.now() + Math.random(),
         mapIndex,
         symbol: `${prefix}1`,
-        part: "",
-        photoNo: "",
-        remarks: "",
+        part: '',
+        photoNo: '',
+        remarks: '',
       });
     }
 
@@ -123,7 +142,7 @@ export default function MapPage() {
     });
   }, [project, id, initializedRows]);
 
-  const uploadMaps = async (e: any) => {
+  const uploadMaps = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files as FileList).slice(0, 2);
     if (files.length === 0) return;
     setUploading(true);
@@ -141,58 +160,58 @@ export default function MapPage() {
 
   const removeMap = async (index: number) => {
     if(!window.confirm('この位置図を削除しますか？\n（配置したマーカーもすべて削除されます）')) return;
-    const newUrls = project.mapUrls.filter((_: any, i: number) => i !== index);
-    const newPins = (project.mapPins || []).filter((p: any) => p.mapIndex !== index);
+    const newUrls = project.mapUrls.filter((_, i: number) => i !== index);
+    const newPins = (project.mapPins || []).filter((p) => p.mapIndex !== index);
     setProject({ ...project, mapUrls: newUrls, mapPins: newPins });
     await updateDoc(doc(db, "projects", id!), { mapUrls: newUrls, mapPins: newPins });
   };
 
-  const addPin = async (e: any, mapIndex: number) => {
+  const addPin = async (e: React.MouseEvent<HTMLDivElement>, mapIndex: number) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
     
-    const currentPins = (project.mapPins || []).filter((p: any) => p.mapIndex === mapIndex);
+    const currentPins = (project.mapPins || []).filter((p) => p.mapIndex === mapIndex);
     const prefix = mapIndex === 0 ? 'A-' : 'B-';
     const label = `${prefix}${currentPins.length + 1}`;
 
-    const newPin = { id: Date.now(), mapIndex, x, y, label, type: 'circle', rotation: 0 };
-    const newPins = [...(project.mapPins || []), newPin];
+    const newPin: MapPinT = { id: Date.now(), mapIndex, x, y, label, type: 'circle', rotation: 0 };
+    const newPins: MapPinT[] = [...(project.mapPins || []), newPin];
     setProject({ ...project, mapPins: newPins });
     await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
     setEditingPin(newPin);
   };
 
-  const savePin = async (updatedPin: any) => {
-    const newPins = (project.mapPins || []).map((p: any) => p.id === updatedPin.id ? updatedPin : p);
+  const savePin = async (updatedPin: MapPinT) => {
+    const newPins = (project.mapPins || []).map((p) => p.id === updatedPin.id ? updatedPin : p);
     setProject({ ...project, mapPins: newPins });
     await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
   };
 
   const removePin = async (pinId: number) => {
-    const newPins = (project.mapPins || []).filter((p: any) => p.id !== pinId);
+    const newPins = (project.mapPins || []).filter((p) => p.id !== pinId);
     setProject({ ...project, mapPins: newPins });
     await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
   };
 
   const addMapRow = async (mapIndex: number) => {
-    const currentRows = (project.mapRows || []).filter((r: any) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0));
+    const currentRows = (project.mapRows || []).filter((r) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0));
     const prefix = mapIndex === 0 ? 'A-' : 'B-';
     const symbol = `${prefix}${currentRows.length + 1}`;
     
-    const newRows = [...(project.mapRows || []), { id: Date.now(), mapIndex, symbol, part: "", photoNo: "", remarks: "" }];
+    const newRows: MapRow[] = [...(project.mapRows || []), { id: Date.now(), mapIndex, symbol, part: "", photoNo: "", remarks: "" }];
     setProject({ ...project, mapRows: newRows });
     await updateDoc(doc(db, "projects", id!), { mapRows: newRows });
   };
 
-  const updateMapRow = async (rowId: number, field: string, value: string) => {
-    const newRows = (project.mapRows || []).map((r: any) => r.id === rowId ? { ...r, [field]: value } : r);
+  const updateMapRow = async (rowId: number, field: keyof MapRow, value: string) => {
+    const newRows = (project.mapRows || []).map((r) => r.id === rowId ? { ...r, [field]: value } : r);
     setProject({ ...project, mapRows: newRows });
     await updateDoc(doc(db, "projects", id!), { mapRows: newRows });
   };
 
   const removeMapRow = async (rowId: number) => {
-    const newRows = (project.mapRows || []).filter((r: any) => r.id !== rowId);
+    const newRows = (project.mapRows || []).filter((r) => r.id !== rowId);
     setProject({ ...project, mapRows: newRows });
     await updateDoc(doc(db, "projects", id!), { mapRows: newRows });
   };
@@ -224,14 +243,14 @@ export default function MapPage() {
               </div>
               
               {project.mapUrls.map((u: string, i: number) => {
-                const currentRows = (project.mapRows || []).filter((r: any) => r.mapIndex === i || (r.mapIndex === undefined && i === 0));
+                const currentRows = (project.mapRows || []).filter((r) => r.mapIndex === i || (r.mapIndex === undefined && i === 0));
                 
                 return (
                 <div key={i} className="relative w-full border-2 border-gray-300 rounded-xl bg-gray-100 shadow-inner group overflow-hidden flex flex-col p-2">
                   <div className="flex items-center justify-center overflow-hidden">
                     <div className="relative inline-block" onClick={(e) => addPin(e, i)}>
                       <img src={proxyUrl(u, i)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[60vh] pointer-events-none rounded shadow-sm" alt="" />
-                      {(project.mapPins || []).filter((p: any) => p.mapIndex === i).map((pin: any) => (
+                      {(project.mapPins || []).filter((p) => p.mapIndex === i).map((pin) => (
                         <MapMarker key={pin.id} pin={pin} onDragEnd={(x: number, y: number) => savePin({...pin, x, y})} onClick={() => setEditingPin(pin)} />
                       ))}
                     </div>
@@ -241,7 +260,7 @@ export default function MapPage() {
                   <div className="w-full mt-6 pt-4 border-t border-gray-300">
                     <h3 className="text-lg font-bold mb-3 text-gray-800">位置図 {i + 1} の説明表</h3>
                     <div className="space-y-3">
-                      {currentRows.map((row: any) => (
+                      {currentRows.map((row) => (
                         <div key={row.id} className="flex gap-2 items-center bg-white p-2 rounded-xl border border-gray-200 shadow-sm">
                           <div className="flex-1 grid grid-cols-12 gap-2">
                             <input type="text" placeholder="符号" className="col-span-1 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.symbol || ''} onChange={e => updateMapRow(row.id, 'symbol', e.target.value)} />

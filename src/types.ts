@@ -18,9 +18,12 @@ export interface Photo {
 
 export interface MapRow {
   id: number;
+  mapIndex?: number;
   symbol: string;
   part: string;
-  relatedPhotoNumber: string;
+  photoNo?: string;
+  relatedPhotoNumber?: string;
+  remarks?: string;
 }
 
 export type MapPinType = 'circle' | 'arrow';

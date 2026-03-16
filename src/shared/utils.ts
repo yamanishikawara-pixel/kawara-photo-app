@@ -65,6 +65,57 @@ function isHeicFile(file: File): boolean {
   );
 }
 
+function imageFileToJpegViaImgElement(
+  file: File,
+  callback: (jpeg: File) => void,
+  fallback: () => void,
+) {
+  const reader = new FileReader();
+  reader.onerror = fallback;
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onerror = fallback;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX_WIDTH = 800;
+
+      let outW = img.width;
+      let outH = img.height;
+      if (outW > MAX_WIDTH) {
+        outH = Math.round((outH * MAX_WIDTH) / outW);
+        outW = MAX_WIDTH;
+      }
+
+      canvas.width = outW;
+      canvas.height = outH;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        fallback();
+        return;
+      }
+      ctx.drawImage(img, 0, 0, outW, outH);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            fallback();
+            return;
+          }
+          callback(
+            new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), {
+              type: 'image/jpeg',
+              lastModified: file.lastModified,
+            }),
+          );
+        },
+        'image/jpeg',
+        0.9,
+      );
+    };
+    if (typeof e.target?.result === 'string') img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
 function getExifOrientationFromJpeg(arrayBuffer: ArrayBuffer): number | undefined {
   // JPEG EXIF (APP1) の Orientation(0x0112) を読む（最小限）
   const view = new DataView(arrayBuffer);
@@ -180,7 +231,13 @@ export function compressImage(
         // heic2any は Worker を使うため、Node/Vitest では import できない。
         // ブラウザ環境のみ動的importして変換する。
         if (typeof window === 'undefined' || typeof Worker === 'undefined') {
-          safeCallback(file);
+          // 変換できない＝HEICのままアップロードすると表示が崩れる可能性が高いので、
+          // ブラウザでデコードできる場合は canvas 経由でJPEG化する。
+          imageFileToJpegViaImgElement(
+            file,
+            (jpeg) => compressImage(jpeg, callback),
+            () => safeCallback(file),
+          );
           return;
         }
 
@@ -198,7 +255,11 @@ export function compressImage(
         );
         compressImage(jpegFile, callback);
       } catch {
-        safeCallback(file);
+        imageFileToJpegViaImgElement(
+          file,
+          (jpeg) => compressImage(jpeg, callback),
+          () => safeCallback(file),
+        );
       }
     })();
     return;
@@ -210,6 +271,7 @@ export function compressImage(
   if (typeof createImageBitmap === 'function') {
     (async () => {
       try {
+        const orientation = await getOrientation(file);
         const bitmap = await createImageBitmap(file, {
           // TS lib / Safari などの差分吸収のため any に落とす
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -219,21 +281,26 @@ export function compressImage(
 
         const canvas = document.createElement('canvas');
         const MAX_WIDTH = 800;
-        let width = bitmap.width;
-        let height = bitmap.height;
-        if (width > MAX_WIDTH) {
-          height = Math.round((height * MAX_WIDTH) / width);
-          width = MAX_WIDTH;
+        const rotated = orientation === 6 || orientation === 8;
+        const baseW = rotated ? bitmap.height : bitmap.width;
+        const baseH = rotated ? bitmap.width : bitmap.height;
+        let outW = baseW;
+        let outH = baseH;
+        if (outW > MAX_WIDTH) {
+          outH = Math.round((outH * MAX_WIDTH) / outW);
+          outW = MAX_WIDTH;
         }
-        canvas.width = width;
-        canvas.height = height;
+        canvas.width = outW;
+        canvas.height = outH;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
           bitmap.close?.();
           safeCallback(file);
           return;
         }
-        ctx.drawImage(bitmap, 0, 0, width, height);
+        ctx.save();
+        drawImageWithOrientation(ctx, bitmap, outW, outH, orientation);
+        ctx.restore();
         bitmap.close?.();
 
         canvas.toBlob(
