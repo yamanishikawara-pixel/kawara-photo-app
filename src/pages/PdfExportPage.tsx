@@ -185,6 +185,17 @@ export default function PdfExportPage() {
             style={{ ...pageStyle, padding: '20mm' }}
           >
             <div className="w-full h-full border-[3px] border-gray-900 p-10 flex flex-col relative overflow-hidden">
+              {/* ロゴ透かし（背景） */}
+              <div className="absolute inset-0 pointer-events-none">
+                <img
+                  src={kawaraLogo}
+                  alt=""
+                  className="absolute right-[-10mm] bottom-[-18mm] w-[150mm] h-[150mm] object-contain opacity-[0.06]"
+                  style={{ transform: 'rotate(-12deg)' }}
+                  crossOrigin="anonymous"
+                />
+              </div>
+
               {/* ロゴ */}
               <div className="absolute top-[10mm] right-[10mm]">
                 <img
