@@ -175,16 +175,45 @@ function drawImageWithOrientation(
   outH: number,
   orientation: number,
 ) {
-  // 1=normal, 3=180, 6=90CW, 8=270CW を主にサポート
+  // EXIF Orientation (1-8)
+  // 1: normal
+  // 2: flip horizontal
+  // 3: rotate 180
+  // 4: flip vertical
+  // 5: transpose (flip horizontal + rotate 90 CW)
+  // 6: rotate 90 CW
+  // 7: transverse (flip horizontal + rotate 270 CW)
+  // 8: rotate 270 CW
   switch (orientation) {
+    case 2:
+      ctx.translate(outW, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, 0, 0, outW, outH);
+      return;
     case 3:
       ctx.translate(outW, outH);
       ctx.rotate(Math.PI);
       ctx.drawImage(img, 0, 0, outW, outH);
       return;
+    case 4:
+      ctx.translate(0, outH);
+      ctx.scale(1, -1);
+      ctx.drawImage(img, 0, 0, outW, outH);
+      return;
+    case 5:
+      ctx.rotate(Math.PI / 2);
+      ctx.scale(1, -1);
+      ctx.drawImage(img, 0, 0, outH, outW);
+      return;
     case 6:
       ctx.translate(outW, 0);
       ctx.rotate(Math.PI / 2);
+      ctx.drawImage(img, 0, 0, outH, outW);
+      return;
+    case 7:
+      ctx.translate(outW, outH);
+      ctx.rotate(Math.PI / 2);
+      ctx.scale(-1, 1);
       ctx.drawImage(img, 0, 0, outH, outW);
       return;
     case 8:
@@ -266,8 +295,8 @@ export function compressImage(
   }
 
   // EXIFの向き（回転）を反映してから描画したい。
-  // createImageBitmap({ imageOrientation: 'from-image' }) が使える環境では、
-  // 向き補正済みの bitmap を得られるので、それを優先する。
+  // createImageBitmap は環境により自動回転された bitmap を返すことがあるため、
+  // ここでは常に「回転補正なし」で取り出して、補正は必ずこちらで1回だけ行う。
   if (typeof createImageBitmap === 'function') {
     (async () => {
       try {
@@ -275,13 +304,17 @@ export function compressImage(
         const bitmap = await createImageBitmap(file, {
           // TS lib / Safari などの差分吸収のため any に落とす
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          imageOrientation: 'from-image',
+          imageOrientation: 'none',
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any);
 
         const canvas = document.createElement('canvas');
         const MAX_WIDTH = 800;
-        const rotated = orientation === 6 || orientation === 8;
+        const rotated =
+          orientation === 5 ||
+          orientation === 6 ||
+          orientation === 7 ||
+          orientation === 8;
         const baseW = rotated ? bitmap.height : bitmap.width;
         const baseH = rotated ? bitmap.width : bitmap.height;
         let outW = baseW;
