@@ -45,6 +45,107 @@ export function getPreviewScale(paddingPx = 32): number {
 export const proxyUrl = (url: string, id: string | number) =>
   url ? `${url}${url.includes('?') ? '&' : '?'}cb=${id}` : '';
 
+function isJpegFile(file: File): boolean {
+  const name = file.name.toLowerCase();
+  return (
+    file.type === 'image/jpeg' ||
+    file.type === 'image/jpg' ||
+    name.endsWith('.jpg') ||
+    name.endsWith('.jpeg')
+  );
+}
+
+function getExifOrientationFromJpeg(arrayBuffer: ArrayBuffer): number | undefined {
+  // JPEG EXIF (APP1) の Orientation(0x0112) を読む（最小限）
+  const view = new DataView(arrayBuffer);
+  if (view.byteLength < 12) return undefined;
+  if (view.getUint16(0, false) !== 0xffd8) return undefined; // SOI
+
+  let offset = 2;
+  while (offset + 4 <= view.byteLength) {
+    const marker = view.getUint16(offset, false);
+    offset += 2;
+    if (marker === 0xffd9 || marker === 0xffda) break; // EOI / SOS
+    const size = view.getUint16(offset, false);
+    offset += 2;
+    if (size < 2 || offset + (size - 2) > view.byteLength) break;
+
+    if (marker === 0xffe1) {
+      // APP1
+      if (
+        offset + 6 <= view.byteLength &&
+        view.getUint32(offset, false) === 0x45786966 && // "Exif"
+        view.getUint16(offset + 4, false) === 0x0000
+      ) {
+        const tiffStart = offset + 6;
+        if (tiffStart + 8 > view.byteLength) return undefined;
+        const endian = view.getUint16(tiffStart, false);
+        const little = endian === 0x4949; // "II"
+        if (!little && endian !== 0x4d4d) return undefined; // "MM"
+        if (view.getUint16(tiffStart + 2, little) !== 0x002a) return undefined;
+        const ifd0Offset = view.getUint32(tiffStart + 4, little);
+        let ifdOffset = tiffStart + ifd0Offset;
+        if (ifdOffset + 2 > view.byteLength) return undefined;
+        const entries = view.getUint16(ifdOffset, little);
+        ifdOffset += 2;
+        for (let i = 0; i < entries; i++) {
+          const entryOffset = ifdOffset + i * 12;
+          if (entryOffset + 12 > view.byteLength) break;
+          const tag = view.getUint16(entryOffset, little);
+          if (tag !== 0x0112) continue; // Orientation
+          const type = view.getUint16(entryOffset + 2, little);
+          const count = view.getUint32(entryOffset + 4, little);
+          if (type === 3 && count === 1) return view.getUint16(entryOffset + 8, little);
+          return undefined;
+        }
+      }
+      return undefined;
+    }
+
+    offset += size - 2;
+  }
+  return undefined;
+}
+
+function drawImageWithOrientation(
+  ctx: CanvasRenderingContext2D,
+  img: CanvasImageSource,
+  outW: number,
+  outH: number,
+  orientation: number,
+) {
+  // 1=normal, 3=180, 6=90CW, 8=270CW を主にサポート
+  switch (orientation) {
+    case 3:
+      ctx.translate(outW, outH);
+      ctx.rotate(Math.PI);
+      ctx.drawImage(img, 0, 0, outW, outH);
+      return;
+    case 6:
+      ctx.translate(outW, 0);
+      ctx.rotate(Math.PI / 2);
+      ctx.drawImage(img, 0, 0, outH, outW);
+      return;
+    case 8:
+      ctx.translate(0, outH);
+      ctx.rotate(-Math.PI / 2);
+      ctx.drawImage(img, 0, 0, outH, outW);
+      return;
+    default:
+      ctx.drawImage(img, 0, 0, outW, outH);
+  }
+}
+
+async function getOrientation(file: File): Promise<number> {
+  if (!isJpegFile(file)) return 1;
+  try {
+    const buf = await file.arrayBuffer();
+    return getExifOrientationFromJpeg(buf) ?? 1;
+  } catch {
+    return 1;
+  }
+}
+
 export function compressImage(
   file: File,
   callback: (compressedFile: File) => void,
@@ -112,7 +213,8 @@ export function compressImage(
         );
       } catch {
         // fallback to FileReader path below
-        //（向き補正はされない可能性があるが、失敗よりマシ）
+        //（iOS等でcreateImageBitmapの向き補正が効かない場合があるので、EXIFを手動で補正する）
+        const orientation = await getOrientation(file);
         const reader = new FileReader();
         reader.onerror = () => safeCallback(file);
         reader.onload = (e) => {
@@ -121,20 +223,25 @@ export function compressImage(
           img.onload = () => {
             const canvas = document.createElement('canvas');
             const MAX_WIDTH = 800;
-            let width = img.width;
-            let height = img.height;
-            if (width > MAX_WIDTH) {
-              height = Math.round((height * MAX_WIDTH) / width);
-              width = MAX_WIDTH;
+            const rotated = orientation === 6 || orientation === 8;
+            const baseW = rotated ? img.height : img.width;
+            const baseH = rotated ? img.width : img.height;
+            let outW = baseW;
+            let outH = baseH;
+            if (outW > MAX_WIDTH) {
+              outH = Math.round((outH * MAX_WIDTH) / outW);
+              outW = MAX_WIDTH;
             }
-            canvas.width = width;
-            canvas.height = height;
+            canvas.width = outW;
+            canvas.height = outH;
             const ctx = canvas.getContext('2d');
             if (!ctx) {
               safeCallback(file);
               return;
             }
-            ctx.drawImage(img, 0, 0, width, height);
+            ctx.save();
+            drawImageWithOrientation(ctx, img, outW, outH, orientation);
+            ctx.restore();
             canvas.toBlob(
               (blob) => {
                 if (!blob) {
@@ -166,38 +273,46 @@ export function compressImage(
     const img = new Image();
     img.onerror = () => safeCallback(file);
     img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const MAX_WIDTH = 800;
-      let width = img.width;
-      let height = img.height;
-      if (width > MAX_WIDTH) {
-        height = Math.round((height * MAX_WIDTH) / width);
-        width = MAX_WIDTH;
-      }
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        safeCallback(file);
-        return;
-      }
-      ctx.drawImage(img, 0, 0, width, height);
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) {
-            safeCallback(file);
-            return;
-          }
-          safeCallback(
-            new File([blob], file.name, {
-              type: 'image/jpeg',
-              lastModified: file.lastModified,
-            }),
-          );
-        },
-        'image/jpeg',
-        0.8,
-      );
+      (async () => {
+        const orientation = await getOrientation(file);
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800;
+        const rotated = orientation === 6 || orientation === 8;
+        const baseW = rotated ? img.height : img.width;
+        const baseH = rotated ? img.width : img.height;
+        let outW = baseW;
+        let outH = baseH;
+        if (outW > MAX_WIDTH) {
+          outH = Math.round((outH * MAX_WIDTH) / outW);
+          outW = MAX_WIDTH;
+        }
+        canvas.width = outW;
+        canvas.height = outH;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          safeCallback(file);
+          return;
+        }
+        ctx.save();
+        drawImageWithOrientation(ctx, img, outW, outH, orientation);
+        ctx.restore();
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              safeCallback(file);
+              return;
+            }
+            safeCallback(
+              new File([blob], file.name, {
+                type: 'image/jpeg',
+                lastModified: file.lastModified,
+              }),
+            );
+          },
+          'image/jpeg',
+          0.8,
+        );
+      })();
     };
     if (typeof e.target?.result === 'string') img.src = e.target.result;
   };
