@@ -5,7 +5,7 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { compressImage, proxyUrl, useDraggablePin } from '../shared/utils';
-import type { Circle, MapPin, Photo, Project } from '../types';
+import type { Circle, MapPin as MapPinT, Photo, Project } from '../types';
 import type { ChangeEvent, MouseEvent } from 'react';
 
 function PhotoCircleMarker({
@@ -53,7 +53,7 @@ function PinSelectModal({
 }: {
   isOpen: boolean;
   onClose: () => void;
-  pins: MapPin[] | undefined;
+  pins: MapPinT[] | undefined;
   onSelect: (label: string) => void;
 }) {
   if (!isOpen) return null;
@@ -294,7 +294,15 @@ export default function PhotoPage() {
         </button>
 
       </div>
-      <PinSelectModal isOpen={modalOpen} onClose={() => setModalOpen(false)} pins={project.mapPins} onSelect={(label: string) => currentPhotoId && updatePhoto(currentPhotoId, "locationMap", label)} />
+      <PinSelectModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        pins={project.mapPins}
+        onSelect={(label: string) => {
+          if (!currentPhotoId) return;
+          void updatePhoto(currentPhotoId, "locationMap", label);
+        }}
+      />
     </div>
   );
 }
