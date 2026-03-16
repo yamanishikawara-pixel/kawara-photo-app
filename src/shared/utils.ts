@@ -55,6 +55,16 @@ function isJpegFile(file: File): boolean {
   );
 }
 
+function isHeicFile(file: File): boolean {
+  const name = file.name.toLowerCase();
+  return (
+    file.type === 'image/heic' ||
+    file.type === 'image/heif' ||
+    name.endsWith('.heic') ||
+    name.endsWith('.heif')
+  );
+}
+
 function getExifOrientationFromJpeg(arrayBuffer: ArrayBuffer): number | undefined {
   // JPEG EXIF (APP1) の Orientation(0x0112) を読む（最小限）
   const view = new DataView(arrayBuffer);
@@ -160,6 +170,37 @@ export function compressImage(
 
   if (!file.type.startsWith('image/')) {
     safeCallback(file);
+    return;
+  }
+
+  // HEIC はEXIF回転の扱いが環境差で崩れやすいので、先にJPEGへ変換してから処理する
+  if (isHeicFile(file)) {
+    (async () => {
+      try {
+        // heic2any は Worker を使うため、Node/Vitest では import できない。
+        // ブラウザ環境のみ動的importして変換する。
+        if (typeof window === 'undefined' || typeof Worker === 'undefined') {
+          safeCallback(file);
+          return;
+        }
+
+        const { default: heic2any } = await import('heic2any');
+        const converted = (await heic2any({
+          blob: file,
+          toType: 'image/jpeg',
+          quality: 0.92,
+        })) as Blob | Blob[];
+        const blob = Array.isArray(converted) ? converted[0] : converted;
+        const jpegFile = new File(
+          [blob],
+          file.name.replace(/\.(heic|heif)$/i, '.jpg'),
+          { type: 'image/jpeg', lastModified: file.lastModified },
+        );
+        compressImage(jpegFile, callback);
+      } catch {
+        safeCallback(file);
+      }
+    })();
     return;
   }
 
