@@ -58,6 +58,9 @@ export default function PdfExportPage() {
   const [error, setError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [scale, setScale] = useState(1);
+  
+  // ★追加：Safariのキャッシュバグを防ぐため、画面を開くたびに一意のIDを発行する
+  const [sessionId] = useState(() => Date.now().toString());
 
   useEffect(() => {
     if (!id) return;
@@ -166,7 +169,7 @@ export default function PdfExportPage() {
     }
   }
 
-  // 総ページ数の計算（表紙 + 位置図 + 写真 + 材料）
+  // 総ページ数の計算
   const totalPages = 1 + mapCount + photoPages.length + materialPages.length;
 
   const wrapperStyle = { width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` };
@@ -188,7 +191,6 @@ export default function PdfExportPage() {
           onClick={handleExport}
           disabled={isExporting}
           className="bg-black text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg text-base sm:text-lg disabled:opacity-60 disabled:cursor-not-allowed hover:bg-gray-800"
-          aria-busy={isExporting}
         >
           {isExporting ? 'PDF作成中...' : 'ダウンロード'}
         </button>
@@ -202,9 +204,7 @@ export default function PdfExportPage() {
 
       <div className="flex flex-col gap-8 items-center w-full">
         
-        {/* =========================================
-            ① 表紙ページ
-           ========================================= */}
+        {/* ① 表紙ページ */}
         <div style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
           <div className="pdf-page absolute top-0 left-0 bg-white flex flex-col items-center origin-top-left text-black" style={{ ...pageStyle, padding: '25mm' }}>
             <div className="mt-[5mm] mb-[30mm] flex flex-col items-center w-full">
@@ -233,9 +233,7 @@ export default function PdfExportPage() {
           </div>
         </div>
 
-        {/* =========================================
-            ② 位置図ページ
-           ========================================= */}
+        {/* ② 位置図ページ */}
         {mapUrlsToRender.map((u, mapIndex) => (
           <div key={`map-page-${mapIndex}`} style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left" style={pageStyle}>
@@ -245,7 +243,8 @@ export default function PdfExportPage() {
                   {u ? (
                     <div className="flex items-center justify-center w-full h-full">
                       <div className="relative inline-block">
-                        <img src={proxyUrl(u, mapIndex)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[150mm]" alt="" />
+                        {/* ★修正：Safariのキャッシュを突き破るための sessionId を付与！ */}
+                        <img src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[150mm]" alt="" />
                         {(project.mapPins ?? []).filter((p) => p.mapIndex === mapIndex).map((pin) => (
                             <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: 'translate(-50%, -50%)' }} className="absolute z-10">
                               {pin.type === 'arrow' ? (
@@ -273,7 +272,6 @@ export default function PdfExportPage() {
                     <div className="grid grid-cols-12 border-b-2 border-gray-800 bg-gray-100 text-base font-bold">
                       <div className="col-span-1 border-r-2 border-gray-800 p-2 text-center">符号</div>
                       <div className="col-span-2 border-r-2 border-gray-800 p-2 text-center">部位</div>
-                      {/* ★ 写真NOだけ text-sm に戻す */}
                       <div className="col-span-2 border-r-2 border-gray-800 p-2 text-center text-sm">写真NO</div>
                       <div className="col-span-7 p-2 text-center">備考</div>
                     </div>
@@ -285,7 +283,6 @@ export default function PdfExportPage() {
                         <div key={row.id ?? idx} className="grid grid-cols-12 border-b border-gray-400 text-base">
                           <div className="col-span-1 border-r border-gray-400 p-2 font-bold text-red-700 whitespace-nowrap overflow-hidden text-center">{row.symbol ?? '　'}</div>
                           <div className="col-span-2 border-r border-gray-400 p-2 whitespace-nowrap overflow-hidden">{row.part ?? '　'}</div>
-                          {/* ★ 写真NOだけ text-sm に戻す */}
                           <div className="col-span-2 border-r border-gray-400 p-2 whitespace-nowrap overflow-hidden text-center text-sm">{row.photoNo ?? row.relatedPhotoNumber ?? '　'}</div>
                           <div className="col-span-7 p-2 overflow-hidden">{row.remarks ?? '　'}</div>
                         </div>
@@ -299,9 +296,7 @@ export default function PdfExportPage() {
           </div>
         ))}
 
-        {/* =========================================
-            ③ 写真ページ
-           ========================================= */}
+        {/* ③ 写真ページ */}
         {photoPages.map((chunk, pageIndex) => (
           <div key={`photo-page-${pageIndex}`} style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left" style={pageStyle}>
@@ -312,7 +307,8 @@ export default function PdfExportPage() {
                       {p.image ? (
                         <div className="flex items-center justify-center w-full h-full">
                           <div className="relative inline-block" style={{ transform: `rotate(${(p as Photo).rotation ?? 0}deg)`, transformOrigin: 'center center' }}>
-                            <img src={proxyUrl(p.image, p.id)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[88mm]" alt="" />
+                            {/* ★修正：写真も同じくキャッシュバグ対策！ */}
+                            <img src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[88mm]" alt="" />
                             {(p.circles ?? []).map((circle) => (
                               <div key={circle.id} style={{ left: `${circle.x}%`, top: `${circle.y}%`, width: `${circle.size}%`, transform: 'translate(-50%, -50%)' }} className="absolute aspect-square rounded-full border-[3px] border-red-600" />
                             ))}
@@ -323,9 +319,7 @@ export default function PdfExportPage() {
                       )}
                     </div>
                     <div className="w-[40%] flex flex-col text-sm border-2 border-gray-700 bg-white">
-                      {/* ★ 写真NOだけ text-xs(ラベル) / text-sm(内容) に戻して控えめに */}
                       <div className="flex border-b border-gray-400"><div className="w-16 bg-gray-100 p-2 border-r border-gray-400 font-bold flex items-center justify-center text-xs">写真NO</div><div className="p-2 flex-1 font-bold text-sm flex items-center">{p.photoNumber || '　'}</div></div>
-                      
                       <div className="flex border-b border-gray-400"><div className="w-16 bg-gray-100 p-2 border-r border-gray-400 font-bold flex items-center justify-center">撮影日</div><div className="p-2 flex-1 flex items-center font-medium">{p.shootingDate || '　'}</div></div>
                       <div className="flex border-b border-gray-400"><div className="w-16 bg-gray-100 p-2 border-r border-gray-400 font-bold flex items-center justify-center">位置図</div><div className="p-2 flex-1 font-bold text-red-700 flex items-center">{p.locationMap || '　'}</div></div>
                       <div className="flex border-b border-gray-400"><div className="w-16 bg-gray-100 p-2 border-r border-gray-400 font-bold flex items-center justify-center">工程</div><div className="p-2 flex-1 flex items-center font-medium">{p.process || '　'}</div></div>
@@ -339,9 +333,7 @@ export default function PdfExportPage() {
           </div>
         ))}
 
-        {/* =========================================
-            ④ 使用材料表（一番最後に配置！）
-           ========================================= */}
+        {/* ④ 使用材料表 */}
         {materialPages.map((chunk, pageIndex) => (
           <div key={`material-page-${pageIndex}`} style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left" style={pageStyle}>
@@ -355,7 +347,8 @@ export default function PdfExportPage() {
                       {m.image ? (
                         <div className="flex items-center justify-center w-full h-full">
                           <div className="relative inline-block" style={{ transform: `rotate(${m.rotation ?? 0}deg)`, transformOrigin: 'center center' }}>
-                            <img src={proxyUrl(m.image, m.id)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[85mm]" alt="" />
+                            {/* ★修正：材料も同じくキャッシュバグ対策！ */}
+                            <img src={proxyUrl(m.image, `material_${m.id}_${sessionId}`)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[85mm]" alt="" />
                           </div>
                         </div>
                       ) : (
