@@ -5,7 +5,8 @@ import { getAuth } from "firebase/auth";
 
 // ★ Firebase画面のコードを直接ベタ書きします！
 const firebaseConfig = {
-  apiKey: "AIzaSyB9XDlErN8cUdcpMbAPEt0uCZTboBWFm6Q",
+ // ★ ここの1行だけ、小文字の「t」が含まれる正しいものに差し替えてください！
+  apiKey: "AIzaSyB9XDlErN8cUdcpMbAPEt0uCZtboBWFm6Q",
   authDomain: "kawara-photo-app.firebaseapp.com",
   projectId: "kawara-photo-app",
   storageBucket: "kawara-photo-app.firebasestorage.app",
