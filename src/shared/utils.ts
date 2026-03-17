@@ -41,7 +41,6 @@ export function getPreviewScale(paddingPx = 32): number {
   return Math.min(1, availableWidth / A4_WIDTH_PX);
 }
 
-// ★修正：毎回ランダムな暗号をつけるのをやめ、写真ごとの固定IDを使うようにしました（これで真っ白バグが直ります）
 export const proxyUrl = (url: string, id: string | number) =>
   url ? `${url}${url.includes('?') ? '&' : '?'}cb=${id}` : '';
 
@@ -77,7 +76,8 @@ function imageFileToJpegViaImgElement(
     img.onerror = fallback;
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const MAX_WIDTH = 800;
+      // ★修正：800 -> 1600（国交省基準の高品質サイズ）
+      const MAX_WIDTH = 1600;
 
       let outW = img.width;
       let outH = img.height;
@@ -117,32 +117,30 @@ function imageFileToJpegViaImgElement(
 }
 
 function getExifOrientationFromJpeg(arrayBuffer: ArrayBuffer): number | undefined {
-  // JPEG EXIF (APP1) の Orientation(0x0112) を読む（最小限）
   const view = new DataView(arrayBuffer);
   if (view.byteLength < 12) return undefined;
-  if (view.getUint16(0, false) !== 0xffd8) return undefined; // SOI
+  if (view.getUint16(0, false) !== 0xffd8) return undefined;
 
   let offset = 2;
   while (offset + 4 <= view.byteLength) {
     const marker = view.getUint16(offset, false);
     offset += 2;
-    if (marker === 0xffd9 || marker === 0xffda) break; // EOI / SOS
+    if (marker === 0xffd9 || marker === 0xffda) break;
     const size = view.getUint16(offset, false);
     offset += 2;
     if (size < 2 || offset + (size - 2) > view.byteLength) break;
 
     if (marker === 0xffe1) {
-      // APP1
       if (
         offset + 6 <= view.byteLength &&
-        view.getUint32(offset, false) === 0x45786966 && // "Exif"
+        view.getUint32(offset, false) === 0x45786966 &&
         view.getUint16(offset + 4, false) === 0x0000
       ) {
         const tiffStart = offset + 6;
         if (tiffStart + 8 > view.byteLength) return undefined;
         const endian = view.getUint16(tiffStart, false);
-        const little = endian === 0x4949; // "II"
-        if (!little && endian !== 0x4d4d) return undefined; // "MM"
+        const little = endian === 0x4949;
+        if (!little && endian !== 0x4d4d) return undefined;
         if (view.getUint16(tiffStart + 2, little) !== 0x002a) return undefined;
         const ifd0Offset = view.getUint32(tiffStart + 4, little);
         let ifdOffset = tiffStart + ifd0Offset;
@@ -153,7 +151,7 @@ function getExifOrientationFromJpeg(arrayBuffer: ArrayBuffer): number | undefine
           const entryOffset = ifdOffset + i * 12;
           if (entryOffset + 12 > view.byteLength) break;
           const tag = view.getUint16(entryOffset, little);
-          if (tag !== 0x0112) continue; // Orientation
+          if (tag !== 0x0112) continue;
           const type = view.getUint16(entryOffset + 2, little);
           const count = view.getUint32(entryOffset + 4, little);
           if (type === 3 && count === 1) return view.getUint16(entryOffset + 8, little);
@@ -175,15 +173,6 @@ function drawImageWithOrientation(
   outH: number,
   orientation: number,
 ) {
-  // EXIF Orientation (1-8)
-  // 1: normal
-  // 2: flip horizontal
-  // 3: rotate 180
-  // 4: flip vertical
-  // 5: transpose (flip horizontal + rotate 90 CW)
-  // 6: rotate 90 CW
-  // 7: transverse (flip horizontal + rotate 270 CW)
-  // 8: rotate 270 CW
   switch (orientation) {
     case 2:
       ctx.translate(outW, 0);
@@ -254,18 +243,12 @@ function compressImageImpl(
     return;
   }
 
-  // HEIC はEXIF回転の扱いが環境差で崩れやすいので、先にJPEGへ変換してから処理する
   if (isHeicFile(file)) {
     (async () => {
       try {
-        // heic2any は Worker を使うため、Node/Vitest では import できない。
-        // ブラウザ環境のみ動的importして変換する。
         if (typeof window === 'undefined' || typeof Worker === 'undefined') {
-          // 変換できない＝HEICのままアップロードすると表示が崩れる可能性が高いので、
-          // ブラウザでデコードできる場合は canvas 経由でJPEG化する。
           imageFileToJpegViaImgElement(
             file,
-            // HEICから作ったJPEGは「見た目が正」のことが多いので、EXIF回転は信用しない
             (jpeg) => compressImageImpl(jpeg, callback, { skipExifOrientation: true }),
             () => safeCallback(file),
           );
@@ -284,7 +267,6 @@ function compressImageImpl(
           file.name.replace(/\.(heic|heif)$/i, '.jpg'),
           { type: 'image/jpeg', lastModified: file.lastModified },
         );
-        // HEICから作ったJPEGは「見た目が正」のことが多いので、EXIF回転は信用しない
         compressImageImpl(jpegFile, callback, { skipExifOrientation: true });
       } catch {
         imageFileToJpegViaImgElement(
@@ -297,22 +279,19 @@ function compressImageImpl(
     return;
   }
 
-  // EXIFの向き（回転）を反映してから描画したい。
-  // createImageBitmap は環境により自動回転された bitmap を返すことがあるため、
-  // ここでは常に「回転補正なし」で取り出して、補正は必ずこちらで1回だけ行う。
   if (typeof createImageBitmap === 'function') {
     (async () => {
       try {
         const orientation = opts?.skipExifOrientation ? 1 : await getOrientation(file);
         const bitmap = await createImageBitmap(file, {
-          // TS lib / Safari などの差分吸収のため any に落とす
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           imageOrientation: 'none',
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any);
 
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 800;
+        // ★修正：800 -> 1600（国交省基準の高品質サイズ）
+        const MAX_WIDTH = 1600;
         const rotated =
           orientation === 5 ||
           orientation === 6 ||
@@ -353,11 +332,9 @@ function compressImageImpl(
             );
           },
           'image/jpeg',
-          0.8,
+          0.85, // ★修正：0.8 -> 0.85（画質を少し向上）
         );
       } catch {
-        // fallback to FileReader path below
-        //（iOS等でcreateImageBitmapの向き補正が効かない場合があるので、EXIFを手動で補正する）
         const orientation = opts?.skipExifOrientation ? 1 : await getOrientation(file);
         const reader = new FileReader();
         reader.onerror = () => safeCallback(file);
@@ -366,7 +343,8 @@ function compressImageImpl(
           img.onerror = () => safeCallback(file);
           img.onload = () => {
             const canvas = document.createElement('canvas');
-            const MAX_WIDTH = 800;
+            // ★修正：800 -> 1600（国交省基準の高品質サイズ）
+            const MAX_WIDTH = 1600;
             const rotated =
               orientation === 5 ||
               orientation === 6 ||
@@ -404,7 +382,7 @@ function compressImageImpl(
                 );
               },
               'image/jpeg',
-              0.8,
+              0.85, // ★修正：0.8 -> 0.85（画質を少し向上）
             );
           };
           if (typeof e.target?.result === 'string') img.src = e.target.result;
@@ -424,7 +402,8 @@ function compressImageImpl(
       (async () => {
         const orientation = opts?.skipExifOrientation ? 1 : await getOrientation(file);
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 800;
+        // ★修正：800 -> 1600（国交省基準の高品質サイズ）
+        const MAX_WIDTH = 1600;
         const rotated =
           orientation === 5 ||
           orientation === 6 ||
@@ -462,7 +441,7 @@ function compressImageImpl(
             );
           },
           'image/jpeg',
-          0.8,
+          0.85, // ★修正：0.8 -> 0.85（画質を少し向上）
         );
       })();
     };
@@ -574,4 +553,3 @@ export function useDraggablePin(
 
   return { position, onMouseDown, onTouchStart, dragging, containerRef };
 }
-
