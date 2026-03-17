@@ -8,15 +8,7 @@ import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { proxyUrl, useDraggablePin } from '../shared/utils';
 import type { MapPin as MapPinT, MapPinType, MapRow, Project } from '../types';
 
-function MapMarker({
-  pin,
-  onDragEnd,
-  onClick,
-}: {
-  pin: MapPinT;
-  onDragEnd: (x: number, y: number) => void;
-  onClick: () => void;
-}) {
+function MapMarker({ pin, onDragEnd, onClick }: { pin: MapPinT; onDragEnd: (x: number, y: number) => void; onClick: () => void; }) {
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(pin.x, pin.y, onDragEnd);
   return (
     <div ref={containerRef} onMouseDown={onMouseDown} onTouchStart={onTouchStart} onClick={(e) => { e.stopPropagation(); if(!dragging) onClick(); }} style={{ left: `${position.x}%`, top: `${position.y}%`, transform: 'translate(-50%, -50%)', touchAction: 'none' }} className={`absolute flex items-center justify-center cursor-pointer transition-transform ${dragging ? 'z-30 scale-125 opacity-80' : 'z-10 hover:scale-110'}`}>
@@ -35,19 +27,7 @@ function MapMarker({
   )
 }
 
-function MarkerEditModal({
-  pin,
-  isOpen,
-  onClose,
-  onSave,
-  onRemove,
-}: {
-  pin: MapPinT | null;
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (pin: MapPinT) => void;
-  onRemove: (pinId: number) => void;
-}) {
+function MarkerEditModal({ pin, isOpen, onClose, onSave, onRemove }: { pin: MapPinT | null; isOpen: boolean; onClose: () => void; onSave: (pin: MapPinT) => void; onRemove: (pinId: number) => void; }) {
   const [label, setLabel] = useState("");
   const [type, setType] = useState<MapPinType>("circle");
   const [rotation, setRotation] = useState(0);
@@ -102,14 +82,12 @@ export default function MapPage() {
 
   useEffect(() => { getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data() as Project)); }, [id]);
 
-  // 位置図ごとに「説明表」を最初から1行表示にする（必要なら自動で1行作成）
   useEffect(() => {
     if (!project || initializedRows) return;
-    const mapUrls: unknown = project.mapUrls;
-    if (!Array.isArray(mapUrls) || mapUrls.length === 0) return;
+    const mapUrls = project.mapUrls || [];
+    if (mapUrls.length === 0) return;
 
-    const existingRows: MapRow[] = Array.isArray(project.mapRows) ? project.mapRows : [];
-
+    const existingRows: MapRow[] = project.mapRows || [];
     const missingMapIndexes: number[] = [];
     for (let mapIndex = 0; mapIndex < mapUrls.length; mapIndex++) {
       const hasRow = existingRows.some(
@@ -143,6 +121,7 @@ export default function MapPage() {
   }, [project, id, initializedRows]);
 
   const uploadMaps = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!project) return;
     const files = Array.from(e.target.files as FileList).slice(0, 2);
     if (files.length === 0) return;
     setUploading(true);
@@ -159,14 +138,16 @@ export default function MapPage() {
   };
 
   const removeMap = async (index: number) => {
+    if (!project) return;
     if(!window.confirm('この位置図を削除しますか？\n（配置したマーカーもすべて削除されます）')) return;
-    const newUrls = project.mapUrls.filter((_, i: number) => i !== index);
+    const newUrls = (project.mapUrls || []).filter((_, i: number) => i !== index);
     const newPins = (project.mapPins || []).filter((p) => p.mapIndex !== index);
     setProject({ ...project, mapUrls: newUrls, mapPins: newPins });
     await updateDoc(doc(db, "projects", id!), { mapUrls: newUrls, mapPins: newPins });
   };
 
   const addPin = async (e: React.MouseEvent<HTMLDivElement>, mapIndex: number) => {
+    if (!project) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
@@ -183,18 +164,21 @@ export default function MapPage() {
   };
 
   const savePin = async (updatedPin: MapPinT) => {
+    if (!project) return;
     const newPins = (project.mapPins || []).map((p) => p.id === updatedPin.id ? updatedPin : p);
     setProject({ ...project, mapPins: newPins });
     await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
   };
 
   const removePin = async (pinId: number) => {
+    if (!project) return;
     const newPins = (project.mapPins || []).filter((p) => p.id !== pinId);
     setProject({ ...project, mapPins: newPins });
     await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
   };
 
   const addMapRow = async (mapIndex: number) => {
+    if (!project) return;
     const currentRows = (project.mapRows || []).filter((r) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0));
     const prefix = mapIndex === 0 ? 'A-' : 'B-';
     const symbol = `${prefix}${currentRows.length + 1}`;
@@ -205,12 +189,14 @@ export default function MapPage() {
   };
 
   const updateMapRow = async (rowId: number, field: keyof MapRow, value: string) => {
+    if (!project) return;
     const newRows = (project.mapRows || []).map((r) => r.id === rowId ? { ...r, [field]: value } : r);
     setProject({ ...project, mapRows: newRows });
     await updateDoc(doc(db, "projects", id!), { mapRows: newRows });
   };
 
   const removeMapRow = async (rowId: number) => {
+    if (!project) return;
     const newRows = (project.mapRows || []).filter((r) => r.id !== rowId);
     setProject({ ...project, mapRows: newRows });
     await updateDoc(doc(db, "projects", id!), { mapRows: newRows });
@@ -260,17 +246,35 @@ export default function MapPage() {
                   <div className="w-full mt-6 pt-4 border-t border-gray-300">
                     <h3 className="text-lg font-bold mb-3 text-gray-800">位置図 {i + 1} の説明表</h3>
                     <div className="space-y-3">
-                      {currentRows.map((row) => (
-                        <div key={row.id} className="flex gap-2 items-center bg-white p-2 rounded-xl border border-gray-200 shadow-sm">
-                          <div className="flex-1 grid grid-cols-12 gap-2">
-                            <input type="text" placeholder="符号" className="col-span-1 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.symbol || ''} onChange={e => updateMapRow(row.id, 'symbol', e.target.value)} />
-                            <input type="text" placeholder="部位" className="col-span-2 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.part || ''} onChange={e => updateMapRow(row.id, 'part', e.target.value)} />
-                            <input type="text" placeholder="写真NO" className="col-span-2 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.photoNo || row.relatedPhotoNumber || ''} onChange={e => updateMapRow(row.id, 'photoNo', e.target.value)} />
-                            <input type="text" placeholder="備考" className="col-span-7 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.remarks || ''} onChange={e => updateMapRow(row.id, 'remarks', e.target.value)} />
+                      {/* =========================================
+                          ★スマホ特化の2段構えレイアウト（広々タップ可能）
+                         ========================================= */}
+                      {currentRows.map((row: any) => (
+                        <div key={row.id} className="bg-white p-3 rounded-xl border border-gray-300 shadow-sm flex flex-col gap-2 relative">
+                          <button onClick={() => removeMapRow(row.id)} className="absolute top-2 right-2 p-1.5 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 z-10"><Trash2 className="w-5 h-5" /></button>
+                          
+                          <div className="flex gap-2 pr-10">
+                            <div className="w-[25%]">
+                              <label className="text-[10px] font-bold text-gray-500 mb-1 block">符号</label>
+                              <input type="text" placeholder="A-1" className="w-full p-2.5 border border-gray-300 rounded-lg text-base font-bold text-red-600 bg-white focus:ring-2 focus:ring-blue-500" value={row.symbol || ''} onChange={e => updateMapRow(row.id as number, 'symbol', e.target.value)} />
+                            </div>
+                            <div className="w-[45%]">
+                              <label className="text-[10px] font-bold text-gray-500 mb-1 block">部位</label>
+                              <input type="text" placeholder="部位を入力" className="w-full p-2.5 border border-gray-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500" value={row.part || ''} onChange={e => updateMapRow(row.id as number, 'part', e.target.value)} />
+                            </div>
+                            <div className="w-[30%]">
+                              <label className="text-[10px] font-bold text-gray-500 mb-1 block">写真NO</label>
+                              <input type="text" placeholder="番号" className="w-full p-2.5 border border-gray-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500" value={row.photoNo || row.relatedPhotoNumber || ''} onChange={e => updateMapRow(row.id as number, 'photoNo', e.target.value)} />
+                            </div>
                           </div>
-                          <button onClick={() => removeMapRow(row.id)} className="p-2 text-red-500 bg-white border border-red-100 rounded-lg hover:bg-red-50"><Trash2 className="w-5 h-5" /></button>
+
+                          <div className="w-full">
+                            <label className="text-[10px] font-bold text-gray-500 mb-1 block">備考</label>
+                            <textarea placeholder="備考（詳しく入力できます）" rows={2} className="w-full p-2.5 border border-gray-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500" value={row.remarks || ''} onChange={e => updateMapRow(row.id as number, 'remarks', e.target.value)} />
+                          </div>
                         </div>
                       ))}
+                      {/* ========================================= */}
                       <button onClick={() => addMapRow(i)} className="w-full py-3 bg-white text-blue-600 font-bold rounded-xl mt-2 border-2 border-dashed border-blue-200 hover:bg-blue-50 transition-colors">+ 説明行を追加</button>
                     </div>
                   </div>
