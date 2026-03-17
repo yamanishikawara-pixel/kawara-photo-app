@@ -186,45 +186,49 @@ export default function PdfExportPage() {
       <div className="flex flex-col gap-8 items-center w-full">
         
         {/* =========================================
-            ★ここが新しい「完全白黒・特大文字」の表紙です！
+            ★ここが新しい「完全白黒・特大文字・中央ロゴ」の表紙です！
            ========================================= */}
         <div style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
           <div
-            className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left text-black"
+            className="pdf-page absolute top-0 left-0 bg-white flex flex-col items-center origin-top-left text-black"
             style={{ ...pageStyle, padding: '25mm' }}
           >
-            {/* 中央上のロゴ（白黒化して配置） */}
-              {/* ★ mtとmbを減らして、タイトル全体を上にグッと引き上げました */}
-              <div className="mt-[5mm] mb-[5mm]">
-                <img src={kawaraLogo} alt="ロゴ" crossOrigin="anonymous" className="h-[35mm] w-auto grayscale object-contain" />
+            {/* 上段：ロゴ / タイトル（縦中央揃え） */}
+            <div className="mt-[5mm] mb-[30mm] flex flex-col items-center w-full">
+              {/* ロゴ：中央配置、サイズ調整 */}
+              <div className="shrink-0 flex justify-center mb-6">
+                <img
+                  src={kawaraLogo}
+                  alt="ロゴ"
+                  className="block w-[32mm] h-auto object-contain grayscale"
+                  crossOrigin="anonymous"
+                />
               </div>
 
-              {/* タイトル（極太・特大） */}
-              {/* ★ mbを[20mm]から[35mm]に増やして、現場情報との間隔をガッツリ開けました */}
-              <div className="mb-[35mm] text-center w-full">
-                <h1 className="text-[52px] font-black tracking-[0.4em] mb-4">工事写真報告書</h1>
-                <div className="w-[160mm] mx-auto border-b-[4px] border-black"></div>
-                <div className="w-[160mm] mx-auto border-b-[1px] border-black mt-1.5"></div>
+              {/* タイトル：中央配置 */}
+              <div className="flex flex-col items-center">
+                <h1 className="text-[52px] font-black tracking-[0.4em] mb-4 text-center">
+                  工事写真報告書
+                </h1>
+                <div className="w-[160mm] border-b-[4px] border-black"></div>
+                <div className="w-[160mm] border-b-[1px] border-black mt-1.5"></div>
               </div>
+            </div>
 
-              {/* 現場情報（四角い枠をなくし、文字サイズを極限まで大きく、ベースラインを揃える） */}
-              {/* ★ ここから下は一切変えていません（押し出されないように計算済みです！） */}
-              <div className="w-[150mm] space-y-[14mm]">
-                {COVER_FIELDS.map((item, idx) => (
-                  <div key={idx} className="flex items-baseline border-b-2 border-black pb-2">
-                    {/* 項目名（均等割付風） */}
-                    <div className="w-[45mm] flex-shrink-0 flex justify-between text-[24px] font-bold pr-8">
-                      {item.label.split('').map((c: string, i: number) => <span key={i}>{c}</span>)}
-                    </div>
-                    {/* 入力内容（特大・極太） */}
-                    <div className="flex-1 text-[32px] font-black whitespace-nowrap overflow-hidden">
-                      {String(project[item.key] ?? '　')}
-                    </div>
+            {/* 下段：現場情報（四角い枠をなくし、文字サイズを極限まで大きく、ベースラインを揃える） */}
+            <div className="w-[150mm] space-y-[14mm]">
+              {COVER_FIELDS.map((item, idx) => (
+                <div key={idx} className="flex items-baseline border-b-2 border-black pb-2">
+                  <div className="w-[45mm] flex-shrink-0 flex justify-between text-[24px] font-bold pr-8">
+                    {item.label.split('').map((c: string, i: number) => <span key={i}>{c}</span>)}
                   </div>
-                ))}
-              </div>
+                  <div className="flex-1 text-[32px] font-black whitespace-nowrap overflow-hidden">
+                    {String(project[item.key] ?? '　')}
+                  </div>
+                </div>
+              ))}
+            </div>
 
-            
             <div className="absolute bottom-[10mm] right-[15mm] text-[16px] font-bold">- 1 / {totalPages} -</div>
           </div>
         </div>
