@@ -39,6 +39,20 @@ export interface MapPin {
   rotation: number;
 }
 
+// ==========================================
+// ★ ここから新設：材料報告書用の設計図
+// ==========================================
+export interface Material {
+  id: number;
+  image: string | null;   // 材料の写真（パッケージや資材）
+  name: string;           // 品名
+  manufacturer: string;   // メーカー
+  specification: string;  // 規格 / 寸法 / 数量など
+  remarks: string;        // 備考（使用箇所など）
+  rotation?: number;      // 写真の回転（手動補正用）
+}
+// ==========================================
+
 export interface Project {
   projectName: string;
   projectLocation: string;
@@ -49,6 +63,6 @@ export interface Project {
   mapUrls: string[];
   mapRows: MapRow[];
   mapPins: MapPin[];
+  materials?: Material[]; // ★ 新規追加（既存の現場データが壊れないように「?」をつけています）
   createdAt?: string;
 }
-

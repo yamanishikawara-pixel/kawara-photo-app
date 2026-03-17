@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Building2, Camera, FileText, Images, Map } from 'lucide-react';
+import { Building2, Camera, FileText, Images, Map, Package } from 'lucide-react'; // ★ Packageアイコンを追加
 import { List, BookOpen } from 'lucide-react';
 
 import type { Project } from '../types';
@@ -74,6 +74,19 @@ export function HomePage() {
             colorClass="bg-purple-100/30"
             onClick={() => navigate(`/project/${id}/cover`)}
           />
+          
+          {/* =========================================
+              ★新設：材料報告書のメニューボタン
+             ========================================= */}
+          <MenuButton
+            title="材料"
+            subtitle="材料報告書（使用部材）の登録"
+            icon={Package}
+            colorClass="bg-indigo-100/30"
+            onClick={() => navigate(`/project/${id}/material`)}
+          />
+          {/* ========================================= */}
+
           <MenuButton
             title="写真"
             subtitle="赤丸マーカー付き写真の登録"
