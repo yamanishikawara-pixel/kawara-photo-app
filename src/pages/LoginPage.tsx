@@ -26,9 +26,10 @@ export default function LoginPage() {
         await createUserWithEmailAndPassword(auth, email, password);
       }
       navigate('/'); // 成功したら現場一覧へGO！
-    } catch (err: any) {
+   } catch (err: any) {
       console.error(err);
-      setError(isLogin ? 'メールアドレスかパスワードが間違っています。' : '登録に失敗しました。パスワードは6文字以上で入力してください。');
+      // ★ Firebaseの本当の怒り声（エラーメッセージ）をそのまま表示するように変更
+      setError(`エラー: ${err.message}`);
     } finally {
       setLoading(false);
     }
