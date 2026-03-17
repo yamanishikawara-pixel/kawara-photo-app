@@ -97,7 +97,6 @@ export default function PdfExportPage() {
         const currentTransform = pageEl.style.transform;
         pageEl.style.transform = 'scale(1)';
 
-        // Mac/iPhone対策の空打ち
         await toJpeg(pageEl, { cacheBust: true });
         const dataUrl = await toJpeg(pageEl, {
           quality: 0.95,
@@ -154,7 +153,7 @@ export default function PdfExportPage() {
     photoPages.push(chunk);
   }
 
-  // ★ 材料ページの準備（自動オンオフ機能）
+  // 材料ページの準備
   const activeMaterials = (project.materials ?? []).filter(
     (m) => m.image || m.name || m.manufacturer || m.specification || m.remarks
   );
@@ -271,21 +270,23 @@ export default function PdfExportPage() {
                 <div className="mt-4">
                   <div className="text-base font-bold mb-2">項目欄</div>
                   <div className="border-2 border-gray-800">
-                    <div className="grid grid-cols-12 border-b-2 border-gray-800 bg-gray-100 text-sm font-bold">
-                      <div className="col-span-1 border-r-2 border-gray-800 p-2">符号</div>
-                      <div className="col-span-2 border-r-2 border-gray-800 p-2">部位</div>
-                      <div className="col-span-2 border-r-2 border-gray-800 p-2">写真NO</div>
-                      <div className="col-span-7 p-2">備考</div>
+                    {/* ★ 変更点：表のヘッダーの文字を大きく（text-base） */}
+                    <div className="grid grid-cols-12 border-b-2 border-gray-800 bg-gray-100 text-base font-bold">
+                      <div className="col-span-1 border-r-2 border-gray-800 p-2 text-center">符号</div>
+                      <div className="col-span-2 border-r-2 border-gray-800 p-2 text-center">部位</div>
+                      <div className="col-span-2 border-r-2 border-gray-800 p-2 text-center">写真NO</div>
+                      <div className="col-span-7 p-2 text-center">備考</div>
                     </div>
                     {(() => {
                       const rows: MapRow[] = project.mapRows ?? [];
                       const currentRows = rows.filter((r) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0));
                       const displayRows = currentRows.length > 0 ? currentRows.slice(0, 6) : Array.from({ length: 6 }, () => ({ symbol: '　', part: '　', photoNo: '　', remarks: '　' }));
                       return displayRows.map((row: any, idx: number) => (
-                        <div key={row.id ?? idx} className="grid grid-cols-12 border-b border-gray-400 text-sm">
-                          <div className="col-span-1 border-r border-gray-400 p-2 font-bold text-red-700 whitespace-nowrap overflow-hidden">{row.symbol ?? '　'}</div>
+                        // ★ 変更点：表の中身の文字を大きく（text-base）
+                        <div key={row.id ?? idx} className="grid grid-cols-12 border-b border-gray-400 text-base">
+                          <div className="col-span-1 border-r border-gray-400 p-2 font-bold text-red-700 whitespace-nowrap overflow-hidden text-center">{row.symbol ?? '　'}</div>
                           <div className="col-span-2 border-r border-gray-400 p-2 whitespace-nowrap overflow-hidden">{row.part ?? '　'}</div>
-                          <div className="col-span-2 border-r border-gray-400 p-2 whitespace-nowrap overflow-hidden">{row.photoNo ?? row.relatedPhotoNumber ?? '　'}</div>
+                          <div className="col-span-2 border-r border-gray-400 p-2 whitespace-nowrap overflow-hidden text-center">{row.photoNo ?? row.relatedPhotoNumber ?? '　'}</div>
                           <div className="col-span-7 p-2 overflow-hidden">{row.remarks ?? '　'}</div>
                         </div>
                       ));
@@ -321,12 +322,13 @@ export default function PdfExportPage() {
                         <span className="text-gray-400 font-bold">写真未登録</span>
                       )}
                     </div>
-                    <div className="w-[40%] flex flex-col text-xs border-2 border-gray-700 bg-white">
-                      <div className="flex border-b border-gray-400"><div className="w-16 bg-gray-100 p-1.5 border-r border-gray-400 font-bold">写真NO</div><div className="p-1.5 flex-1 font-bold text-sm">{p.photoNumber || '　'}</div></div>
-                      <div className="flex border-b border-gray-400"><div className="w-16 bg-gray-100 p-1.5 border-r border-gray-400 font-bold">撮影日</div><div className="p-1.5 flex-1">{p.shootingDate || '　'}</div></div>
-                      <div className="flex border-b border-gray-400"><div className="w-16 bg-gray-100 p-1.5 border-r border-gray-400 font-bold">位置図</div><div className="p-1.5 flex-1 font-bold text-red-700">{p.locationMap || '　'}</div></div>
-                      <div className="flex border-b border-gray-400"><div className="w-16 bg-gray-100 p-1.5 border-r border-gray-400 font-bold">工程</div><div className="p-1.5 flex-1">{p.process || '　'}</div></div>
-                      <div className="flex-1 flex min-h-0"><div className="w-16 bg-gray-100 p-1.5 border-r border-gray-400 font-bold">説明</div><div className="p-1.5 flex-1 whitespace-pre-wrap overflow-hidden">{p.description || '　'}</div></div>
+                    {/* ★ 変更点：文字サイズを text-xs から text-sm にアップ */}
+                    <div className="w-[40%] flex flex-col text-sm border-2 border-gray-700 bg-white">
+                      <div className="flex border-b border-gray-400"><div className="w-16 bg-gray-100 p-2 border-r border-gray-400 font-bold flex items-center justify-center">写真NO</div><div className="p-2 flex-1 font-bold text-base flex items-center">{p.photoNumber || '　'}</div></div>
+                      <div className="flex border-b border-gray-400"><div className="w-16 bg-gray-100 p-2 border-r border-gray-400 font-bold flex items-center justify-center">撮影日</div><div className="p-2 flex-1 flex items-center font-medium">{p.shootingDate || '　'}</div></div>
+                      <div className="flex border-b border-gray-400"><div className="w-16 bg-gray-100 p-2 border-r border-gray-400 font-bold flex items-center justify-center">位置図</div><div className="p-2 flex-1 font-bold text-red-700 flex items-center">{p.locationMap || '　'}</div></div>
+                      <div className="flex border-b border-gray-400"><div className="w-16 bg-gray-100 p-2 border-r border-gray-400 font-bold flex items-center justify-center">工程</div><div className="p-2 flex-1 flex items-center font-medium">{p.process || '　'}</div></div>
+                      <div className="flex-1 flex min-h-0"><div className="w-16 bg-gray-100 p-2 border-r border-gray-400 font-bold flex items-center justify-center">説明</div><div className="p-2 flex-1 whitespace-pre-wrap overflow-hidden font-medium leading-relaxed">{p.description || '　'}</div></div>
                     </div>
                   </div>
                 ))}
@@ -337,18 +339,17 @@ export default function PdfExportPage() {
         ))}
 
         {/* =========================================
-            ④ 新設：使用材料表（一番最後に配置！）
+            ④ 使用材料表（一番最後に配置！）
            ========================================= */}
         {materialPages.map((chunk, pageIndex) => (
           <div key={`material-page-${pageIndex}`} style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left" style={pageStyle}>
               <div className="w-full flex justify-between items-end mb-2">
-                <h2 className="text-xl font-bold border-b-2 border-gray-800 pb-1">使用材料表</h2>
+                <h2 className="text-2xl font-bold border-b-2 border-gray-800 pb-1">使用材料表</h2>
               </div>
               <div className="flex-1 flex flex-col justify-between border-[3px] border-gray-800 p-2">
                 {chunk.map((m, i) => (
                   <div key={i} className="flex gap-2 h-[32%] border border-gray-500 p-2 rounded">
-                    {/* 写真 */}
                     <div className="w-[60%] border-2 border-gray-700 flex items-center justify-center bg-gray-50 overflow-hidden relative min-h-0">
                       {m.image ? (
                         <div className="flex items-center justify-center w-full h-full">
@@ -360,24 +361,23 @@ export default function PdfExportPage() {
                         <span className="text-gray-400 font-bold">写真未登録</span>
                       )}
                     </div>
-
-                    {/* 材料情報（品名・メーカー・規格・備考） */}
-                    <div className="w-[40%] flex flex-col text-xs border-2 border-gray-700 bg-white">
+                    {/* ★ 変更点：文字サイズを text-xs から text-sm にアップ、項目名の枠を w-20 から w-24 に拡大 */}
+                    <div className="w-[40%] flex flex-col text-sm border-2 border-gray-700 bg-white">
                       <div className="flex border-b border-gray-400">
-                        <div className="w-20 bg-gray-100 p-1.5 border-r border-gray-400 font-bold flex items-center justify-center text-center">品名</div>
-                        <div className="p-1.5 flex-1 font-bold text-sm overflow-hidden">{m.name || '　'}</div>
+                        <div className="w-24 bg-gray-100 p-2 border-r border-gray-400 font-bold flex items-center justify-center text-center">品名</div>
+                        <div className="p-2 flex-1 font-bold text-base overflow-hidden flex items-center">{m.name || '　'}</div>
                       </div>
                       <div className="flex border-b border-gray-400">
-                        <div className="w-20 bg-gray-100 p-1.5 border-r border-gray-400 font-bold flex items-center justify-center text-center">メーカー</div>
-                        <div className="p-1.5 flex-1 overflow-hidden">{m.manufacturer || '　'}</div>
+                        <div className="w-24 bg-gray-100 p-2 border-r border-gray-400 font-bold flex items-center justify-center text-center">メーカー</div>
+                        <div className="p-2 flex-1 overflow-hidden font-medium flex items-center">{m.manufacturer || '　'}</div>
                       </div>
                       <div className="flex border-b border-gray-400">
-                        <div className="w-20 bg-gray-100 p-1.5 border-r border-gray-400 font-bold text-[10px] flex items-center justify-center text-center leading-tight">規格・寸法<br/>数量</div>
-                        <div className="p-1.5 flex-1 font-bold text-red-700 overflow-hidden">{m.specification || '　'}</div>
+                        <div className="w-24 bg-gray-100 p-2 border-r border-gray-400 font-bold text-xs flex items-center justify-center text-center leading-tight">規格・寸法<br/>数量</div>
+                        <div className="p-2 flex-1 font-bold text-red-700 overflow-hidden flex items-center">{m.specification || '　'}</div>
                       </div>
                       <div className="flex-1 flex min-h-0">
-                        <div className="w-20 bg-gray-100 p-1.5 border-r border-gray-400 font-bold flex items-center justify-center text-center">備考</div>
-                        <div className="p-1.5 flex-1 whitespace-pre-wrap overflow-hidden">{m.remarks || '　'}</div>
+                        <div className="w-24 bg-gray-100 p-2 border-r border-gray-400 font-bold flex items-center justify-center text-center">備考</div>
+                        <div className="p-2 flex-1 whitespace-pre-wrap overflow-hidden font-medium leading-relaxed">{m.remarks || '　'}</div>
                       </div>
                     </div>
                   </div>
