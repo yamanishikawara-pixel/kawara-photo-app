@@ -194,18 +194,21 @@ export default function PdfExportPage() {
             style={{ ...pageStyle, padding: '25mm' }}
           >
             {/* 中央上のロゴ（白黒化して配置） */}
-              <div className="mt-[10mm] mb-[15mm]">
+              {/* ★ mtとmbを減らして、タイトル全体を上にグッと引き上げました */}
+              <div className="mt-[5mm] mb-[5mm]">
                 <img src={kawaraLogo} alt="ロゴ" crossOrigin="anonymous" className="h-[35mm] w-auto grayscale object-contain" />
               </div>
 
               {/* タイトル（極太・特大） */}
-              <div className="mb-[20mm] text-center w-full">
+              {/* ★ mbを[20mm]から[35mm]に増やして、現場情報との間隔をガッツリ開けました */}
+              <div className="mb-[35mm] text-center w-full">
                 <h1 className="text-[52px] font-black tracking-[0.4em] mb-4">工事写真報告書</h1>
                 <div className="w-[160mm] mx-auto border-b-[4px] border-black"></div>
                 <div className="w-[160mm] mx-auto border-b-[1px] border-black mt-1.5"></div>
               </div>
 
-              {/* 現場情報（四角い枠をなくし、文字サイズを極限まで大きく） */}
+              {/* 現場情報（四角い枠をなくし、文字サイズを極限まで大きく、ベースラインを揃える） */}
+              {/* ★ ここから下は一切変えていません（押し出されないように計算済みです！） */}
               <div className="w-[150mm] space-y-[14mm]">
                 {COVER_FIELDS.map((item, idx) => (
                   <div key={idx} className="flex items-baseline border-b-2 border-black pb-2">
