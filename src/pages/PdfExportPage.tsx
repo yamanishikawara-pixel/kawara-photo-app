@@ -270,11 +270,11 @@ export default function PdfExportPage() {
                 <div className="mt-4">
                   <div className="text-base font-bold mb-2">項目欄</div>
                   <div className="border-2 border-gray-800">
-                    {/* ★ 変更点：表のヘッダーの文字を大きく（text-base） */}
                     <div className="grid grid-cols-12 border-b-2 border-gray-800 bg-gray-100 text-base font-bold">
                       <div className="col-span-1 border-r-2 border-gray-800 p-2 text-center">符号</div>
                       <div className="col-span-2 border-r-2 border-gray-800 p-2 text-center">部位</div>
-                      <div className="col-span-2 border-r-2 border-gray-800 p-2 text-center">写真NO</div>
+                      {/* ★ 写真NOだけ text-sm に戻す */}
+                      <div className="col-span-2 border-r-2 border-gray-800 p-2 text-center text-sm">写真NO</div>
                       <div className="col-span-7 p-2 text-center">備考</div>
                     </div>
                     {(() => {
@@ -282,11 +282,11 @@ export default function PdfExportPage() {
                       const currentRows = rows.filter((r) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0));
                       const displayRows = currentRows.length > 0 ? currentRows.slice(0, 6) : Array.from({ length: 6 }, () => ({ symbol: '　', part: '　', photoNo: '　', remarks: '　' }));
                       return displayRows.map((row: any, idx: number) => (
-                        // ★ 変更点：表の中身の文字を大きく（text-base）
                         <div key={row.id ?? idx} className="grid grid-cols-12 border-b border-gray-400 text-base">
                           <div className="col-span-1 border-r border-gray-400 p-2 font-bold text-red-700 whitespace-nowrap overflow-hidden text-center">{row.symbol ?? '　'}</div>
                           <div className="col-span-2 border-r border-gray-400 p-2 whitespace-nowrap overflow-hidden">{row.part ?? '　'}</div>
-                          <div className="col-span-2 border-r border-gray-400 p-2 whitespace-nowrap overflow-hidden text-center">{row.photoNo ?? row.relatedPhotoNumber ?? '　'}</div>
+                          {/* ★ 写真NOだけ text-sm に戻す */}
+                          <div className="col-span-2 border-r border-gray-400 p-2 whitespace-nowrap overflow-hidden text-center text-sm">{row.photoNo ?? row.relatedPhotoNumber ?? '　'}</div>
                           <div className="col-span-7 p-2 overflow-hidden">{row.remarks ?? '　'}</div>
                         </div>
                       ));
@@ -322,9 +322,10 @@ export default function PdfExportPage() {
                         <span className="text-gray-400 font-bold">写真未登録</span>
                       )}
                     </div>
-                    {/* ★ 変更点：文字サイズを text-xs から text-sm にアップ */}
                     <div className="w-[40%] flex flex-col text-sm border-2 border-gray-700 bg-white">
-                      <div className="flex border-b border-gray-400"><div className="w-16 bg-gray-100 p-2 border-r border-gray-400 font-bold flex items-center justify-center">写真NO</div><div className="p-2 flex-1 font-bold text-base flex items-center">{p.photoNumber || '　'}</div></div>
+                      {/* ★ 写真NOだけ text-xs(ラベル) / text-sm(内容) に戻して控えめに */}
+                      <div className="flex border-b border-gray-400"><div className="w-16 bg-gray-100 p-2 border-r border-gray-400 font-bold flex items-center justify-center text-xs">写真NO</div><div className="p-2 flex-1 font-bold text-sm flex items-center">{p.photoNumber || '　'}</div></div>
+                      
                       <div className="flex border-b border-gray-400"><div className="w-16 bg-gray-100 p-2 border-r border-gray-400 font-bold flex items-center justify-center">撮影日</div><div className="p-2 flex-1 flex items-center font-medium">{p.shootingDate || '　'}</div></div>
                       <div className="flex border-b border-gray-400"><div className="w-16 bg-gray-100 p-2 border-r border-gray-400 font-bold flex items-center justify-center">位置図</div><div className="p-2 flex-1 font-bold text-red-700 flex items-center">{p.locationMap || '　'}</div></div>
                       <div className="flex border-b border-gray-400"><div className="w-16 bg-gray-100 p-2 border-r border-gray-400 font-bold flex items-center justify-center">工程</div><div className="p-2 flex-1 flex items-center font-medium">{p.process || '　'}</div></div>
@@ -361,7 +362,6 @@ export default function PdfExportPage() {
                         <span className="text-gray-400 font-bold">写真未登録</span>
                       )}
                     </div>
-                    {/* ★ 変更点：文字サイズを text-xs から text-sm にアップ、項目名の枠を w-20 から w-24 に拡大 */}
                     <div className="w-[40%] flex flex-col text-sm border-2 border-gray-700 bg-white">
                       <div className="flex border-b border-gray-400">
                         <div className="w-24 bg-gray-100 p-2 border-r border-gray-400 font-bold flex items-center justify-center text-center">品名</div>
