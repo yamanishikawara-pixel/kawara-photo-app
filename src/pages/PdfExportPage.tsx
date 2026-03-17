@@ -139,19 +139,6 @@ export default function PdfExportPage() {
 
   if (!project) return <LoadingSpinner />;
 
-  // ★ 材料ページの準備（自動オンオフ機能）
-  const activeMaterials = (project.materials ?? []).filter(
-    (m) => m.image || m.name || m.manufacturer || m.specification || m.remarks
-  );
-  const materialPages: Material[][] = [];
-  if (activeMaterials.length > 0) {
-    for (let i = 0; i < Math.max(activeMaterials.length, 3); i += 3) {
-      const chunk = activeMaterials.slice(i, i + 3);
-      while (chunk.length < 3) chunk.push(createEmptyMaterial());
-      materialPages.push(chunk);
-    }
-  }
-
   // 位置図の準備
   const mapUrlsToRender = project.mapUrls?.length ? project.mapUrls : [''];
   const mapCount = mapUrlsToRender.length;
@@ -167,8 +154,21 @@ export default function PdfExportPage() {
     photoPages.push(chunk);
   }
 
-  // 総ページ数の計算（表紙 + 材料 + 位置図 + 写真）
-  const totalPages = 1 + materialPages.length + mapCount + photoPages.length;
+  // ★ 材料ページの準備（自動オンオフ機能）
+  const activeMaterials = (project.materials ?? []).filter(
+    (m) => m.image || m.name || m.manufacturer || m.specification || m.remarks
+  );
+  const materialPages: Material[][] = [];
+  if (activeMaterials.length > 0) {
+    for (let i = 0; i < Math.max(activeMaterials.length, 3); i += 3) {
+      const chunk = activeMaterials.slice(i, i + 3);
+      while (chunk.length < 3) chunk.push(createEmptyMaterial());
+      materialPages.push(chunk);
+    }
+  }
+
+  // 総ページ数の計算（表紙 + 位置図 + 写真 + 材料）
+  const totalPages = 1 + mapCount + photoPages.length + materialPages.length;
 
   const wrapperStyle = { width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` };
   const pageStyle = { width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})` };
@@ -204,7 +204,7 @@ export default function PdfExportPage() {
       <div className="flex flex-col gap-8 items-center w-full">
         
         {/* =========================================
-            表紙ページ
+            ① 表紙ページ
            ========================================= */}
         <div style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
           <div className="pdf-page absolute top-0 left-0 bg-white flex flex-col items-center origin-top-left text-black" style={{ ...pageStyle, padding: '25mm' }}>
@@ -235,59 +235,7 @@ export default function PdfExportPage() {
         </div>
 
         {/* =========================================
-            ★ 新設：材料報告書ページ
-           ========================================= */}
-        {materialPages.map((chunk, pageIndex) => (
-          <div key={`material-page-${pageIndex}`} style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
-            <div className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left" style={pageStyle}>
-              <div className="w-full flex justify-between items-end mb-2">
-                <h2 className="text-xl font-bold border-b-2 border-gray-800 pb-1">材料報告書</h2>
-              </div>
-              <div className="flex-1 flex flex-col justify-between border-[3px] border-gray-800 p-2">
-                {chunk.map((m, i) => (
-                  <div key={i} className="flex gap-2 h-[32%] border border-gray-500 p-2 rounded">
-                    {/* 写真 */}
-                    <div className="w-[60%] border-2 border-gray-700 flex items-center justify-center bg-gray-50 overflow-hidden relative min-h-0">
-                      {m.image ? (
-                        <div className="flex items-center justify-center w-full h-full">
-                          <div className="relative inline-block" style={{ transform: `rotate(${m.rotation ?? 0}deg)`, transformOrigin: 'center center' }}>
-                            <img src={proxyUrl(m.image, m.id)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[85mm]" alt="" />
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-gray-400 font-bold">写真未登録</span>
-                      )}
-                    </div>
-
-                    {/* 材料情報（品名・メーカー・規格・備考） */}
-                    <div className="w-[40%] flex flex-col text-xs border-2 border-gray-700 bg-white">
-                      <div className="flex border-b border-gray-400">
-                        <div className="w-20 bg-gray-100 p-1.5 border-r border-gray-400 font-bold flex items-center justify-center text-center">品名</div>
-                        <div className="p-1.5 flex-1 font-bold text-sm overflow-hidden">{m.name || '　'}</div>
-                      </div>
-                      <div className="flex border-b border-gray-400">
-                        <div className="w-20 bg-gray-100 p-1.5 border-r border-gray-400 font-bold flex items-center justify-center text-center">メーカー</div>
-                        <div className="p-1.5 flex-1 overflow-hidden">{m.manufacturer || '　'}</div>
-                      </div>
-                      <div className="flex border-b border-gray-400">
-                        <div className="w-20 bg-gray-100 p-1.5 border-r border-gray-400 font-bold text-[10px] flex items-center justify-center text-center leading-tight">規格・寸法<br/>数量</div>
-                        <div className="p-1.5 flex-1 font-bold text-red-700 overflow-hidden">{m.specification || '　'}</div>
-                      </div>
-                      <div className="flex-1 flex min-h-0">
-                        <div className="w-20 bg-gray-100 p-1.5 border-r border-gray-400 font-bold flex items-center justify-center text-center">備考</div>
-                        <div className="p-1.5 flex-1 whitespace-pre-wrap overflow-hidden">{m.remarks || '　'}</div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">- {2 + pageIndex} / {totalPages} -</div>
-            </div>
-          </div>
-        ))}
-
-        {/* =========================================
-            位置図ページ
+            ② 位置図ページ
            ========================================= */}
         {mapUrlsToRender.map((u, mapIndex) => (
           <div key={`map-page-${mapIndex}`} style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
@@ -345,13 +293,13 @@ export default function PdfExportPage() {
                   </div>
                 </div>
               </div>
-              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">- {2 + materialPages.length + mapIndex} / {totalPages} -</div>
+              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">- {2 + mapIndex} / {totalPages} -</div>
             </div>
           </div>
         ))}
 
         {/* =========================================
-            写真ページ
+            ③ 写真ページ
            ========================================= */}
         {photoPages.map((chunk, pageIndex) => (
           <div key={`photo-page-${pageIndex}`} style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
@@ -383,10 +331,63 @@ export default function PdfExportPage() {
                   </div>
                 ))}
               </div>
-              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">- {2 + materialPages.length + mapCount + pageIndex} / {totalPages} -</div>
+              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">- {2 + mapCount + pageIndex} / {totalPages} -</div>
             </div>
           </div>
         ))}
+
+        {/* =========================================
+            ④ 新設：使用材料表（一番最後に配置！）
+           ========================================= */}
+        {materialPages.map((chunk, pageIndex) => (
+          <div key={`material-page-${pageIndex}`} style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
+            <div className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left" style={pageStyle}>
+              <div className="w-full flex justify-between items-end mb-2">
+                <h2 className="text-xl font-bold border-b-2 border-gray-800 pb-1">使用材料表</h2>
+              </div>
+              <div className="flex-1 flex flex-col justify-between border-[3px] border-gray-800 p-2">
+                {chunk.map((m, i) => (
+                  <div key={i} className="flex gap-2 h-[32%] border border-gray-500 p-2 rounded">
+                    {/* 写真 */}
+                    <div className="w-[60%] border-2 border-gray-700 flex items-center justify-center bg-gray-50 overflow-hidden relative min-h-0">
+                      {m.image ? (
+                        <div className="flex items-center justify-center w-full h-full">
+                          <div className="relative inline-block" style={{ transform: `rotate(${m.rotation ?? 0}deg)`, transformOrigin: 'center center' }}>
+                            <img src={proxyUrl(m.image, m.id)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[85mm]" alt="" />
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 font-bold">写真未登録</span>
+                      )}
+                    </div>
+
+                    {/* 材料情報（品名・メーカー・規格・備考） */}
+                    <div className="w-[40%] flex flex-col text-xs border-2 border-gray-700 bg-white">
+                      <div className="flex border-b border-gray-400">
+                        <div className="w-20 bg-gray-100 p-1.5 border-r border-gray-400 font-bold flex items-center justify-center text-center">品名</div>
+                        <div className="p-1.5 flex-1 font-bold text-sm overflow-hidden">{m.name || '　'}</div>
+                      </div>
+                      <div className="flex border-b border-gray-400">
+                        <div className="w-20 bg-gray-100 p-1.5 border-r border-gray-400 font-bold flex items-center justify-center text-center">メーカー</div>
+                        <div className="p-1.5 flex-1 overflow-hidden">{m.manufacturer || '　'}</div>
+                      </div>
+                      <div className="flex border-b border-gray-400">
+                        <div className="w-20 bg-gray-100 p-1.5 border-r border-gray-400 font-bold text-[10px] flex items-center justify-center text-center leading-tight">規格・寸法<br/>数量</div>
+                        <div className="p-1.5 flex-1 font-bold text-red-700 overflow-hidden">{m.specification || '　'}</div>
+                      </div>
+                      <div className="flex-1 flex min-h-0">
+                        <div className="w-20 bg-gray-100 p-1.5 border-r border-gray-400 font-bold flex items-center justify-center text-center">備考</div>
+                        <div className="p-1.5 flex-1 whitespace-pre-wrap overflow-hidden">{m.remarks || '　'}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">- {2 + mapCount + photoPages.length + pageIndex} / {totalPages} -</div>
+            </div>
+          </div>
+        ))}
+
       </div>
     </div>
   );
