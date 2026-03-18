@@ -149,7 +149,7 @@ export default function PdfExportPage() {
   };
   // ==========================================
 
-  const handleExport = async () => {
+ const handleExport = async () => {
     if (!project) return;
     try {
       const pages = document.querySelectorAll('.pdf-page');
@@ -165,15 +165,17 @@ export default function PdfExportPage() {
       for (let i = 0; i < pages.length; i++) {
         const pageEl = pages[i] as HTMLElement;
         pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
-        await new Promise((r) => setTimeout(r, 600));
+        
+        // ★修正1：ブラウザが前のページのメモリを掃除する時間（休憩）を少し長くする
+        await new Promise((r) => setTimeout(r, 1200));
 
         const currentTransform = pageEl.style.transform;
         pageEl.style.transform = 'scale(1)';
 
-       await toJpeg(pageEl, { cacheBust: true });
+        // ★修正2：ダミー出力を削除し、一発本番にする！
         const dataUrl = await toJpeg(pageEl, {
-          quality: 0.98,   // ★ JPEGの圧縮品質を最高レベルに引き上げ！
-          pixelRatio: 1.5, // ★ 1（荒い）と2（真っ白）の間の「黄金比」に設定！
+          quality: 0.98,
+          pixelRatio: 1.5,
           backgroundColor: '#ffffff',
         });
 
@@ -193,7 +195,6 @@ export default function PdfExportPage() {
       setIsExporting(false);
     }
   };
-
   if (error && !project) {
     return (
       <div className="min-h-screen bg-gray-200 p-6 font-sans flex flex-col items-center justify-center">
