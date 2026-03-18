@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, LogOut } from 'lucide-react';
+import { Plus, Trash2, LogOut, Settings } from 'lucide-react';
 import { collection, addDoc, deleteDoc, doc, getDocs, query, where } from 'firebase/firestore';
 import { ref, listAll, deleteObject } from 'firebase/storage'; // ★追加：倉庫のお掃除道具
 import { signOut } from 'firebase/auth';
@@ -146,10 +146,11 @@ export function ProjectListPage() {
       <div className="max-w-md mx-auto space-y-6 pb-12">
         {error && <ErrorMessage message={error} onDismiss={() => setError(null)} />}
         
-        <div className="flex justify-between items-center pt-2">
-           <div className="text-sm font-bold text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap max-w-[70%]">
-             {auth.currentUser?.email}
-           </div>
+        <div className="flex items-center gap-4 shrink-0">
+             <button onClick={() => navigate('/settings')} className="text-gray-400 hover:text-blue-600 flex items-center gap-1 text-sm font-bold transition-colors">
+               <Settings className="w-5 h-5" /> 設定
+             </button>
+            
            <button onClick={handleLogout} className="text-gray-400 hover:text-gray-600 flex items-center gap-1 text-sm font-bold shrink-0">
              <LogOut className="w-4 h-4" /> ログアウト
            </button>
