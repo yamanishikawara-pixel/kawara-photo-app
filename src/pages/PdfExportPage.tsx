@@ -170,10 +170,10 @@ export default function PdfExportPage() {
         const currentTransform = pageEl.style.transform;
         pageEl.style.transform = 'scale(1)';
 
-        await toJpeg(pageEl, { cacheBust: true });
+       await toJpeg(pageEl, { cacheBust: true });
         const dataUrl = await toJpeg(pageEl, {
-          quality: 0.95,
-          pixelRatio: 1,  // ★ここを「1」に変更して、メモリの負担を減らします！
+          quality: 0.98,   // ★ JPEGの圧縮品質を最高レベルに引き上げ！
+          pixelRatio: 1.5, // ★ 1（荒い）と2（真っ白）の間の「黄金比」に設定！
           backgroundColor: '#ffffff',
         });
 
