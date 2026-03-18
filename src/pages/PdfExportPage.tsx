@@ -255,10 +255,10 @@ export default function PdfExportPage() {
               })}
             </div>
 
-            {/* ★ 右下に住所や電話番号をカッコよく表示！ */}
+           {/* ★ 右下に住所や電話番号をカッコよく表示！ */}
             {userSettings && (userSettings.address || userSettings.phone) && (
-              <div className="absolute bottom-[25mm] right-[25mm] text-right flex flex-col items-end">
-                {userSettings.companyName && <div className="text-[20px] font-bold mb-1">{userSettings.companyName}</div>}
+              <div className="absolute bottom-[16mm] right-[15mm] text-right flex flex-col items-end bg-white pl-4 py-1">
+                {userSettings.companyName && <div className="text-[18px] font-bold mb-1">{userSettings.companyName}</div>}
                 {userSettings.address && <div className="text-[14px] text-gray-800">{userSettings.address}</div>}
                 {userSettings.phone && <div className="text-[14px] text-gray-800">TEL: {userSettings.phone}</div>}
               </div>
