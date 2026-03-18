@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Download } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
-import { db, auth } from '../firebase'; // ★ authを追加
+import { db, auth } from '../firebase';
 import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
+import JSZip from 'jszip'; // ★追加：Zipを作る道具
+import { saveAs } from 'file-saver'; // ★追加：保存する道具
 import type { Circle, MapRow, Photo, Project, Material } from '../types';
 import kawaraLogo from '../assets/kawara-logo.png';
 import {
@@ -55,27 +57,23 @@ export default function PdfExportPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState<ProjectWithOptionals | null>(null);
-  
-  // ★追加：設定画面で保存した「自社情報」を入れる箱
   const [userSettings, setUserSettings] = useState<any>(null); 
   
   const [error, setError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isZipping, setIsZipping] = useState(false); // ★追加：Zip作成中の状態
   const [scale, setScale] = useState(1);
   const [sessionId] = useState(() => Date.now().toString());
 
-  // ★現場データと自社情報の両方を読み込む
   useEffect(() => {
     if (!id) return;
     setError(null);
 
     const fetchData = async () => {
       try {
-        // ① 現場データの読み込み
         const d = await getDoc(doc(db, 'projects', id));
         if (d.exists()) setProject(d.data() as ProjectWithOptionals);
 
-        // ② 自社情報の読み込み
         const user = auth.currentUser;
         if (user) {
           const s = await getDoc(doc(db, 'users', user.uid));
@@ -94,6 +92,62 @@ export default function PdfExportPage() {
     window.addEventListener('resize', updateScale);
     return () => window.removeEventListener('resize', updateScale);
   }, []);
+
+  // ==========================================
+  // ★ 魔法のZipダウンロード機能
+  // ==========================================
+  const handleZipExport = async () => {
+    if (!project) return;
+    try {
+      setIsZipping(true);
+      setError(null);
+
+      const zip = new JSZip();
+      const folderName = project.projectName || '現場写真';
+      const imgFolder = zip.folder(folderName);
+
+      if (!imgFolder) throw new Error("フォルダ作成失敗");
+
+      // 画像が登録されている写真だけを抽出
+      const activePhotos = (project.photos ?? []).filter(p => p.image);
+
+      if (activePhotos.length === 0) {
+        setError("ダウンロードする写真がありません。");
+        setIsZipping(false);
+        return;
+      }
+
+      // 1枚ずつ画像データを取得してZipに詰める
+      const promises = activePhotos.map(async (p) => {
+        if (!p.image) return;
+        try {
+          const response = await fetch(p.image);
+          const blob = await response.blob();
+
+          // ファイル名を「写真番号_工程.jpg」にする（例：01_現状.jpg）
+          const processName = p.process ? `_${p.process}` : '';
+          const filename = `${p.photoNumber.padStart(2, '0')}${processName}.jpg`;
+
+          imgFolder.file(filename, blob);
+        } catch (err) {
+          console.error(`写真 ${p.photoNumber} の取得に失敗`, err);
+        }
+      });
+
+      await Promise.all(promises);
+
+      // Zipファイルを生成してダウンロード
+      const content = await zip.generateAsync({ type: 'blob' });
+      saveAs(content, `${folderName}.zip`);
+
+    } catch (err) {
+      console.error(err);
+      setError('Zipファイルの作成に失敗しました。');
+    } finally {
+      setIsZipping(false);
+    }
+  };
+  // ==========================================
 
   const handleExport = async () => {
     if (!project) return;
@@ -197,14 +251,28 @@ export default function PdfExportPage() {
         >
           <ArrowLeft className="w-6 h-6" /> もどる
         </button>
-        <button
-          type="button"
-          onClick={handleExport}
-          disabled={isExporting}
-          className="bg-black text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg text-base sm:text-lg hover:bg-gray-800"
-        >
-          {isExporting ? 'PDF作成中...' : 'ダウンロード'}
-        </button>
+        
+        {/* ★ ボタンエリアを強化！ZipとPDFを並べる */}
+        <div className="flex gap-2 sm:gap-4">
+          <button
+            type="button"
+            onClick={handleZipExport}
+            disabled={isExporting || isZipping}
+            className="flex items-center gap-2 bg-green-600 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold shadow-lg text-sm sm:text-base hover:bg-green-700 disabled:opacity-50"
+          >
+            <Download className="w-5 h-5" />
+            {isZipping ? 'Zip作成中...' : '写真のみ(Zip)'}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={isExporting || isZipping}
+            className="flex items-center gap-2 bg-black text-white px-5 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg text-base sm:text-lg hover:bg-gray-800 disabled:opacity-50"
+          >
+            {isExporting ? 'PDF作成中...' : 'PDF出力'}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -220,7 +288,6 @@ export default function PdfExportPage() {
           <div className="pdf-page absolute top-0 left-0 bg-white flex flex-col items-center origin-top-left text-black" style={{ ...pageStyle, padding: '25mm' }}>
             <div className="mt-[5mm] mb-[30mm] flex flex-col items-center w-full">
               
-              {/* ★ 自社ロゴの表示！ */}
               <div className="shrink-0 flex justify-center mb-6">
                 {userSettings?.logoUrl ? (
                   <img src={proxyUrl(userSettings.logoUrl, `logo_${sessionId}`)} alt="自社ロゴ" className="block w-[40mm] h-auto object-contain" crossOrigin="anonymous" />
@@ -237,7 +304,6 @@ export default function PdfExportPage() {
             </div>
             <div className="w-[150mm] space-y-[14mm]">
               {COVER_FIELDS.map((item, idx) => {
-                // ★ 施工業者の欄を、設定画面の会社名で上書き！
                 let value = String(project[item.key] ?? '　');
                 if (item.key === 'contractorName' && userSettings?.companyName) {
                   value = userSettings.companyName;
@@ -255,7 +321,6 @@ export default function PdfExportPage() {
               })}
             </div>
 
-           {/* ★ 右下に住所や電話番号をカッコよく表示！ */}
             {userSettings && (userSettings.address || userSettings.phone) && (
               <div className="absolute bottom-[16mm] right-[15mm] text-right flex flex-col items-end bg-white pl-4 py-1">
                 {userSettings.companyName && <div className="text-[18px] font-bold mb-1">{userSettings.companyName}</div>}
