@@ -102,8 +102,7 @@ export default function PhotoPage() {
   const [currentPhotoId, setCurrentPhotoId] = useState<number | null>(null);
   const [selectedCircleId, setSelectedCircleId] = useState<number | null>(null);
   
-  // ★追加：どの写真の入力アシストを開いているか管理する状態
-  const [activeAssistId, setActiveAssistId] = useState<number | null>(null);
+ 
 
   useEffect(() => { getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data() as Project)); }, [id]);
 
