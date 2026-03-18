@@ -173,7 +173,7 @@ export default function PdfExportPage() {
         await toJpeg(pageEl, { cacheBust: true });
         const dataUrl = await toJpeg(pageEl, {
           quality: 0.95,
-          pixelRatio: 2,
+          pixelRatio: 1,  // ★ここを「1」に変更して、メモリの負担を減らします！
           backgroundColor: '#ffffff',
         });
 
