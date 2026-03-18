@@ -156,8 +156,30 @@ export default function PdfExportPage() {
       if (pages.length === 0) return;
       setIsExporting(true);
       setError(null);
+
+      // ★究極のSafariハック：PDF化する前に、全画像を「暗号データ（Base64）」に変換してねじ込む！
+      const allImages = Array.from(document.querySelectorAll('.pdf-page img')) as HTMLImageElement[];
+      for (const img of allImages) {
+        // もし画像がネット上のURL（http~）だったら
+        if (img.src && img.src.startsWith('http')) {
+          try {
+            const res = await fetch(img.src);
+            const blob = await res.blob();
+            const base64 = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(blob);
+            });
+            // Safariがサボれないように、画像のURLを直接データそのものにすり替える
+            img.src = base64; 
+          } catch (e) {
+            console.warn('画像の暗号化スキップ:', e);
+          }
+        }
+      }
+
       window.scrollTo(0, 0);
-      await new Promise((r) => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 800));
 
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -166,21 +188,13 @@ export default function PdfExportPage() {
         const pageEl = pages[i] as HTMLElement;
         pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
         
-        // しっかり画面中央に来るまで待つ
-        await new Promise((r) => setTimeout(r, 800));
+        // 少しだけ待機して確実性を上げる
+        await new Promise((r) => setTimeout(r, 1000));
 
         const currentTransform = pageEl.style.transform;
         pageEl.style.transform = 'scale(1)';
 
-        // ★修正：Safariを叩き起こすための「超軽量な準備運動」
-        // pixelRatioを0.1にすることで、メモリ消費をほぼゼロにして画像だけをキャッシュさせます！
-        try {
-          await toJpeg(pageEl, { pixelRatio: 0.1, quality: 0.1, cacheBust: true });
-        } catch (e) {
-          console.warn("準備運動スキップ");
-        }
-
-        // ★本番出力：高画質（1.5）で一気に描き出す！
+        // 画像はすでに暗号化されているので、高画質（1.5）で一発本番出力を叩き込む！
         const dataUrl = await toJpeg(pageEl, {
           quality: 0.98,
           pixelRatio: 1.5,
@@ -203,7 +217,6 @@ export default function PdfExportPage() {
       setIsExporting(false);
     }
   };
-
   if (!project) return <LoadingSpinner />;
 
   const mapUrlsToRender = project.mapUrls?.length ? project.mapUrls : [''];
