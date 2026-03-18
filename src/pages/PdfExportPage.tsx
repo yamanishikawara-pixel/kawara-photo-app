@@ -166,13 +166,21 @@ export default function PdfExportPage() {
         const pageEl = pages[i] as HTMLElement;
         pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
         
-        // ★修正1：ブラウザが前のページのメモリを掃除する時間（休憩）を少し長くする
-        await new Promise((r) => setTimeout(r, 1200));
+        // しっかり画面中央に来るまで待つ
+        await new Promise((r) => setTimeout(r, 800));
 
         const currentTransform = pageEl.style.transform;
         pageEl.style.transform = 'scale(1)';
 
-        // ★修正2：ダミー出力を削除し、一発本番にする！
+        // ★修正：Safariを叩き起こすための「超軽量な準備運動」
+        // pixelRatioを0.1にすることで、メモリ消費をほぼゼロにして画像だけをキャッシュさせます！
+        try {
+          await toJpeg(pageEl, { pixelRatio: 0.1, quality: 0.1, cacheBust: true });
+        } catch (e) {
+          console.warn("準備運動スキップ");
+        }
+
+        // ★本番出力：高画質（1.5）で一気に描き出す！
         const dataUrl = await toJpeg(pageEl, {
           quality: 0.98,
           pixelRatio: 1.5,
@@ -195,20 +203,6 @@ export default function PdfExportPage() {
       setIsExporting(false);
     }
   };
-  if (error && !project) {
-    return (
-      <div className="min-h-screen bg-gray-200 p-6 font-sans flex flex-col items-center justify-center">
-        <ErrorMessage message={error} onDismiss={() => setError(null)} />
-        <button
-          type="button"
-          onClick={() => navigate(`/project/${id}`)}
-          className="mt-4 text-blue-500 font-bold flex items-center gap-2"
-        >
-          <ArrowLeft className="w-5 h-5" /> もどる
-        </button>
-      </div>
-    );
-  }
 
   if (!project) return <LoadingSpinner />;
 
