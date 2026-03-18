@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth } from '../firebase'; // ★ authを追加
 import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import type { Circle, MapRow, Photo, Project, Material } from '../types';
@@ -55,21 +55,37 @@ export default function PdfExportPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState<ProjectWithOptionals | null>(null);
+  
+  // ★追加：設定画面で保存した「自社情報」を入れる箱
+  const [userSettings, setUserSettings] = useState<any>(null); 
+  
   const [error, setError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [scale, setScale] = useState(1);
-  
-  // ★追加：Safariのキャッシュバグを防ぐため、画面を開くたびに一意のIDを発行する
   const [sessionId] = useState(() => Date.now().toString());
 
+  // ★現場データと自社情報の両方を読み込む
   useEffect(() => {
     if (!id) return;
     setError(null);
-    getDoc(doc(db, 'projects', id))
-      .then((d) => {
+
+    const fetchData = async () => {
+      try {
+        // ① 現場データの読み込み
+        const d = await getDoc(doc(db, 'projects', id));
         if (d.exists()) setProject(d.data() as ProjectWithOptionals);
-      })
-      .catch(() => setError('データの読み込みに失敗しました。'));
+
+        // ② 自社情報の読み込み
+        const user = auth.currentUser;
+        if (user) {
+          const s = await getDoc(doc(db, 'users', user.uid));
+          if (s.exists()) setUserSettings(s.data());
+        }
+      } catch (err) {
+        setError('データの読み込みに失敗しました。');
+      }
+    };
+    fetchData();
   }, [id]);
 
   useEffect(() => {
@@ -141,11 +157,9 @@ export default function PdfExportPage() {
 
   if (!project) return <LoadingSpinner />;
 
-  // 位置図の準備
   const mapUrlsToRender = project.mapUrls?.length ? project.mapUrls : [''];
   const mapCount = mapUrlsToRender.length;
   
-  // 写真ページの準備
   const activePhotos = (project.photos ?? []).filter(
     (p) => p.image || p.process || p.description
   );
@@ -156,7 +170,6 @@ export default function PdfExportPage() {
     photoPages.push(chunk);
   }
 
-  // 材料ページの準備
   const activeMaterials = (project.materials ?? []).filter(
     (m) => m.image || m.name || m.manufacturer || m.specification || m.remarks
   );
@@ -169,7 +182,6 @@ export default function PdfExportPage() {
     }
   }
 
-  // 総ページ数の計算
   const totalPages = 1 + mapCount + photoPages.length + materialPages.length;
 
   const wrapperStyle = { width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` };
@@ -182,7 +194,6 @@ export default function PdfExportPage() {
           type="button"
           onClick={() => navigate(`/project/${id}`)}
           className="text-blue-500 font-bold flex items-center gap-2 text-lg"
-          aria-label="現場メニューにもどる"
         >
           <ArrowLeft className="w-6 h-6" /> もどる
         </button>
@@ -190,7 +201,7 @@ export default function PdfExportPage() {
           type="button"
           onClick={handleExport}
           disabled={isExporting}
-          className="bg-black text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg text-base sm:text-lg disabled:opacity-60 disabled:cursor-not-allowed hover:bg-gray-800"
+          className="bg-black text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg text-base sm:text-lg hover:bg-gray-800"
         >
           {isExporting ? 'PDF作成中...' : 'ダウンロード'}
         </button>
@@ -208,9 +219,16 @@ export default function PdfExportPage() {
         <div style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
           <div className="pdf-page absolute top-0 left-0 bg-white flex flex-col items-center origin-top-left text-black" style={{ ...pageStyle, padding: '25mm' }}>
             <div className="mt-[5mm] mb-[30mm] flex flex-col items-center w-full">
+              
+              {/* ★ 自社ロゴの表示！ */}
               <div className="shrink-0 flex justify-center mb-6">
-                <img src={kawaraLogo} alt="ロゴ" className="block w-[32mm] h-auto object-contain grayscale" crossOrigin="anonymous" />
+                {userSettings?.logoUrl ? (
+                  <img src={proxyUrl(userSettings.logoUrl, `logo_${sessionId}`)} alt="自社ロゴ" className="block w-[40mm] h-auto object-contain" crossOrigin="anonymous" />
+                ) : (
+                  <img src={kawaraLogo} alt="標準ロゴ" className="block w-[32mm] h-auto object-contain grayscale" crossOrigin="anonymous" />
+                )}
               </div>
+              
               <div className="flex flex-col items-center">
                 <h1 className="text-[52px] font-black tracking-[0.4em] mb-4 text-center">工事写真報告書</h1>
                 <div className="w-[160mm] border-b-[4px] border-black"></div>
@@ -218,17 +236,34 @@ export default function PdfExportPage() {
               </div>
             </div>
             <div className="w-[150mm] space-y-[14mm]">
-              {COVER_FIELDS.map((item, idx) => (
-                <div key={idx} className="flex items-baseline border-b-2 border-black pb-2">
-                  <div className="w-[45mm] flex-shrink-0 flex justify-between text-[24px] font-bold pr-8">
-                    {item.label.split('').map((c: string, i: number) => <span key={i}>{c}</span>)}
+              {COVER_FIELDS.map((item, idx) => {
+                // ★ 施工業者の欄を、設定画面の会社名で上書き！
+                let value = String(project[item.key] ?? '　');
+                if (item.key === 'contractorName' && userSettings?.companyName) {
+                  value = userSettings.companyName;
+                }
+                return (
+                  <div key={idx} className="flex items-baseline border-b-2 border-black pb-2">
+                    <div className="w-[45mm] flex-shrink-0 flex justify-between text-[24px] font-bold pr-8">
+                      {item.label.split('').map((c: string, i: number) => <span key={i}>{c}</span>)}
+                    </div>
+                    <div className="flex-1 text-[32px] font-black whitespace-nowrap overflow-hidden">
+                      {value}
+                    </div>
                   </div>
-                  <div className="flex-1 text-[32px] font-black whitespace-nowrap overflow-hidden">
-                    {String(project[item.key] ?? '　')}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
+
+            {/* ★ 右下に住所や電話番号をカッコよく表示！ */}
+            {userSettings && (userSettings.address || userSettings.phone) && (
+              <div className="absolute bottom-[25mm] right-[25mm] text-right flex flex-col items-end">
+                {userSettings.companyName && <div className="text-[20px] font-bold mb-1">{userSettings.companyName}</div>}
+                {userSettings.address && <div className="text-[14px] text-gray-800">{userSettings.address}</div>}
+                {userSettings.phone && <div className="text-[14px] text-gray-800">TEL: {userSettings.phone}</div>}
+              </div>
+            )}
+
             <div className="absolute bottom-[10mm] right-[15mm] text-[16px] font-bold">- 1 / {totalPages} -</div>
           </div>
         </div>
@@ -243,7 +278,6 @@ export default function PdfExportPage() {
                   {u ? (
                     <div className="flex items-center justify-center w-full h-full">
                       <div className="relative inline-block">
-                        {/* ★修正：Safariのキャッシュを突き破るための sessionId を付与！ */}
                         <img src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[150mm]" alt="" />
                         {(project.mapPins ?? []).filter((p) => p.mapIndex === mapIndex).map((pin) => (
                             <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: 'translate(-50%, -50%)' }} className="absolute z-10">
@@ -307,7 +341,6 @@ export default function PdfExportPage() {
                       {p.image ? (
                         <div className="flex items-center justify-center w-full h-full">
                           <div className="relative inline-block" style={{ transform: `rotate(${(p as Photo).rotation ?? 0}deg)`, transformOrigin: 'center center' }}>
-                            {/* ★修正：写真も同じくキャッシュバグ対策！ */}
                             <img src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[88mm]" alt="" />
                             {(p.circles ?? []).map((circle) => (
                               <div key={circle.id} style={{ left: `${circle.x}%`, top: `${circle.y}%`, width: `${circle.size}%`, transform: 'translate(-50%, -50%)' }} className="absolute aspect-square rounded-full border-[3px] border-red-600" />
@@ -347,7 +380,6 @@ export default function PdfExportPage() {
                       {m.image ? (
                         <div className="flex items-center justify-center w-full h-full">
                           <div className="relative inline-block" style={{ transform: `rotate(${m.rotation ?? 0}deg)`, transformOrigin: 'center center' }}>
-                            {/* ★修正：材料も同じくキャッシュバグ対策！ */}
                             <img src={proxyUrl(m.image, `material_${m.id}_${sessionId}`)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[85mm]" alt="" />
                           </div>
                         </div>
