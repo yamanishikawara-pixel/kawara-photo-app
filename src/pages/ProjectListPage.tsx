@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, LogOut } from 'lucide-react'; // ★ LogOutアイコンを追加
-import { collection, addDoc, deleteDoc, doc, getDocs, query, where } from 'firebase/firestore'; // ★ orderByを外し、whereを追加
-import { signOut } from 'firebase/auth'; // ★ ログアウト機能を追加
+import { Plus, Trash2, LogOut } from 'lucide-react';
+import { collection, addDoc, deleteDoc, doc, getDocs, query, where } from 'firebase/firestore';
+import { ref, listAll, deleteObject } from 'firebase/storage'; // ★追加：倉庫のお掃除道具
+import { signOut } from 'firebase/auth';
 
-import { db, auth } from '../firebase'; // ★ auth（ログイン情報）を呼び出し
+import { db, auth, storage } from '../firebase'; // ★追加：storage（画像倉庫）を呼び出し
 import type { Project } from '../types';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { ErrorMessage } from '../shared/ErrorMessage';
@@ -12,7 +13,7 @@ import { ConfirmModal } from '../shared/ConfirmModal';
 
 interface ProjectWithId extends Project {
   id: string;
-  userId?: string; // ★ 裏データとしてuserIdを持つように定義
+  userId?: string;
 }
 
 export function ProjectListPage() {
@@ -21,6 +22,7 @@ export function ProjectListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false); // ★追加：削除中のローディング状態
 
   useEffect(() => {
     const fetch = async () => {
@@ -33,7 +35,6 @@ export function ProjectListPage() {
           return;
         }
 
-        // ★ 究極の壁：「自分の名札（uid）」がついた現場だけを呼び出す！
         const q = query(
           collection(db, 'projects'),
           where('userId', '==', user.uid)
@@ -41,7 +42,6 @@ export function ProjectListPage() {
         const snap = await getDocs(q);
         const fetchedProjects = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ProjectWithId));
         
-        // ★ エラーを避けるため、アプリ側で新しい順に並び替え
         fetchedProjects.sort((a, b) => {
           const dateA = a.createdAt || '';
           const dateB = b.createdAt || '';
@@ -66,7 +66,7 @@ export function ProjectListPage() {
       if (!user) throw new Error("Not logged in");
 
       const docRef = await addDoc(collection(db, 'projects'), {
-        userId: user.uid, // ★ 現場を作る瞬間に「自分の名札」をガッチリ貼り付ける！
+        userId: user.uid,
         projectName: '新規現場',
         projectLocation: '',
         constructionPeriod: '',
@@ -95,18 +95,43 @@ export function ProjectListPage() {
     }
   };
 
+  // ==========================================
+  // ★ 究極のお掃除システム：現場と一緒に写真も全消去
+  // ==========================================
   const deleteProject = async (id: string) => {
     setError(null);
+    setIsDeleting(true); // 削除中マークをオン
     try {
+      // ① まずは画像倉庫（Storage）のお掃除
+      // maps, photos, materials の3つのフォルダを確認し、中身の画像を全部消す
+      const folders = ['maps', 'photos', 'materials'];
+      for (const folder of folders) {
+        const folderRef = ref(storage, `${folder}/${id}`);
+        try {
+          const fileList = await listAll(folderRef);
+          // フォルダの中の全画像を一つずつ爆破（削除）していく
+          const deletePromises = fileList.items.map((item) => deleteObject(item));
+          await Promise.all(deletePromises);
+        } catch (err) {
+          // 写真が1枚も登録されていない時はエラーが出るが、問題ないのでスルーする
+          console.log(`${folder} フォルダは空でした`);
+        }
+      }
+
+      // ② 次に、文字データ（Firestore）を削除
       await deleteDoc(doc(db, 'projects', id));
+      
+      // ③ 最後に画面からその現場を消す
       setProjects((prev) => prev.filter((p) => p.id !== id));
     } catch {
-      setError('削除に失敗しました。');
+      setError('削除に失敗しました。電波の良いところで再度お試しください。');
+    } finally {
+      setIsDeleting(false); // 削除中マークをオフ
+      setConfirmDelete(null);
     }
-    setConfirmDelete(null);
   };
+  // ==========================================
 
-  // ★ ログアウト処理
   const handleLogout = async () => {
     if (window.confirm('ログアウトしますか？')) {
       await signOut(auth);
@@ -114,14 +139,13 @@ export function ProjectListPage() {
     }
   };
 
-  if (loading) return <LoadingSpinner />;
+  if (loading || isDeleting) return <LoadingSpinner />; // ★削除中もグルグルを表示
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 font-sans">
       <div className="max-w-md mx-auto space-y-6 pb-12">
         {error && <ErrorMessage message={error} onDismiss={() => setError(null)} />}
         
-        {/* ★ ヘッダーにログイン中のアドレスとログアウトボタンを表示 */}
         <div className="flex justify-between items-center pt-2">
            <div className="text-sm font-bold text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap max-w-[70%]">
              {auth.currentUser?.email}
@@ -143,7 +167,6 @@ export function ProjectListPage() {
           </button>
         </div>
 
-        {/* 現場が0件の時の優しいメッセージ */}
         {projects.length === 0 && !loading && !error && (
           <div className="text-center py-12 text-gray-500 font-bold bg-white rounded-2xl border border-dashed border-gray-300">
             まだ現場がありません。<br/>「＋ 新規現場」から作成してください！
@@ -182,9 +205,9 @@ export function ProjectListPage() {
       </div>
       <ConfirmModal
         isOpen={!!confirmDelete}
-        title="現場の削除"
-        message="この現場データを完全に削除しますか？"
-        confirmLabel="削除する"
+        title="現場の完全削除"
+        message="この現場データと、アップロードされた【すべての写真】を完全に削除します。よろしいですか？"
+        confirmLabel="完全に削除する"
         onConfirm={() => confirmDelete && deleteProject(confirmDelete.id)}
         onCancel={() => setConfirmDelete(null)}
       />
