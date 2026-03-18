@@ -1,12 +1,24 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus } from 'lucide-react';
+import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus, Sparkles } from 'lucide-react'; // ★ Sparkles(キラキラ)アイコン追加
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { compressImage, proxyUrl, useDraggablePin } from '../shared/utils';
 import type { Circle, MapPin as MapPinT, Photo, Project } from '../types';
 import type { ChangeEvent, MouseEvent } from 'react';
+
+// ==========================================
+// ★ 魔法の言葉（定型文）の辞書
+// ==========================================
+const PRESET_WORDS = {
+  process: ["現状", "施工中", "施工後", "撤去中", "下地処理", "清掃", "完了"],
+  description: [
+    "瓦割れ", "ズレ", "凍害", "漆喰剥がれ", "棟の歪み", 
+    "雨漏り跡", "下地腐食", "ルーフィング破れ",
+    "新規瓦葺き", "漆喰詰め直し", "ビス止め固定", "防水テープ処理"
+  ]
+};
 
 function PhotoCircleMarker({
   circle,
@@ -89,6 +101,9 @@ export default function PhotoPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [currentPhotoId, setCurrentPhotoId] = useState<number | null>(null);
   const [selectedCircleId, setSelectedCircleId] = useState<number | null>(null);
+  
+  // ★追加：どの写真の入力アシストを開いているか管理する状態
+  const [activeAssistId, setActiveAssistId] = useState<number | null>(null);
 
   useEffect(() => { getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data() as Project)); }, [id]);
 
@@ -102,6 +117,13 @@ export default function PhotoPage() {
     const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, [field]: value } : p);
     setProject({ ...project, photos: newPhotos });
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+  };
+
+  // ★追加：定型文をポチッと足す関数（既存の文字の末尾に追加する）
+  const appendWord = (photoId: number, field: 'process' | 'description', word: string, currentValue: string) => {
+    // 既存の文字があれば、その後ろにスペースを入れて繋げる
+    const newValue = currentValue ? `${currentValue} ${word}` : word;
+    updatePhoto(photoId, field, newValue);
   };
 
   const deletePhotoSlot = async (photoId: number) => {
@@ -340,14 +362,48 @@ export default function PhotoPage() {
                 </div>
               </div>
 
-              <div className="space-y-5">
+              {/* ★ ここから文字入力エリアと「魔法のアシストボタン」の融合 */}
+              <div className="space-y-4">
                 <button onClick={() => { setCurrentPhotoId(photo.id); setModalOpen(true); }} className={`w-full p-4 text-lg border-2 rounded-xl text-left flex justify-between items-center ${photo.locationMap ? 'text-red-700 font-bold border-red-300 bg-red-50' : 'text-gray-500 border-gray-300 bg-gray-50'}`}>
                   {photo.locationMap || '▼ どの場所の写真ですか？（タップして選択）'}
                   <MapPin className={`w-6 h-6 ${photo.locationMap ? 'text-red-500' : 'text-gray-400'}`} />
                 </button>
-                <input type="text" placeholder="工程 例: 葺き直し" className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" value={photo.process} onChange={(e) => updatePhoto(photo.id, "process", e.target.value)} />
-                <textarea placeholder="説明（短文）" rows={2} className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" value={photo.description} onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} />
+
+                {/* 工程の入力 */}
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-sm font-bold text-gray-600">工程</label>
+                  </div>
+                  <input type="text" placeholder="例: 現状、施工中" className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" value={photo.process || ''} onChange={(e) => updatePhoto(photo.id, "process", e.target.value)} />
+                  
+                  {/* 工程の魔法ボタン */}
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {PRESET_WORDS.process.map(word => (
+                      <button key={word} onClick={() => appendWord(photo.id, 'process', word, photo.process || '')} className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-lg text-sm font-bold transition-colors shadow-sm">
+                        + {word}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 説明の入力 */}
+                <div className="relative pt-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-sm font-bold text-gray-600">説明</label>
+                  </div>
+                  <textarea placeholder="例: 瓦割れ、ズレあり" rows={2} className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" value={photo.description || ''} onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} />
+                  
+                  {/* 説明の魔法ボタン */}
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {PRESET_WORDS.description.map(word => (
+                      <button key={word} onClick={() => appendWord(photo.id, 'description', word, photo.description || '')} className="bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 px-3 py-1.5 rounded-lg text-sm font-bold transition-colors shadow-sm flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" /> {word}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
+
             </div>
           ))}
         </div>
