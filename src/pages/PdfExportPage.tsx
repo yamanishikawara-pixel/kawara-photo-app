@@ -156,30 +156,8 @@ export default function PdfExportPage() {
       if (pages.length === 0) return;
       setIsExporting(true);
       setError(null);
-
-      // ★究極のSafariハック：PDF化する前に、全画像を「暗号データ（Base64）」に変換してねじ込む！
-      const allImages = Array.from(document.querySelectorAll('.pdf-page img')) as HTMLImageElement[];
-      for (const img of allImages) {
-        // もし画像がネット上のURL（http~）だったら
-        if (img.src && img.src.startsWith('http')) {
-          try {
-            const res = await fetch(img.src);
-            const blob = await res.blob();
-            const base64 = await new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result as string);
-              reader.readAsDataURL(blob);
-            });
-            // Safariがサボれないように、画像のURLを直接データそのものにすり替える
-            img.src = base64; 
-          } catch (e) {
-            console.warn('画像の暗号化スキップ:', e);
-          }
-        }
-      }
-
       window.scrollTo(0, 0);
-      await new Promise((r) => setTimeout(r, 800));
+      await new Promise((r) => setTimeout(r, 1000));
 
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -188,15 +166,25 @@ export default function PdfExportPage() {
         const pageEl = pages[i] as HTMLElement;
         pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
         
-        // 少しだけ待機して確実性を上げる
+        // ★Safariの通信を落ち着かせるための待機
         await new Promise((r) => setTimeout(r, 1000));
 
         const currentTransform = pageEl.style.transform;
         pageEl.style.transform = 'scale(1)';
 
-        // 画像はすでに暗号化されているので、高画質（1.5）で一発本番出力を叩き込む！
+        // ★準備運動：無駄な再ダウンロード（cacheBust）をやめ、Safariのキャッシュをそのまま使わせる
+        try {
+          await toJpeg(pageEl, { pixelRatio: 1.0, quality: 0.5 });
+        } catch (e) {
+          console.warn('準備運動スキップ');
+        }
+
+        // ★メモリを回復させ、画像を完全に表示させるための深呼吸（1.5秒待機）
+        await new Promise((r) => setTimeout(r, 1500));
+
+        // ★本番出力：高画質（1.5）で一気に描き出す！
         const dataUrl = await toJpeg(pageEl, {
-          quality: 0.98,
+          quality: 0.95,
           pixelRatio: 1.5,
           backgroundColor: '#ffffff',
         });
@@ -206,6 +194,9 @@ export default function PdfExportPage() {
         const pdfHeight = (pageEl.offsetHeight * pdfWidth) / pageEl.offsetWidth;
         if (i > 0) pdf.addPage();
         pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+
+        // ★次のページに行く前に、メモリを解放してあげる
+        await new Promise((r) => setTimeout(r, 1000));
       }
 
       pdf.save(`${project.projectName || '写真台帳'}.pdf`);
