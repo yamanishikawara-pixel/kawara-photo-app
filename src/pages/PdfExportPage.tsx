@@ -146,8 +146,38 @@ export default function PdfExportPage() {
       if (pages.length === 0) return;
       setIsExporting(true);
       setError(null);
+
+      // ★Safariの絶対防壁を破壊する最終ハック
+      // 画面上の全画像を「文字データ（Base64）」に変換し、完全に表示されきるまで「待つ」！
+      const images = Array.from(document.querySelectorAll('.pdf-page img')) as HTMLImageElement[];
+      for (const img of images) {
+        if (img.src && img.src.startsWith('http')) {
+          try {
+            // 先ほど発行した通行証を使って、画像をデータとして取得
+            const res = await fetch(img.src, { cache: 'no-cache' });
+            const blob = await res.blob();
+            const base64 = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(blob);
+            });
+            
+            // ★超重要：Safariが画像を復元して、画面に完全に表示し終わるまで「待つ」！
+            await new Promise<void>((resolve) => {
+              img.onload = () => resolve();
+              img.onerror = () => resolve(); // エラーでも止まらないようにする
+              img.removeAttribute('crossOrigin');
+              img.src = base64;
+            });
+          } catch (e) {
+            console.warn("画像変換エラー", e);
+          }
+        }
+      }
+
+      // 念のため全体の描画が安定するまで深呼吸
       window.scrollTo(0, 0);
-      await new Promise((r) => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 1000));
 
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -161,11 +191,11 @@ export default function PdfExportPage() {
         const currentTransform = pageEl.style.transform;
         pageEl.style.transform = 'scale(1)';
 
+        // すべての画像は「ただの文字データ」に偽装されているため、Safariはもうブロックできない！
         const dataUrl = await toJpeg(pageEl, {
           quality: 0.95,
           pixelRatio: 1.5,
           backgroundColor: '#ffffff',
-         
         });
 
         pageEl.style.transform = currentTransform;
