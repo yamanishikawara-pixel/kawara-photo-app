@@ -37,13 +37,11 @@ function PhotoCircleMarker({
 }) {
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(circle.x, circle.y, onDragEnd);
 
-  // ★追加：ダブルクリック（ダブルタップ）の判定
   const [lastTap, setLastTap] = useState(0);
   const handleTap = (e: any) => {
     e.stopPropagation();
     const now = Date.now();
     if (now - lastTap < 300) {
-      // 300ミリ秒以内にもう一度押されたら「ダブルタップ」と判定して消す！
       onRemove();
     } else {
       setLastTap(now);
@@ -59,12 +57,12 @@ function PhotoCircleMarker({
         ref={containerRef}
         onMouseDown={handleTap}
         onTouchStart={handleTap}
+        onClick={(e) => e.stopPropagation()} // ★これを追加！タップが背景に突き抜けるのを絶対防ぐ壁！
         style={{ left: `${position.x}%`, top: `${position.y}%`, width: `${circle.size}%`, transform: 'translate(-50%, -50%)', touchAction: 'none' }}
         className={`absolute aspect-square rounded-full border-[3px] border-red-500 shadow-sm ${dragging ? 'z-30 opacity-70 scale-110' : 'z-20 cursor-pointer'} ${isSelected ? 'border-dashed bg-red-500/20' : ''}`}
       />
-      {/* ★ ゴミ箱ボタンの位置も少し調整して見やすくしました */}
       {isSelected && !dragging && (
-        <div style={{ left: `${position.x}%`, top: `${position.y + circle.size/2 + 8}%`, transform: 'translateX(-50%)' }} className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden">
+        <div onClick={(e) => e.stopPropagation()} style={{ left: `${position.x}%`, top: `${position.y + circle.size/2 + 8}%`, transform: 'translateX(-50%)' }} className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden">
           <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.min(60, circle.size * 1.3))}} className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700">+</button>
           <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.max(5, circle.size * 0.7))}} className="px-4 py-2 text-xl font-bold border-l border-r hover:bg-gray-100 text-gray-700">-</button>
           <button onClick={(e) => {e.stopPropagation(); onRemove()}} className="px-4 py-2 text-red-500 hover:bg-red-50 flex items-center justify-center gap-1 font-bold"><Trash2 className="w-5 h-5"/> 消す</button>
@@ -334,7 +332,7 @@ export default function PhotoPage() {
                     {(photo.circles || []).map((circle) => (
                       <PhotoCircleMarker key={circle.id} circle={circle} isSelected={selectedCircleId === circle.id} onSelect={() => setSelectedCircleId(circle.id)} onDragEnd={(x: number, y: number) => updateCircle(photo.id, circle.id, { x, y })} onSizeChange={(size: number) => updateCircle(photo.id, circle.id, { size })} onRemove={() => removeCircle(photo.id, circle.id)} />
                     ))}
-                    <div className="absolute -top-3 -left-3 bg-black/70 text-white text-xs px-2 py-1 rounded-full font-bold pointer-events-none shadow">タップで赤丸追加<br/>(ダブルタップで削除)</div>
+                    <div className="absolute -top-3 -left-3 bg-black/70 text-white text-xs px-2 py-1 rounded-full font-bold pointer-events-none shadow">タップで選択・削除<br/>(長押しで移動)</div>
                   </div>
                 ) : (
                   <div className="text-center text-gray-400">
