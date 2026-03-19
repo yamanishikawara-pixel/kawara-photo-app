@@ -5,8 +5,8 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
-import JSZip from 'jszip'; // ★追加：Zipを作る道具
-import { saveAs } from 'file-saver'; // ★追加：保存する道具
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 import type { Circle, MapRow, Photo, Project, Material } from '../types';
 import kawaraLogo from '../assets/kawara-logo.png';
 import {
@@ -61,7 +61,7 @@ export default function PdfExportPage() {
   
   const [error, setError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
-  const [isZipping, setIsZipping] = useState(false); // ★追加：Zip作成中の状態
+  const [isZipping, setIsZipping] = useState(false);
   const [scale, setScale] = useState(1);
   const [sessionId] = useState(() => Date.now().toString());
 
@@ -93,9 +93,6 @@ export default function PdfExportPage() {
     return () => window.removeEventListener('resize', updateScale);
   }, []);
 
-  // ==========================================
-  // ★ 魔法のZipダウンロード機能
-  // ==========================================
   const handleZipExport = async () => {
     if (!project) return;
     try {
@@ -108,7 +105,6 @@ export default function PdfExportPage() {
 
       if (!imgFolder) throw new Error("フォルダ作成失敗");
 
-      // 画像が登録されている写真だけを抽出
       const activePhotos = (project.photos ?? []).filter(p => p.image);
 
       if (activePhotos.length === 0) {
@@ -117,17 +113,13 @@ export default function PdfExportPage() {
         return;
       }
 
-      // 1枚ずつ画像データを取得してZipに詰める
       const promises = activePhotos.map(async (p) => {
         if (!p.image) return;
         try {
           const response = await fetch(p.image);
           const blob = await response.blob();
-
-          // ファイル名を「写真番号_工程.jpg」にする（例：01_現状.jpg）
           const processName = p.process ? `_${p.process}` : '';
           const filename = `${p.photoNumber.padStart(2, '0')}${processName}.jpg`;
-
           imgFolder.file(filename, blob);
         } catch (err) {
           console.error(`写真 ${p.photoNumber} の取得に失敗`, err);
@@ -136,7 +128,6 @@ export default function PdfExportPage() {
 
       await Promise.all(promises);
 
-      // Zipファイルを生成してダウンロード
       const content = await zip.generateAsync({ type: 'blob' });
       saveAs(content, `${folderName}.zip`);
 
@@ -147,42 +138,16 @@ export default function PdfExportPage() {
       setIsZipping(false);
     }
   };
-  // ==========================================
 
- const handleExport = async () => {
+  const handleExport = async () => {
     if (!project) return;
     try {
       const pages = document.querySelectorAll('.pdf-page');
       if (pages.length === 0) return;
       setIsExporting(true);
       setError(null);
-
-      // ★最終兵器：Safariのセキュリティ(CORS)ブロックを完全破壊するBase64変換
-      const images = document.querySelectorAll('.pdf-page img');
-      for (let i = 0; i < images.length; i++) {
-        const img = images[i] as HTMLImageElement;
-        if (img.src && img.src.startsWith('http')) {
-          try {
-            const res = await fetch(img.src);
-            const blob = await res.blob();
-            await new Promise((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => {
-                img.src = reader.result as string;
-                img.removeAttribute('crossOrigin'); // ★超重要：Safariのバグの元凶を消す
-                resolve(null);
-              };
-              reader.readAsDataURL(blob);
-            });
-          } catch (e) {
-            console.warn("画像変換エラー", e);
-          }
-        }
-      }
-
-      // 変換後、画面が更新されるのを待つ
       window.scrollTo(0, 0);
-      await new Promise((r) => setTimeout(r, 1000));
+      await new Promise((r) => setTimeout(r, 500));
 
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -190,17 +155,17 @@ export default function PdfExportPage() {
       for (let i = 0; i < pages.length; i++) {
         const pageEl = pages[i] as HTMLElement;
         pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
-        await new Promise((r) => setTimeout(r, 500));
+        
+        await new Promise((r) => setTimeout(r, 800));
 
         const currentTransform = pageEl.style.transform;
         pageEl.style.transform = 'scale(1)';
 
-        // 画像は完全に暗号化されているので、高画質（1.5）で一発本番出力を叩き込む！
         const dataUrl = await toJpeg(pageEl, {
           quality: 0.95,
           pixelRatio: 1.5,
           backgroundColor: '#ffffff',
-          cacheBust: true, // これで文字ズレなどの他のバグも防ぐ
+         
         });
 
         pageEl.style.transform = currentTransform;
@@ -263,7 +228,6 @@ export default function PdfExportPage() {
           <ArrowLeft className="w-6 h-6" /> もどる
         </button>
         
-        {/* ★ ボタンエリアを強化！ZipとPDFを並べる */}
         <div className="flex gap-2 sm:gap-4">
           <button
             type="button"
