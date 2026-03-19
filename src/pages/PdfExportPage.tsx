@@ -146,38 +146,10 @@ export default function PdfExportPage() {
       if (pages.length === 0) return;
       setIsExporting(true);
       setError(null);
-
-      // ★Safariの絶対防壁を破壊する最終ハック
-      // 画面上の全画像を「文字データ（Base64）」に変換し、完全に表示されきるまで「待つ」！
-      const images = Array.from(document.querySelectorAll('.pdf-page img')) as HTMLImageElement[];
-      for (const img of images) {
-        if (img.src && img.src.startsWith('http')) {
-          try {
-            // 先ほど発行した通行証を使って、画像をデータとして取得
-            const res = await fetch(img.src, { cache: 'no-cache' });
-            const blob = await res.blob();
-            const base64 = await new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result as string);
-              reader.readAsDataURL(blob);
-            });
-            
-            // ★超重要：Safariが画像を復元して、画面に完全に表示し終わるまで「待つ」！
-            await new Promise<void>((resolve) => {
-              img.onload = () => resolve();
-              img.onerror = () => resolve(); // エラーでも止まらないようにする
-              img.removeAttribute('crossOrigin');
-              img.src = base64;
-            });
-          } catch (e) {
-            console.warn("画像変換エラー", e);
-          }
-        }
-      }
-
-      // 念のため全体の描画が安定するまで深呼吸
       window.scrollTo(0, 0);
-      await new Promise((r) => setTimeout(r, 1000));
+
+      // Chromeなら待機時間は最小限でOK
+      await new Promise((r) => setTimeout(r, 300));
 
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -186,14 +158,14 @@ export default function PdfExportPage() {
         const pageEl = pages[i] as HTMLElement;
         pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
         
-        await new Promise((r) => setTimeout(r, 800));
+        await new Promise((r) => setTimeout(r, 300)); // スムーズなスクロール待機のみ
 
         const currentTransform = pageEl.style.transform;
         pageEl.style.transform = 'scale(1)';
 
-        // すべての画像は「ただの文字データ」に偽装されているため、Safariはもうブロックできない！
+        // Chrome専用：一切の制限なく、最高画質（1.5）で一発出力！
         const dataUrl = await toJpeg(pageEl, {
-          quality: 0.95,
+          quality: 0.98,
           pixelRatio: 1.5,
           backgroundColor: '#ffffff',
         });
