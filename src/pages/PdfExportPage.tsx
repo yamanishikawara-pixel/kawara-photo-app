@@ -189,7 +189,8 @@ export default function PdfExportPage() {
   
   if (!project) return <LoadingSpinner />;
 
-  const mapUrlsToRender = project.mapUrls?.length ? project.mapUrls : [''];
+  // ★ ここが安全装置！何があっても最大3枚までしか出力しないように制限
+  const mapUrlsToRender = project.mapUrls?.length ? project.mapUrls.slice(0, 3) : [''];
   const mapCount = mapUrlsToRender.length;
   
   const activePhotos = (project.photos ?? []).filter(

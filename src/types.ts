@@ -60,9 +60,9 @@ export interface Project {
   contractorName: string;
   creationDate: string;
   photos: Photo[];
-  mapUrls: string[];
+  mapUrls: string[]; // ★ここが図面のURLを入れる箱。今回ここを最大3つまで使うようにプログラム側で制御します
   mapRows: MapRow[];
   mapPins: MapPin[];
-  materials?: Material[]; // ★ 新規追加（既存の現場データが壊れないように「?」をつけています）
+  materials?: Material[];
   createdAt?: string;
 }

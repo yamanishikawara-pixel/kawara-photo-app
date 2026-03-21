@@ -103,7 +103,7 @@ export default function MapPage() {
 
     const newRows = [...existingRows];
     for (const mapIndex of missingMapIndexes) {
-      const prefix = mapIndex === 0 ? 'A-' : 'B-';
+      const prefix = mapIndex === 0 ? 'A-' : mapIndex === 1 ? 'B-' : 'C-'; // ★ 3枚目(C-)に対応
       newRows.push({
         id: Date.now() + Math.random(),
         mapIndex,
@@ -122,12 +122,13 @@ export default function MapPage() {
 
   const uploadMaps = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!project) return;
-    const files = Array.from(e.target.files as FileList).slice(0, 2);
+    // ★ ここを2枚から3枚に変更
+    const files = Array.from(e.target.files as FileList).slice(0, 3);
     if (files.length === 0) return;
     setUploading(true);
     const newUrls = [...(project.mapUrls || [])];
     for (const f of files) {
-      if (newUrls.length >= 2) break;
+      if (newUrls.length >= 3) break; // ★ ここも3枚制限に
       const r = ref(storage, `maps/${id}/${Date.now()}_${f.name}`);
       await uploadBytes(r, f);
       newUrls.push(await getDownloadURL(r));
@@ -142,8 +143,24 @@ export default function MapPage() {
     if(!window.confirm('この位置図を削除しますか？\n（配置したマーカーもすべて削除されます）')) return;
     const newUrls = (project.mapUrls || []).filter((_, i: number) => i !== index);
     const newPins = (project.mapPins || []).filter((p) => p.mapIndex !== index);
-    setProject({ ...project, mapUrls: newUrls, mapPins: newPins });
-    await updateDoc(doc(db, "projects", id!), { mapUrls: newUrls, mapPins: newPins });
+    
+    // ★ 削除したあとのインデックスのズレを修正（A, B, Cを振り直すため）
+    const newRows = (project.mapRows || []).filter((r) => r.mapIndex !== index).map((r) => {
+        if(r.mapIndex !== undefined && r.mapIndex > index) {
+            return { ...r, mapIndex: r.mapIndex - 1 }
+        }
+        return r;
+    });
+
+    const shiftedPins = newPins.map(p => {
+        if(p.mapIndex > index) {
+            return { ...p, mapIndex: p.mapIndex - 1}
+        }
+        return p;
+    });
+
+    setProject({ ...project, mapUrls: newUrls, mapPins: shiftedPins, mapRows: newRows });
+    await updateDoc(doc(db, "projects", id!), { mapUrls: newUrls, mapPins: shiftedPins, mapRows: newRows });
   };
 
   const addPin = async (e: React.MouseEvent<HTMLDivElement>, mapIndex: number) => {
@@ -153,7 +170,7 @@ export default function MapPage() {
     const y = ((e.clientY - rect.top) / rect.height) * 100;
     
     const currentPins = (project.mapPins || []).filter((p) => p.mapIndex === mapIndex);
-    const prefix = mapIndex === 0 ? 'A-' : 'B-';
+    const prefix = mapIndex === 0 ? 'A-' : mapIndex === 1 ? 'B-' : 'C-'; // ★ 3枚目(C-)に対応
     const label = `${prefix}${currentPins.length + 1}`;
 
     const newPin: MapPinT = { id: Date.now(), mapIndex, x, y, label, type: 'circle', rotation: 0 };
@@ -180,7 +197,7 @@ export default function MapPage() {
   const addMapRow = async (mapIndex: number) => {
     if (!project) return;
     const currentRows = (project.mapRows || []).filter((r) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0));
-    const prefix = mapIndex === 0 ? 'A-' : 'B-';
+    const prefix = mapIndex === 0 ? 'A-' : mapIndex === 1 ? 'B-' : 'C-'; // ★ 3枚目(C-)に対応
     const symbol = `${prefix}${currentRows.length + 1}`;
     
     const newRows: MapRow[] = [...(project.mapRows || []), { id: Date.now(), mapIndex, symbol, part: "", photoNo: "", remarks: "" }];
@@ -213,8 +230,8 @@ export default function MapPage() {
         <div className="bg-white p-5 rounded-3xl shadow-sm border border-black/5 mb-6 relative">
           <label className="flex items-center justify-center gap-2 w-full text-center bg-green-100 text-green-700 font-bold py-4 text-lg rounded-xl cursor-pointer shadow-sm mb-6 z-10 relative">
             <Images className="w-6 h-6" />
-            {uploading ? "Google倉庫へ保存中..." : "図面を追加（2枚まで）"}
-            <input type="file" multiple accept="image/*" className="hidden" onChange={uploadMaps} disabled={uploading} />
+            {uploading ? "Google倉庫へ保存中..." : "図面を追加（最大3枚まで）"}
+            <input type="file" multiple accept="image/*" className="hidden" onChange={uploadMaps} disabled={uploading || (project.mapUrls && project.mapUrls.length >= 3)} />
           </label>
 
           {project.mapUrls && project.mapUrls.length > 0 ? (
@@ -233,7 +250,13 @@ export default function MapPage() {
                 
                 return (
                 <div key={i} className="relative w-full border-2 border-gray-300 rounded-xl bg-gray-100 shadow-inner group overflow-hidden flex flex-col p-2">
-                  <div className="flex items-center justify-center overflow-hidden">
+                  
+                  {/* ★ 削除ボタン */}
+                  <div className="absolute top-2 right-2 z-20">
+                     <button onClick={() => removeMap(i)} className="bg-white/90 rounded-full p-2 text-red-500 shadow-sm border border-red-100 hover:bg-red-50"><Trash2 className="w-5 h-5" /></button>
+                  </div>
+
+                  <div className="flex items-center justify-center overflow-hidden pt-2">
                     <div className="relative inline-block" onClick={(e) => addPin(e, i)}>
                       <img src={proxyUrl(u, i)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[60vh] pointer-events-none rounded shadow-sm" alt="" />
                       {(project.mapPins || []).filter((p) => p.mapIndex === i).map((pin) => (
@@ -241,14 +264,10 @@ export default function MapPage() {
                       ))}
                     </div>
                   </div>
-                  <button onClick={() => removeMap(i)} className="absolute top-2 right-2 bg-white/90 rounded-full p-2 text-red-500 shadow-sm z-20"><Trash2 className="w-5 h-5" /></button>
 
                   <div className="w-full mt-6 pt-4 border-t border-gray-300">
                     <h3 className="text-lg font-bold mb-3 text-gray-800">位置図 {i + 1} の説明表</h3>
                     <div className="space-y-3">
-                      {/* =========================================
-                          ★スマホ特化の2段構えレイアウト（広々タップ可能）
-                         ========================================= */}
                       {currentRows.map((row: any) => (
                         <div key={row.id} className="bg-white p-3 rounded-xl border border-gray-300 shadow-sm flex flex-col gap-2 relative">
                           <button onClick={() => removeMapRow(row.id)} className="absolute top-2 right-2 p-1.5 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 z-10"><Trash2 className="w-5 h-5" /></button>
@@ -274,7 +293,6 @@ export default function MapPage() {
                           </div>
                         </div>
                       ))}
-                      {/* ========================================= */}
                       <button onClick={() => addMapRow(i)} className="w-full py-3 bg-white text-blue-600 font-bold rounded-xl mt-2 border-2 border-dashed border-blue-200 hover:bg-blue-50 transition-colors">+ 説明行を追加</button>
                     </div>
                   </div>
