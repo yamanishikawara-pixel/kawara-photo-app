@@ -28,20 +28,6 @@ const COVER_FIELDS: { label: string; key: keyof Project }[] = [
   { label: '作成年月日', key: 'creationDate' },
 ];
 
-// ==========================================
-// ★ ロード画面で表示されるランダムTIPS（豆知識）の辞書
-// ==========================================
-const LOADING_TIPS = [
-  "現場の安全第一！今日も一日ご安全に。",
-  "高画質な画像データを圧縮・変換しています...",
-  "写真がない枠は、自動的にPDFから除外されて綺麗に詰まります。",
-  "赤丸はダブルタップ（2回連続タップ）で一瞬で消すことができます。",
-  "魔法の言葉（定型文）は、いつでも自由に追加・変更できます。",
-  "位置図は最大3枚まで登録可能！現場に合わせて使い分けましょう。",
-  "Zipダウンロードを使えば、元請けへ「写真だけ」を爆速で送れます。",
-  "オフライン状態でも、現場での写真登録や文字入力は可能です。",
-];
-
 function createEmptyPhoto(): Photo & { circles?: Circle[] } {
   return {
     id: Math.random(),
@@ -67,6 +53,28 @@ function createEmptyMaterial(): Material {
   };
 }
 
+// ==========================================
+// ★ 汗をかいて頑張る「瓦職人」キャラクターのコンポーネント
+// ==========================================
+function HardWorkingRoofer() {
+  return (
+    <div className="relative flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-600 rounded-3xl bg-gray-800 shadow-inner">
+      <div className="relative text-[120px] leading-none mb-6">
+        {/* ヘルメットをかぶった男性 (瓦職人のメタファー) */}
+        👷‍♂️
+        {/* ★ 汗のしずく (飛び散るアニメーション) */}
+        <span className="absolute top-2 right-[-20px] text-5xl animate-[bounce_1s_infinite] opacity-90">💧</span>
+        <span className="absolute top-10 left-[-20px] text-4xl animate-[pulse_1.2s_infinite] delay-150 opacity-80">💧</span>
+        
+        {/* ★ 瓦とハンマーのアニメーション (裏で瓦を葺いている演出) */}
+        <span className="absolute bottom-[-10px] right-[-10px] text-5xl animate-spin-slow">🔨</span>
+      </div>
+      <p className="text-red-300 font-bold text-sm tracking-widest text-center">瓦魂、梱包中。</p>
+    </div>
+  );
+}
+// ==========================================
+
 export default function PdfExportPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -77,7 +85,6 @@ export default function PdfExportPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [isZipping, setIsZipping] = useState(false);
   const [loadingMode, setLoadingMode] = useState<'pdf' | 'zip' | null>(null); // ★ ロード画面の切り替え用
-  const [currentTip, setCurrentTip] = useState(LOADING_TIPS[0]); // ★ 現在のTIPS
   
   const [scale, setScale] = useState(1);
   const [sessionId] = useState(() => Date.now().toString());
@@ -113,8 +120,7 @@ export default function PdfExportPage() {
   const handleZipExport = async () => {
     if (!project) return;
     try {
-      // ★ ロード画面をONにして、ランダムなTIPSを選ぶ
-      setCurrentTip(LOADING_TIPS[Math.floor(Math.random() * LOADING_TIPS.length)]);
+      // ★ ロード画面をONにする（TIPS辞書は廃止）
       setLoadingMode('zip');
       setIsZipping(true);
       setError(null);
@@ -170,8 +176,7 @@ export default function PdfExportPage() {
       const pages = document.querySelectorAll('.pdf-page');
       if (pages.length === 0) return;
       
-      // ★ ロード画面をONにして、ランダムなTIPSを選ぶ
-      setCurrentTip(LOADING_TIPS[Math.floor(Math.random() * LOADING_TIPS.length)]);
+      // ★ ロード画面をONにする（TIPS辞書は廃止）
       setLoadingMode('pdf');
       setIsExporting(true);
       setError(null);
@@ -253,20 +258,26 @@ export default function PdfExportPage() {
     <div className="min-h-screen bg-gray-200 p-4 sm:p-6 font-sans flex flex-col items-center pb-12 overflow-x-hidden w-full relative">
       
       {/* ==========================================
-          ★ 超カッコいい Now Loading 画面の演出 
+          ★ 汗かき瓦職人さんが頑張る Now Loading 画面 
          ========================================== */}
       {loadingMode && (
-        <div className="fixed inset-0 z-50 bg-gray-900/95 flex flex-col items-center justify-center text-white p-6 backdrop-blur-md transition-all duration-300">
-          <div className="w-24 h-24 border-4 border-gray-700 border-t-red-500 rounded-full animate-spin mb-8 shadow-[0_0_30px_rgba(239,68,68,0.5)]"></div>
-          <h2 className="text-4xl font-black tracking-[0.2em] mb-4 animate-pulse text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">NOW LOADING...</h2>
-          <p className="text-gray-300 font-bold text-xl mb-12">
-            {loadingMode === 'pdf' ? '超高画質PDF台帳を生成しています...' : '全写真をZipファイルにまとめています...'}
+        <div className="fixed inset-0 z-50 bg-gray-950/98 flex flex-col items-center justify-center text-white p-6 backdrop-blur-lg transition-all duration-300">
+          
+          <div className="mb-12">
+            <HardWorkingRoofer />
+          </div>
+
+          <h2 className="text-2xl font-black text-white tracking-[0.3em] mb-4 animate-pulse">
+            瓦屋の魂を込めて、資料を梱包中。
+          </h2>
+          <p className="text-gray-400 font-medium text-lg text-center leading-relaxed">
+            {loadingMode === 'pdf' ? '超高画質なPDF写真台帳を生成しています。' : '全写真を1つのZipファイルにまとめています。'}<br/>
+            現場の記録が形になるまで、少々お待ちください。
           </p>
           
-          <div className="max-w-lg w-full bg-gray-800 border border-gray-700 p-6 rounded-2xl shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-2 h-full bg-red-500"></div>
-            <p className="text-red-400 font-bold mb-3 text-sm tracking-wider">💡 現場のTIPS</p>
-            <p className="text-white font-medium leading-relaxed text-lg">{currentTip}</p>
+          {/* シンプルなプログレスバー (ゲーム的Tipsを廃止し、ビジネスツール系に変更) */}
+          <div className="w-full max-w-sm mt-12 bg-gray-700 h-2 rounded-full overflow-hidden border border-gray-600 shadow-inner">
+            <div className="bg-red-500 h-full w-[60%] animate-[pulse_1.5s_infinite] rounded-full"></div>
           </div>
         </div>
       )}
@@ -468,7 +479,7 @@ export default function PdfExportPage() {
               </div>
               <div className="flex-1 flex flex-col justify-between border-[3px] border-gray-800 p-2">
                 {chunk.map((m, i) => (
-                  <div key={i} className="flex gap-2 h-[32%] border border-gray-500 p-2 rounded">
+                 <div key={i} className="flex gap-2 h-[32%] border border-gray-500 p-2 rounded">
                     <div className="w-[60%] border-2 border-gray-700 flex items-center justify-center bg-gray-50 overflow-hidden relative min-h-0">
                       {m.image ? (
                         <div className="flex items-center justify-center w-full h-full">
