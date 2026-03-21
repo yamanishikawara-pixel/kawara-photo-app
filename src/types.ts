@@ -37,21 +37,32 @@ export interface MapPin {
   label: string;
   type: MapPinType;
   rotation: number;
+  size?: number; // ★ 新設：マーカーの拡大縮小用
 }
 
 // ==========================================
-// ★ ここから新設：材料報告書用の設計図
+// ★ 新設：基準線（直線）用の設計図
 // ==========================================
+export interface MapLine {
+  id: number;
+  mapIndex: number;
+  x: number;          // 中心のX座標
+  y: number;          // 中心のY座標
+  length: number;     // 長さ
+  rotation: number;   // 角度
+  thickness: number;  // 太さ
+  color: string;      // 色
+}
+
 export interface Material {
   id: number;
-  image: string | null;   // 材料の写真（パッケージや資材）
-  name: string;           // 品名
-  manufacturer: string;   // メーカー
-  specification: string;  // 規格 / 寸法 / 数量など
-  remarks: string;        // 備考（使用箇所など）
-  rotation?: number;      // 写真の回転（手動補正用）
+  image: string | null;
+  name: string;
+  manufacturer: string;
+  specification: string;
+  remarks: string;
+  rotation?: number;
 }
-// ==========================================
 
 export interface Project {
   projectName: string;
@@ -60,9 +71,10 @@ export interface Project {
   contractorName: string;
   creationDate: string;
   photos: Photo[];
-  mapUrls: string[]; // ★ここが図面のURLを入れる箱。今回ここを最大3つまで使うようにプログラム側で制御します
+  mapUrls: string[];
   mapRows: MapRow[];
   mapPins: MapPin[];
+  mapLines?: MapLine[]; // ★ 新設：基準線の箱
   materials?: Material[];
   createdAt?: string;
 }

@@ -6,51 +6,101 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { proxyUrl, useDraggablePin } from '../shared/utils';
-import type { MapPin as MapPinT, MapPinType, MapRow, Project } from '../types';
+import type { MapPin as MapPinT, MapLine, MapPinType, MapRow, Project } from '../types';
 
-function MapMarker({ pin, onDragEnd, onClick }: { pin: MapPinT; onDragEnd: (x: number, y: number) => void; onClick: () => void; }) {
+function MapMarker({ pin, isSelected, onSelect, onDragEnd, onEdit, onSizeChange, onRemove }: any) {
+  const sizeMult = pin.size || 1;
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(pin.x, pin.y, onDragEnd);
   return (
-    <div ref={containerRef} onMouseDown={onMouseDown} onTouchStart={onTouchStart} onClick={(e) => { e.stopPropagation(); if(!dragging) onClick(); }} style={{ left: `${position.x}%`, top: `${position.y}%`, transform: 'translate(-50%, -50%)', touchAction: 'none' }} className={`absolute flex items-center justify-center cursor-pointer transition-transform ${dragging ? 'z-30 scale-125 opacity-80' : 'z-10 hover:scale-110'}`}>
-      {pin.type === 'arrow' ? (
-        <div className="flex items-center gap-1 drop-shadow-md bg-white/70 px-2 py-0.5 rounded-lg border border-red-200">
-          <span className="text-red-600 font-black text-2xl leading-none" style={{ transform: `rotate(${pin.rotation || 0}deg)` }}>➡</span>
-          <span className="text-red-600 font-bold text-xl">{pin.label}</span>
-        </div>
-      ) : (
-        <div className="relative flex items-center justify-center">
-          <div className="w-14 h-14 rounded-full border-[4px] border-red-600 shadow-sm bg-red-600/10"></div>
-          <span className="absolute text-red-600 font-black text-xl drop-shadow-md bg-white/50 px-1 rounded">{pin.label}</span>
+    <>
+      <div
+        ref={containerRef} onMouseDown={onMouseDown} onTouchStart={onTouchStart} onClick={(e) => { e.stopPropagation(); if(!dragging) onSelect(); }}
+        style={{ left: `${position.x}%`, top: `${position.y}%`, transform: `translate(-50%, -50%) scale(${sizeMult})`, touchAction: 'none' }}
+        className={`absolute flex items-center justify-center cursor-pointer transition-transform ${dragging ? 'z-30 opacity-80' : 'z-20 hover:scale-105'} ${isSelected ? 'ring-4 ring-blue-500 ring-offset-2 rounded-full' : ''}`}
+      >
+        {pin.type === 'arrow' ? (
+          <div className="flex items-center gap-1 drop-shadow-md bg-white/70 px-2 py-0.5 rounded-lg border border-red-200">
+            <span className="text-red-600 font-black text-2xl leading-none" style={{ transform: `rotate(${pin.rotation || 0}deg)` }}>➡</span>
+            <span className="text-red-600 font-bold text-xl">{pin.label}</span>
+          </div>
+        ) : (
+          <div className="relative flex items-center justify-center">
+            <div className="w-14 h-14 rounded-full border-[4px] border-red-600 shadow-sm bg-red-600/10"></div>
+            <span className="absolute text-red-600 font-black text-xl drop-shadow-md bg-white/50 px-1 rounded">{pin.label}</span>
+          </div>
+        )}
+      </div>
+      {isSelected && !dragging && (
+        <div onClick={e => e.stopPropagation()} style={{ left: `${position.x}%`, top: `${position.y + 8 * sizeMult}%`, transform: 'translateX(-50%)' }} className="absolute z-40 flex bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden w-max">
+          <button onClick={() => onSizeChange(Math.min(3, sizeMult + 0.2))} className="px-5 py-3 font-bold text-xl hover:bg-gray-100 text-gray-700">+</button>
+          <button onClick={() => onSizeChange(Math.max(0.4, sizeMult - 0.2))} className="px-5 py-3 font-bold text-xl border-x border-gray-200 hover:bg-gray-100 text-gray-700">-</button>
+          <button onClick={onEdit} className="px-5 py-3 font-bold hover:bg-gray-100 text-blue-600 flex items-center gap-1">設定</button>
+          <button onClick={onRemove} className="px-5 py-3 font-bold hover:bg-red-50 text-red-500 border-l border-gray-200 flex items-center gap-1">消す</button>
         </div>
       )}
-    </div>
+    </>
   )
 }
 
-function MarkerEditModal({ pin, isOpen, onClose, onSave, onRemove }: { pin: MapPinT | null; isOpen: boolean; onClose: () => void; onSave: (pin: MapPinT) => void; onRemove: (pinId: number) => void; }) {
+function MapLineMarker({ line, isSelected, onSelect, onUpdate, onRemove }: any) {
+  return (
+    <>
+      <div
+        onClick={(e) => { e.stopPropagation(); onSelect(); }}
+        style={{
+          left: `${line.x}%`, top: `${line.y}%`,
+          width: `${line.length}%`, height: `${line.thickness}px`,
+          backgroundColor: line.color,
+          transform: `translate(-50%, -50%) rotate(${line.rotation}deg)`,
+          position: 'absolute', cursor: 'pointer', zIndex: isSelected ? 25 : 15,
+          boxShadow: isSelected ? '0 0 0 2px white, 0 0 0 4px #3b82f6' : 'none'
+        }}
+      />
+      {isSelected && (
+        <div onClick={e => e.stopPropagation()} style={{ left: `${line.x}%`, top: `${line.y + 8}%`, transform: 'translateX(-50%)' }} className="absolute z-40 bg-white p-3 rounded-2xl shadow-2xl border border-gray-200 flex flex-col gap-3 w-max">
+           <div className="flex justify-between items-center px-1"><span className="text-xs font-bold text-gray-500">長さ・回転</span></div>
+           <div className="flex gap-1 bg-gray-50 p-1 rounded-xl">
+             <button className="px-3 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({length: line.length + 2})}>長＋</button>
+             <button className="px-3 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({length: Math.max(1, line.length - 2)})}>長ー</button>
+             <button className="px-3 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({rotation: line.rotation + 5})}>↻右</button>
+             <button className="px-3 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({rotation: line.rotation - 5})}>↺左</button>
+           </div>
+           <div className="flex justify-between items-center px-1 mt-1"><span className="text-xs font-bold text-gray-500">位置・その他</span></div>
+           <div className="flex gap-1 bg-gray-50 p-1 rounded-xl items-center">
+             <button className="px-4 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({y: line.y - 1})}>⬆️</button>
+             <button className="px-4 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({y: line.y + 1})}>⬇️</button>
+             <button className="px-4 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({x: line.x - 1})}>⬅️</button>
+             <button className="px-4 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({x: line.x + 1})}>➡️</button>
+             <button className="px-4 py-2 bg-red-50 text-red-500 rounded-lg shadow-sm font-bold ml-1 border border-red-100" onClick={onRemove}>消す</button>
+           </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+function MarkerEditModal({ pin, isOpen, onClose, onSave, onRemove }: any) {
   const [label, setLabel] = useState("");
   const [type, setType] = useState<MapPinType>("circle");
   const [rotation, setRotation] = useState(0);
-
   useEffect(() => { if (pin) { setLabel(pin.label); setType(pin.type || 'circle'); setRotation(pin.rotation || 0); } }, [pin]);
   if (!isOpen || !pin) return null;
-
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-white rounded-3xl w-full max-w-sm p-6 space-y-6" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center border-b pb-3">
-          <h3 className="text-xl font-bold text-gray-900">マーカーの設定</h3>
+          <h3 className="text-xl font-bold text-gray-900">記号の設定</h3>
           <button onClick={onClose}><X className="w-6 h-6 text-gray-400"/></button>
         </div>
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-2">符号（番号など）</label>
-          <input type="text" value={label} onChange={e => setLabel(e.target.value)} className="w-full p-4 text-xl font-bold border-2 border-gray-300 rounded-xl focus:border-red-500 focus:outline-none" />
+          <input type="text" value={label} onChange={e => setLabel(e.target.value)} className="w-full p-4 text-xl font-bold border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none" />
         </div>
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-3">マーカーの種類</label>
           <div className="flex gap-4">
-            <button onClick={() => setType('circle')} className={`flex-1 py-3 font-bold border-2 rounded-xl flex items-center justify-center gap-2 ${type==='circle' ? 'border-red-500 bg-red-50 text-red-600' : 'border-gray-200 text-gray-500'}`}><div className="w-5 h-5 rounded-full border-[3px] border-current"></div> 範囲 (〇)</button>
-            <button onClick={() => setType('arrow')} className={`flex-1 py-3 font-bold border-2 rounded-xl flex items-center justify-center gap-2 ${type==='arrow' ? 'border-red-500 bg-red-50 text-red-600' : 'border-gray-200 text-gray-500'}`}><span className="text-xl leading-none">➡</span> 方向</button>
+            <button onClick={() => setType('circle')} className={`flex-1 py-3 font-bold border-2 rounded-xl flex items-center justify-center gap-2 ${type==='circle' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 text-gray-500'}`}><div className="w-5 h-5 rounded-full border-[3px] border-current"></div> 範囲 (〇)</button>
+            <button onClick={() => setType('arrow')} className={`flex-1 py-3 font-bold border-2 rounded-xl flex items-center justify-center gap-2 ${type==='arrow' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 text-gray-500'}`}><span className="text-xl leading-none">➡</span> 方向</button>
           </div>
         </div>
         {type === 'arrow' && (
@@ -58,14 +108,13 @@ function MarkerEditModal({ pin, isOpen, onClose, onSave, onRemove }: { pin: MapP
             <label className="block text-sm font-bold text-gray-700 mb-2">撮影した向き</label>
             <div className="grid grid-cols-4 gap-2">
               {[ {d: -90, l: '↑'}, {d: 0, l: '➡'}, {d: 90, l: '↓'}, {d: 180, l: '⬅'} ].map(rot => (
-                <button key={rot.d} onClick={() => setRotation(rot.d)} className={`p-3 text-2xl font-black border-2 rounded-xl flex justify-center ${rotation === rot.d ? 'border-red-500 bg-red-100 text-red-600' : 'border-gray-200 text-gray-400'}`}><span style={{transform: `rotate(${rot.d}deg)`}}>➡</span></button>
+                <button key={rot.d} onClick={() => setRotation(rot.d)} className={`p-3 text-2xl font-black border-2 rounded-xl flex justify-center ${rotation === rot.d ? 'border-blue-500 bg-blue-100 text-blue-600' : 'border-gray-200 text-gray-400'}`}><span style={{transform: `rotate(${rot.d}deg)`}}>➡</span></button>
               ))}
             </div>
           </div>
         )}
         <div className="flex gap-3 pt-4 border-t">
-          <button onClick={() => { onSave({...pin, label, type, rotation}); onClose(); }} className="flex-1 bg-red-600 text-white text-lg font-bold py-4 rounded-xl shadow-md">決定</button>
-          <button onClick={() => { onRemove(pin.id); onClose(); }} className="bg-gray-100 text-gray-600 font-bold py-4 px-6 rounded-xl hover:bg-red-100 hover:text-red-600">削除</button>
+          <button onClick={() => { onSave({...pin, label, type, rotation}); onClose(); }} className="flex-1 bg-blue-600 text-white text-lg font-bold py-4 rounded-xl shadow-md">保存</button>
         </div>
       </div>
     </div>
@@ -79,6 +128,12 @@ export default function MapPage() {
   const [uploading, setUploading] = useState(false);
   const [editingPin, setEditingPin] = useState<MapPinT | null>(null);
   const [initializedRows, setInitializedRows] = useState(false);
+  
+  // ★ 新設：モード切り替えと選択状態の管理
+  const [drawMode, setDrawMode] = useState<'pin' | 'line'>('pin');
+  const [lineStart, setLineStart] = useState<{x: number, y: number, mapIndex: number} | null>(null);
+  const [selectedPinId, setSelectedPinId] = useState<number | null>(null);
+  const [selectedLineId, setSelectedLineId] = useState<number | null>(null);
 
   useEffect(() => { getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data() as Project)); }, [id]);
 
@@ -86,49 +141,30 @@ export default function MapPage() {
     if (!project || initializedRows) return;
     const mapUrls = project.mapUrls || [];
     if (mapUrls.length === 0) return;
-
     const existingRows: MapRow[] = project.mapRows || [];
     const missingMapIndexes: number[] = [];
     for (let mapIndex = 0; mapIndex < mapUrls.length; mapIndex++) {
-      const hasRow = existingRows.some(
-        (r) => r?.mapIndex === mapIndex || (r?.mapIndex === undefined && mapIndex === 0),
-      );
+      const hasRow = existingRows.some(r => r?.mapIndex === mapIndex || (r?.mapIndex === undefined && mapIndex === 0));
       if (!hasRow) missingMapIndexes.push(mapIndex);
     }
-
-    if (missingMapIndexes.length === 0) {
-      setInitializedRows(true);
-      return;
-    }
-
+    if (missingMapIndexes.length === 0) { setInitializedRows(true); return; }
     const newRows = [...existingRows];
     for (const mapIndex of missingMapIndexes) {
-      const prefix = mapIndex === 0 ? 'A-' : mapIndex === 1 ? 'B-' : 'C-'; // ★ 3枚目(C-)に対応
-      newRows.push({
-        id: Date.now() + Math.random(),
-        mapIndex,
-        symbol: `${prefix}1`,
-        part: '',
-        photoNo: '',
-        remarks: '',
-      });
+      const prefix = mapIndex === 0 ? 'A-' : mapIndex === 1 ? 'B-' : 'C-';
+      newRows.push({ id: Date.now() + Math.random(), mapIndex, symbol: `${prefix}1`, part: '', photoNo: '', remarks: '' });
     }
-
     setProject({ ...project, mapRows: newRows });
-    updateDoc(doc(db, "projects", id!), { mapRows: newRows }).finally(() => {
-      setInitializedRows(true);
-    });
+    updateDoc(doc(db, "projects", id!), { mapRows: newRows }).finally(() => setInitializedRows(true));
   }, [project, id, initializedRows]);
 
   const uploadMaps = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!project) return;
-    // ★ ここを2枚から3枚に変更
     const files = Array.from(e.target.files as FileList).slice(0, 3);
     if (files.length === 0) return;
     setUploading(true);
     const newUrls = [...(project.mapUrls || [])];
     for (const f of files) {
-      if (newUrls.length >= 3) break; // ★ ここも3枚制限に
+      if (newUrls.length >= 3) break;
       const r = ref(storage, `maps/${id}/${Date.now()}_${f.name}`);
       await uploadBytes(r, f);
       newUrls.push(await getDownloadURL(r));
@@ -142,76 +178,111 @@ export default function MapPage() {
     if (!project) return;
     if(!window.confirm('この位置図を削除しますか？\n（配置したマーカーもすべて削除されます）')) return;
     const newUrls = (project.mapUrls || []).filter((_, i: number) => i !== index);
-    const newPins = (project.mapPins || []).filter((p) => p.mapIndex !== index);
-    
-    // ★ 削除したあとのインデックスのズレを修正（A, B, Cを振り直すため）
-    const newRows = (project.mapRows || []).filter((r) => r.mapIndex !== index).map((r) => {
-        if(r.mapIndex !== undefined && r.mapIndex > index) {
-            return { ...r, mapIndex: r.mapIndex - 1 }
-        }
-        return r;
-    });
-
-    const shiftedPins = newPins.map(p => {
-        if(p.mapIndex > index) {
-            return { ...p, mapIndex: p.mapIndex - 1}
-        }
-        return p;
-    });
-
-    setProject({ ...project, mapUrls: newUrls, mapPins: shiftedPins, mapRows: newRows });
-    await updateDoc(doc(db, "projects", id!), { mapUrls: newUrls, mapPins: shiftedPins, mapRows: newRows });
+    const newPins = (project.mapPins || []).filter((p) => p.mapIndex !== index).map(p => p.mapIndex > index ? { ...p, mapIndex: p.mapIndex - 1} : p);
+    const newLines = (project.mapLines || []).filter((l) => l.mapIndex !== index).map(l => l.mapIndex > index ? { ...l, mapIndex: l.mapIndex - 1} : l);
+    const newRows = (project.mapRows || []).filter((r) => r.mapIndex !== index).map(r => (r.mapIndex !== undefined && r.mapIndex > index) ? { ...r, mapIndex: r.mapIndex - 1 } : r);
+    setProject({ ...project, mapUrls: newUrls, mapPins: newPins, mapLines: newLines, mapRows: newRows });
+    await updateDoc(doc(db, "projects", id!), { mapUrls: newUrls, mapPins: newPins, mapLines: newLines, mapRows: newRows });
   };
 
-  const addPin = async (e: React.MouseEvent<HTMLDivElement>, mapIndex: number) => {
+  // ★ 究極の「ハイブリッドUI」マップクリック処理
+  const handleMapClick = async (e: React.MouseEvent<HTMLDivElement>, mapIndex: number) => {
     if (!project) return;
+    
+    // 選択中のものがあれば、まず「選択解除」だけを行う（誤操作防止）
+    if (selectedPinId || selectedLineId) {
+      setSelectedPinId(null);
+      setSelectedLineId(null);
+      return; 
+    }
+
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
-    
-    const currentPins = (project.mapPins || []).filter((p) => p.mapIndex === mapIndex);
-    const prefix = mapIndex === 0 ? 'A-' : mapIndex === 1 ? 'B-' : 'C-'; // ★ 3枚目(C-)に対応
-    const label = `${prefix}${currentPins.length + 1}`;
 
-    const newPin: MapPinT = { id: Date.now(), mapIndex, x, y, label, type: 'circle', rotation: 0 };
-    const newPins: MapPinT[] = [...(project.mapPins || []), newPin];
-    setProject({ ...project, mapPins: newPins });
-    await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
-    setEditingPin(newPin);
+    if (drawMode === 'pin') {
+      const currentPins = (project.mapPins || []).filter((p) => p.mapIndex === mapIndex);
+      const prefix = mapIndex === 0 ? 'A-' : mapIndex === 1 ? 'B-' : 'C-';
+      const label = `${prefix}${currentPins.length + 1}`;
+      const newPin: MapPinT = { id: Date.now(), mapIndex, x, y, label, type: 'circle', rotation: 0, size: 1 };
+      const newPins: MapPinT[] = [...(project.mapPins || []), newPin];
+      setProject({ ...project, mapPins: newPins });
+      await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
+      setEditingPin(newPin);
+    } else if (drawMode === 'line') {
+      if (!lineStart || lineStart.mapIndex !== mapIndex) {
+        setLineStart({ x, y, mapIndex }); // 1点目（始点）
+      } else {
+        // 2点目（終点）タップ時：線を計算して引く
+        const dx = x - lineStart.x;
+        const dy = y - lineStart.y;
+        const cx = (lineStart.x + x) / 2;
+        const cy = (lineStart.y + y) / 2;
+        const length = Math.sqrt(dx*dx + dy*dy);
+        const rotation = Math.atan2(dy, dx) * 180 / Math.PI;
+
+        const newLine: MapLine = { id: Date.now(), mapIndex, x: cx, y: cy, length, rotation, thickness: 4, color: '#3b82f6' };
+        const newLines = [...(project.mapLines || []), newLine];
+        setProject({ ...project, mapLines: newLines });
+        await updateDoc(doc(db, "projects", id!), { mapLines: newLines });
+        setLineStart(null);
+        setSelectedLineId(newLine.id); // 引いた直後に微調整パネルを出す
+      }
+    }
   };
 
+  // ピンの更新系
   const savePin = async (updatedPin: MapPinT) => {
     if (!project) return;
     const newPins = (project.mapPins || []).map((p) => p.id === updatedPin.id ? updatedPin : p);
     setProject({ ...project, mapPins: newPins });
     await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
   };
-
+  const updatePinSize = async (pinId: number, size: number) => {
+    if (!project) return;
+    const newPins = (project.mapPins || []).map((p) => p.id === pinId ? { ...p, size } : p);
+    setProject({ ...project, mapPins: newPins });
+    await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
+  };
   const removePin = async (pinId: number) => {
     if (!project) return;
     const newPins = (project.mapPins || []).filter((p) => p.id !== pinId);
     setProject({ ...project, mapPins: newPins });
     await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
+    setSelectedPinId(null);
   };
 
+  // 線の更新系
+  const updateLine = async (lineId: number, props: Partial<MapLine>) => {
+    if (!project) return;
+    const newLines = (project.mapLines || []).map(l => l.id === lineId ? { ...l, ...props } : l);
+    setProject({...project, mapLines: newLines});
+    await updateDoc(doc(db, "projects", id!), { mapLines: newLines });
+  };
+  const removeLine = async (lineId: number) => {
+    if (!project) return;
+    const newLines = (project.mapLines || []).filter(l => l.id !== lineId);
+    setProject({...project, mapLines: newLines});
+    await updateDoc(doc(db, "projects", id!), { mapLines: newLines });
+    setSelectedLineId(null);
+  };
+
+  // 表の更新系
   const addMapRow = async (mapIndex: number) => {
     if (!project) return;
     const currentRows = (project.mapRows || []).filter((r) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0));
-    const prefix = mapIndex === 0 ? 'A-' : mapIndex === 1 ? 'B-' : 'C-'; // ★ 3枚目(C-)に対応
+    const prefix = mapIndex === 0 ? 'A-' : mapIndex === 1 ? 'B-' : 'C-';
     const symbol = `${prefix}${currentRows.length + 1}`;
-    
     const newRows: MapRow[] = [...(project.mapRows || []), { id: Date.now(), mapIndex, symbol, part: "", photoNo: "", remarks: "" }];
     setProject({ ...project, mapRows: newRows });
     await updateDoc(doc(db, "projects", id!), { mapRows: newRows });
   };
-
   const updateMapRow = async (rowId: number, field: keyof MapRow, value: string) => {
     if (!project) return;
     const newRows = (project.mapRows || []).map((r) => r.id === rowId ? { ...r, [field]: value } : r);
     setProject({ ...project, mapRows: newRows });
     await updateDoc(doc(db, "projects", id!), { mapRows: newRows });
   };
-
   const removeMapRow = async (rowId: number) => {
     if (!project) return;
     const newRows = (project.mapRows || []).filter((r) => r.id !== rowId);
@@ -222,7 +293,7 @@ export default function MapPage() {
   if (!project) return <LoadingSpinner />;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 font-sans overflow-x-hidden">
+    <div className="min-h-screen bg-gray-50 p-6 font-sans overflow-x-hidden" onClick={() => { setSelectedPinId(null); setSelectedLineId(null); }}>
       <div className="max-w-md mx-auto pb-12">
         <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
         <h1 className="text-3xl font-bold mb-6 text-gray-900">位置図の登録と指示</h1>
@@ -236,32 +307,54 @@ export default function MapPage() {
 
           {project.mapUrls && project.mapUrls.length > 0 ? (
             <div className="space-y-8">
-              <div className="bg-red-50 p-4 rounded-xl border border-red-100 space-y-2">
-                <p className="text-base font-bold text-red-600 flex items-center gap-2"><MapPin className="w-5 h-5" /> 現場マーカーの使い方</p>
-                <ul className="text-sm text-red-700 font-medium space-y-1 list-disc pl-5">
-                  <li>図面を<b>タップ</b>すると、赤丸が打てます。</li>
-                  <li>赤丸を<b>ドラッグ</b>で自由に移動できます。</li>
-                  <li>赤丸を<b>もう一度タップ</b>すると、<b>「矢印」</b>への変更や文字の変更ができます。</li>
+              
+              {/* ★ 新設：超直感的なモード切り替えボタン */}
+              <div className="flex gap-2 bg-gray-100 p-2 rounded-2xl shadow-inner border border-gray-200">
+                <button onClick={(e) => { e.stopPropagation(); setDrawMode('pin'); setLineStart(null); }} className={`flex-1 py-3.5 font-bold rounded-xl transition-all text-lg ${drawMode === 'pin' ? 'bg-red-500 text-white shadow-md' : 'bg-transparent text-gray-500'}`}>
+                  📍 記号を打つ
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); setDrawMode('line'); setSelectedPinId(null); setSelectedLineId(null); }} className={`flex-1 py-3.5 font-bold rounded-xl transition-all text-lg ${drawMode === 'line' ? 'bg-blue-500 text-white shadow-md' : 'bg-transparent text-gray-500'}`}>
+                  📏 基準線を引く
+                </button>
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 space-y-2">
+                <p className="text-base font-bold text-blue-700 flex items-center gap-2">💡 現在のモード：{drawMode === 'pin' ? '記号マーカー' : '基準線（2点ポンポン）'}</p>
+                <ul className="text-sm text-blue-800 font-medium space-y-1 list-disc pl-5">
+                  {drawMode === 'pin' ? (
+                    <><li>図面を<b>タップ</b>で記号を配置。</li><li>記号をタップで<b>拡大縮小や設定</b>。</li></>
+                  ) : (
+                    <><li>図面を<b>2回タップ（始点・終点）</b>で線を引きます。</li><li>線をタップすると<b>長さや角度を微調整</b>できます。</li></>
+                  )}
                 </ul>
               </div>
               
               {project.mapUrls.map((u: string, i: number) => {
                 const currentRows = (project.mapRows || []).filter((r) => r.mapIndex === i || (r.mapIndex === undefined && i === 0));
-                
                 return (
                 <div key={i} className="relative w-full border-2 border-gray-300 rounded-xl bg-gray-100 shadow-inner group overflow-hidden flex flex-col p-2">
-                  
-                  {/* ★ 削除ボタン */}
                   <div className="absolute top-2 right-2 z-20">
                      <button onClick={() => removeMap(i)} className="bg-white/90 rounded-full p-2 text-red-500 shadow-sm border border-red-100 hover:bg-red-50"><Trash2 className="w-5 h-5" /></button>
                   </div>
 
                   <div className="flex items-center justify-center overflow-hidden pt-2">
-                    <div className="relative inline-block" onClick={(e) => addPin(e, i)}>
+                    <div className="relative inline-block" onClick={(e) => handleMapClick(e, i)}>
                       <img src={proxyUrl(u, i)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[60vh] pointer-events-none rounded shadow-sm" alt="" />
+                      
+                      {/* マーカーの描画 */}
                       {(project.mapPins || []).filter((p) => p.mapIndex === i).map((pin) => (
-                        <MapMarker key={pin.id} pin={pin} onDragEnd={(x: number, y: number) => savePin({...pin, x, y})} onClick={() => setEditingPin(pin)} />
+                        <MapMarker key={pin.id} pin={pin} isSelected={selectedPinId === pin.id} onSelect={() => setSelectedPinId(pin.id)} onDragEnd={(x: number, y: number) => savePin({...pin, x, y})} onEdit={() => setEditingPin(pin)} onSizeChange={(size: number) => updatePinSize(pin.id, size)} onRemove={() => removePin(pin.id)} />
                       ))}
+                      
+                      {/* 基準線の描画 */}
+                      {(project.mapLines || []).filter((l) => l.mapIndex === i).map((line) => (
+                        <MapLineMarker key={`line-${line.id}`} line={line} isSelected={selectedLineId === line.id} onSelect={() => setSelectedLineId(line.id)} onUpdate={(props: Partial<MapLine>) => updateLine(line.id, props)} onRemove={() => removeLine(line.id)} />
+                      ))}
+
+                      {/* 基準線を引いている途中の「始点」の目印 */}
+                      {drawMode === 'line' && lineStart && lineStart.mapIndex === i && (
+                        <div style={{left: `${lineStart.x}%`, top: `${lineStart.y}%`, transform: 'translate(-50%, -50%)'}} className="absolute w-6 h-6 bg-blue-500/60 border-2 border-white rounded-full animate-ping z-30 pointer-events-none shadow-lg" />
+                      )}
                     </div>
                   </div>
 
@@ -271,26 +364,12 @@ export default function MapPage() {
                       {currentRows.map((row: any) => (
                         <div key={row.id} className="bg-white p-3 rounded-xl border border-gray-300 shadow-sm flex flex-col gap-2 relative">
                           <button onClick={() => removeMapRow(row.id)} className="absolute top-2 right-2 p-1.5 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 z-10"><Trash2 className="w-5 h-5" /></button>
-                          
                           <div className="flex gap-2 pr-10">
-                            <div className="w-[25%]">
-                              <label className="text-[10px] font-bold text-gray-500 mb-1 block">符号</label>
-                              <input type="text" placeholder="A-1" className="w-full p-2.5 border border-gray-300 rounded-lg text-base font-bold text-red-600 bg-white focus:ring-2 focus:ring-blue-500" value={row.symbol || ''} onChange={e => updateMapRow(row.id as number, 'symbol', e.target.value)} />
-                            </div>
-                            <div className="w-[45%]">
-                              <label className="text-[10px] font-bold text-gray-500 mb-1 block">部位</label>
-                              <input type="text" placeholder="部位を入力" className="w-full p-2.5 border border-gray-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500" value={row.part || ''} onChange={e => updateMapRow(row.id as number, 'part', e.target.value)} />
-                            </div>
-                            <div className="w-[30%]">
-                              <label className="text-[10px] font-bold text-gray-500 mb-1 block">写真NO</label>
-                              <input type="text" placeholder="番号" className="w-full p-2.5 border border-gray-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500" value={row.photoNo || row.relatedPhotoNumber || ''} onChange={e => updateMapRow(row.id as number, 'photoNo', e.target.value)} />
-                            </div>
+                            <div className="w-[25%]"><label className="text-[10px] font-bold text-gray-500 mb-1 block">符号</label><input type="text" placeholder="A-1" className="w-full p-2.5 border border-gray-300 rounded-lg text-base font-bold text-red-600 bg-white focus:ring-2 focus:ring-blue-500" value={row.symbol || ''} onChange={e => updateMapRow(row.id as number, 'symbol', e.target.value)} /></div>
+                            <div className="w-[45%]"><label className="text-[10px] font-bold text-gray-500 mb-1 block">部位</label><input type="text" placeholder="部位を入力" className="w-full p-2.5 border border-gray-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500" value={row.part || ''} onChange={e => updateMapRow(row.id as number, 'part', e.target.value)} /></div>
+                            <div className="w-[30%]"><label className="text-[10px] font-bold text-gray-500 mb-1 block">写真NO</label><input type="text" placeholder="番号" className="w-full p-2.5 border border-gray-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500" value={row.photoNo || row.relatedPhotoNumber || ''} onChange={e => updateMapRow(row.id as number, 'photoNo', e.target.value)} /></div>
                           </div>
-
-                          <div className="w-full">
-                            <label className="text-[10px] font-bold text-gray-500 mb-1 block">備考</label>
-                            <textarea placeholder="備考（詳しく入力できます）" rows={2} className="w-full p-2.5 border border-gray-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500" value={row.remarks || ''} onChange={e => updateMapRow(row.id as number, 'remarks', e.target.value)} />
-                          </div>
+                          <div className="w-full"><label className="text-[10px] font-bold text-gray-500 mb-1 block">備考</label><textarea placeholder="備考（詳しく入力できます）" rows={2} className="w-full p-2.5 border border-gray-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500" value={row.remarks || ''} onChange={e => updateMapRow(row.id as number, 'remarks', e.target.value)} /></div>
                         </div>
                       ))}
                       <button onClick={() => addMapRow(i)} className="w-full py-3 bg-white text-blue-600 font-bold rounded-xl mt-2 border-2 border-dashed border-blue-200 hover:bg-blue-50 transition-colors">+ 説明行を追加</button>
@@ -299,16 +378,13 @@ export default function MapPage() {
 
                 </div>
               )})}
-
             </div>
           ) : (
-             <div className="w-full bg-gray-100 rounded-2xl flex flex-col items-center justify-center border-2 border-dashed border-gray-300 overflow-hidden p-10 gap-3">
-              <span className="text-gray-400 font-bold text-lg">位置図未登録</span>
-            </div>
+             <div className="w-full bg-gray-100 rounded-2xl flex flex-col items-center justify-center border-2 border-dashed border-gray-300 overflow-hidden p-10 gap-3"><span className="text-gray-400 font-bold text-lg">位置図未登録</span></div>
           )}
         </div>
       </div>
-      <MarkerEditModal pin={editingPin} isOpen={!!editingPin} onClose={() => setEditingPin(null)} onSave={savePin} onRemove={removePin} />
+      <MarkerEditModal pin={editingPin} isOpen={!!editingPin} onClose={() => setEditingPin(null)} onSave={savePin} onRemove={() => removePin(editingPin?.id as number)} />
     </div>
   );
 }
