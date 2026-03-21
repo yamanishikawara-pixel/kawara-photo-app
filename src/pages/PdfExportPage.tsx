@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Download, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Download, ShieldCheck } from 'lucide-react'; // ★ ShieldCheckを追加
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import type { Circle, MapRow, MapLine, Photo, Project, Material } from '../types';
+import type { Circle, MapRow, MapLine, Photo, Project, Material } from '../types'; // ★ MapLineを追加
 import kawaraLogo from '../assets/kawara-logo.png';
 import {
   A4_HEIGHT_PX,
@@ -33,11 +33,10 @@ const LINE_TYPES = [
   { label: 'その他', color: '#ef4444' },   // 赤
 ];
 
-// 凡例コンポーネント（項目欄の隅に配置）
+// 凡例コンポーネント（タイトルテキスト無し）
 function LineLegend() {
   return (
     <div className="flex gap-x-4 gap-y-1 flex-wrap text-xs font-medium border border-gray-300 rounded-lg p-2 bg-white shadow-sm">
-      <div className="w-full text-center text-[10px] font-bold text-gray-400 mb-1">【 凡例：図面の線の意味 】</div>
       {LINE_TYPES.map(type => (
         <div key={type.label} className="flex items-center gap-1.5">
           {/* 四角ではなく「線」の形で見せる */}
