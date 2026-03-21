@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Download, ShieldCheck } from 'lucide-react'; // ★ ShieldCheck（安全の盾アイコン）を追加
+import { ArrowLeft, Download, ShieldCheck } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { toJpeg } from 'html-to-image';
@@ -259,9 +259,9 @@ export default function PdfExportPage() {
             <ProfessionalLoader />
           </div>
 
-          {/* ★ 最高にカッコいいキャッチコピー */}
+          {/* ★ 究極のキャッチコピー */}
           <h2 className="text-2xl sm:text-3xl font-black text-white tracking-[0.2em] mb-4 animate-pulse">
-            見えない仕事に、見える安全。
+            見えない仕事に、見える安心。
           </h2>
           <p className="text-gray-400 font-medium text-lg text-center leading-relaxed">
             {loadingMode === 'pdf' ? '写真台帳を生成しています...' : '全写真をZipファイルにまとめています...'}<br/>
