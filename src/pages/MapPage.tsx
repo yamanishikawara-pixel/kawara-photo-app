@@ -8,6 +8,18 @@ import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { proxyUrl, useDraggablePin } from '../shared/utils';
 import type { MapPin as MapPinT, MapLine, MapPinType, MapRow, Project } from '../types';
 
+// ==========================================
+// ★ 基準線の種類（色と名前）の辞書
+// ==========================================
+const LINE_TYPES = [
+  { label: '流れ壁', color: '#3b82f6' }, // 青
+  { label: '平行壁', color: '#eab308' }, // 黄
+  { label: '棟', color: '#22c55e' },     // 緑
+  { label: '軒先', color: '#f97316' },   // オレンジ
+  { label: '袖', color: '#ec4899' },     // ピンク
+  { label: 'その他', color: '#ef4444' },   // 赤
+];
+
 function MapMarker({ pin, isSelected, onSelect, onDragEnd, onEdit, onSizeChange, onRemove }: any) {
   const sizeMult = pin.size || 1;
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(pin.x, pin.y, onDragEnd);
@@ -53,24 +65,41 @@ function MapLineMarker({ line, isSelected, onSelect, onUpdate, onRemove }: any) 
           backgroundColor: line.color,
           transform: `translate(-50%, -50%) rotate(${line.rotation}deg)`,
           position: 'absolute', cursor: 'pointer', zIndex: isSelected ? 25 : 15,
-          boxShadow: isSelected ? '0 0 0 2px white, 0 0 0 4px #3b82f6' : 'none'
+          boxShadow: isSelected ? '0 0 0 2px white, 0 0 0 4px rgba(59, 130, 246, 0.5)' : 'none'
         }}
       />
       {isSelected && (
         <div onClick={e => e.stopPropagation()} style={{ left: `${line.x}%`, top: `${line.y + 8}%`, transform: 'translateX(-50%)' }} className="absolute z-40 bg-white p-3 rounded-2xl shadow-2xl border border-gray-200 flex flex-col gap-3 w-max">
-           <div className="flex justify-between items-center px-1"><span className="text-xs font-bold text-gray-500">長さ・回転</span></div>
-           <div className="flex gap-1 bg-gray-50 p-1 rounded-xl">
-             <button className="px-3 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({length: line.length + 2})}>長＋</button>
-             <button className="px-3 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({length: Math.max(1, line.length - 2)})}>長ー</button>
-             <button className="px-3 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({rotation: line.rotation + 5})}>↻右</button>
-             <button className="px-3 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({rotation: line.rotation - 5})}>↺左</button>
+           
+           <div className="flex justify-between items-center px-1"><span className="text-xs font-bold text-gray-500">線の種類</span></div>
+           <div className="flex gap-1 bg-gray-50 p-1.5 rounded-xl border border-gray-100">
+             {LINE_TYPES.map(type => (
+               <button
+                 key={type.label}
+                 onClick={() => onUpdate({ color: type.color })}
+                 className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${line.color === type.color ? 'bg-white shadow-md border border-gray-200 scale-110' : 'hover:bg-gray-200 border border-transparent'}`}
+               >
+                 {/* ★ ここを「完全な直線」に修正しました！ */}
+                 <div style={{ backgroundColor: type.color }} className="w-8 h-[3px] rounded-sm mb-1.5"></div>
+                 <span className="text-[10px] font-bold text-gray-600 leading-none">{type.label}</span>
+               </button>
+             ))}
            </div>
+
+           <div className="flex justify-between items-center px-1"><span className="text-xs font-bold text-gray-500">長さ・回転</span></div>
+           <div className="flex gap-1 bg-gray-50 p-1 rounded-xl border border-gray-100">
+             <button className="px-4 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({length: line.length + 2})}>長＋</button>
+             <button className="px-4 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({length: Math.max(1, line.length - 2)})}>長ー</button>
+             <button className="px-4 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({rotation: line.rotation + 5})}>↻右</button>
+             <button className="px-4 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({rotation: line.rotation - 5})}>↺左</button>
+           </div>
+           
            <div className="flex justify-between items-center px-1 mt-1"><span className="text-xs font-bold text-gray-500">位置・その他</span></div>
-           <div className="flex gap-1 bg-gray-50 p-1 rounded-xl items-center">
-             <button className="px-4 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({y: line.y - 1})}>⬆️</button>
-             <button className="px-4 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({y: line.y + 1})}>⬇️</button>
-             <button className="px-4 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({x: line.x - 1})}>⬅️</button>
-             <button className="px-4 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({x: line.x + 1})}>➡️</button>
+           <div className="flex gap-1 bg-gray-50 p-1 rounded-xl border border-gray-100 items-center">
+             <button className="px-5 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({y: line.y - 1})}>⬆️</button>
+             <button className="px-5 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({y: line.y + 1})}>⬇️</button>
+             <button className="px-5 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({x: line.x - 1})}>⬅️</button>
+             <button className="px-5 py-2 bg-white rounded-lg shadow-sm font-bold border border-gray-200" onClick={() => onUpdate({x: line.x + 1})}>➡️</button>
              <button className="px-4 py-2 bg-red-50 text-red-500 rounded-lg shadow-sm font-bold ml-1 border border-red-100" onClick={onRemove}>消す</button>
            </div>
         </div>
@@ -130,6 +159,8 @@ export default function MapPage() {
   const [initializedRows, setInitializedRows] = useState(false);
   
   const [drawMode, setDrawMode] = useState<'pin' | 'line'>('pin');
+  const [selectedLineColor, setSelectedLineColor] = useState(LINE_TYPES[0].color);
+  
   const [lineStart, setLineStart] = useState<{x: number, y: number, mapIndex: number} | null>(null);
   const [selectedPinId, setSelectedPinId] = useState<number | null>(null);
   const [selectedLineId, setSelectedLineId] = useState<number | null>(null);
@@ -217,7 +248,7 @@ export default function MapPage() {
         const length = Math.sqrt(dx*dx + dy*dy);
         const rotation = Math.atan2(dy, dx) * 180 / Math.PI;
 
-        const newLine: MapLine = { id: Date.now(), mapIndex, x: cx, y: cy, length, rotation, thickness: 4, color: '#3b82f6' };
+        const newLine: MapLine = { id: Date.now(), mapIndex, x: cx, y: cy, length, rotation, thickness: 4, color: selectedLineColor };
         const newLines = [...(project.mapLines || []), newLine];
         setProject({ ...project, mapLines: newLines });
         await updateDoc(doc(db, "projects", id!), { mapLines: newLines });
@@ -301,7 +332,6 @@ export default function MapPage() {
           {project.mapUrls && project.mapUrls.length > 0 ? (
             <div className="space-y-6">
               
-              {/* ★ 改善：めちゃくちゃスッキリさせたモード切り替えスイッチ */}
               <div className="flex bg-gray-200 p-1.5 rounded-xl shadow-inner mx-auto">
                 <button onClick={(e) => { e.stopPropagation(); setDrawMode('pin'); setLineStart(null); }} className={`flex-1 py-2 font-bold rounded-lg transition-all text-base ${drawMode === 'pin' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>
                   📍 記号を打つ
@@ -310,7 +340,23 @@ export default function MapPage() {
                   📏 基準線を引く
                 </button>
               </div>
-              {/* 青い説明文は完全に削除しました！ */}
+
+              {drawMode === 'line' && (
+                <div className="bg-white border border-gray-200 rounded-2xl p-3 shadow-sm flex flex-wrap gap-2 justify-center">
+                  <div className="w-full text-center text-xs font-bold text-gray-400 mb-1">▼ 引く線の種類を選んでください ▼</div>
+                  {LINE_TYPES.map(type => (
+                    <button
+                      key={type.label}
+                      onClick={(e) => { e.stopPropagation(); setSelectedLineColor(type.color); }}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold transition-all border ${selectedLineColor === type.color ? 'bg-gray-50 border-gray-300 shadow-md scale-105' : 'bg-white border-transparent hover:bg-gray-50 text-gray-500'}`}
+                    >
+                      {/* ★ ここを「完全な直線」に修正しました！ */}
+                      <div style={{ backgroundColor: type.color }} className="w-8 h-[3px] rounded-sm"></div>
+                      <span style={{ color: selectedLineColor === type.color ? type.color : 'inherit' }} className="leading-none">{type.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
               
               {project.mapUrls.map((u: string, i: number) => {
                 const currentRows = (project.mapRows || []).filter((r) => r.mapIndex === i || (r.mapIndex === undefined && i === 0));
