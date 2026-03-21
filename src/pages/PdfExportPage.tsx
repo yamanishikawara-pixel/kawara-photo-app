@@ -28,6 +28,20 @@ const COVER_FIELDS: { label: string; key: keyof Project }[] = [
   { label: '作成年月日', key: 'creationDate' },
 ];
 
+// ==========================================
+// ★ ロード画面で表示されるランダムTIPS（豆知識）の辞書
+// ==========================================
+const LOADING_TIPS = [
+  "現場の安全第一！今日も一日ご安全に。",
+  "高画質な画像データを圧縮・変換しています...",
+  "写真がない枠は、自動的にPDFから除外されて綺麗に詰まります。",
+  "赤丸はダブルタップ（2回連続タップ）で一瞬で消すことができます。",
+  "魔法の言葉（定型文）は、いつでも自由に追加・変更できます。",
+  "位置図は最大3枚まで登録可能！現場に合わせて使い分けましょう。",
+  "Zipダウンロードを使えば、元請けへ「写真だけ」を爆速で送れます。",
+  "オフライン状態でも、現場での写真登録や文字入力は可能です。",
+];
+
 function createEmptyPhoto(): Photo & { circles?: Circle[] } {
   return {
     id: Math.random(),
@@ -62,6 +76,9 @@ export default function PdfExportPage() {
   const [error, setError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isZipping, setIsZipping] = useState(false);
+  const [loadingMode, setLoadingMode] = useState<'pdf' | 'zip' | null>(null); // ★ ロード画面の切り替え用
+  const [currentTip, setCurrentTip] = useState(LOADING_TIPS[0]); // ★ 現在のTIPS
+  
   const [scale, setScale] = useState(1);
   const [sessionId] = useState(() => Date.now().toString());
 
@@ -96,8 +113,14 @@ export default function PdfExportPage() {
   const handleZipExport = async () => {
     if (!project) return;
     try {
+      // ★ ロード画面をONにして、ランダムなTIPSを選ぶ
+      setCurrentTip(LOADING_TIPS[Math.floor(Math.random() * LOADING_TIPS.length)]);
+      setLoadingMode('zip');
       setIsZipping(true);
       setError(null);
+
+      // 画面の描画を待つための深呼吸
+      await new Promise((r) => setTimeout(r, 100));
 
       const zip = new JSZip();
       const folderName = project.projectName || '現場写真';
@@ -110,6 +133,7 @@ export default function PdfExportPage() {
       if (activePhotos.length === 0) {
         setError("ダウンロードする写真がありません。");
         setIsZipping(false);
+        setLoadingMode(null);
         return;
       }
 
@@ -136,6 +160,7 @@ export default function PdfExportPage() {
       setError('Zipファイルの作成に失敗しました。');
     } finally {
       setIsZipping(false);
+      setLoadingMode(null);
     }
   };
 
@@ -144,11 +169,15 @@ export default function PdfExportPage() {
     try {
       const pages = document.querySelectorAll('.pdf-page');
       if (pages.length === 0) return;
+      
+      // ★ ロード画面をONにして、ランダムなTIPSを選ぶ
+      setCurrentTip(LOADING_TIPS[Math.floor(Math.random() * LOADING_TIPS.length)]);
+      setLoadingMode('pdf');
       setIsExporting(true);
       setError(null);
       window.scrollTo(0, 0);
 
-      // Chromeなら待機時間は最小限でOK
+      // Chromeなら待機時間は最小限でOK（ロード画面を出すために少しだけ待つ）
       await new Promise((r) => setTimeout(r, 300));
 
       const pdf = new jsPDF('p', 'mm', 'a4');
@@ -184,12 +213,12 @@ export default function PdfExportPage() {
       setError(message);
     } finally {
       setIsExporting(false);
+      setLoadingMode(null);
     }
   };
   
   if (!project) return <LoadingSpinner />;
 
-  // ★ ここが安全装置！何があっても最大3枚までしか出力しないように制限
   const mapUrlsToRender = project.mapUrls?.length ? project.mapUrls.slice(0, 3) : [''];
   const mapCount = mapUrlsToRender.length;
   
@@ -221,7 +250,28 @@ export default function PdfExportPage() {
   const pageStyle = { width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})` };
 
   return (
-    <div className="min-h-screen bg-gray-200 p-4 sm:p-6 font-sans flex flex-col items-center pb-12 overflow-x-hidden w-full">
+    <div className="min-h-screen bg-gray-200 p-4 sm:p-6 font-sans flex flex-col items-center pb-12 overflow-x-hidden w-full relative">
+      
+      {/* ==========================================
+          ★ 超カッコいい Now Loading 画面の演出 
+         ========================================== */}
+      {loadingMode && (
+        <div className="fixed inset-0 z-50 bg-gray-900/95 flex flex-col items-center justify-center text-white p-6 backdrop-blur-md transition-all duration-300">
+          <div className="w-24 h-24 border-4 border-gray-700 border-t-red-500 rounded-full animate-spin mb-8 shadow-[0_0_30px_rgba(239,68,68,0.5)]"></div>
+          <h2 className="text-4xl font-black tracking-[0.2em] mb-4 animate-pulse text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">NOW LOADING...</h2>
+          <p className="text-gray-300 font-bold text-xl mb-12">
+            {loadingMode === 'pdf' ? '超高画質PDF台帳を生成しています...' : '全写真をZipファイルにまとめています...'}
+          </p>
+          
+          <div className="max-w-lg w-full bg-gray-800 border border-gray-700 p-6 rounded-2xl shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-2 h-full bg-red-500"></div>
+            <p className="text-red-400 font-bold mb-3 text-sm tracking-wider">💡 現場のTIPS</p>
+            <p className="text-white font-medium leading-relaxed text-lg">{currentTip}</p>
+          </div>
+        </div>
+      )}
+      {/* ========================================== */}
+
       <div className="w-full max-w-2xl mb-6 flex justify-between items-center flex-wrap gap-2">
         <button
           type="button"
@@ -239,7 +289,7 @@ export default function PdfExportPage() {
             className="flex items-center gap-2 bg-green-600 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold shadow-lg text-sm sm:text-base hover:bg-green-700 disabled:opacity-50"
           >
             <Download className="w-5 h-5" />
-            {isZipping ? 'Zip作成中...' : '写真のみ(Zip)'}
+            写真のみ(Zip)
           </button>
 
           <button
@@ -248,7 +298,7 @@ export default function PdfExportPage() {
             disabled={isExporting || isZipping}
             className="flex items-center gap-2 bg-black text-white px-5 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg text-base sm:text-lg hover:bg-gray-800 disabled:opacity-50"
           >
-            {isExporting ? 'PDF作成中...' : 'PDF出力'}
+            PDF出力
           </button>
         </div>
       </div>
