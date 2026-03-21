@@ -378,7 +378,15 @@ export default function PhotoPage() {
                   <MapPin className={`w-6 h-6 ${photo.locationMap ? 'text-red-500' : 'text-gray-400'}`} />
                 </button>
 
-                <div className="relative">
+                {/* ★ここに追加：撮影日の自由編集欄 */}
+                <div className="relative pt-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-sm font-bold text-gray-600">撮影日</label>
+                  </div>
+                  <input type="text" placeholder="例: 2026/3/21" className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" value={photo.shootingDate || ''} onChange={(e) => updatePhoto(photo.id, "shootingDate", e.target.value)} />
+                </div>
+
+                <div className="relative pt-2">
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-sm font-bold text-gray-600">工程</label>
                   </div>
