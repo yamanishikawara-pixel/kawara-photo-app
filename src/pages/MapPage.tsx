@@ -129,7 +129,6 @@ export default function MapPage() {
   const [editingPin, setEditingPin] = useState<MapPinT | null>(null);
   const [initializedRows, setInitializedRows] = useState(false);
   
-  // ★ 新設：モード切り替えと選択状態の管理
   const [drawMode, setDrawMode] = useState<'pin' | 'line'>('pin');
   const [lineStart, setLineStart] = useState<{x: number, y: number, mapIndex: number} | null>(null);
   const [selectedPinId, setSelectedPinId] = useState<number | null>(null);
@@ -185,11 +184,9 @@ export default function MapPage() {
     await updateDoc(doc(db, "projects", id!), { mapUrls: newUrls, mapPins: newPins, mapLines: newLines, mapRows: newRows });
   };
 
-  // ★ 究極の「ハイブリッドUI」マップクリック処理
   const handleMapClick = async (e: React.MouseEvent<HTMLDivElement>, mapIndex: number) => {
     if (!project) return;
     
-    // 選択中のものがあれば、まず「選択解除」だけを行う（誤操作防止）
     if (selectedPinId || selectedLineId) {
       setSelectedPinId(null);
       setSelectedLineId(null);
@@ -211,9 +208,8 @@ export default function MapPage() {
       setEditingPin(newPin);
     } else if (drawMode === 'line') {
       if (!lineStart || lineStart.mapIndex !== mapIndex) {
-        setLineStart({ x, y, mapIndex }); // 1点目（始点）
+        setLineStart({ x, y, mapIndex });
       } else {
-        // 2点目（終点）タップ時：線を計算して引く
         const dx = x - lineStart.x;
         const dy = y - lineStart.y;
         const cx = (lineStart.x + x) / 2;
@@ -226,12 +222,11 @@ export default function MapPage() {
         setProject({ ...project, mapLines: newLines });
         await updateDoc(doc(db, "projects", id!), { mapLines: newLines });
         setLineStart(null);
-        setSelectedLineId(newLine.id); // 引いた直後に微調整パネルを出す
+        setSelectedLineId(newLine.id);
       }
     }
   };
 
-  // ピンの更新系
   const savePin = async (updatedPin: MapPinT) => {
     if (!project) return;
     const newPins = (project.mapPins || []).map((p) => p.id === updatedPin.id ? updatedPin : p);
@@ -252,7 +247,6 @@ export default function MapPage() {
     setSelectedPinId(null);
   };
 
-  // 線の更新系
   const updateLine = async (lineId: number, props: Partial<MapLine>) => {
     if (!project) return;
     const newLines = (project.mapLines || []).map(l => l.id === lineId ? { ...l, ...props } : l);
@@ -267,7 +261,6 @@ export default function MapPage() {
     setSelectedLineId(null);
   };
 
-  // 表の更新系
   const addMapRow = async (mapIndex: number) => {
     if (!project) return;
     const currentRows = (project.mapRows || []).filter((r) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0));
@@ -306,28 +299,18 @@ export default function MapPage() {
           </label>
 
           {project.mapUrls && project.mapUrls.length > 0 ? (
-            <div className="space-y-8">
+            <div className="space-y-6">
               
-              {/* ★ 新設：超直感的なモード切り替えボタン */}
-              <div className="flex gap-2 bg-gray-100 p-2 rounded-2xl shadow-inner border border-gray-200">
-                <button onClick={(e) => { e.stopPropagation(); setDrawMode('pin'); setLineStart(null); }} className={`flex-1 py-3.5 font-bold rounded-xl transition-all text-lg ${drawMode === 'pin' ? 'bg-red-500 text-white shadow-md' : 'bg-transparent text-gray-500'}`}>
+              {/* ★ 改善：めちゃくちゃスッキリさせたモード切り替えスイッチ */}
+              <div className="flex bg-gray-200 p-1.5 rounded-xl shadow-inner mx-auto">
+                <button onClick={(e) => { e.stopPropagation(); setDrawMode('pin'); setLineStart(null); }} className={`flex-1 py-2 font-bold rounded-lg transition-all text-base ${drawMode === 'pin' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>
                   📍 記号を打つ
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); setDrawMode('line'); setSelectedPinId(null); setSelectedLineId(null); }} className={`flex-1 py-3.5 font-bold rounded-xl transition-all text-lg ${drawMode === 'line' ? 'bg-blue-500 text-white shadow-md' : 'bg-transparent text-gray-500'}`}>
+                <button onClick={(e) => { e.stopPropagation(); setDrawMode('line'); setSelectedPinId(null); setSelectedLineId(null); }} className={`flex-1 py-2 font-bold rounded-lg transition-all text-base ${drawMode === 'line' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>
                   📏 基準線を引く
                 </button>
               </div>
-
-              <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 space-y-2">
-                <p className="text-base font-bold text-blue-700 flex items-center gap-2">💡 現在のモード：{drawMode === 'pin' ? '記号マーカー' : '基準線（2点ポンポン）'}</p>
-                <ul className="text-sm text-blue-800 font-medium space-y-1 list-disc pl-5">
-                  {drawMode === 'pin' ? (
-                    <><li>図面を<b>タップ</b>で記号を配置。</li><li>記号をタップで<b>拡大縮小や設定</b>。</li></>
-                  ) : (
-                    <><li>図面を<b>2回タップ（始点・終点）</b>で線を引きます。</li><li>線をタップすると<b>長さや角度を微調整</b>できます。</li></>
-                  )}
-                </ul>
-              </div>
+              {/* 青い説明文は完全に削除しました！ */}
               
               {project.mapUrls.map((u: string, i: number) => {
                 const currentRows = (project.mapRows || []).filter((r) => r.mapIndex === i || (r.mapIndex === undefined && i === 0));
@@ -341,17 +324,14 @@ export default function MapPage() {
                     <div className="relative inline-block" onClick={(e) => handleMapClick(e, i)}>
                       <img src={proxyUrl(u, i)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[60vh] pointer-events-none rounded shadow-sm" alt="" />
                       
-                      {/* マーカーの描画 */}
                       {(project.mapPins || []).filter((p) => p.mapIndex === i).map((pin) => (
                         <MapMarker key={pin.id} pin={pin} isSelected={selectedPinId === pin.id} onSelect={() => setSelectedPinId(pin.id)} onDragEnd={(x: number, y: number) => savePin({...pin, x, y})} onEdit={() => setEditingPin(pin)} onSizeChange={(size: number) => updatePinSize(pin.id, size)} onRemove={() => removePin(pin.id)} />
                       ))}
                       
-                      {/* 基準線の描画 */}
                       {(project.mapLines || []).filter((l) => l.mapIndex === i).map((line) => (
                         <MapLineMarker key={`line-${line.id}`} line={line} isSelected={selectedLineId === line.id} onSelect={() => setSelectedLineId(line.id)} onUpdate={(props: Partial<MapLine>) => updateLine(line.id, props)} onRemove={() => removeLine(line.id)} />
                       ))}
 
-                      {/* 基準線を引いている途中の「始点」の目印 */}
                       {drawMode === 'line' && lineStart && lineStart.mapIndex === i && (
                         <div style={{left: `${lineStart.x}%`, top: `${lineStart.y}%`, transform: 'translate(-50%, -50%)'}} className="absolute w-6 h-6 bg-blue-500/60 border-2 border-white rounded-full animate-ping z-30 pointer-events-none shadow-lg" />
                       )}
