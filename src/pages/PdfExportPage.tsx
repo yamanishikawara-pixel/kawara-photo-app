@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Download } from 'lucide-react';
+import { ArrowLeft, Download, ShieldCheck } from 'lucide-react'; // ★ ShieldCheck（安全の盾アイコン）を追加
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { toJpeg } from 'html-to-image';
@@ -54,22 +54,19 @@ function createEmptyMaterial(): Material {
 }
 
 // ==========================================
-// ★ 汗をかいて頑張る「瓦職人」キャラクターのコンポーネント
+// ★ 絵文字を廃止した「超プロ仕様」のアニメーション
 // ==========================================
-function HardWorkingRoofer() {
+function ProfessionalLoader() {
   return (
-    <div className="relative flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-600 rounded-3xl bg-gray-800 shadow-inner">
-      <div className="relative text-[120px] leading-none mb-6">
-        {/* ヘルメットをかぶった男性 (瓦職人のメタファー) */}
-        👷‍♂️
-        {/* ★ 汗のしずく (飛び散るアニメーション) */}
-        <span className="absolute top-2 right-[-20px] text-5xl animate-[bounce_1s_infinite] opacity-90">💧</span>
-        <span className="absolute top-10 left-[-20px] text-4xl animate-[pulse_1.2s_infinite] delay-150 opacity-80">💧</span>
-        
-        {/* ★ 瓦とハンマーのアニメーション (裏で瓦を葺いている演出) */}
-        <span className="absolute bottom-[-10px] right-[-10px] text-5xl animate-spin-slow">🔨</span>
+    <div className="relative flex flex-col items-center justify-center p-8 mb-4">
+      <div className="relative flex items-center justify-center w-28 h-28">
+        {/* 外側のスタイリッシュな回転リング */}
+        <div className="absolute inset-0 border-4 border-gray-800 border-t-red-600 rounded-full animate-spin shadow-[0_0_20px_rgba(220,38,38,0.3)]"></div>
+        {/* 内側のリング（逆回転でメカニカルな印象に） */}
+        <div className="absolute inset-2 border-4 border-gray-800 border-b-red-800 rounded-full animate-[spin_2s_linear_infinite_reverse]"></div>
+        {/* 中央で明滅する「安全の盾」アイコン */}
+        <ShieldCheck className="w-10 h-10 text-red-500 animate-pulse" />
       </div>
-      <p className="text-red-300 font-bold text-sm tracking-widest text-center">瓦魂、梱包中。</p>
     </div>
   );
 }
@@ -84,7 +81,7 @@ export default function PdfExportPage() {
   const [error, setError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isZipping, setIsZipping] = useState(false);
-  const [loadingMode, setLoadingMode] = useState<'pdf' | 'zip' | null>(null); // ★ ロード画面の切り替え用
+  const [loadingMode, setLoadingMode] = useState<'pdf' | 'zip' | null>(null);
   
   const [scale, setScale] = useState(1);
   const [sessionId] = useState(() => Date.now().toString());
@@ -120,12 +117,10 @@ export default function PdfExportPage() {
   const handleZipExport = async () => {
     if (!project) return;
     try {
-      // ★ ロード画面をONにする（TIPS辞書は廃止）
       setLoadingMode('zip');
       setIsZipping(true);
       setError(null);
 
-      // 画面の描画を待つための深呼吸
       await new Promise((r) => setTimeout(r, 100));
 
       const zip = new JSZip();
@@ -176,13 +171,11 @@ export default function PdfExportPage() {
       const pages = document.querySelectorAll('.pdf-page');
       if (pages.length === 0) return;
       
-      // ★ ロード画面をONにする（TIPS辞書は廃止）
       setLoadingMode('pdf');
       setIsExporting(true);
       setError(null);
       window.scrollTo(0, 0);
 
-      // Chromeなら待機時間は最小限でOK（ロード画面を出すために少しだけ待つ）
       await new Promise((r) => setTimeout(r, 300));
 
       const pdf = new jsPDF('p', 'mm', 'a4');
@@ -192,12 +185,11 @@ export default function PdfExportPage() {
         const pageEl = pages[i] as HTMLElement;
         pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
         
-        await new Promise((r) => setTimeout(r, 300)); // スムーズなスクロール待機のみ
+        await new Promise((r) => setTimeout(r, 300));
 
         const currentTransform = pageEl.style.transform;
         pageEl.style.transform = 'scale(1)';
 
-        // Chrome専用：一切の制限なく、最高画質（1.5）で一発出力！
         const dataUrl = await toJpeg(pageEl, {
           quality: 0.98,
           pixelRatio: 1.5,
@@ -258,26 +250,26 @@ export default function PdfExportPage() {
     <div className="min-h-screen bg-gray-200 p-4 sm:p-6 font-sans flex flex-col items-center pb-12 overflow-x-hidden w-full relative">
       
       {/* ==========================================
-          ★ 汗かき瓦職人さんが頑張る Now Loading 画面 
+          ★ 洗練されたプロ仕様の Now Loading 画面 
          ========================================== */}
       {loadingMode && (
         <div className="fixed inset-0 z-50 bg-gray-950/98 flex flex-col items-center justify-center text-white p-6 backdrop-blur-lg transition-all duration-300">
           
-          <div className="mb-12">
-            <HardWorkingRoofer />
+          <div className="mb-4">
+            <ProfessionalLoader />
           </div>
 
-          <h2 className="text-2xl font-black text-white tracking-[0.3em] mb-4 animate-pulse">
-            瓦屋の魂を込めて、資料を梱包中。
+          {/* ★ 最高にカッコいいキャッチコピー */}
+          <h2 className="text-2xl sm:text-3xl font-black text-white tracking-[0.2em] mb-4 animate-pulse">
+            見えない仕事に、見える安全。
           </h2>
           <p className="text-gray-400 font-medium text-lg text-center leading-relaxed">
-            {loadingMode === 'pdf' ? '超高画質なPDF写真台帳を生成しています。' : '全写真を1つのZipファイルにまとめています。'}<br/>
-            現場の記録が形になるまで、少々お待ちください。
+            {loadingMode === 'pdf' ? '写真台帳を生成しています...' : '全写真をZipファイルにまとめています...'}<br/>
+            少々お待ちください。
           </p>
           
-          {/* シンプルなプログレスバー (ゲーム的Tipsを廃止し、ビジネスツール系に変更) */}
-          <div className="w-full max-w-sm mt-12 bg-gray-700 h-2 rounded-full overflow-hidden border border-gray-600 shadow-inner">
-            <div className="bg-red-500 h-full w-[60%] animate-[pulse_1.5s_infinite] rounded-full"></div>
+          <div className="w-full max-w-sm mt-12 bg-gray-800 h-1.5 rounded-full overflow-hidden shadow-inner">
+            <div className="bg-red-600 h-full w-[60%] animate-[pulse_1.5s_infinite] rounded-full"></div>
           </div>
         </div>
       )}
