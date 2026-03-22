@@ -145,7 +145,7 @@ export default function PdfExportPage() {
       const htmlContent = container.innerHTML;
       
       // Googleの工場（Cloud Functions）へデータを送る
-      // ↓ここをターミナルのURL（https://...）に書き換えてください！
+      // ↓ここをターミナルのURL（https://console.firebase.google.com/project/kawara-photo-app/overview）に書き換えてください！
       const response = await fetch('【ここにURLを貼り付け】', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
