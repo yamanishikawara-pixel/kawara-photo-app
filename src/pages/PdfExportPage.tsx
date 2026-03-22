@@ -144,24 +144,42 @@ export default function PdfExportPage() {
       // 2. HTMLの中身を取り出す
       const htmlContent = container.innerHTML;
 
-      // ★追加：現在ブラウザに適用されているCSSスタイルを抽出する
-      const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-        .map(styleEl => styleEl.outerHTML)
-        .join('');
-      
       // 3. Googleの工場（Cloud Functions）へデータを送る
-      // ↓ここは社長が貼り付けたURLをそのまま使ってください！
+      // ↓ここのURLを書き換えてください！
       const response = await fetch('【ここに社長のURLが入る】', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // ★修正：CSSとHTMLを合体させて、完全なページとして送る
         body: JSON.stringify({
-          html: `<!DOCTYPE html><html><head><meta charset="utf-8">${styles}<style>body{margin:0;padding:0;background-color:#ffffff;}.pdf-page{transform:scale(1)!important;box-shadow:none!important;}</style></head><body>${htmlContent}</body></html>`
+          html: `<!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <script src="https://cdn.tailwindcss.com"></script>
+            <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
+            <style>
+              body { 
+                margin: 0; 
+                padding: 0; 
+                background-color: #ffffff; 
+                font-family: 'Noto Sans JP', sans-serif; 
+              }
+              .pdf-page { 
+                transform: scale(1) !important; 
+                box-shadow: none !important; 
+                page-break-after: always; 
+              }
+            </style>
+          </head>
+          <body>
+            ${htmlContent}
+          </body>
+          </html>`
         }),
       });
 
       if (!response.ok) throw new Error('サーバーでのPDF生成に失敗しました');
 
+      // 届いたデータをPDFとしてダウンロード
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
