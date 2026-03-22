@@ -7,7 +7,8 @@ import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import type { Circle, MapRow, MapLine, Photo, Project, Material } from '../types';
+// ★ エラーの原因だった MapLine の読み込みを削除しました
+import type { Circle, MapRow, Photo, Project, Material } from '../types';
 import kawaraLogo from '../assets/kawara-logo.png';
 import {
   A4_HEIGHT_PX,
@@ -180,7 +181,6 @@ export default function PdfExportPage() {
       setError(null);
       window.scrollTo(0, 0);
 
-      // ★ スマホ（iPhone）のための長めの待機時間（画面の描画を確実に待つ）
       await new Promise((r) => setTimeout(r, 800));
 
       const pdf = new jsPDF('p', 'mm', 'a4');
@@ -189,36 +189,27 @@ export default function PdfExportPage() {
       for (let i = 0; i < pages.length; i++) {
         const pageEl = pages[i] as HTMLElement;
         pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
-        
-        // ★ ページめくり後の息継ぎ
         await new Promise((r) => setTimeout(r, 400));
-
         const currentTransform = pageEl.style.transform;
         pageEl.style.transform = 'scale(1)';
 
-        // ==========================================
-        // ★ 必殺技：iPhone画像真っ白バグ対策の「ウォームアップ（空打ち）」
-        // ==========================================
         try {
+          // ★ エラーの原因だった useCORS を削除しました（cacheBustのみでiPhone対策します）
           await toJpeg(pageEl, { 
-            cacheBust: true, // iPhoneのキャッシュの悪さを防ぐ
-            pixelRatio: 0.1, // 空打ちなので超低画質でOK
+            cacheBust: true, 
+            pixelRatio: 0.1, 
             quality: 0.1 
           });
-        } catch (e) {
-          console.warn("Warmup error (safe to ignore):", e);
-        }
+        } catch (e) {}
         
-        // 空打ちした後に少し待つ（ここでiPhoneが画像をメモリに展開します）
         await new Promise((r) => setTimeout(r, 300));
-        // ==========================================
 
-        // ★ 本番のPDF書き出し
+        // ★ 本番書き出し（ここも useCORS を削除）
         const dataUrl = await toJpeg(pageEl, {
-          quality: 0.95, // 0.98だと14ページ等の大容量時にiPhoneのメモリがパンクするので0.95に最適化
-          pixelRatio: 1.5,
+          quality: 0.90,
+          pixelRatio: 1.2,
           backgroundColor: '#ffffff',
-          cacheBust: true, // 本番でもキャッシュ無視を強制
+          cacheBust: true,
         });
 
         pageEl.style.transform = currentTransform;
@@ -348,7 +339,7 @@ export default function PdfExportPage() {
                               )}
                             </div>
                         ))}
-                        {(project.mapLines ?? []).filter((l) => l.mapIndex === mapIndex).map((line) => (
+                        {(project.mapLines ?? []).filter((l) => l.mapIndex === mapIndex).map((line: any) => (
                           <div key={`line-${line.id}`} style={{ position: 'absolute', left: `${line.x}%`, top: `${line.y}%`, width: `${line.length}%`, height: `${line.thickness}px`, backgroundColor: line.color, transform: `translate(-50%, -50%) rotate(${line.rotation}deg)`, transformOrigin: 'center center', zIndex: 5 }} />
                         ))}
                       </div>

@@ -37,21 +37,21 @@ export interface MapPin {
   label: string;
   type: MapPinType;
   rotation: number;
-  size?: number; // ★ 新設：マーカーの拡大縮小用
+  size?: number;
 }
 
 // ==========================================
-// ★ 新設：基準線（直線）用の設計図
+// ★ これがないとエラーになります！（基準線の設計図）
 // ==========================================
 export interface MapLine {
   id: number;
   mapIndex: number;
-  x: number;          // 中心のX座標
-  y: number;          // 中心のY座標
-  length: number;     // 長さ
-  rotation: number;   // 角度
-  thickness: number;  // 太さ
-  color: string;      // 色
+  x: number;
+  y: number;
+  length: number;
+  rotation: number;
+  thickness: number;
+  color: string;
 }
 
 export interface Material {
@@ -74,7 +74,7 @@ export interface Project {
   mapUrls: string[];
   mapRows: MapRow[];
   mapPins: MapPin[];
-  mapLines?: MapLine[]; // ★ 新設：基準線の箱
+  mapLines?: MapLine[]; // ★ ここにも追加
   materials?: Material[];
   createdAt?: string;
 }
