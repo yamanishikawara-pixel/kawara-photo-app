@@ -133,49 +133,39 @@ export default function PdfExportPage() {
 
   const handleExport = async () => {
     if (!project) return;
+    setIsExporting(true);
+    setError(null);
 
     try {
-      const pages = document.querySelectorAll('.pdf-page');
-      if (pages.length === 0) return;
+      // PDF化したい外側の枠（ページが並んでいる場所）を取得
+      const container = document.querySelector('.flex.flex-col.gap-8.items-center.w-full');
+      if (!container) return;
+
+      // HTMLの中身を取り出す
+      const htmlContent = container.innerHTML;
       
-      setIsExporting(true);
-      setError(null);
-      window.scrollTo(0, 0);
+      // Googleの工場（Cloud Functions）へデータを送る
+      // ↓ここをターミナルのURL（https://...）に書き換えてください！
+      const response = await fetch('【ここにURLを貼り付け】', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ html: `<html><head><style>body{margin:0;padding:0;}</style></head><body>${htmlContent}</body></html>` }),
+      });
 
-      await new Promise((r) => setTimeout(r, 800));
+      if (!response.ok) throw new Error('サーバーでのPDF生成に失敗しました');
 
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-
-      for (let i = 0; i < pages.length; i++) {
-        const pageEl = pages[i] as HTMLElement;
-        pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
-        await new Promise((r) => setTimeout(r, 400));
-        
-        const currentTransform = pageEl.style.transform;
-        pageEl.style.transform = 'scale(1)';
-
-        const canvas = await html2canvas(pageEl, {
-          scale: 1.5,
-          useCORS: true,
-          allowTaint: false,
-          backgroundColor: '#ffffff',
-          logging: false,
-        });
-
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.90);
-        pageEl.style.transform = currentTransform;
-
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-        if (i > 0) pdf.addPage();
-        pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-      }
-
-      pdf.save(`${project.projectName || '写真台帳'}.pdf`);
-
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'PDFの作成に失敗しました。';
-      setError(message);
+      // 届いたデータをPDFとしてダウンロード
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${project.projectName || '現場報告書'}_${new Date().getTime()}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      
+    } catch (err: any) {
+      console.error(err);
+      setError('PDF作成中にエラーが発生しました。裏サーバーの稼働状況を確認してください。');
     } finally {
       setIsExporting(false);
     }
