@@ -38,9 +38,10 @@ export const generatePdf = onRequest({
 
       await browser.close();
 
-      // PDFを「文字」に変換して安全に送る
-      const base64Pdf = Buffer.from(pdfBuffer).toString('base64');
-      res.status(200).json({ pdfBase64: base64Pdf });
+     res.setHeader("Content-Type", "application/pdf");
+res.setHeader("Content-Disposition", 'attachment; filename="report.pdf"');
+res.setHeader("Cache-Control", "no-store");
+res.status(200).send(Buffer.from(pdfBuffer));
 
     } catch (error) {
       logger.error("PDF生成エラー", error);

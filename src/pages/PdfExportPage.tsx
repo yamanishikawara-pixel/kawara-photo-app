@@ -191,32 +191,28 @@ const handleExport = async () => {
         }),
       });
 
-      if (!response.ok) throw new Error('サーバーエラーが発生しました');
+     if (!response.ok) {
+  const errText = await response.text();
+  throw new Error(`サーバーエラー: ${response.status} ${errText}`);
+}
 
-      // ★最強の対策：届いた「文字」を、iPhoneの中で綺麗なPDFに再組み立てする！
-      const data = await response.json();
-      if (!data.pdfBase64) throw new Error('PDFデータが空です');
+const contentType = response.headers.get('content-type') || '';
 
-      const byteCharacters = atob(data.pdfBase64);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'application/pdf' });
+if (!contentType.includes('application/pdf')) {
+  const errText = await response.text();
+  throw new Error(`PDFが返っていません: ${errText}`);
+}
 
-      // ダウンロード処理
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${project.projectName || '現場報告書'}_${new Date().getTime()}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+const blob = await response.blob();
 
-      setTimeout(() => {
-        window.URL.revokeObjectURL(url);
-      }, 10000);
+if (blob.size === 0) {
+  throw new Error('PDFデータが空です');
+}
+
+saveAs(
+  blob,
+  `${project.projectName || '現場報告書'}_${Date.now()}.pdf`
+);
       
     } catch (err: any) {
       console.error(err);
