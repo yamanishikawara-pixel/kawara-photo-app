@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Download, ShieldCheck } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-// ★ 元の賢いエンジンに戻します！（oklchエラー解決）
+// ★ エラーの原因だった html2canvas を捨て、元のエンジンに戻します！
 import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import JSZip from 'jszip';
@@ -177,10 +177,10 @@ export default function PdfExportPage() {
       setError(null);
       window.scrollTo(0, 0);
 
-      await new Promise((r) => setTimeout(r, 800));
+      await new Promise((r) => setTimeout(r, 500));
 
       // ==========================================
-      // ★ 究極の真っ黒バグ対策：画像を完全に読み込んでから進む！
+      // ★ 最終奥義：iPhoneのメモリパンクを防ぐ「画像圧縮＆密輸」作戦
       // ==========================================
       const imgs = document.querySelectorAll('.pdf-page img');
       originalSrcs = new Map<HTMLImageElement, string>();
@@ -189,35 +189,58 @@ export default function PdfExportPage() {
         const img = imgs[i] as HTMLImageElement;
         if (img.src && img.src.startsWith('http')) {
           try {
-            // 画像のデータを取得
+            // 1. 画像を安全にダウンロード
             const res = await fetch(img.src);
             const blob = await res.blob();
-            // 暗号文字（Base64）に変換
-            const base64 = await new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result as string);
-              reader.readAsDataURL(blob);
-            });
+            const objectUrl = URL.createObjectURL(blob);
             
-            originalSrcs.set(img, img.src); // 元のURLを記録
-
-            // ★ ここが真っ黒バグの真犯人でした！
-            // 画像が画面に「完全に表示されるまで」絶対に待つ！
-            await new Promise<void>((resolve) => {
-              img.onload = () => resolve();   // 表示完了でOK
-              img.onerror = () => resolve();  // エラーでも止まらないようにOK
-              img.src = base64;               // 画像を差し替える
-            });
-
-            img.removeAttribute('crossOrigin');
+            // 2. メモリ上に見えない画像を作る
+            const tempImg = new Image();
+            tempImg.src = objectUrl;
+            await new Promise((resolve) => { tempImg.onload = resolve; tempImg.onerror = resolve; });
+            
+            // 3. ★iPhoneがパンクしないサイズ（最大800px）に縮小計算！真っ黒バグの原因をここで排除！
+            const MAX_SIZE = 800;
+            let w = tempImg.width;
+            let h = tempImg.height;
+            if (w > MAX_SIZE || h > MAX_SIZE) {
+                if (w > h) {
+                    h = Math.round((MAX_SIZE / w) * h);
+                    w = MAX_SIZE;
+                } else {
+                    w = Math.round((MAX_SIZE / h) * w);
+                    h = MAX_SIZE;
+                }
+            }
+            
+            // 4. キャンバスで圧縮して暗号文字（Base64）にする
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(tempImg, 0, 0, w, h);
+              const base64 = canvas.toDataURL('image/jpeg', 0.7); // 70%の画質で超軽量化
+              
+              originalSrcs.set(img, img.src); // 後で戻すために記録
+              
+              // 5. 画面の画像を軽い暗号文字にすり替える
+              await new Promise<void>((resolve) => {
+                img.onload = () => resolve();
+                img.onerror = () => resolve();
+                img.src = base64;
+              });
+            }
+            
+            URL.revokeObjectURL(objectUrl); // ゴミ掃除
           } catch (e) {
-            console.warn('画像変換スキップ:', e);
+            console.warn('画像最適化スキップ:', e);
           }
         }
       }
       
       window.scrollTo(0, 0);
-      await new Promise((r) => setTimeout(r, 800));
+      await new Promise((r) => setTimeout(r, 1000));
       // ==========================================
 
       const pdf = new jsPDF('p', 'mm', 'a4');
@@ -232,16 +255,17 @@ export default function PdfExportPage() {
         pageEl.style.transform = 'scale(1)';
 
         try {
-          await toJpeg(pageEl, { pixelRatio: 0.1, quality: 0.1 });
+          await toJpeg(pageEl, { pixelRatio: 0.1, quality: 0.1 }); // 空打ち
         } catch (e) {}
         
         await new Promise((r) => setTimeout(r, 200));
 
+        // 本番書き出し（余計な通信は一切させない設定）
         const dataUrl = await toJpeg(pageEl, {
           quality: 0.85,
-          pixelRatio: 1.0, // iPhoneのメモリに優しい設定
+          pixelRatio: 1.0,
           backgroundColor: '#ffffff',
-          cacheBust: false // すでにBase64なので不要
+          cacheBust: false
         });
 
         pageEl.style.transform = currentTransform;
@@ -257,7 +281,7 @@ export default function PdfExportPage() {
       const message = err instanceof Error ? err.message : 'PDFの作成に失敗しました。';
       setError(message);
     } finally {
-      // 処理が終わったら画像を元のURLに戻す
+      // 処理が終わったら画像を元のURLに戻してメモリを軽くする
       if (originalSrcs) {
         originalSrcs.forEach((src, img) => {
           if (img) {
