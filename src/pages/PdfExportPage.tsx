@@ -44,7 +44,58 @@ function createEmptyPhoto(): Photo & { circles?: Circle[] } {
 function createEmptyMaterial(): Material {
   return { id: Math.random(), image: null, name: '', manufacturer: '', specification: '', remarks: '', rotation: 0 };
 }
+function isIOSDevice() {
+  const ua = window.navigator.userAgent;
+  const platform = window.navigator.platform;
 
+  return (
+    /iPhone|iPad|iPod/.test(ua) ||
+    (platform === 'MacIntel' && window.navigator.maxTouchPoints > 1)
+  );
+}
+
+async function waitForImagesInElement(element: HTMLElement) {
+  const images = Array.from(element.querySelectorAll('img'));
+
+  await Promise.all(
+    images.map(async (img) => {
+      if (!img.src) return;
+
+      if (img.complete && img.naturalWidth > 0) {
+        if (typeof img.decode === 'function') {
+          try {
+            await img.decode();
+          } catch {}
+        }
+        return;
+      }
+
+      await new Promise<void>((resolve) => {
+        let finished = false;
+
+        const done = () => {
+          if (finished) return;
+          finished = true;
+          img.removeEventListener('load', done);
+          img.removeEventListener('error', done);
+          window.clearTimeout(timer);
+          resolve();
+        };
+
+        const timer = window.setTimeout(done, 10000);
+
+        img.addEventListener('load', done, { once: true });
+        img.addEventListener('error', done, { once: true });
+      });
+
+      if (typeof img.decode === 'function') {
+        try {
+          await img.decode();
+        } catch {}
+      }
+    })
+  );
+}
 function ProfessionalLoader() {
   return (
     <div className="relative flex flex-col items-center justify-center p-8 mb-4">
@@ -143,58 +194,74 @@ export default function PdfExportPage() {
       setError('Zipファイルの作成に失敗しました。');
     } finally { setIsZipping(false); setLoadingMode(null); }
   };
+const handleExport = async () => {
+  if (!project) return;
 
-  const handleExport = async () => {
-    if (!project) return;
+  try {
+    const pages = Array.from(document.querySelectorAll<HTMLElement>('.pdf-page'));
+    if (pages.length === 0) return;
 
-    try {
-      const pages = document.querySelectorAll('.pdf-page');
-      if (pages.length === 0) return;
-      
-      setLoadingMode('pdf');
-      setIsExporting(true);
-      setError(null);
-      window.scrollTo(0, 0);
+    setLoadingMode('pdf');
+    setIsExporting(true);
+    setError(null);
 
-      await new Promise((r) => setTimeout(r, 800));
+    window.scrollTo({ top: 0, behavior: 'auto' });
 
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
+    const isIOS = isIOSDevice();
+    const renderScale = isIOS ? 1 : 1.5;
 
-      for (let i = 0; i < pages.length; i++) {
-        const pageEl = pages[i] as HTMLElement;
-        pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
-        await new Promise((r) => setTimeout(r, 400));
-        
-        const currentTransform = pageEl.style.transform;
-        pageEl.style.transform = 'scale(1)';
+    await new Promise((r) => setTimeout(r, isIOS ? 300 : 500));
 
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+
+    for (let i = 0; i < pages.length; i++) {
+      const pageEl = pages[i];
+
+      pageEl.scrollIntoView({ behavior: 'auto', block: 'center' });
+
+      // 画像の完全読込待ち
+      await waitForImagesInElement(pageEl);
+      await new Promise((r) => setTimeout(r, isIOS ? 150 : 250));
+
+      const currentTransform = pageEl.style.transform;
+      pageEl.style.transform = 'none';
+
+      try {
         const canvas = await html2canvas(pageEl, {
-          scale: 1.5,
+          scale: renderScale,
           useCORS: true,
           allowTaint: false,
           backgroundColor: '#ffffff',
           logging: false,
+          imageTimeout: 15000,
+          removeContainer: true,
         });
 
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.90);
-        pageEl.style.transform = currentTransform;
-
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
         const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
         if (i > 0) pdf.addPage();
         pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+
+        // iPhone向け：canvasメモリ解放
+        canvas.width = 0;
+        canvas.height = 0;
+      } finally {
+        pageEl.style.transform = currentTransform;
       }
-
-      pdf.save(`${project.projectName || '写真台帳'}.pdf`);
-
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'PDFの作成に失敗しました。';
-      setError(message);
-    } finally {
-      setIsExporting(false);
-      setLoadingMode(null);
     }
-  };
+
+    pdf.save(`${project.projectName || '写真台帳'}.pdf`);
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : 'PDFの作成に失敗しました。';
+    setError(message);
+  } finally {
+    setIsExporting(false);
+    setLoadingMode(null);
+  }
+};
   
   if (!project) return <LoadingSpinner />;
 
