@@ -3,8 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Download, ShieldCheck } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-// ★ 欠陥のあった html-to-image を捨て、新エンジン html2canvas を搭載！
-import html2canvas from 'html2canvas';
+// ★ 元の賢いエンジンに戻します！（oklchエラー解決）
+import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -166,6 +166,7 @@ export default function PdfExportPage() {
 
   const handleExport = async () => {
     if (!project) return;
+    let originalSrcs: Map<HTMLImageElement, string> | null = null;
 
     try {
       const pages = document.querySelectorAll('.pdf-page');
@@ -176,8 +177,48 @@ export default function PdfExportPage() {
       setError(null);
       window.scrollTo(0, 0);
 
-      // 画面を落ち着かせるための待機時間
       await new Promise((r) => setTimeout(r, 800));
+
+      // ==========================================
+      // ★ 究極の真っ黒バグ対策：画像を完全に読み込んでから進む！
+      // ==========================================
+      const imgs = document.querySelectorAll('.pdf-page img');
+      originalSrcs = new Map<HTMLImageElement, string>();
+
+      for (let i = 0; i < imgs.length; i++) {
+        const img = imgs[i] as HTMLImageElement;
+        if (img.src && img.src.startsWith('http')) {
+          try {
+            // 画像のデータを取得
+            const res = await fetch(img.src);
+            const blob = await res.blob();
+            // 暗号文字（Base64）に変換
+            const base64 = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(blob);
+            });
+            
+            originalSrcs.set(img, img.src); // 元のURLを記録
+
+            // ★ ここが真っ黒バグの真犯人でした！
+            // 画像が画面に「完全に表示されるまで」絶対に待つ！
+            await new Promise<void>((resolve) => {
+              img.onload = () => resolve();   // 表示完了でOK
+              img.onerror = () => resolve();  // エラーでも止まらないようにOK
+              img.src = base64;               // 画像を差し替える
+            });
+
+            img.removeAttribute('crossOrigin');
+          } catch (e) {
+            console.warn('画像変換スキップ:', e);
+          }
+        }
+      }
+      
+      window.scrollTo(0, 0);
+      await new Promise((r) => setTimeout(r, 800));
+      // ==========================================
 
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -185,30 +226,27 @@ export default function PdfExportPage() {
       for (let i = 0; i < pages.length; i++) {
         const pageEl = pages[i] as HTMLElement;
         pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
-        
-        await new Promise((r) => setTimeout(r, 500)); // スクロール後の息継ぎ
+        await new Promise((r) => setTimeout(r, 400));
         
         const currentTransform = pageEl.style.transform;
-        pageEl.style.transform = 'scale(1)'; // キャプチャのために等倍に戻す
+        pageEl.style.transform = 'scale(1)';
 
-        // ==========================================
-        // ★ 新エンジン「html2canvas」によるiPhone完全突破処理
-        // ==========================================
-        const canvas = await html2canvas(pageEl, {
-          scale: 1.2, // iPhoneのメモリを圧迫せず、かつ綺麗な画質
-          useCORS: true, // Google倉庫の画像を絶対にブロックさせない
-          allowTaint: false,
+        try {
+          await toJpeg(pageEl, { pixelRatio: 0.1, quality: 0.1 });
+        } catch (e) {}
+        
+        await new Promise((r) => setTimeout(r, 200));
+
+        const dataUrl = await toJpeg(pageEl, {
+          quality: 0.85,
+          pixelRatio: 1.0, // iPhoneのメモリに優しい設定
           backgroundColor: '#ffffff',
-          logging: false, // 余計な処理を止めて高速化
+          cacheBust: false // すでにBase64なので不要
         });
-
-        // 出来上がった画像をPDF用に変換
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        // ==========================================
 
         pageEl.style.transform = currentTransform;
 
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        const pdfHeight = (pageEl.offsetHeight * pdfWidth) / pageEl.offsetWidth;
         if (i > 0) pdf.addPage();
         pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
       }
@@ -219,6 +257,15 @@ export default function PdfExportPage() {
       const message = err instanceof Error ? err.message : 'PDFの作成に失敗しました。';
       setError(message);
     } finally {
+      // 処理が終わったら画像を元のURLに戻す
+      if (originalSrcs) {
+        originalSrcs.forEach((src, img) => {
+          if (img) {
+            img.src = src;
+            img.setAttribute('crossOrigin', 'anonymous');
+          }
+        });
+      }
       setIsExporting(false);
       setLoadingMode(null);
     }
