@@ -208,7 +208,7 @@ const handleExport = async () => {
     window.scrollTo({ top: 0, behavior: 'auto' });
 
     const isIOS = isIOSDevice();
-    const renderScale = isIOS ? 1 : 1.5;
+const renderScale = isIOS ? 1.25 : 1.5;
 
     await new Promise((r) => setTimeout(r, isIOS ? 300 : 500));
 
@@ -238,11 +238,11 @@ const handleExport = async () => {
           removeContainer: true,
         });
 
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.98);
         const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
 
         if (i > 0) pdf.addPage();
-        pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+        pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'SLOW');
 
         // iPhone向け：canvasメモリ解放
         canvas.width = 0;
