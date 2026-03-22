@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Download, ShieldCheck } from 'lucide-react'; // ★ ShieldCheckを追加
+import { ArrowLeft, Download, ShieldCheck } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import type { Circle, MapRow, MapLine, Photo, Project, Material } from '../types'; // ★ MapLineを追加
+import type { Circle, MapRow, MapLine, Photo, Project, Material } from '../types';
 import kawaraLogo from '../assets/kawara-logo.png';
 import {
   A4_HEIGHT_PX,
@@ -20,26 +20,20 @@ import { LoadingSpinner } from '../shared/LoadingSpinner';
 
 type ProjectWithOptionals = Project;
 
-// ==========================================
-// ★ ここから新設：お客様に「線の意味」を伝えるための凡例（Legend）
-// ==========================================
-// MapPage.tsxと同じ設定を使う
 const LINE_TYPES = [
-  { label: '流れ壁', color: '#3b82f6' }, // 青
-  { label: '平行壁', color: '#eab308' }, // 黄
-  { label: '棟', color: '#22c55e' },     // 緑
-  { label: '軒先', color: '#f97316' },   // オレンジ
-  { label: '袖', color: '#ec4899' },     // ピンク
-  { label: 'その他', color: '#ef4444' },   // 赤
+  { label: '流れ壁', color: '#3b82f6' },
+  { label: '平行壁', color: '#eab308' },
+  { label: '棟', color: '#22c55e' },    
+  { label: '軒先', color: '#f97316' },  
+  { label: '袖', color: '#ec4899' },    
+  { label: 'その他', color: '#ef4444' },  
 ];
 
-// 凡例コンポーネント（タイトルテキスト無し）
 function LineLegend() {
   return (
     <div className="flex gap-x-4 gap-y-1 flex-wrap text-xs font-medium border border-gray-300 rounded-lg p-2 bg-white shadow-sm">
       {LINE_TYPES.map(type => (
         <div key={type.label} className="flex items-center gap-1.5">
-          {/* 四角ではなく「線」の形で見せる */}
           <div style={{ backgroundColor: type.color }} className="w-6 h-0.5 rounded-full" />
           <span className="text-gray-700">{type.label}</span>
         </div>
@@ -47,7 +41,6 @@ function LineLegend() {
     </div>
   );
 }
-// ==========================================
 
 const COVER_FIELDS: { label: string; key: keyof Project }[] = [
   { label: '工事件名', key: 'projectName' },
@@ -82,24 +75,17 @@ function createEmptyMaterial(): Material {
   };
 }
 
-// ==========================================
-// ★ 洗練されたプロ仕様の Now Loading 画面 
-// ==========================================
 function ProfessionalLoader() {
   return (
     <div className="relative flex flex-col items-center justify-center p-8 mb-4">
       <div className="relative flex items-center justify-center w-28 h-28">
-        {/* 外側のスタイリッシュな回転リング */}
         <div className="absolute inset-0 border-4 border-gray-800 border-t-red-600 rounded-full animate-spin shadow-[0_0_20px_rgba(220,38,38,0.3)]"></div>
-        {/* 内側のリング（逆回転でメカニカルな印象に） */}
         <div className="absolute inset-2 border-4 border-gray-800 border-b-red-800 rounded-full animate-[spin_2s_linear_infinite_reverse]"></div>
-        {/* 中央で明滅する「安全の盾」アイコン */}
         <ShieldCheck className="w-10 h-10 text-red-500 animate-pulse" />
       </div>
     </div>
   );
 }
-// ==========================================
 
 export default function PdfExportPage() {
   const { id } = useParams();
@@ -205,7 +191,8 @@ export default function PdfExportPage() {
       setError(null);
       window.scrollTo(0, 0);
 
-      await new Promise((r) => setTimeout(r, 300));
+      // スマホ用に少し待機時間を長めに確保
+      await new Promise((r) => setTimeout(r, 600));
 
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -214,15 +201,19 @@ export default function PdfExportPage() {
         const pageEl = pages[i] as HTMLElement;
         pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
         
-        await new Promise((r) => setTimeout(r, 300));
+        await new Promise((r) => setTimeout(r, 400));
 
         const currentTransform = pageEl.style.transform;
         pageEl.style.transform = 'scale(1)';
 
+        // ==========================================
+        // ★ 画像が荒い原因を解消！超高画質モード（pixelRatio: 3）
+        // ==========================================
         const dataUrl = await toJpeg(pageEl, {
-          quality: 0.98,
-          pixelRatio: 1.5,
+          quality: 1.0,      // 画質を最高に
+          pixelRatio: 3,     // ★ 解像度を1.5から3に引き上げ！
           backgroundColor: '#ffffff',
+          cacheBust: true,   // 画像の再読込を強制して真っ白バグを予防
         });
 
         pageEl.style.transform = currentTransform;
@@ -278,9 +269,6 @@ export default function PdfExportPage() {
   return (
     <div className="min-h-screen bg-gray-200 p-4 sm:p-6 font-sans flex flex-col items-center pb-12 overflow-x-hidden w-full relative">
       
-      {/* ==========================================
-          ★ 洗練されたプロ仕様の Now Loading 画面 
-         ========================================== */}
       {loadingMode && (
         <div className="fixed inset-0 z-50 bg-gray-950/98 flex flex-col items-center justify-center text-white p-6 backdrop-blur-lg transition-all duration-300">
           
@@ -288,7 +276,6 @@ export default function PdfExportPage() {
             <ProfessionalLoader />
           </div>
 
-          {/* ★ 最高にカッコいいキャッチコピー */}
           <h2 className="text-2xl sm:text-3xl font-black text-white tracking-[0.2em] mb-4 animate-pulse">
             見えない仕事に、見える安心。
           </h2>
@@ -302,7 +289,6 @@ export default function PdfExportPage() {
           </div>
         </div>
       )}
-      {/* ========================================== */}
 
       <div className="w-full max-w-2xl mb-6 flex justify-between items-center flex-wrap gap-2">
         <button
@@ -420,7 +406,6 @@ export default function PdfExportPage() {
                             </div>
                           ))}
                         
-                        {/* ★ PDF用基準線（新設） */}
                         {(project.mapLines ?? []).filter((l) => l.mapIndex === mapIndex).map((line) => (
                           <div key={`line-${line.id}`} style={{
                             position: 'absolute',
@@ -429,7 +414,7 @@ export default function PdfExportPage() {
                             backgroundColor: line.color,
                             transform: `translate(-50%, -50%) rotate(${line.rotation}deg)`,
                             transformOrigin: 'center center',
-                            zIndex: 5 // ピンの下
+                            zIndex: 5 
                           }} />
                         ))}
                       </div>
@@ -439,10 +424,9 @@ export default function PdfExportPage() {
                   )}
                 </div>
                 <div className="mt-4">
-                  {/* ★ お客様向けの「凡例」を項目欄の隅に配置 */}
                   <div className="flex justify-between items-end mb-2">
                     <div className="text-base font-bold">項目欄</div>
-                    <LineLegend /> {/* 線の意味を表示 */}
+                    <LineLegend /> 
                   </div>
                   <div className="border-2 border-gray-800">
                     <div className="grid grid-cols-12 border-b-2 border-gray-800 bg-gray-100 text-base font-bold">
