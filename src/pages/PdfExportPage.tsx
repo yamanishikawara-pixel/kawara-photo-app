@@ -165,6 +165,8 @@ export default function PdfExportPage() {
 
   const handleExport = async () => {
     if (!project) return;
+    let originalSrcs: Map<HTMLImageElement, string> | null = null;
+
     try {
       const pages = document.querySelectorAll('.pdf-page');
       if (pages.length === 0) return;
@@ -172,59 +174,42 @@ export default function PdfExportPage() {
       setLoadingMode('pdf');
       setIsExporting(true);
       setError(null);
-      
-      // ローディング画面が出るまで少し待つ
+      window.scrollTo(0, 0);
+
       await new Promise((r) => setTimeout(r, 500));
 
       // ==========================================
-      // ★ 究極のiPhone真っ白バグ対策：画像を「Base64(暗号文字)」に強制密輸する
+      // ★ 黒塗りバグを排除した「純度100%」の画像データ変換
       // ==========================================
       const imgs = document.querySelectorAll('.pdf-page img');
+      originalSrcs = new Map<HTMLImageElement, string>();
+
       for (let i = 0; i < imgs.length; i++) {
         const img = imgs[i] as HTMLImageElement;
         if (img.src && img.src.startsWith('http')) {
           
-          // iPhoneがサボらないように一度画像まで強制スクロール
           img.scrollIntoView({ behavior: 'instant', block: 'center' });
           await new Promise((r) => setTimeout(r, 50));
 
           try {
-            // 【作戦A】すでに画面に出ている画像を「Canvas」で直接読み取って暗号化（最速＆最強）
-            const canvas = document.createElement('canvas');
-            canvas.width = img.naturalWidth || img.width || 800;
-            canvas.height = img.naturalHeight || img.height || 600;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-              const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-              if (dataUrl.length > 50) { // 成功したらURLを文字データにすり替える
-                img.src = dataUrl;
-                img.removeAttribute('crossOrigin');
-                continue; 
-              }
-            }
-          } catch (e) {
-            // Safariの機嫌が悪く作戦Aが弾かれた場合は、作戦Bへ
-          }
-
-          try {
-            // 【作戦B】もう一度裏でこっそりダウンロードして暗号化
-            const res = await fetch(img.src, { cache: 'no-cache' });
+            // 黒塗りの原因だったCanvas(お絵かきツール)を完全に削除し、
+            // 純粋にファイルをダウンロードしてそのまま暗号化する処理だけを残しました！
+            const res = await fetch(img.src);
             const blob = await res.blob();
             const base64 = await new Promise<string>((resolve) => {
               const reader = new FileReader();
               reader.onloadend = () => resolve(reader.result as string);
               reader.readAsDataURL(blob);
             });
-            img.src = base64;
+            originalSrcs.set(img, img.src); // 元のURLを記録
+            img.src = base64; // 純度100%の暗号文字にすり替え！
             img.removeAttribute('crossOrigin');
-          } catch (e2) {
-            console.warn("画像暗号化スキップ:", e2);
+          } catch (e) {
+            console.warn('画像変換スキップ:', e);
           }
         }
       }
       
-      // 画像の文字化がすべて完了したら、一番上に戻って定着するのを待つ
       window.scrollTo(0, 0);
       await new Promise((r) => setTimeout(r, 1000));
       // ==========================================
@@ -235,26 +220,22 @@ export default function PdfExportPage() {
       for (let i = 0; i < pages.length; i++) {
         const pageEl = pages[i] as HTMLElement;
         pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
-        
-        // ページをめくったら少し待つ（iPhoneの息継ぎ）
         await new Promise((r) => setTimeout(r, 400));
         
         const currentTransform = pageEl.style.transform;
         pageEl.style.transform = 'scale(1)';
 
-        // ウォームアップ（空打ち）
         try {
           await toJpeg(pageEl, { pixelRatio: 0.1, quality: 0.1 });
         } catch (e) {}
         
         await new Promise((r) => setTimeout(r, 200));
 
-        // 本番書き出し（余計な通信は一切させない設定）
         const dataUrl = await toJpeg(pageEl, {
           quality: 0.90,
           pixelRatio: 1.2,
           backgroundColor: '#ffffff',
-          cacheBust: false // すでに文字データなので通信不要
+          cacheBust: false
         });
 
         pageEl.style.transform = currentTransform;
@@ -265,10 +246,22 @@ export default function PdfExportPage() {
       }
 
       pdf.save(`${project.projectName || '写真台帳'}.pdf`);
+
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'PDFの作成に失敗しました。';
       setError(message);
     } finally {
+      // ==========================================
+      // ★ 出力完了後、画像を元のURLに戻す（iPhoneのメモリ解放）
+      // ==========================================
+      if (originalSrcs) {
+        originalSrcs.forEach((src, img) => {
+          if (img) {
+            img.src = src;
+            img.setAttribute('crossOrigin', 'anonymous');
+          }
+        });
+      }
       setIsExporting(false);
       setLoadingMode(null);
     }
