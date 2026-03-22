@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Download, ShieldCheck } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import html2canvas from 'html2canvas'; // ★ 画像が映るエンジンに戻しました
+import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -57,7 +57,6 @@ function ProfessionalLoader() {
   );
 }
 
-// PDF印刷用の凡例（oklchエラー回避のため、Tailwind色クラスを排除しインラインスタイル化）
 function PdfLineLegend() {
   return (
     <div className="flex gap-x-4 gap-y-1 flex-wrap text-xs font-medium rounded-lg p-2 shadow-sm" style={{ border: '1px solid #d1d5db', backgroundColor: '#ffffff' }}>
@@ -170,7 +169,6 @@ export default function PdfExportPage() {
         const currentTransform = pageEl.style.transform;
         pageEl.style.transform = 'scale(1)';
 
-        // html2canvasでPDFを生成（oklchエラーは後述のインラインスタイル化で完全回避済み）
         const canvas = await html2canvas(pageEl, {
           scale: 1.5,
           useCORS: true,
@@ -252,31 +250,36 @@ export default function PdfExportPage() {
       {error && <div className="w-full max-w-2xl mb-4"><ErrorMessage message={error} onDismiss={() => setError(null)} /></div>}
 
       <div className="flex flex-col gap-8 items-center w-full">
-        {/* ① 表紙 */}
+        {/* ① 表紙ページ */}
         <div style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
           <div className="pdf-page absolute top-0 left-0 flex flex-col items-center origin-top-left" style={{ ...pageStyle, backgroundColor: '#ffffff', color: '#000000' }}>
-            <div className="mt-[5mm] mb-[30mm] flex flex-col items-center w-full">
+            <div className="mt-[5mm] mb-[28mm] flex flex-col items-center w-full">
               <div className="shrink-0 flex justify-center mb-6">
                 {userSettings?.logoUrl ? <img src={proxyUrl(userSettings.logoUrl, `logo_${sessionId}`)} alt="自社ロゴ" className="block w-[40mm] h-auto object-contain" crossOrigin="anonymous" /> : <img src={kawaraLogo} alt="標準ロゴ" className="block w-[32mm] h-auto object-contain grayscale" crossOrigin="anonymous" />}
               </div>
               <div className="flex flex-col items-center">
-                <h1 className="text-[52px] font-black tracking-[0.4em] mb-4 text-center">工事写真報告書</h1>
+                <h1 className="text-[48px] font-black tracking-[0.3em] mb-4 text-center">工事写真報告書</h1>
                 <div style={{ width: '160mm', borderBottom: '4px solid #000000' }}></div>
                 <div style={{ width: '160mm', borderBottom: '1px solid #000000', marginTop: '6px' }}></div>
               </div>
             </div>
-            <div className="w-[150mm] space-y-[14mm]">
+            
+            {/* ★ 項目ごとの均等配置と、下線との絶妙な余白バランスを調整 */}
+            <div className="w-[150mm] flex flex-col gap-y-[12mm]">
               {COVER_FIELDS.map((item, idx) => {
                 let value = String(project[item.key] ?? '　');
                 if (item.key === 'contractorName' && userSettings?.companyName) value = userSettings.companyName;
                 return (
-                  <div key={idx} className="flex items-baseline pb-2" style={{ borderBottom: '2px solid #000000' }}>
-                    <div className="w-[45mm] flex-shrink-0 flex justify-between text-[24px] font-bold pr-8">{item.label.split('').map((c: string, i: number) => <span key={i}>{c}</span>)}</div>
-                    <div className="flex-1 text-[32px] font-black whitespace-nowrap overflow-hidden">{value}</div>
+                  <div key={idx} className="flex items-end pb-2" style={{ borderBottom: '2px solid #000000' }}>
+                    <div className="w-[45mm] flex-shrink-0 flex justify-between text-[22px] font-bold pr-8 leading-none">
+                      {item.label.split('').map((c: string, i: number) => <span key={i} className="block leading-none">{c}</span>)}
+                    </div>
+                    <div className="flex-1 text-[26px] font-black whitespace-nowrap overflow-hidden pl-4 leading-none pb-[2px]">{value}</div>
                   </div>
                 );
               })}
             </div>
+
             {userSettings && (userSettings.address || userSettings.phone) && (
               <div className="absolute bottom-[16mm] right-[15mm] text-right flex flex-col items-end pl-4 py-1" style={{ backgroundColor: '#ffffff' }}>
                 {userSettings.companyName && <div className="text-[18px] font-bold mb-1" style={{ color: '#000000' }}>{userSettings.companyName}</div>}
@@ -288,7 +291,7 @@ export default function PdfExportPage() {
           </div>
         </div>
 
-        {/* ② 位置図 */}
+        {/* ② 位置図ページ */}
         {mapUrlsToRender.map((u, mapIndex) => (
           <div key={`map-page-${mapIndex}`} style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left" style={{ ...pageStyle, backgroundColor: '#ffffff', color: '#000000' }}>
@@ -315,6 +318,8 @@ export default function PdfExportPage() {
                     </div>
                   ) : (<span className="font-bold" style={{ color: '#9ca3af' }}>位置図未登録</span>)}
                 </div>
+                
+                {/* ★ 項目欄テーブルの文字を上下左右の中央に均等配置 */}
                 <div className="mt-4">
                   <div className="flex justify-between items-end mb-2">
                     <div className="text-base font-bold">項目欄</div>
@@ -322,10 +327,10 @@ export default function PdfExportPage() {
                   </div>
                   <div style={{ border: '2px solid #1f2937' }}>
                     <div className="grid grid-cols-12 text-base font-bold" style={{ borderBottom: '2px solid #1f2937', backgroundColor: '#f3f4f6' }}>
-                      <div className="col-span-1 p-2 text-center" style={{ borderRight: '2px solid #1f2937' }}>符号</div>
-                      <div className="col-span-2 p-2 text-center" style={{ borderRight: '2px solid #1f2937' }}>部位</div>
-                      <div className="col-span-2 p-2 text-center text-sm" style={{ borderRight: '2px solid #1f2937' }}>写真NO</div>
-                      <div className="col-span-7 p-2 text-center">備考</div>
+                      <div className="col-span-1 py-2 text-center flex justify-center items-center" style={{ borderRight: '2px solid #1f2937' }}>符号</div>
+                      <div className="col-span-2 py-2 text-center flex justify-center items-center" style={{ borderRight: '2px solid #1f2937' }}>部位</div>
+                      <div className="col-span-2 py-2 text-center text-sm flex justify-center items-center" style={{ borderRight: '2px solid #1f2937' }}>写真NO</div>
+                      <div className="col-span-7 py-2 text-center flex justify-center items-center">備考</div>
                     </div>
                     {(() => {
                       const rows: MapRow[] = project.mapRows ?? [];
@@ -333,10 +338,10 @@ export default function PdfExportPage() {
                       const displayRows = currentRows.length > 0 ? currentRows.slice(0, 6) : Array.from({ length: 6 }, () => ({ symbol: '　', part: '　', photoNo: '　', remarks: '　' }));
                       return displayRows.map((row: any, idx: number) => (
                         <div key={row.id ?? idx} className="grid grid-cols-12 text-base" style={{ borderBottom: '1px solid #9ca3af' }}>
-                          <div className="col-span-1 p-2 font-bold whitespace-nowrap overflow-hidden text-center" style={{ borderRight: '1px solid #9ca3af', color: '#b91c1c' }}>{row.symbol ?? '　'}</div>
-                          <div className="col-span-2 p-2 whitespace-nowrap overflow-hidden" style={{ borderRight: '1px solid #9ca3af' }}>{row.part ?? '　'}</div>
-                          <div className="col-span-2 p-2 whitespace-nowrap overflow-hidden text-center text-sm" style={{ borderRight: '1px solid #9ca3af' }}>{row.photoNo ?? row.relatedPhotoNumber ?? '　'}</div>
-                          <div className="col-span-7 p-2 overflow-hidden">{row.remarks ?? '　'}</div>
+                          <div className="col-span-1 py-2 font-bold text-center flex justify-center items-center" style={{ borderRight: '1px solid #9ca3af', color: '#b91c1c' }}>{row.symbol ?? '　'}</div>
+                          <div className="col-span-2 px-2 py-2 flex items-center overflow-hidden" style={{ borderRight: '1px solid #9ca3af' }}>{row.part ?? '　'}</div>
+                          <div className="col-span-2 py-2 text-center text-sm flex justify-center items-center overflow-hidden" style={{ borderRight: '1px solid #9ca3af' }}>{row.photoNo ?? row.relatedPhotoNumber ?? '　'}</div>
+                          <div className="col-span-7 px-2 py-2 flex items-center overflow-hidden">{row.remarks ?? '　'}</div>
                         </div>
                       ));
                     })()}
@@ -367,12 +372,29 @@ export default function PdfExportPage() {
                         </div>
                       ) : (<span className="font-bold" style={{ color: '#9ca3af' }}>写真未登録</span>)}
                     </div>
+                    
+                    {/* ★ 写真の横のテキスト表を、上下中央揃えで均等に美しく配置 */}
                     <div className="w-[40%] flex flex-col text-sm" style={{ border: '2px solid #374151', backgroundColor: '#ffffff' }}>
-                      <div className="flex" style={{ borderBottom: '1px solid #9ca3af' }}><div className="w-16 p-2 font-bold flex items-center justify-center text-xs" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>写真NO</div><div className="p-2 flex-1 font-bold text-sm flex items-center">{p.photoNumber || '　'}</div></div>
-                      <div className="flex" style={{ borderBottom: '1px solid #9ca3af' }}><div className="w-16 p-2 font-bold flex items-center justify-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>撮影日</div><div className="p-2 flex-1 flex items-center font-medium">{p.shootingDate || '　'}</div></div>
-                      <div className="flex" style={{ borderBottom: '1px solid #9ca3af' }}><div className="w-16 p-2 font-bold flex items-center justify-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>位置図</div><div className="p-2 flex-1 font-bold flex items-center" style={{ color: '#b91c1c' }}>{p.locationMap || '　'}</div></div>
-                      <div className="flex" style={{ borderBottom: '1px solid #9ca3af' }}><div className="w-16 p-2 font-bold flex items-center justify-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>工程</div><div className="p-2 flex-1 flex items-center font-medium">{p.process || '　'}</div></div>
-                      <div className="flex-1 flex min-h-0"><div className="w-16 p-2 font-bold flex items-center justify-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>説明</div><div className="p-2 flex-1 whitespace-pre-wrap overflow-hidden font-medium leading-relaxed">{p.description || '　'}</div></div>
+                      <div className="flex min-h-[36px]" style={{ borderBottom: '1px solid #9ca3af' }}>
+                        <div className="w-20 font-bold flex items-center justify-center text-center text-xs" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>写真NO</div>
+                        <div className="px-3 flex-1 font-bold text-sm flex items-center">{p.photoNumber || '　'}</div>
+                      </div>
+                      <div className="flex min-h-[36px]" style={{ borderBottom: '1px solid #9ca3af' }}>
+                        <div className="w-20 font-bold flex items-center justify-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>撮影日</div>
+                        <div className="px-3 flex-1 flex items-center font-medium">{p.shootingDate || '　'}</div>
+                      </div>
+                      <div className="flex min-h-[36px]" style={{ borderBottom: '1px solid #9ca3af' }}>
+                        <div className="w-20 font-bold flex items-center justify-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>位置図</div>
+                        <div className="px-3 flex-1 font-bold flex items-center" style={{ color: '#b91c1c' }}>{p.locationMap || '　'}</div>
+                      </div>
+                      <div className="flex min-h-[36px]" style={{ borderBottom: '1px solid #9ca3af' }}>
+                        <div className="w-20 font-bold flex items-center justify-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>工程</div>
+                        <div className="px-3 flex-1 flex items-center font-medium">{p.process || '　'}</div>
+                      </div>
+                      <div className="flex-1 flex min-h-0">
+                        <div className="w-20 py-2 font-bold flex items-center justify-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>説明</div>
+                        <div className="p-3 flex-1 whitespace-pre-wrap overflow-hidden font-medium leading-relaxed flex items-start">{p.description || '　'}</div>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -399,11 +421,25 @@ export default function PdfExportPage() {
                         </div>
                       ) : (<span className="font-bold" style={{ color: '#9ca3af' }}>写真未登録</span>)}
                     </div>
+                    
+                    {/* ★ 材料表のテキストも均等バランス調整 */}
                     <div className="w-[40%] flex flex-col text-sm" style={{ border: '2px solid #374151', backgroundColor: '#ffffff' }}>
-                      <div className="flex" style={{ borderBottom: '1px solid #9ca3af' }}><div className="w-24 p-2 font-bold flex items-center justify-center text-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>品名</div><div className="p-2 flex-1 font-bold text-base overflow-hidden flex items-center">{m.name || '　'}</div></div>
-                      <div className="flex" style={{ borderBottom: '1px solid #9ca3af' }}><div className="w-24 p-2 font-bold flex items-center justify-center text-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>メーカー</div><div className="p-2 flex-1 overflow-hidden font-medium flex items-center">{m.manufacturer || '　'}</div></div>
-                      <div className="flex" style={{ borderBottom: '1px solid #9ca3af' }}><div className="w-24 p-2 font-bold text-xs flex items-center justify-center text-center leading-tight" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>規格・寸法<br/>数量</div><div className="p-2 flex-1 font-bold overflow-hidden flex items-center" style={{ color: '#b91c1c' }}>{m.specification || '　'}</div></div>
-                      <div className="flex-1 flex min-h-0"><div className="w-24 p-2 font-bold flex items-center justify-center text-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>備考</div><div className="p-2 flex-1 whitespace-pre-wrap overflow-hidden font-medium leading-relaxed">{m.remarks || '　'}</div></div>
+                      <div className="flex min-h-[36px]" style={{ borderBottom: '1px solid #9ca3af' }}>
+                        <div className="w-24 font-bold flex items-center justify-center text-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>品名</div>
+                        <div className="px-3 flex-1 font-bold text-base overflow-hidden flex items-center">{m.name || '　'}</div>
+                      </div>
+                      <div className="flex min-h-[36px]" style={{ borderBottom: '1px solid #9ca3af' }}>
+                        <div className="w-24 font-bold flex items-center justify-center text-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>メーカー</div>
+                        <div className="px-3 flex-1 overflow-hidden font-medium flex items-center">{m.manufacturer || '　'}</div>
+                      </div>
+                      <div className="flex min-h-[48px]" style={{ borderBottom: '1px solid #9ca3af' }}>
+                        <div className="w-24 font-bold text-xs flex items-center justify-center text-center leading-tight py-1" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>規格・寸法<br/>数量</div>
+                        <div className="px-3 flex-1 font-bold overflow-hidden flex items-center" style={{ color: '#b91c1c' }}>{m.specification || '　'}</div>
+                      </div>
+                      <div className="flex-1 flex min-h-0">
+                        <div className="w-24 py-2 font-bold flex items-center justify-center text-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>備考</div>
+                        <div className="p-3 flex-1 whitespace-pre-wrap overflow-hidden font-medium leading-relaxed flex items-start">{m.remarks || '　'}</div>
+                      </div>
                     </div>
                   </div>
                 ))}
