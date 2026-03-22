@@ -196,15 +196,24 @@ const handleExport = async () => {
         throw new Error(`サーバーエラー: ${errText}`);
       }
 
-      // ★ここが最大の修正ポイント！届いたデータを「純粋なPDF」として強制組み立て
+      // ★ここが修正ポイント！
       const arrayBuffer = await response.arrayBuffer();
       const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
+      
       const a = document.createElement('a');
       a.href = url;
       a.download = `${project.projectName || '現場報告書'}_${new Date().getTime()}.pdf`;
+      
+      // iOS Safari対策：一度画面の見えない所にボタンを置いてから押す
+      document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      // 10秒待ってからデータを消す（iPhoneが保存する時間を稼ぐ！）
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 10000);
       
     } catch (err: any) {
       console.error(err);
