@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Download, ShieldCheck } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { toJpeg } from 'html-to-image';
+// ★ 欠陥のあった html-to-image を捨て、新エンジン html2canvas を搭載！
+import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -185,32 +186,29 @@ export default function PdfExportPage() {
         const pageEl = pages[i] as HTMLElement;
         pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
         
-        await new Promise((r) => setTimeout(r, 400)); // スクロール後の息継ぎ
+        await new Promise((r) => setTimeout(r, 500)); // スクロール後の息継ぎ
         
         const currentTransform = pageEl.style.transform;
         pageEl.style.transform = 'scale(1)'; // キャプチャのために等倍に戻す
 
-        // iPhoneのメモリを温めるための空打ち（超軽量）
-        // ★ エラーの原因だった間違った設定を削除しました！
-        try {
-          await toJpeg(pageEl, { pixelRatio: 0.1, quality: 0.1 });
-        } catch (e) {}
-        
-        await new Promise((r) => setTimeout(r, 200));
-
         // ==========================================
-        // ★ iPhoneのメモリパンク（真っ白化）を完全に防ぐ最適化設定
+        // ★ 新エンジン「html2canvas」によるiPhone完全突破処理
         // ==========================================
-        const dataUrl = await toJpeg(pageEl, {
-          quality: 0.85,
-          pixelRatio: 1.0, // ←iPhoneの限界を超えない設定
+        const canvas = await html2canvas(pageEl, {
+          scale: 1.2, // iPhoneのメモリを圧迫せず、かつ綺麗な画質
+          useCORS: true, // Google倉庫の画像を絶対にブロックさせない
+          allowTaint: false,
           backgroundColor: '#ffffff',
-          cacheBust: true, // ←キャッシュの悪さを防ぐ（これは正しい設定です）
+          logging: false, // 余計な処理を止めて高速化
         });
+
+        // 出来上がった画像をPDF用に変換
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        // ==========================================
 
         pageEl.style.transform = currentTransform;
 
-        const pdfHeight = (pageEl.offsetHeight * pdfWidth) / pageEl.offsetWidth;
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
         if (i > 0) pdf.addPage();
         pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
       }
