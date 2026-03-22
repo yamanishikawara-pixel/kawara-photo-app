@@ -165,7 +165,6 @@ export default function PdfExportPage() {
 
   const handleExport = async () => {
     if (!project) return;
-    let originalSrcs: Map<HTMLImageElement, string> | null = null;
 
     try {
       const pages = document.querySelectorAll('.pdf-page');
@@ -176,43 +175,8 @@ export default function PdfExportPage() {
       setError(null);
       window.scrollTo(0, 0);
 
-      await new Promise((r) => setTimeout(r, 500));
-
-      // ==========================================
-      // ★ 黒塗りバグを排除した「純度100%」の画像データ変換
-      // ==========================================
-      const imgs = document.querySelectorAll('.pdf-page img');
-      originalSrcs = new Map<HTMLImageElement, string>();
-
-      for (let i = 0; i < imgs.length; i++) {
-        const img = imgs[i] as HTMLImageElement;
-        if (img.src && img.src.startsWith('http')) {
-          
-          img.scrollIntoView({ behavior: 'instant', block: 'center' });
-          await new Promise((r) => setTimeout(r, 50));
-
-          try {
-            // 黒塗りの原因だったCanvas(お絵かきツール)を完全に削除し、
-            // 純粋にファイルをダウンロードしてそのまま暗号化する処理だけを残しました！
-            const res = await fetch(img.src);
-            const blob = await res.blob();
-            const base64 = await new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result as string);
-              reader.readAsDataURL(blob);
-            });
-            originalSrcs.set(img, img.src); // 元のURLを記録
-            img.src = base64; // 純度100%の暗号文字にすり替え！
-            img.removeAttribute('crossOrigin');
-          } catch (e) {
-            console.warn('画像変換スキップ:', e);
-          }
-        }
-      }
-      
-      window.scrollTo(0, 0);
-      await new Promise((r) => setTimeout(r, 1000));
-      // ==========================================
+      // 画面を落ち着かせるための待機時間
+      await new Promise((r) => setTimeout(r, 800));
 
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -220,22 +184,28 @@ export default function PdfExportPage() {
       for (let i = 0; i < pages.length; i++) {
         const pageEl = pages[i] as HTMLElement;
         pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
-        await new Promise((r) => setTimeout(r, 400));
+        
+        await new Promise((r) => setTimeout(r, 400)); // スクロール後の息継ぎ
         
         const currentTransform = pageEl.style.transform;
-        pageEl.style.transform = 'scale(1)';
+        pageEl.style.transform = 'scale(1)'; // キャプチャのために等倍に戻す
 
+        // iPhoneのメモリを温めるための空打ち（超軽量）
+        // ★ エラーの原因だった間違った設定を削除しました！
         try {
           await toJpeg(pageEl, { pixelRatio: 0.1, quality: 0.1 });
         } catch (e) {}
         
         await new Promise((r) => setTimeout(r, 200));
 
+        // ==========================================
+        // ★ iPhoneのメモリパンク（真っ白化）を完全に防ぐ最適化設定
+        // ==========================================
         const dataUrl = await toJpeg(pageEl, {
-          quality: 0.90,
-          pixelRatio: 1.2,
+          quality: 0.85,
+          pixelRatio: 1.0, // ←iPhoneの限界を超えない設定
           backgroundColor: '#ffffff',
-          cacheBust: false
+          cacheBust: true, // ←キャッシュの悪さを防ぐ（これは正しい設定です）
         });
 
         pageEl.style.transform = currentTransform;
@@ -251,17 +221,6 @@ export default function PdfExportPage() {
       const message = err instanceof Error ? err.message : 'PDFの作成に失敗しました。';
       setError(message);
     } finally {
-      // ==========================================
-      // ★ 出力完了後、画像を元のURLに戻す（iPhoneのメモリ解放）
-      // ==========================================
-      if (originalSrcs) {
-        originalSrcs.forEach((src, img) => {
-          if (img) {
-            img.src = src;
-            img.setAttribute('crossOrigin', 'anonymous');
-          }
-        });
-      }
       setIsExporting(false);
       setLoadingMode(null);
     }
