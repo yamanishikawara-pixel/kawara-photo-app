@@ -164,7 +164,7 @@ const handleExport = async () => {
 
       const htmlContent = clone.innerHTML;
 
-      const response = await fetch('【ここに社長のURLが入る】', {
+      const response = await fetch('【https://console.firebase.google.com/project/kawara-photo-app/overview】', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -191,26 +191,29 @@ const handleExport = async () => {
         }),
       });
 
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`サーバーエラー: ${errText}`);
-      }
+      if (!response.ok) throw new Error('サーバーエラーが発生しました');
 
-      // ★ここが修正ポイント！
-      const arrayBuffer = await response.arrayBuffer();
-      const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
+      // ★最強の対策：届いた「文字」を、iPhoneの中で綺麗なPDFに再組み立てする！
+      const data = await response.json();
+      if (!data.pdfBase64) throw new Error('PDFデータが空です');
+
+      const byteCharacters = atob(data.pdfBase64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
+
+      // ダウンロード処理
       const url = window.URL.createObjectURL(blob);
-      
       const a = document.createElement('a');
       a.href = url;
       a.download = `${project.projectName || '現場報告書'}_${new Date().getTime()}.pdf`;
-      
-      // iOS Safari対策：一度画面の見えない所にボタンを置いてから押す
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      
-      // 10秒待ってからデータを消す（iPhoneが保存する時間を稼ぐ！）
+
       setTimeout(() => {
         window.URL.revokeObjectURL(url);
       }, 10000);

@@ -35,10 +35,9 @@ export const generatePdf = onRequest({
 
     await browser.close();
 
-    // ★ここが最大の修正ポイント！純粋なバイナリデータとして強制送信
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename="report.pdf"');
-    res.end(Buffer.from(pdfBuffer));
+    // ★最強の対策：PDFを「Base64（ただの文字）」に変換して安全に送る！
+    const base64Pdf = Buffer.from(pdfBuffer).toString('base64');
+    res.status(200).json({ pdfBase64: base64Pdf });
 
   } catch (error) {
     logger.error("PDF生成エラー", error);
