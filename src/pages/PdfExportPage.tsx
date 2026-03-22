@@ -131,26 +131,44 @@ export default function PdfExportPage() {
     } finally { setIsZipping(false); }
   };
 
- const handleExport = async () => {
+const handleExport = async () => {
     if (!project) return;
     setIsExporting(true);
     setError(null);
 
     try {
-      // 1. アプリが元々持っている「デザインルール（CSS）」をかき集める
+      // 1. 今適用されているデザイン（CSS）をすべて取得（Tailwindもここに含まれます）
       const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
         .map(styleEl => styleEl.outerHTML)
         .join('');
 
-      // 2. スマホ用の「縮小する枠」を無視して、中の「ページ（.pdf-page）」だけを全部抜き出す
-      const pages = Array.from(document.querySelectorAll('.pdf-page'))
-        .map(page => page.outerHTML)
-        .join('');
+      // 2. 画面のデータをコピー
+      const container = document.querySelector('.flex.flex-col.gap-8.items-center.w-full');
+      if (!container) throw new Error('データが見つかりません');
+      const clone = container.cloneNode(true) as HTMLElement;
 
-      if (!pages) throw new Error('PDFのページが見つかりません');
+      // 3. スマホ用の「縮小」と「余分な余白」をJavascriptで直接解除（これが一番安全です！）
+      const wrappers = clone.querySelectorAll('.shrink-0');
+      wrappers.forEach((w: any) => {
+        w.style.width = '794px';
+        w.style.height = '1123px';
+        w.style.pageBreakAfter = 'always';
+        w.style.margin = '0';
+        w.style.boxShadow = 'none';
+      });
 
-      // 3. Googleの工場へデータを送る
-      // ↓ここのURLを社長のURLに書き換えてください！
+      const pages = clone.querySelectorAll('.pdf-page');
+      pages.forEach((p: any) => {
+        p.style.transform = 'none';      // 縮小を解除！
+        p.style.position = 'relative';   // 位置を正常化！
+        p.style.width = '794px';
+        p.style.height = '1123px';
+      });
+
+      // 4. 整えたデータをHTMLとして取り出す
+      const htmlContent = clone.innerHTML;
+
+      // 5. Googleの工場へ送信
       const response = await fetch('【ここに社長のURLが入る】', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -160,28 +178,20 @@ export default function PdfExportPage() {
           <head>
             <meta charset="utf-8">
             ${styles}
-            <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
             <style>
-              /* 印刷用の最強リセットCSS（スマホ用の縮小を強制解除） */
+              /* 印刷用の最終調整 */
+              @page { margin: 0; size: A4 portrait; }
               body { 
                 margin: 0; 
                 padding: 0; 
                 background-color: #ffffff; 
-                font-family: 'Noto Sans JP', sans-serif; 
-              }
-              .pdf-page { 
-                position: static !important; /* スマホ用の重なりを解除 */
-                transform: none !important;  /* スマホ用の縮小を解除（これが真っ白の原因！） */
-                width: 210mm !important;     /* A4の幅に強制 */
-                height: 297mm !important;    /* A4の高さに強制 */
-                page-break-after: always;    /* ページごとに綺麗に改ページ */
-                box-shadow: none !important; 
-                margin: 0 !important;
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact; 
               }
             </style>
           </head>
           <body>
-            ${pages}
+            ${htmlContent}
           </body>
           </html>`
         }),
@@ -200,7 +210,7 @@ export default function PdfExportPage() {
       
     } catch (err: any) {
       console.error(err);
-      setError('PDF作成中にエラーが発生しました。通信環境を確認してください。');
+      setError('PDF作成中にエラーが発生しました。');
     } finally {
       setIsExporting(false);
     }
