@@ -137,17 +137,14 @@ const handleExport = async () => {
     setError(null);
 
     try {
-      // 1. 今適用されているデザイン（CSS）をすべて取得（Tailwindもここに含まれます）
       const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
         .map(styleEl => styleEl.outerHTML)
         .join('');
 
-      // 2. 画面のデータをコピー
       const container = document.querySelector('.flex.flex-col.gap-8.items-center.w-full');
       if (!container) throw new Error('データが見つかりません');
       const clone = container.cloneNode(true) as HTMLElement;
 
-      // 3. スマホ用の「縮小」と「余分な余白」をJavascriptで直接解除（これが一番安全です！）
       const wrappers = clone.querySelectorAll('.shrink-0');
       wrappers.forEach((w: any) => {
         w.style.width = '794px';
@@ -159,16 +156,14 @@ const handleExport = async () => {
 
       const pages = clone.querySelectorAll('.pdf-page');
       pages.forEach((p: any) => {
-        p.style.transform = 'none';      // 縮小を解除！
-        p.style.position = 'relative';   // 位置を正常化！
+        p.style.transform = 'none';
+        p.style.position = 'relative';
         p.style.width = '794px';
         p.style.height = '1123px';
       });
 
-      // 4. 整えたデータをHTMLとして取り出す
       const htmlContent = clone.innerHTML;
 
-      // 5. Googleの工場へ送信
       const response = await fetch('【ここに社長のURLが入る】', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -179,7 +174,6 @@ const handleExport = async () => {
             <meta charset="utf-8">
             ${styles}
             <style>
-              /* 印刷用の最終調整 */
               @page { margin: 0; size: A4 portrait; }
               body { 
                 margin: 0; 
@@ -197,10 +191,14 @@ const handleExport = async () => {
         }),
       });
 
-      if (!response.ok) throw new Error('サーバーでのPDF生成に失敗しました');
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`サーバーエラー: ${errText}`);
+      }
 
-      // 届いたデータをPDFとしてダウンロード
-      const blob = await response.blob();
+      // ★ここが最大の修正ポイント！届いたデータを「純粋なPDF」として強制組み立て
+      const arrayBuffer = await response.arrayBuffer();
+      const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
