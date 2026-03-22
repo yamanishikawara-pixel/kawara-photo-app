@@ -132,95 +132,133 @@ export default function PdfExportPage() {
   };
 
 const handleExport = async () => {
-    if (!project) return;
-    setIsExporting(true);
-    setError(null);
+  if (!project) return;
 
-    try {
-      const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-        .map(styleEl => styleEl.outerHTML)
-        .join('');
+  setIsExporting(true);
+  setError(null);
 
-      const container = document.querySelector('.flex.flex-col.gap-8.items-center.w-full');
-      if (!container) throw new Error('データが見つかりません');
-      const clone = container.cloneNode(true) as HTMLElement;
+  try {
+    const styles = Array.from(
+      document.querySelectorAll('style, link[rel="stylesheet"]')
+    )
+      .map((styleEl) => styleEl.outerHTML)
+      .join('');
 
-      const wrappers = clone.querySelectorAll('.shrink-0');
-      wrappers.forEach((w: any) => {
-        w.style.width = '794px';
-        w.style.height = '1123px';
-        w.style.pageBreakAfter = 'always';
-        w.style.margin = '0';
-        w.style.boxShadow = 'none';
-      });
+    const container = document.querySelector(
+      '.flex.flex-col.gap-8.items-center.w-full'
+    );
 
-      const pages = clone.querySelectorAll('.pdf-page');
-      pages.forEach((p: any) => {
-        p.style.transform = 'none';
-        p.style.position = 'relative';
-        p.style.width = '794px';
-        p.style.height = '1123px';
-      });
-
-      const htmlContent = clone.innerHTML;
-
-      const response = await fetch('https://generatepdf-ld4b4dsi5q-an.a.run.app', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          html: `<!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="utf-8">
-            ${styles}
-            <style>
-              @page { margin: 0; size: A4 portrait; }
-              body { 
-                margin: 0; 
-                padding: 0; 
-                background-color: #ffffff; 
-                -webkit-print-color-adjust: exact; 
-                print-color-adjust: exact; 
-              }
-            </style>
-          </head>
-          <body>
-            ${htmlContent}
-          </body>
-          </html>`
-        }),
-      });
-
-     if (!response.ok) {
-  const errText = await response.text();
-  throw new Error(`サーバーエラー: ${response.status} ${errText}`);
-}
-
-const contentType = response.headers.get('content-type') || '';
-
-if (!contentType.includes('application/pdf')) {
-  const errText = await response.text();
-  throw new Error(`PDFが返っていません: ${errText}`);
-}
-
-const blob = await response.blob();
-
-if (blob.size === 0) {
-  throw new Error('PDFデータが空です');
-}
-
-saveAs(
-  blob,
-  `${project.projectName || '現場報告書'}_${Date.now()}.pdf`
-);
-      
-    } catch (err: any) {
-      console.error(err);
-      setError('PDF作成中にエラーが発生しました。');
-    } finally {
-      setIsExporting(false);
+    if (!container) {
+      throw new Error('PDF化するデータが見つかりません');
     }
-  };
+
+    const clone = container.cloneNode(true) as HTMLElement;
+
+    const wrappers = clone.querySelectorAll('.shrink-0');
+    wrappers.forEach((w: any) => {
+      w.style.width = '794px';
+      w.style.height = '1123px';
+      w.style.pageBreakAfter = 'always';
+      w.style.margin = '0';
+      w.style.boxShadow = 'none';
+    });
+
+    const pages = clone.querySelectorAll('.pdf-page');
+    pages.forEach((p: any) => {
+      p.style.transform = 'none';
+      p.style.position = 'relative';
+      p.style.width = '794px';
+      p.style.height = '1123px';
+    });
+
+    const htmlContent = clone.innerHTML;
+
+    const response = await fetch('/api/generatePdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        html: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  ${styles}
+  <style>
+    @page {
+      margin: 0;
+      size: A4 portrait;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    body {
+      width: 794px;
+    }
+
+    .shrink-0 {
+      width: 794px !important;
+      height: 1123px !important;
+      margin: 0 !important;
+      page-break-after: always;
+      break-after: page;
+      box-shadow: none !important;
+    }
+
+    .shrink-0:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
+
+    .pdf-page {
+      width: 794px !important;
+      height: 1123px !important;
+      transform: none !important;
+      position: relative !important;
+      overflow: hidden !important;
+    }
+  </style>
+</head>
+<body>
+  ${htmlContent}
+</body>
+</html>`,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`サーバーエラー: ${response.status} ${errText}`);
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+
+    if (!contentType.includes('application/pdf')) {
+      const errText = await response.text();
+      throw new Error(`PDFが返っていません: ${errText}`);
+    }
+
+    const blob = await response.blob();
+
+    if (blob.size === 0) {
+      throw new Error('PDFデータが空です');
+    }
+
+    saveAs(
+      blob,
+      `${project.projectName || '現場報告書'}_${Date.now()}.pdf`
+    );
+  } catch (err: any) {
+    console.error('PDF出力エラー:', err);
+    setError(err?.message || 'PDF作成中にエラーが発生しました。');
+  } finally {
+    setIsExporting(false);
+  }
+};
   
   if (!project) return <LoadingSpinner />;
 
