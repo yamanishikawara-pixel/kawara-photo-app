@@ -7,8 +7,7 @@ import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-// ★ エラーの原因だった MapLine の読み込みを削除しました
-import type { Circle, MapRow, Photo, Project, Material } from '../types';
+import type { Circle, MapRow, MapLine, Photo, Project, Material } from '../types';
 import kawaraLogo from '../assets/kawara-logo.png';
 import {
   A4_HEIGHT_PX,
@@ -21,16 +20,13 @@ import { LoadingSpinner } from '../shared/LoadingSpinner';
 
 type ProjectWithOptionals = Project;
 
-// ==========================================
-// ★ お客様に「線の意味」を伝えるための凡例（Legend）
-// ==========================================
 const LINE_TYPES = [
-  { label: '流れ壁', color: '#3b82f6' }, // 青
-  { label: '平行壁', color: '#eab308' }, // 黄
-  { label: '棟', color: '#22c55e' },     // 緑
-  { label: '軒先', color: '#f97316' },   // オレンジ
-  { label: '袖', color: '#ec4899' },     // ピンク
-  { label: 'その他', color: '#ef4444' },   // 赤
+  { label: '流れ壁', color: '#3b82f6' },
+  { label: '平行壁', color: '#eab308' },
+  { label: '棟', color: '#22c55e' },    
+  { label: '軒先', color: '#f97316' },  
+  { label: '袖', color: '#ec4899' },    
+  { label: 'その他', color: '#ef4444' },  
 ];
 
 function LineLegend() {
@@ -79,9 +75,6 @@ function createEmptyMaterial(): Material {
   };
 }
 
-// ==========================================
-// ★ 洗練されたプロ仕様の Now Loading 画面 
-// ==========================================
 function ProfessionalLoader() {
   return (
     <div className="relative flex flex-col items-center justify-center p-8 mb-4">
@@ -181,7 +174,33 @@ export default function PdfExportPage() {
       setError(null);
       window.scrollTo(0, 0);
 
-      await new Promise((r) => setTimeout(r, 800));
+      await new Promise((r) => setTimeout(r, 500));
+
+      // ==========================================
+      // ★ 究極のiPhone真っ白バグ対策（Base64強制変換）
+      // ==========================================
+      const imgs = document.querySelectorAll('.pdf-page img');
+      for (let i = 0; i < imgs.length; i++) {
+        const img = imgs[i] as HTMLImageElement;
+        // 画像が通常のURLの場合のみ変換を実行
+        if (img.src && img.src.startsWith('http')) {
+          try {
+            const response = await fetch(img.src);
+            const blob = await response.blob();
+            const base64 = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(blob);
+            });
+            img.src = base64; 
+            img.removeAttribute('crossOrigin'); 
+          } catch (e) {
+            console.warn('画像変換スキップ:', e);
+          }
+        }
+      }
+      await new Promise((r) => setTimeout(r, 600));
+      // ==========================================
 
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -190,26 +209,20 @@ export default function PdfExportPage() {
         const pageEl = pages[i] as HTMLElement;
         pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
         await new Promise((r) => setTimeout(r, 400));
+        
         const currentTransform = pageEl.style.transform;
         pageEl.style.transform = 'scale(1)';
 
         try {
-          // ★ エラーの原因だった useCORS を削除しました（cacheBustのみでiPhone対策します）
-          await toJpeg(pageEl, { 
-            cacheBust: true, 
-            pixelRatio: 0.1, 
-            quality: 0.1 
-          });
+          await toJpeg(pageEl, { pixelRatio: 0.1, quality: 0.1 });
         } catch (e) {}
         
-        await new Promise((r) => setTimeout(r, 300));
+        await new Promise((r) => setTimeout(r, 200));
 
-        // ★ 本番書き出し（ここも useCORS を削除）
         const dataUrl = await toJpeg(pageEl, {
           quality: 0.90,
           pixelRatio: 1.2,
-          backgroundColor: '#ffffff',
-          cacheBust: true,
+          backgroundColor: '#ffffff'
         });
 
         pageEl.style.transform = currentTransform;
@@ -339,7 +352,8 @@ export default function PdfExportPage() {
                               )}
                             </div>
                         ))}
-                        {(project.mapLines ?? []).filter((l) => l.mapIndex === mapIndex).map((line: any) => (
+                        {/* ★ ここが警告の原因でした！ (line: any) を (line: MapLine) に修正しました！ */}
+                        {(project.mapLines ?? []).filter((l) => l.mapIndex === mapIndex).map((line: MapLine) => (
                           <div key={`line-${line.id}`} style={{ position: 'absolute', left: `${line.x}%`, top: `${line.y}%`, width: `${line.length}%`, height: `${line.thickness}px`, backgroundColor: line.color, transform: `translate(-50%, -50%) rotate(${line.rotation}deg)`, transformOrigin: 'center center', zIndex: 5 }} />
                         ))}
                       </div>
