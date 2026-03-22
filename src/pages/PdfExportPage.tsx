@@ -164,7 +164,7 @@ const handleExport = async () => {
 
       const htmlContent = clone.innerHTML;
 
-      const response = await fetch('【https://console.firebase.google.com/project/kawara-photo-app/overview】', {
+      const response = await fetch('https://generatepdf-ld4b4dsi5q-an.a.run.app', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
