@@ -8,6 +8,12 @@ import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { proxyUrl, useDraggablePin } from '../shared/utils';
 import type { MapLine, MapPin as MapPinT, MapPinType, MapRow, Project } from '../types';
 
+// ★ PDFを画像に変換するための最強ツールを読み込みます
+import * as pdfjsLib from 'pdfjs-dist';
+// ワーカー（裏方の計算担当）の設定。エラー防止のため安全なCDNから読み込みます。
+// @ts-ignore
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
 const LINE_DRAW_COLORS = [
   { label: '流れ壁', color: '#3b82f6' },
   { label: '平行壁', color: '#eab308' },
@@ -157,7 +163,6 @@ export default function MapPage() {
 
   useEffect(() => { getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data() as Project)); }, [id]);
 
-  // 位置図ごとに「説明表」を最初から1行表示にする（必要なら自動で1行作成）
   useEffect(() => {
     if (!project || initializedRows) return;
     const mapUrls: unknown = project.mapUrls;
@@ -197,23 +202,62 @@ export default function MapPage() {
     });
   }, [project, id, initializedRows]);
 
+  // ★ PDFを画像に変換してアップロードする最強関数
   const uploadMaps = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files as FileList).slice(0, 2);
     if (files.length === 0) return;
     setUploading(true);
-    const newUrls = [...(project.mapUrls || [])];
+    const newUrls = [...(project?.mapUrls || [])];
+
     for (const f of files) {
       if (newUrls.length >= 2) break;
-      const r = ref(storage, `maps/${id}/${Date.now()}_${f.name}`);
-      await uploadBytes(r, f);
+
+      let fileToUpload: File | Blob = f;
+      let fileName = f.name;
+
+      // もし選ばれたファイルがPDFだったら、裏でこっそり画像（JPG）に変換する！
+      if (f.type === 'application/pdf') {
+        try {
+          const arrayBuffer = await f.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          const page = await pdf.getPage(1); // 1ページ目を取得
+
+          const viewport = page.getViewport({ scale: 2.0 }); // 高画質（2倍）で読み込む
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+
+          if (context) {
+            await page.render({ canvasContext: context, viewport: viewport }).promise;
+            const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+            if (blob) {
+              fileToUpload = blob;
+              fileName = fileName.replace(/\.pdf$/i, '.jpg'); // 名前もJPGに変えておく
+            }
+          }
+        } catch (err) {
+          console.error('PDF変換エラー:', err);
+          alert('PDFの読み込みに失敗しました。パスワードがかかっているか、壊れている可能性があります。');
+          continue; // 失敗したらこのファイルは飛ばす
+        }
+      }
+
+      // 変換された画像（または普通の画像）をGoogle倉庫にアップロード
+      const r = ref(storage, `maps/${id}/${Date.now()}_${fileName}`);
+      await uploadBytes(r, fileToUpload);
       newUrls.push(await getDownloadURL(r));
     }
-    setProject({ ...project, mapUrls: newUrls });
-    await updateDoc(doc(db, "projects", id!), { mapUrls: newUrls });
+
+    if (project) {
+      setProject({ ...project, mapUrls: newUrls });
+      await updateDoc(doc(db, "projects", id!), { mapUrls: newUrls });
+    }
     setUploading(false);
   };
 
   const removeMap = async (index: number) => {
+    if (!project) return;
     if (
       !window.confirm(
         'この位置図を削除しますか？\n（配置したマーカー・線もすべて削除されます）',
@@ -245,6 +289,7 @@ export default function MapPage() {
   };
 
   const addPin = async (e: React.MouseEvent<HTMLDivElement>, mapIndex: number) => {
+    if (!project) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
@@ -261,18 +306,21 @@ export default function MapPage() {
   };
 
   const savePin = async (updatedPin: MapPinT) => {
+    if (!project) return;
     const newPins = (project.mapPins || []).map((p) => p.id === updatedPin.id ? updatedPin : p);
     setProject({ ...project, mapPins: newPins });
     await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
   };
 
   const removePin = async (pinId: number) => {
+    if (!project) return;
     const newPins = (project.mapPins || []).filter((p) => p.id !== pinId);
     setProject({ ...project, mapPins: newPins });
     await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
   };
 
   const addMapRow = async (mapIndex: number) => {
+    if (!project) return;
     const currentRows = (project.mapRows || []).filter((r) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0));
     const prefix = mapIndex === 0 ? 'A-' : 'B-';
     const symbol = `${prefix}${currentRows.length + 1}`;
@@ -283,18 +331,21 @@ export default function MapPage() {
   };
 
   const updateMapRow = async (rowId: number, field: keyof MapRow, value: string) => {
+    if (!project) return;
     const newRows = (project.mapRows || []).map((r) => r.id === rowId ? { ...r, [field]: value } : r);
     setProject({ ...project, mapRows: newRows });
     await updateDoc(doc(db, "projects", id!), { mapRows: newRows });
   };
 
   const removeMapRow = async (rowId: number) => {
+    if (!project) return;
     const newRows = (project.mapRows || []).filter((r) => r.id !== rowId);
     setProject({ ...project, mapRows: newRows });
     await updateDoc(doc(db, "projects", id!), { mapRows: newRows });
   };
 
   const removeMapLine = async (lineId: number) => {
+    if (!project) return;
     const newLines = (project.mapLines || []).filter((l) => l.id !== lineId);
     setProject({ ...project, mapLines: newLines });
     await updateDoc(doc(db, "projects", id!), { mapLines: newLines });
@@ -398,8 +449,9 @@ export default function MapPage() {
         <div className="bg-white p-5 rounded-3xl shadow-sm border border-black/5 mb-6 relative">
           <label className="flex items-center justify-center gap-2 w-full text-center bg-green-100 text-green-700 font-bold py-4 text-lg rounded-xl cursor-pointer shadow-sm mb-6 z-10 relative">
             <Images className="w-6 h-6" />
-            {uploading ? "Google倉庫へ保存中..." : "図面を追加（2枚まで）"}
-            <input type="file" multiple accept="image/*" className="hidden" onChange={uploadMaps} disabled={uploading} />
+            {uploading ? "Google倉庫へ保存中..." : "図面を追加（PDFもOK！）"}
+            {/* ★ PDFも選択できるように「application/pdf」を追加 */}
+            <input type="file" multiple accept="image/*,application/pdf" className="hidden" onChange={uploadMaps} disabled={uploading} />
           </label>
 
           {project.mapUrls && project.mapUrls.length > 0 ? (
