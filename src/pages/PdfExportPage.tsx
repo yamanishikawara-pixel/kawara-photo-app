@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Download } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase';
-import { toJpeg } from 'html-to-image';
-import { jsPDF } from 'jspdf';
-import type { Circle, MapRow, Photo, Project } from '../types';
+import { db, auth } from '../firebase';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
+import type { Circle, MapRow, MapLine, Photo, Project, Material } from '../types';
 import kawaraLogo from '../assets/kawara-logo.png';
 import {
   A4_HEIGHT_PX,
@@ -16,7 +16,19 @@ import {
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 
+/** Cloud Run 側が JSON（pdfBase64）または生 PDF を返すどちらでも扱う */
+const PDF_GENERATE_URL = 'https://generatepdf-ld4b4dsi5q-an.a.run.app';
+
 type ProjectWithOptionals = Project;
+
+const LINE_TYPES = [
+  { label: '流れ壁', color: '#3b82f6' },
+  { label: '平行壁', color: '#eab308' },
+  { label: '棟', color: '#22c55e' },
+  { label: '軒先', color: '#f97316' },
+  { label: '袖', color: '#ec4899' },
+  { label: 'その他', color: '#ef4444' },
+];
 
 const COVER_FIELDS: { label: string; key: keyof Project }[] = [
   { label: '工事件名', key: 'projectName' },
@@ -39,22 +51,84 @@ function createEmptyPhoto(): Photo & { circles?: Circle[] } {
   };
 }
 
+function createEmptyMaterial(): Material {
+  return {
+    id: Math.random(),
+    image: null,
+    name: '',
+    manufacturer: '',
+    specification: '',
+    remarks: '',
+    rotation: 0,
+  };
+}
+
+function PdfLineLegend() {
+  return (
+    <div
+      className="flex gap-x-4 gap-y-1 flex-wrap text-xs font-medium rounded-lg p-2 shadow-sm"
+      style={{ border: '1px solid #d1d5db', backgroundColor: '#ffffff' }}
+    >
+      {LINE_TYPES.map((type) => (
+        <div key={type.label} className="flex items-center gap-1.5">
+          <div
+            style={{
+              backgroundColor: type.color,
+              width: '1.5rem',
+              height: '2px',
+              borderRadius: '9999px',
+            }}
+          />
+          <span style={{ color: '#374151' }}>{type.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function downloadPdfBlob(blob: Blob, filename: string) {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => {
+    window.URL.revokeObjectURL(url);
+  }, 10000);
+}
+
 export default function PdfExportPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState<ProjectWithOptionals | null>(null);
+  const [userSettings, setUserSettings] = useState<Record<string, unknown> | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isZipping, setIsZipping] = useState(false);
   const [scale, setScale] = useState(1);
+  const [sessionId] = useState(() => Date.now().toString());
 
   useEffect(() => {
     if (!id) return;
     setError(null);
-    getDoc(doc(db, 'projects', id))
-      .then((d) => {
+    const fetchData = async () => {
+      try {
+        const d = await getDoc(doc(db, 'projects', id));
         if (d.exists()) setProject(d.data() as ProjectWithOptionals);
-      })
-      .catch(() => setError('データの読み込みに失敗しました。'));
+        const user = auth.currentUser;
+        if (user) {
+          const s = await getDoc(doc(db, 'users', user.uid));
+          if (s.exists()) setUserSettings(s.data() as Record<string, unknown>);
+        }
+      } catch {
+        setError('データの読み込みに失敗しました。');
+      }
+    };
+    fetchData();
   }, [id]);
 
   useEffect(() => {
@@ -64,75 +138,169 @@ export default function PdfExportPage() {
     return () => window.removeEventListener('resize', updateScale);
   }, []);
 
-  const handleExport = async () => {
+  const handleZipExport = async () => {
     if (!project) return;
     try {
-      const pages = document.querySelectorAll('.pdf-page');
-      if (pages.length === 0) return;
-      setIsExporting(true);
+      setIsZipping(true);
       setError(null);
-      window.scrollTo(0, 0);
-      await new Promise((r) => setTimeout(r, 500));
-      if (document.fonts?.ready) {
-        await document.fonts.ready;
+      await new Promise((r) => setTimeout(r, 100));
+
+      const zip = new JSZip();
+      const folderName = project.projectName || '現場写真';
+      const imgFolder = zip.folder(folderName);
+      if (!imgFolder) throw new Error('フォルダ作成失敗');
+
+      const activePhotos = (project.photos ?? []).filter((p) => p.image);
+      if (activePhotos.length === 0) {
+        setError('ダウンロードする写真がありません。');
+        setIsZipping(false);
+        return;
       }
 
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const promises = activePhotos.map(async (p) => {
+        if (!p.image) return;
+        try {
+          const response = await fetch(p.image);
+          const blob = await response.blob();
+          const processName = p.process ? `_${p.process}` : '';
+          const filename = `${p.photoNumber.padStart(2, '0')}${processName}.jpg`;
+          imgFolder.file(filename, blob);
+        } catch {
+          /* 1枚失敗しても続行 */
+        }
+      });
 
-      for (let i = 0; i < pages.length; i++) {
-        const pageEl = pages[i] as HTMLElement;
-        pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
-        await new Promise((r) => setTimeout(r, 600));
+      await Promise.all(promises);
+      const content = await zip.generateAsync({ type: 'blob' });
+      saveAs(content, `${folderName}.zip`);
+    } catch {
+      setError('Zipファイルの作成に失敗しました。');
+    } finally {
+      setIsZipping(false);
+    }
+  };
 
-        const currentTransform = pageEl.style.transform;
-        pageEl.style.transform = 'scale(1)';
+  const handleExport = async () => {
+    if (!project) return;
+    setIsExporting(true);
+    setError(null);
 
-        const dataUrl = await toJpeg(pageEl, {
-          cacheBust: true,
-          quality: 0.95,
-          pixelRatio: 2,
-          backgroundColor: '#ffffff',
-        });
+    try {
+      const styles = Array.from(
+        document.querySelectorAll('style, link[rel="stylesheet"]'),
+      )
+        .map((styleEl) => styleEl.outerHTML)
+        .join('');
 
-        pageEl.style.transform = currentTransform;
+      const container = document.querySelector(
+        '.flex.flex-col.gap-8.items-center.w-full',
+      );
+      if (!container) throw new Error('データが見つかりません');
+      const clone = container.cloneNode(true) as HTMLElement;
 
-        const pdfHeight = (pageEl.offsetHeight * pdfWidth) / pageEl.offsetWidth;
-        if (i > 0) pdf.addPage();
-        pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      const wrappers = clone.querySelectorAll('.shrink-0');
+      wrappers.forEach((w: Element) => {
+        const el = w as HTMLElement;
+        el.style.width = '794px';
+        el.style.height = '1123px';
+        el.style.pageBreakAfter = 'always';
+        el.style.margin = '0';
+        el.style.boxShadow = 'none';
+      });
+
+      const pages = clone.querySelectorAll('.pdf-page');
+      pages.forEach((p: Element) => {
+        const el = p as HTMLElement;
+        el.style.transform = 'none';
+        el.style.position = 'relative';
+        el.style.width = '794px';
+        el.style.height = '1123px';
+      });
+
+      const htmlContent = clone.innerHTML;
+
+      const response = await fetch(PDF_GENERATE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          html: `<!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            ${styles}
+            <style>
+              @page { margin: 0; size: A4 portrait; }
+              body { 
+                margin: 0; 
+                padding: 0; 
+                background-color: #ffffff; 
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact; 
+              }
+            </style>
+          </head>
+          <body>
+            ${htmlContent}
+          </body>
+          </html>`,
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => '');
+        throw new Error(
+          `サーバーエラー: ${response.status}${errText ? ` ${errText.slice(0, 200)}` : ''}`,
+        );
       }
 
-      pdf.save(`${project.projectName || '写真台帳'}.pdf`);
+      const contentType = response.headers.get('content-type') || '';
+      const pdfName = `${project.projectName || '現場報告書'}_${new Date().getTime()}.pdf`;
+
+      if (contentType.includes('application/pdf')) {
+        const blob = await response.blob();
+        if (blob.size === 0) throw new Error('PDFデータが空です');
+        downloadPdfBlob(blob, pdfName);
+      } else {
+        const data = (await response.json()) as { pdfBase64?: string };
+        if (!data.pdfBase64) throw new Error('PDFデータが空です');
+
+        const byteCharacters = atob(data.pdfBase64);
+        const byteNumbers = new Array<number>(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'application/pdf' });
+        downloadPdfBlob(blob, pdfName);
+      }
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'PDFの作成に失敗しました。';
-      setError(message);
+      console.error(err);
+      setError('PDF作成中にエラーが発生しました。裏サーバーのログを確認してください。');
     } finally {
       setIsExporting(false);
     }
   };
 
-  if (error && !project) {
-    return (
-      <div className="min-h-screen bg-gray-200 p-6 font-sans flex flex-col items-center justify-center">
-        <ErrorMessage message={error} onDismiss={() => setError(null)} />
-        <button
-          type="button"
-          onClick={() => navigate(`/project/${id}`)}
-          className="mt-4 text-blue-500 font-bold flex items-center gap-2"
-        >
-          <ArrowLeft className="w-5 h-5" /> もどる
-        </button>
-      </div>
-    );
-  }
-
   if (!project) return <LoadingSpinner />;
 
-  const mapUrlsToRender = project.mapUrls?.length ? project.mapUrls : [''];
+  const logoUrl =
+    typeof userSettings?.logoUrl === 'string' ? userSettings.logoUrl : undefined;
+  const companyName =
+    typeof userSettings?.companyName === 'string'
+      ? userSettings.companyName
+      : undefined;
+  const address =
+    typeof userSettings?.address === 'string' ? userSettings.address : undefined;
+  const phone =
+    typeof userSettings?.phone === 'string' ? userSettings.phone : undefined;
+
+  const mapUrlsToRender = project.mapUrls?.length
+    ? project.mapUrls.slice(0, 3)
+    : [''];
   const mapCount = mapUrlsToRender.length;
+
   const activePhotos = (project.photos ?? []).filter(
-    (p) => p.image || p.process || p.description
+    (p) => p.image || p.process || p.description,
   );
   const photoPages: (Photo & { circles?: Circle[] })[][] = [];
   for (let i = 0; i < Math.max(activePhotos.length, 3); i += 3) {
@@ -140,7 +308,25 @@ export default function PdfExportPage() {
     while (chunk.length < 3) chunk.push(createEmptyPhoto());
     photoPages.push(chunk);
   }
-  const totalPages = 1 + mapCount + photoPages.length;
+
+  const activeMaterials = (project.materials ?? []).filter(
+    (m) =>
+      m.image ||
+      m.name ||
+      m.manufacturer ||
+      m.specification ||
+      m.remarks,
+  );
+  const materialPages: Material[][] = [];
+  if (activeMaterials.length > 0) {
+    for (let i = 0; i < Math.max(activeMaterials.length, 3); i += 3) {
+      const chunk = activeMaterials.slice(i, i + 3);
+      while (chunk.length < 3) chunk.push(createEmptyMaterial());
+      materialPages.push(chunk);
+    }
+  }
+
+  const totalPages = 1 + mapCount + photoPages.length + materialPages.length;
   const wrapperStyle = {
     width: `${A4_WIDTH_PX * scale}px`,
     height: `${A4_HEIGHT_PX * scale}px`,
@@ -153,25 +339,34 @@ export default function PdfExportPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-200 p-4 sm:p-6 font-sans flex flex-col items-center pb-12 overflow-x-hidden w-full">
+    <div className="min-h-screen bg-gray-200 p-4 sm:p-6 font-sans flex flex-col items-center pb-12 overflow-x-hidden w-full relative">
       <div className="w-full max-w-2xl mb-6 flex justify-between items-center flex-wrap gap-2">
         <button
           type="button"
           onClick={() => navigate(`/project/${id}`)}
           className="text-blue-500 font-bold flex items-center gap-2 text-lg"
-          aria-label="現場メニューにもどる"
         >
           <ArrowLeft className="w-6 h-6" /> もどる
         </button>
-        <button
-          type="button"
-          onClick={handleExport}
-          disabled={isExporting}
-          className="bg-orange-500 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg text-base sm:text-lg disabled:opacity-60 disabled:cursor-not-allowed"
-          aria-busy={isExporting}
-        >
-          {isExporting ? 'PDF作成中...' : 'ダウンロード'}
-        </button>
+        <div className="flex gap-2 sm:gap-4">
+          <button
+            type="button"
+            onClick={handleZipExport}
+            disabled={isExporting || isZipping}
+            className="flex items-center gap-2 bg-green-600 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold shadow-lg text-sm sm:text-base hover:bg-green-700 disabled:opacity-50"
+          >
+            <Download className="w-5 h-5" />
+            写真のみ(Zip)
+          </button>
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={isExporting || isZipping}
+            className="flex items-center gap-2 bg-black text-white px-5 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg text-base sm:text-lg hover:bg-gray-800 disabled:opacity-50"
+          >
+            {isExporting ? 'PDF出力中...' : 'PDF出力'}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -181,80 +376,112 @@ export default function PdfExportPage() {
       )}
 
       <div className="flex flex-col gap-8 items-center w-full">
-        {/* 表紙 */}
-        <div style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
+        <div
+          style={wrapperStyle}
+          className="relative bg-white shadow-md shrink-0"
+        >
           <div
-            className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left"
-            style={{ ...pageStyle, padding: '20mm' }}
+            className="pdf-page absolute top-0 left-0 flex flex-col items-center origin-top-left"
+            style={{ ...pageStyle, backgroundColor: '#ffffff', color: '#000000' }}
           >
-            <div className="w-full h-full border-[2px] border-gray-900 px-[16mm] pt-[14mm] pb-[12mm] flex flex-col relative overflow-hidden">
-              {/* ロゴ透かし（背景）: “存在感はあるが邪魔しない” */}
-              <div className="absolute inset-0 pointer-events-none">
-                <img
-                  src={kawaraLogo}
-                  alt=""
-                  className="absolute left-[6mm] bottom-[-30mm] w-[190mm] h-[190mm] object-contain opacity-[0.035]"
-                  style={{ transform: 'rotate(-6deg)' }}
-                  crossOrigin="anonymous"
-                />
-              </div>
-
-              {/* 上段：タイトル / ロゴ（同一行で整列） */}
-              <div className="relative flex items-start justify-between">
-                <div className="pt-[2mm]">
-                  <h1 className="text-[42px] leading-[1.06] font-extrabold tracking-[0.08em] text-gray-950">
-                    工事写真報告書
-                  </h1>
-                  <div className="mt-3">
-                    <div className="h-[2px] w-[92mm] bg-gray-900" />
-                    <div className="mt-[2mm] h-[1px] w-[58mm] bg-gray-900/60" />
-                  </div>
-                </div>
-
-                <div className="shrink-0">
+            <div className="mt-[5mm] mb-[28mm] flex flex-col items-center w-full">
+              <div className="shrink-0 flex justify-center mb-6">
+                {logoUrl ? (
                   <img
-                    src={kawaraLogo}
-                    alt=""
-                    className="block w-[22mm] h-[22mm] object-contain"
+                    src={proxyUrl(logoUrl, `logo_${sessionId}`)}
+                    alt="自社ロゴ"
+                    className="block w-[40mm] h-auto object-contain"
                     crossOrigin="anonymous"
                   />
-                </div>
+                ) : (
+                  <img
+                    src={kawaraLogo}
+                    alt="標準ロゴ"
+                    className="block w-[32mm] h-auto object-contain grayscale"
+                    crossOrigin="anonymous"
+                  />
+                )}
               </div>
-
-              {/* 本文（項目は変更しない） */}
-              <div className="relative mt-[20mm] flex-1 flex items-start justify-center">
-                <div className="w-full max-w-[165mm] rounded-[16px] border-[1.5px] border-gray-900 bg-white px-8 py-7">
-                  <div className="space-y-5">
-                    {COVER_FIELDS.map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-6">
-                        <div className="w-[34mm] flex-shrink-0">
-                          <div className="text-[11px] font-bold tracking-[0.18em] text-gray-700 whitespace-nowrap">
-                            {item.label}
-                          </div>
-                        </div>
-                        <div className="flex-1 min-w-0 border-b border-gray-300 pb-2">
-                          <div className="text-[21px] font-bold text-gray-950 whitespace-nowrap overflow-hidden text-ellipsis">
-                            {String(project[item.key] ?? '　')}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* さりげないフッターライン（文字なし） */}
-              <div className="relative mt-auto pt-[8mm]">
-                <div className="h-[1px] w-full bg-gray-900/25" />
+              <div className="flex flex-col items-center">
+                <h1 className="text-[48px] font-black tracking-[0.3em] mb-4 text-center">
+                  工事写真報告書
+                </h1>
+                <div
+                  style={{
+                    width: '160mm',
+                    borderBottom: '4px solid #000000',
+                  }}
+                />
+                <div
+                  style={{
+                    width: '160mm',
+                    borderBottom: '1px solid #000000',
+                    marginTop: '6px',
+                  }}
+                />
               </div>
             </div>
-            <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">
+
+            <div className="w-[150mm] flex flex-col gap-y-[12mm]">
+              {COVER_FIELDS.map((item, idx) => {
+                let value = String(project[item.key] ?? '　');
+                if (item.key === 'contractorName' && companyName)
+                  value = companyName;
+                return (
+                  <div
+                    key={idx}
+                    className="flex items-end pb-2"
+                    style={{ borderBottom: '2px solid #000000' }}
+                  >
+                    <div className="w-[45mm] flex-shrink-0 flex justify-between text-[22px] font-bold pr-8 leading-none">
+                      {item.label.split('').map((c: string, i: number) => (
+                        <span key={i} className="block leading-none">
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex-1 text-[26px] font-black whitespace-nowrap overflow-hidden pl-4 leading-none pb-[2px]">
+                      {value}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {userSettings && (address || phone) && (
+              <div
+                className="absolute bottom-[16mm] right-[15mm] text-right flex flex-col items-end pl-4 py-1"
+                style={{ backgroundColor: '#ffffff' }}
+              >
+                {companyName && (
+                  <div
+                    className="text-[18px] font-bold mb-1"
+                    style={{ color: '#000000' }}
+                  >
+                    {companyName}
+                  </div>
+                )}
+                {address && (
+                  <div className="text-[14px]" style={{ color: '#1f2937' }}>
+                    {address}
+                  </div>
+                )}
+                {phone && (
+                  <div className="text-[14px]" style={{ color: '#1f2937' }}>
+                    TEL: {phone}
+                  </div>
+                )}
+              </div>
+            )}
+            <div
+              className="absolute bottom-[10mm] right-[15mm] text-[16px] font-bold"
+              style={{ color: '#000000' }}
+            >
               - 1 / {totalPages} -
             </div>
           </div>
         </div>
 
-        {/* 位置図 */}
         {mapUrlsToRender.map((u, mapIndex) => (
           <div
             key={`map-page-${mapIndex}`}
@@ -262,20 +489,31 @@ export default function PdfExportPage() {
             className="relative bg-white shadow-md shrink-0"
           >
             <div
-              className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left"
-              style={pageStyle}
+              className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left"
+              style={{ ...pageStyle, backgroundColor: '#ffffff', color: '#000000' }}
             >
-              <div className="w-full h-full border-[3px] border-gray-800 p-6 flex flex-col">
-                <h2 className="text-2xl font-bold mb-4 border-b-2 border-gray-800 pb-2">
-                  位置図{' '}
-                  {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}
+              <div
+                className="w-full h-full p-6 flex flex-col"
+                style={{ border: '3px solid #1f2937' }}
+              >
+                <h2
+                  className="text-2xl font-bold mb-4 pb-2"
+                  style={{ borderBottom: '2px solid #1f2937' }}
+                >
+                  位置図 {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}
                 </h2>
-                <div className="border border-gray-400 p-2 bg-gray-50 flex-1 flex items-center justify-center overflow-hidden min-h-0">
+                <div
+                  className="p-2 flex-1 flex items-center justify-center overflow-hidden min-h-0"
+                  style={{
+                    border: '1px solid #9ca3af',
+                    backgroundColor: '#f9fafb',
+                  }}
+                >
                   {u ? (
                     <div className="flex items-center justify-center w-full h-full">
                       <div className="relative inline-block">
                         <img
-                          src={proxyUrl(u, mapIndex)}
+                          src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)}
                           crossOrigin="anonymous"
                           className="block w-auto h-auto max-w-full max-h-[150mm]"
                           alt=""
@@ -288,58 +526,116 @@ export default function PdfExportPage() {
                               style={{
                                 left: `${pin.x}%`,
                                 top: `${pin.y}%`,
-                                transform: 'translate(-50%, -50%)',
+                                transform: `translate(-50%, -50%) scale(${pin.size ?? 1})`,
                               }}
                               className="absolute z-10"
                             >
                               {pin.type === 'arrow' ? (
-                                <div className="flex items-center gap-1 bg-white/70 px-1 rounded border border-red-200">
+                                <div
+                                  className="flex items-center gap-1 px-1 rounded"
+                                  style={{
+                                    backgroundColor: 'rgba(255,255,255,0.7)',
+                                    border: '1px solid #fecaca',
+                                  }}
+                                >
                                   <span
-                                    className="text-red-600 font-black text-[24px]"
+                                    className="font-black text-[24px]"
                                     style={{
+                                      color: '#dc2626',
                                       transform: `rotate(${pin.rotation ?? 0}deg)`,
                                     }}
                                   >
                                     ➡
                                   </span>
-                                  <span className="text-red-600 font-bold text-[20px]">
+                                  <span
+                                    className="font-bold text-[20px]"
+                                    style={{ color: '#dc2626' }}
+                                  >
                                     {pin.label}
                                   </span>
                                 </div>
                               ) : (
                                 <div className="relative flex items-center justify-center">
-                                  <div className="w-[14mm] h-[14mm] rounded-full border-[4px] border-red-600 bg-red-600/10" />
-                                  <span className="absolute text-red-600 font-bold text-[18px] bg-white/70 px-1 rounded">
+                                  <div
+                                    className="w-[14mm] h-[14mm] rounded-full"
+                                    style={{
+                                      border: '4px solid #dc2626',
+                                      backgroundColor: 'rgba(220,38,38,0.1)',
+                                    }}
+                                  />
+                                  <span
+                                    className="absolute font-bold text-[18px] px-1 rounded"
+                                    style={{
+                                      color: '#dc2626',
+                                      backgroundColor: 'rgba(255,255,255,0.7)',
+                                    }}
+                                  >
                                     {pin.label}
                                   </span>
                                 </div>
                               )}
                             </div>
                           ))}
+                        {(project.mapLines ?? [])
+                          .filter((l) => l.mapIndex === mapIndex)
+                          .map((line: MapLine) => (
+                            <div
+                              key={`line-${line.id}`}
+                              style={{
+                                position: 'absolute',
+                                left: `${line.x}%`,
+                                top: `${line.y}%`,
+                                width: `${line.length}%`,
+                                height: `${line.thickness}px`,
+                                backgroundColor: line.color,
+                                transform: `translate(-50%, -50%) rotate(${line.rotation}deg)`,
+                                transformOrigin: 'center center',
+                                zIndex: 5,
+                              }}
+                            />
+                          ))}
                       </div>
                     </div>
                   ) : (
-                    <span className="text-gray-400 font-bold">
+                    <span className="font-bold" style={{ color: '#9ca3af' }}>
                       位置図未登録
                     </span>
                   )}
                 </div>
-
-                {/* 項目欄（説明表） */}
                 <div className="mt-4">
-                  <div className="text-base font-bold mb-2">項目欄</div>
-                  <div className="border-2 border-gray-800">
-                    <div className="grid grid-cols-12 border-b-2 border-gray-800 bg-gray-100 text-sm font-bold">
-                      <div className="col-span-1 border-r-2 border-gray-800 p-2">
+                  <div className="flex justify-between items-end mb-2">
+                    <div className="text-base font-bold">項目欄</div>
+                    <PdfLineLegend />
+                  </div>
+                  <div style={{ border: '2px solid #1f2937' }}>
+                    <div
+                      className="grid grid-cols-12 text-base font-bold"
+                      style={{
+                        borderBottom: '2px solid #1f2937',
+                        backgroundColor: '#f3f4f6',
+                      }}
+                    >
+                      <div
+                        className="col-span-1 py-2 text-center flex justify-center items-center"
+                        style={{ borderRight: '2px solid #1f2937' }}
+                      >
                         符号
                       </div>
-                      <div className="col-span-2 border-r-2 border-gray-800 p-2">
+                      <div
+                        className="col-span-2 py-2 text-center flex justify-center items-center"
+                        style={{ borderRight: '2px solid #1f2937' }}
+                      >
                         部位
                       </div>
-                      <div className="col-span-2 border-r-2 border-gray-800 p-2">
+                      <div
+                        className="col-span-2 py-2 text-center text-sm flex justify-center items-center"
+                        style={{ borderRight: '2px solid #1f2937' }}
+                      >
                         写真NO
                       </div>
-                      <div className="col-span-7 p-2">備考</div>
+                      <div className="col-span-7 py-2 text-center flex justify-center items-center">
+                        備考
+                      </div>
                     </div>
                     {(() => {
                       const rows: MapRow[] = project.mapRows ?? [];
@@ -358,21 +654,34 @@ export default function PdfExportPage() {
                               photoNo: '　',
                               remarks: '　',
                             }));
-                      return displayRows.map((row, idx: number) => (
+                      return displayRows.map((row) => (
                         <div
                           key={row.id}
-                          className="grid grid-cols-12 border-b border-gray-400 text-sm"
+                          className="grid grid-cols-12 text-base"
+                          style={{ borderBottom: '1px solid #9ca3af' }}
                         >
-                          <div className="col-span-1 border-r border-gray-400 p-2 font-bold text-red-700 whitespace-nowrap overflow-hidden">
+                          <div
+                            className="col-span-1 py-2 font-bold text-center flex justify-center items-center"
+                            style={{
+                              borderRight: '1px solid #9ca3af',
+                              color: '#b91c1c',
+                            }}
+                          >
                             {row.symbol ?? '　'}
                           </div>
-                          <div className="col-span-2 border-r border-gray-400 p-2 whitespace-nowrap overflow-hidden">
+                          <div
+                            className="col-span-2 px-2 py-2 flex items-center overflow-hidden"
+                            style={{ borderRight: '1px solid #9ca3af' }}
+                          >
                             {row.part ?? '　'}
                           </div>
-                          <div className="col-span-2 border-r border-gray-400 p-2 whitespace-nowrap overflow-hidden">
+                          <div
+                            className="col-span-2 py-2 text-center text-sm flex justify-center items-center overflow-hidden"
+                            style={{ borderRight: '1px solid #9ca3af' }}
+                          >
                             {row.photoNo ?? row.relatedPhotoNumber ?? '　'}
                           </div>
-                          <div className="col-span-7 p-2 overflow-hidden">
+                          <div className="col-span-7 px-2 py-2 flex items-center overflow-hidden">
                             {row.remarks ?? '　'}
                           </div>
                         </div>
@@ -381,32 +690,43 @@ export default function PdfExportPage() {
                   </div>
                 </div>
               </div>
-              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">
+              <div
+                className="absolute bottom-[10mm] right-[15mm] text-xs font-serif"
+                style={{ color: '#9ca3af' }}
+              >
                 - {2 + mapIndex} / {totalPages} -
               </div>
             </div>
           </div>
         ))}
 
-        {/* 写真 */}
         {photoPages.map((chunk, pageIndex) => (
           <div
-            key={pageIndex}
+            key={`photo-page-${pageIndex}`}
             style={wrapperStyle}
             className="relative bg-white shadow-md shrink-0"
           >
             <div
-              className="pdf-page absolute top-0 left-0 bg-white flex flex-col origin-top-left"
-              style={pageStyle}
+              className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left"
+              style={{ ...pageStyle, backgroundColor: '#ffffff', color: '#000000' }}
             >
-              <div className="flex-1 flex flex-col justify-between border-[3px] border-gray-800 p-2">
+              <div
+                className="flex-1 flex flex-col justify-between p-2"
+                style={{ border: '3px solid #1f2937' }}
+              >
                 {chunk.map((p, i) => (
                   <div
                     key={i}
-                    className="flex gap-2 h-[32%] border border-gray-500 p-2 rounded"
+                    className="flex gap-2 h-[32%] p-2 rounded"
+                    style={{ border: '1px solid #6b7280' }}
                   >
-                    {/* 写真（拡大） */}
-                    <div className="w-[60%] border-2 border-gray-700 flex items-center justify-center bg-gray-50 overflow-hidden relative min-h-0">
+                    <div
+                      className="w-[60%] flex items-center justify-center overflow-hidden relative min-h-0"
+                      style={{
+                        border: '2px solid #374151',
+                        backgroundColor: '#f9fafb',
+                      }}
+                    >
                       {p.image ? (
                         <div className="flex items-center justify-center w-full h-full">
                           <div
@@ -417,7 +737,10 @@ export default function PdfExportPage() {
                             }}
                           >
                             <img
-                              src={proxyUrl(p.image, p.id)}
+                              src={proxyUrl(
+                                p.image,
+                                `photo_${p.id}_${sessionId}`,
+                              )}
                               crossOrigin="anonymous"
                               className="block w-auto h-auto max-w-full max-h-[88mm]"
                               alt=""
@@ -425,61 +748,114 @@ export default function PdfExportPage() {
                             {(p.circles ?? []).map((circle) => (
                               <div
                                 key={circle.id}
+                                className="absolute aspect-square rounded-full"
                                 style={{
                                   left: `${circle.x}%`,
                                   top: `${circle.y}%`,
                                   width: `${circle.size}%`,
                                   transform: 'translate(-50%, -50%)',
+                                  border: '3px solid #dc2626',
                                 }}
-                                className="absolute aspect-square rounded-full border-[3px] border-red-600"
                               />
                             ))}
                           </div>
                         </div>
                       ) : (
-                        <span className="text-gray-400 font-bold">
+                        <span className="font-bold" style={{ color: '#9ca3af' }}>
                           写真未登録
                         </span>
                       )}
                     </div>
 
-                    {/* 説明欄（少し縮小） */}
-                    <div className="w-[40%] flex flex-col text-xs border-2 border-gray-700 bg-white">
-                      <div className="flex border-b border-gray-400">
-                        <div className="w-16 bg-gray-100 p-1.5 border-r border-gray-400 font-bold">
+                    <div
+                      className="w-[40%] flex flex-col text-sm"
+                      style={{
+                        border: '2px solid #374151',
+                        backgroundColor: '#ffffff',
+                      }}
+                    >
+                      <div
+                        className="flex min-h-[36px]"
+                        style={{ borderBottom: '1px solid #9ca3af' }}
+                      >
+                        <div
+                          className="w-20 font-bold flex items-center justify-center text-center text-xs"
+                          style={{
+                            backgroundColor: '#f3f4f6',
+                            borderRight: '1px solid #9ca3af',
+                          }}
+                        >
                           写真NO
                         </div>
-                        <div className="p-1.5 flex-1 font-bold text-sm">
+                        <div className="px-3 flex-1 font-bold text-sm flex items-center">
                           {p.photoNumber || '　'}
                         </div>
                       </div>
-                      <div className="flex border-b border-gray-400">
-                        <div className="w-16 bg-gray-100 p-1.5 border-r border-gray-400 font-bold">
+                      <div
+                        className="flex min-h-[36px]"
+                        style={{ borderBottom: '1px solid #9ca3af' }}
+                      >
+                        <div
+                          className="w-20 font-bold flex items-center justify-center"
+                          style={{
+                            backgroundColor: '#f3f4f6',
+                            borderRight: '1px solid #9ca3af',
+                          }}
+                        >
                           撮影日
                         </div>
-                        <div className="p-1.5 flex-1">
+                        <div className="px-3 flex-1 flex items-center font-medium">
                           {p.shootingDate || '　'}
                         </div>
                       </div>
-                      <div className="flex border-b border-gray-400">
-                        <div className="w-16 bg-gray-100 p-1.5 border-r border-gray-400 font-bold">
+                      <div
+                        className="flex min-h-[36px]"
+                        style={{ borderBottom: '1px solid #9ca3af' }}
+                      >
+                        <div
+                          className="w-20 font-bold flex items-center justify-center"
+                          style={{
+                            backgroundColor: '#f3f4f6',
+                            borderRight: '1px solid #9ca3af',
+                          }}
+                        >
                           位置図
                         </div>
-                        <div className="p-1.5 flex-1 font-bold text-red-700">
+                        <div
+                          className="px-3 flex-1 font-bold flex items-center"
+                          style={{ color: '#b91c1c' }}
+                        >
                           {p.locationMap || '　'}
                         </div>
                       </div>
-                      <div className="flex border-b border-gray-400">
-                        <div className="w-16 bg-gray-100 p-1.5 border-r border-gray-400 font-bold">
+                      <div
+                        className="flex min-h-[36px]"
+                        style={{ borderBottom: '1px solid #9ca3af' }}
+                      >
+                        <div
+                          className="w-20 font-bold flex items-center justify-center"
+                          style={{
+                            backgroundColor: '#f3f4f6',
+                            borderRight: '1px solid #9ca3af',
+                          }}
+                        >
                           工程
                         </div>
-                        <div className="p-1.5 flex-1">{p.process || '　'}</div>
+                        <div className="px-3 flex-1 flex items-center font-medium">
+                          {p.process || '　'}
+                        </div>
                       </div>
                       <div className="flex-1 flex min-h-0">
-                        <div className="w-16 bg-gray-100 p-1.5 border-r border-gray-400 font-bold">
+                        <div
+                          className="w-20 py-2 font-bold flex items-center justify-center"
+                          style={{
+                            backgroundColor: '#f3f4f6',
+                            borderRight: '1px solid #9ca3af',
+                          }}
+                        >
                           説明
                         </div>
-                        <div className="p-1.5 flex-1 whitespace-pre-wrap overflow-hidden">
+                        <div className="p-3 flex-1 whitespace-pre-wrap overflow-hidden font-medium leading-relaxed flex items-start">
                           {p.description || '　'}
                         </div>
                       </div>
@@ -487,8 +863,164 @@ export default function PdfExportPage() {
                   </div>
                 ))}
               </div>
-              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif text-gray-400">
+              <div
+                className="absolute bottom-[10mm] right-[15mm] text-xs font-serif"
+                style={{ color: '#9ca3af' }}
+              >
                 - {2 + mapCount + pageIndex} / {totalPages} -
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {materialPages.map((chunk, pageIndex) => (
+          <div
+            key={`material-page-${pageIndex}`}
+            style={wrapperStyle}
+            className="relative bg-white shadow-md shrink-0"
+          >
+            <div
+              className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left"
+              style={{ ...pageStyle, backgroundColor: '#ffffff', color: '#000000' }}
+            >
+              <div className="w-full flex justify-between items-end mb-2">
+                <h2
+                  className="text-2xl font-bold pb-1"
+                  style={{ borderBottom: '2px solid #1f2937' }}
+                >
+                  使用材料表
+                </h2>
+              </div>
+              <div
+                className="flex-1 flex flex-col justify-between p-2"
+                style={{ border: '3px solid #1f2937' }}
+              >
+                {chunk.map((m, i) => (
+                  <div
+                    key={i}
+                    className="flex gap-2 h-[32%] p-2 rounded"
+                    style={{ border: '1px solid #6b7280' }}
+                  >
+                    <div
+                      className="w-[60%] flex items-center justify-center overflow-hidden relative min-h-0"
+                      style={{
+                        border: '2px solid #374151',
+                        backgroundColor: '#f9fafb',
+                      }}
+                    >
+                      {m.image ? (
+                        <div className="flex items-center justify-center w-full h-full">
+                          <div
+                            className="relative inline-block"
+                            style={{
+                              transform: `rotate(${m.rotation ?? 0}deg)`,
+                              transformOrigin: 'center center',
+                            }}
+                          >
+                            <img
+                              src={proxyUrl(
+                                m.image,
+                                `material_${m.id}_${sessionId}`,
+                              )}
+                              crossOrigin="anonymous"
+                              className="block w-auto h-auto max-w-full max-h-[85mm]"
+                              alt=""
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="font-bold" style={{ color: '#9ca3af' }}>
+                          写真未登録
+                        </span>
+                      )}
+                    </div>
+
+                    <div
+                      className="w-[40%] flex flex-col text-sm"
+                      style={{
+                        border: '2px solid #374151',
+                        backgroundColor: '#ffffff',
+                      }}
+                    >
+                      <div
+                        className="flex min-h-[36px]"
+                        style={{ borderBottom: '1px solid #9ca3af' }}
+                      >
+                        <div
+                          className="w-24 font-bold flex items-center justify-center text-center"
+                          style={{
+                            backgroundColor: '#f3f4f6',
+                            borderRight: '1px solid #9ca3af',
+                          }}
+                        >
+                          品名
+                        </div>
+                        <div className="px-3 flex-1 font-bold text-base overflow-hidden flex items-center">
+                          {m.name || '　'}
+                        </div>
+                      </div>
+                      <div
+                        className="flex min-h-[36px]"
+                        style={{ borderBottom: '1px solid #9ca3af' }}
+                      >
+                        <div
+                          className="w-24 font-bold flex items-center justify-center text-center"
+                          style={{
+                            backgroundColor: '#f3f4f6',
+                            borderRight: '1px solid #9ca3af',
+                          }}
+                        >
+                          メーカー
+                        </div>
+                        <div className="px-3 flex-1 overflow-hidden font-medium flex items-center">
+                          {m.manufacturer || '　'}
+                        </div>
+                      </div>
+                      <div
+                        className="flex min-h-[48px]"
+                        style={{ borderBottom: '1px solid #9ca3af' }}
+                      >
+                        <div
+                          className="w-24 font-bold text-xs flex items-center justify-center text-center leading-tight py-1"
+                          style={{
+                            backgroundColor: '#f3f4f6',
+                            borderRight: '1px solid #9ca3af',
+                          }}
+                        >
+                          規格・寸法
+                          <br />
+                          数量
+                        </div>
+                        <div
+                          className="px-3 flex-1 font-bold overflow-hidden flex items-center"
+                          style={{ color: '#b91c1c' }}
+                        >
+                          {m.specification || '　'}
+                        </div>
+                      </div>
+                      <div className="flex-1 flex min-h-0">
+                        <div
+                          className="w-24 py-2 font-bold flex items-center justify-center text-center"
+                          style={{
+                            backgroundColor: '#f3f4f6',
+                            borderRight: '1px solid #9ca3af',
+                          }}
+                        >
+                          備考
+                        </div>
+                        <div className="p-3 flex-1 whitespace-pre-wrap overflow-hidden font-medium leading-relaxed flex items-start">
+                          {m.remarks || '　'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div
+                className="absolute bottom-[10mm] right-[15mm] text-xs font-serif"
+                style={{ color: '#9ca3af' }}
+              >
+                - {2 + mapCount + photoPages.length + pageIndex} / {totalPages} -
               </div>
             </div>
           </div>

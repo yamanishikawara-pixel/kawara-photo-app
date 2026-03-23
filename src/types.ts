@@ -37,6 +37,29 @@ export interface MapPin {
   label: string;
   type: MapPinType;
   rotation: number;
+  /** 位置図上の表示スケール（未指定は 1） */
+  size?: number;
+}
+
+export interface MapLine {
+  id: number;
+  mapIndex: number;
+  x: number;
+  y: number;
+  length: number;
+  thickness: number;
+  color: string;
+  rotation: number;
+}
+
+export interface Material {
+  id: number;
+  image: string | null;
+  name: string;
+  manufacturer: string;
+  specification: string;
+  remarks: string;
+  rotation: number;
 }
 
 export interface Project {
@@ -49,6 +72,10 @@ export interface Project {
   mapUrls: string[];
   mapRows: MapRow[];
   mapPins: MapPin[];
+  /** 位置図上の線（任意） */
+  mapLines?: MapLine[];
+  /** 使用材料（任意） */
+  materials?: Material[];
   createdAt?: string;
 }
 
