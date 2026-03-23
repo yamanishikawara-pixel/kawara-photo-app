@@ -8,9 +8,9 @@ import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { proxyUrl, useDraggablePin } from '../shared/utils';
 import type { MapLine, MapPin as MapPinT, MapPinType, MapRow, Project } from '../types';
 
-// PDFを画像に変換するための最強ツールを読み込みます
+// PDFを画像に変換するための最強ツール
 import * as pdfjsLib from 'pdfjs-dist';
-// ワーカー（裏方の計算担当）の設定。最新版に対応した拡張子（.mjs）に変更！
+// ワーカーの設定
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 const LINE_DRAW_COLORS = [
@@ -21,6 +21,32 @@ const LINE_DRAW_COLORS = [
   { label: '袖', color: '#ec4899' },
   { label: 'その他', color: '#ef4444' },
 ] as const;
+
+// ★指示線の凡例データ
+const LINE_LEGEND_DATA = [
+  { label: '流れ壁', color: '#3b82f6' },
+  { label: '棟（むね）', color: '#ef4444' }, // 元の赤色を棟に変更など、名称は自由に
+  { label: '平壁', color: '#22c55e' },
+  { label: '軒先（のきさき）', color: '#f97316' },
+  { label: '袖壁', color: '#eab308' },
+  { label: 'その他', color: '#ec4899' },
+] as const;
+
+function PdfLineLegend() {
+  return (
+    <div
+      className="flex gap-x-4 gap-y-1 flex-wrap text-xs font-medium rounded-lg p-2 shadow-sm"
+      style={{ border: '1px solid #d1d5db', backgroundColor: '#ffffff' }}
+    >
+      {LINE_LEGEND_DATA.map(type => (
+        <div key={type.label} className="flex items-center gap-1.5">
+          <div style={{ backgroundColor: type.color, width: '12px', height: '12px', borderRadius: '50%' }} />
+          <span style={{ color: '#374151' }}>{type.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /** 画面上の2点（%）から MapLine の中心・長さ・角度を算出 */
 function lineFromTwoPoints(
@@ -59,10 +85,10 @@ function safeStyle(
 
 function MapMarker({
   pin,
-  isSelected, // ★選択されているか
+  isSelected,
   onDragEnd,
   onClick,
-  onSizeChange, // ★サイズ変更用コールバック
+  onSizeChange,
 }: {
   pin: MapPinT;
   isSelected: boolean;
@@ -71,8 +97,7 @@ function MapMarker({
   onSizeChange: (newSize: number) => void;
 }) {
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(pin.x, pin.y, onDragEnd);
-
-  const currentSize = pin.size || 1; // デフォルトサイズは1倍
+  const currentSize = pin.size || 1; 
 
   return (
     <>
@@ -84,7 +109,6 @@ function MapMarker({
           e.stopPropagation();
           if (!dragging) onClick();
         }}
-        // ★修正：scaleに pin.size を反映させて拡大縮小させる！
         style={{
           left: `${position.x}%`,
           top: `${position.y}%`,
@@ -115,26 +139,24 @@ function MapMarker({
         )}
       </div>
 
-      {/* ★選択中のみ、マーカーの下に拡大縮小ボタンを表示 */}
       {isSelected && !dragging && (
         <div
           style={{
             left: `${position.x}%`,
-            // サイズに合わせてボタンの位置も少し調整
             top: `${position.y + 10 * currentSize}%`,
             transform: 'translateX(-50%)',
           }}
           className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden"
-          onClick={(e) => e.stopPropagation()} // 親のタップイベントを防止
+          onClick={(e) => e.stopPropagation()} 
         >
           <button
-            onClick={() => onSizeChange(Math.min(3, currentSize + 0.1))} // 最大3倍まで
+            onClick={() => onSizeChange(Math.min(3, currentSize + 0.1))} 
             className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700"
           >
             ＋
           </button>
           <button
-            onClick={() => onSizeChange(Math.max(0.3, currentSize - 0.1))} // 最小0.3倍まで
+            onClick={() => onSizeChange(Math.max(0.3, currentSize - 0.1))} 
             className="px-4 py-2 text-xl font-bold border-l hover:bg-gray-100 text-gray-700"
           >
             ー
@@ -201,45 +223,18 @@ function MarkerEditModal({
     </div>
   )
 }
-// @ts-nocheck
 
-// ★指示線の凡例（プレビューの下に表示）
-const LINE_LEGEND_DATA = [
-  { label: '流れ壁', color: '#3b82f6' }, // 青
-  { label: '棟（むね）', color: '#ef4444' }, // 赤
-  { label: '平壁', color: '#22c55e' },    // 緑
-  { label: '軒先（のきさき）', color: '#f97316' },  // オレンジ
-  { label: '袖壁', color: '#eab308' },    // 黄
-  { label: 'その他', color: '#ec4899' },  // ピンク
-] as const;
-
-function PdfLineLegend() {
-  return (
-    <div
-      className="flex gap-x-4 gap-y-1 flex-wrap text-xs font-medium rounded-lg p-2 shadow-sm"
-      style={{ border: '1px solid #d1d5db', backgroundColor: '#ffffff' }}
-    >
-      {LINE_LEGEND_DATA.map(type => (
-        <div key={type.label} className="flex items-center gap-1.5">
-          {/* 指定された色の小さな丸を表示 */}
-          <div style={{ backgroundColor: type.color, width: '10px', height: '10px', borderRadius: '50%' }} />
-          <span style={{ color: '#374151' }}>{type.label}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
 export default function MapPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
   const [uploading, setUploading] = useState(false);
   const [editingPin, setEditingPin] = useState<MapPinT | null>(null);
-  const [selectedPinId, setSelectedPinId] = useState<number | null>(null); // ★選択されたピンID
+  const [selectedPinId, setSelectedPinId] = useState<number | null>(null); 
   const [initializedRows, setInitializedRows] = useState(false);
   const [lineModeForMap, setLineModeForMap] = useState<number | null>(null);
   const [lineColor, setLineColor] = useState<string>(LINE_DRAW_COLORS[0].color);
-  const [selectedLineWidth, setSelectedLineWidth] = useState<number>(4); // ★追加：選択された線の細さ（デフォルト4）
+  const [selectedLineWidth, setSelectedLineWidth] = useState<number>(4); 
   
   const [lineDrag, setLineDrag] = useState<{
     mapIndex: number;
@@ -292,7 +287,6 @@ export default function MapPage() {
     });
   }, [project, id, initializedRows]);
 
-  // PDFを画像に変換してアップロードする最強関数
   const uploadMaps = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files as FileList).slice(0, 2);
     if (files.length === 0) return;
@@ -322,7 +316,8 @@ export default function MapPage() {
           canvas.height = viewport.height;
 
           if (context) {
-           await page.render({ canvasContext: context, viewport: viewport } as any).promise;
+            // as any を追加して型エラーを回避！
+            await page.render({ canvasContext: context, viewport: viewport } as any).promise;
             const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
             if (blob) {
               fileToUpload = blob;
@@ -395,7 +390,7 @@ export default function MapPage() {
     setProject({ ...project, mapPins: newPins });
     await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
     setEditingPin(newPin);
-    setSelectedPinId(newPin.id); // 追加直後は選択状態にする
+    setSelectedPinId(newPin.id); 
   };
 
   const savePin = async (updatedPin: MapPinT) => {
@@ -506,7 +501,7 @@ export default function MapPage() {
       x: geom.x,
       y: geom.y,
       length: geom.length,
-      thickness: selectedLineWidth, // ★固定の4から、選択された太さに変更！
+      thickness: selectedLineWidth, 
       color: lineColor,
       rotation: geom.rotation,
     };
@@ -542,7 +537,6 @@ export default function MapPage() {
   if (!project) return <LoadingSpinner />;
 
   return (
-    // 全体クリックで選択状態を解除
     <div className="min-h-screen bg-gray-50 p-6 font-sans overflow-x-hidden" onClick={() => setSelectedPinId(null)}>
       <div className="max-w-md mx-auto pb-12">
         <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
@@ -567,7 +561,14 @@ export default function MapPage() {
                   <li><b>「線を描く」</b>をオンにすると、ドラッグで線を引き、壁種などを指示できます。</li>
                 </ul>
               </div>
+
+              {/* ★凡例部分 */}
+              <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                <p className="text-sm font-bold text-gray-700 mb-2">線の色と種類（凡例）</p>
+                <PdfLineLegend />
+              </div>
               
+              {/* ★ここから図面のループ */}
               {project.mapUrls.map((u: string, i: number) => {
                 const currentRows = (project.mapRows || []).filter((r) => r.mapIndex === i || (r.mapIndex === undefined && i === 0));
                 
@@ -610,7 +611,6 @@ export default function MapPage() {
                       )}
                     </div>
 
-                    {/* ★修正：線モードの時だけ、太さを調整するスライダーを表示 */}
                     {lineModeForMap === i && (
                       <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border mt-1">
                         <span className="text-sm font-bold text-gray-700 whitespace-nowrap">線の細さ:</span>
@@ -624,7 +624,6 @@ export default function MapPage() {
                           className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
                         />
                         <span className="text-lg font-black text-amber-700 w-8 text-right">{selectedLineWidth}px</span>
-                        {/* プレビュー用の線 */}
                         <div className="w-10 h-6 flex items-center justify-center border rounded bg-gray-50">
                           <div style={{ backgroundColor: lineColor, width: '80%', height: `${selectedLineWidth}px` }} className="rounded-full" />
                         </div>
@@ -638,11 +637,10 @@ export default function MapPage() {
                         lineModeForMap === i ? 'cursor-crosshair' : ''
                       }`}
                       onClick={(e) => {
-                        // 線モード中、またはピンが選択されている時は、新規ピン追加を防ぐ
                         if (lineModeForMap !== i && selectedPinId === null) {
                            addPin(e, i);
                         } else {
-                           setSelectedPinId(null); // それ以外は選択解除
+                           setSelectedPinId(null); 
                         }
                       }}
                       onPointerDown={(e) => handleLinePointerDown(e, i)}
@@ -652,7 +650,6 @@ export default function MapPage() {
                     >
                       <img src={proxyUrl(u, i)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[60vh] pointer-events-none rounded shadow-sm" alt="" />
                       
-                      {/* 配置済みの線の描画 */}
                       {(project.mapLines || [])
                         .filter((l) => l.mapIndex === i)
                         .map((line) => (
@@ -672,7 +669,6 @@ export default function MapPage() {
                           />
                         ))}
                       
-                      {/* 線を描画中のプレビュー（SVG） */}
                       {lineDrag &&
                         lineDrag.mapIndex === i &&
                         linePreviewEnd && (
@@ -688,27 +684,26 @@ export default function MapPage() {
                               x2={linePreviewEnd.x}
                               y2={linePreviewEnd.y}
                               stroke={lineColor}
-                              strokeWidth={selectedLineWidth / 5} // SVGのstrokeWidthは少し調整
+                              strokeWidth={selectedLineWidth / 5} 
                               strokeLinecap="round"
                             />
                           </svg>
                         )}
                       
-                      {/* マーカー（ピン）の描画 */}
                       {(project.mapPins || []).filter((p) => p.mapIndex === i).map((pin) => (
                         <MapMarker
                           key={pin.id}
                           pin={pin}
-                          isSelected={selectedPinId === pin.id} // ★選択状態を渡す
+                          isSelected={selectedPinId === pin.id} 
                           onDragEnd={(x: number, y: number) => savePin({...pin, x, y})}
                           onClick={() => {
                             if (selectedPinId === pin.id) {
-                              setEditingPin(pin); // 選択中にもう一度タップで編集モーダル
+                              setEditingPin(pin); 
                             } else {
-                              setSelectedPinId(pin.id); // タップで選択
+                              setSelectedPinId(pin.id); 
                             }
                           }}
-                          onSizeChange={(newSize) => updatePinSize(pin.id, newSize)} // ★サイズ変更関数を渡す
+                          onSizeChange={(newSize) => updatePinSize(pin.id, newSize)} 
                         />
                       ))}
                     </div>
@@ -730,7 +725,7 @@ export default function MapPage() {
                             >
                               <span
                                 className="inline-block h-2 rounded-sm"
-                                style={{ backgroundColor: line.color || '#000', width: `${line.thickness}px` }} // 太さを反映
+                                style={{ backgroundColor: line.color || '#000', width: `${line.thickness}px` }} 
                               />
                               削除
                             </button>
