@@ -821,18 +821,20 @@ export default function MapPage() {
                     </div>
                   )}
 
-                  <div className="w-full mt-6 pt-4 border-t border-gray-300">
+                 <div className="w-full mt-6 pt-4 border-t border-gray-300">
                     <h3 className="text-lg font-bold mb-3 text-gray-800">位置図 {i + 1} の説明表</h3>
                     <div className="space-y-3">
                       {currentRows.map((row) => (
-                        <div key={row.id} className="flex gap-2 items-center bg-white p-2 rounded-xl border border-gray-200 shadow-sm">
-                          <div className="flex-1 grid grid-cols-12 gap-2">
-                            <input type="text" placeholder="符号" className="col-span-1 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.symbol || ''} onChange={e => updateMapRow(row.id, 'symbol', e.target.value)} />
-                            <input type="text" placeholder="部位" className="col-span-2 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.part || ''} onChange={e => updateMapRow(row.id, 'part', e.target.value)} />
-                            <input type="text" placeholder="写真NO" className="col-span-2 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.photoNo || row.relatedPhotoNumber || ''} onChange={e => updateMapRow(row.id, 'photoNo', e.target.value)} />
-                            <input type="text" placeholder="備考" className="col-span-7 p-2 border border-gray-300 rounded-lg text-sm bg-white" value={row.remarks || ''} onChange={e => updateMapRow(row.id, 'remarks', e.target.value)} />
+                        <div key={row.id} className="flex gap-1 sm:gap-2 items-center bg-white p-2 rounded-xl border border-gray-200 shadow-sm">
+                          {/* ★ここを改修：割合を 1:2:2:7 から 2:3:2:5 に変更し、符号欄を2倍に拡大！ */}
+                          <div className="flex-1 grid grid-cols-12 gap-1 sm:gap-2">
+                            <input type="text" placeholder="符号" className="col-span-3 sm:col-span-2 p-2 border border-gray-300 rounded-lg text-sm sm:text-base bg-white text-center font-bold" value={row.symbol || ''} onChange={e => updateMapRow(row.id, 'symbol', e.target.value)} />
+                            <input type="text" placeholder="部位" className="col-span-3 p-2 border border-gray-300 rounded-lg text-sm sm:text-base bg-white" value={row.part || ''} onChange={e => updateMapRow(row.id, 'part', e.target.value)} />
+                            <input type="text" placeholder="写真" className="col-span-2 p-2 border border-gray-300 rounded-lg text-sm sm:text-base bg-white text-center font-bold" value={row.photoNo || row.relatedPhotoNumber || ''} onChange={e => updateMapRow(row.id, 'photoNo', e.target.value)} />
+                            <input type="text" placeholder="備考" className="col-span-4 sm:col-span-5 p-2 border border-gray-300 rounded-lg text-sm sm:text-base bg-white" value={row.remarks || ''} onChange={e => updateMapRow(row.id, 'remarks', e.target.value)} />
                           </div>
-                          <button onClick={() => removeMapRow(row.id)} className="p-2 text-red-500 bg-white border border-red-100 rounded-lg hover:bg-red-50"><Trash2 className="w-5 h-5" /></button>
+                          {/* ゴミ箱ボタンが潰れないように shrink-0 を追加 */}
+                          <button onClick={() => removeMapRow(row.id)} className="p-2 text-red-500 bg-white border border-red-100 rounded-lg hover:bg-red-50 shrink-0"><Trash2 className="w-5 h-5" /></button>
                         </div>
                       ))}
                       <button onClick={() => addMapRow(i)} className="w-full py-3 bg-white text-blue-600 font-bold rounded-xl mt-2 border-2 border-dashed border-blue-200 hover:bg-blue-50 transition-colors">+ 説明行を追加</button>
