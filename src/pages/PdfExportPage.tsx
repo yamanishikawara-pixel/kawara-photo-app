@@ -348,10 +348,11 @@ export default function PdfExportPage() {
                           r.mapIndex === mapIndex ||
                           (r.mapIndex === undefined && mapIndex === 0),
                       );
-                      const displayRows =
+                      const displayRows: MapRow[] =
                         currentRows.length > 0
                           ? currentRows.slice(0, 6)
-                          : Array.from({ length: 6 }, () => ({
+                          : Array.from({ length: 6 }, (_, i) => ({
+                              id: -(i + 1),
                               symbol: '　',
                               part: '　',
                               photoNo: '　',
@@ -359,7 +360,7 @@ export default function PdfExportPage() {
                             }));
                       return displayRows.map((row, idx: number) => (
                         <div
-                          key={row.id ?? idx}
+                          key={row.id}
                           className="grid grid-cols-12 border-b border-gray-400 text-sm"
                         >
                           <div className="col-span-1 border-r border-gray-400 p-2 font-bold text-red-700 whitespace-nowrap overflow-hidden">
