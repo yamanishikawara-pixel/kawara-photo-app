@@ -10,9 +10,8 @@ import type { MapLine, MapPin as MapPinT, MapPinType, MapRow, Project } from '..
 
 // ★ PDFを画像に変換するための最強ツールを読み込みます
 import * as pdfjsLib from 'pdfjs-dist';
-// ワーカー（裏方の計算担当）の設定。エラー防止のため安全なCDNから読み込みます。
-// @ts-ignore
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// ★修正1：最新版(v4)に対応した拡張子（.mjs）のワーカーに変更！
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 const LINE_DRAW_COLORS = [
   { label: '流れ壁', color: '#3b82f6' },
@@ -219,7 +218,12 @@ export default function MapPage() {
       if (f.type === 'application/pdf') {
         try {
           const arrayBuffer = await f.arrayBuffer();
-          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          // ★修正2：日本語の図面（明朝体やゴシック体など）をエラーなく読み込めるように「日本語辞書（cMap）」をセット！
+          const pdf = await pdfjsLib.getDocument({ 
+            data: arrayBuffer,
+            cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/cmaps/`,
+            cMapPacked: true,
+          }).promise;
           const page = await pdf.getPage(1); // 1ページ目を取得
 
           const viewport = page.getViewport({ scale: 2.0 }); // 高画質（2倍）で読み込む
