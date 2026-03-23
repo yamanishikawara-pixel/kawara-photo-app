@@ -79,13 +79,19 @@ function safeStyle(
   return String(val);
 }
 
-// ★新機能：ドラッグして自由に動かせる「線」の専用部品
+// ★線を掴んで動かし、タップで回転できる専用部品！
 function DraggableMapLine({
   line,
+  isSelected,
   onDragEnd,
+  onClick,
+  onRotate,
 }: {
   line: MapLine;
+  isSelected: boolean;
   onDragEnd: (x: number, y: number) => void;
+  onClick: () => void;
+  onRotate: (newRotation: number) => void;
 }) {
   const initialX = typeof line.x === 'number' ? line.x : parseFloat(line.x as string);
   const initialY = typeof line.y === 'number' ? line.y : parseFloat(line.y as string);
@@ -93,35 +99,70 @@ function DraggableMapLine({
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(initialX, initialY, onDragEnd);
 
   return (
-    <div
-      ref={containerRef}
-      onMouseDown={onMouseDown}
-      onTouchStart={onTouchStart}
-      // 線描画モードの誤作動防止
-      className={`map-line-marker absolute cursor-move flex items-center justify-center transition-opacity ${
-        dragging ? 'z-30 opacity-50 scale-105' : 'z-10 hover:opacity-80'
-      }`}
-      style={{
-        left: `${position.x}%`,
-        top: `${position.y}%`,
-        width: safeStyle(line.length, '%'),
-        // ★ここがミソ！細い線でも指で掴みやすいように、見えないタッチ判定エリアを最低20px確保！
-        height: Math.max(typeof line.thickness === 'number' ? line.thickness : parseFloat(line.thickness as string) || 4, 20) + 'px', 
-        transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`,
-        transformOrigin: 'center center',
-        touchAction: 'none',
-      }}
-    >
-      {/* 見た目としての実際の線（真ん中に表示される） */}
-      <div 
-        style={{ 
-          width: '100%', 
-          height: safeStyle(line.thickness, 'px'), 
-          backgroundColor: line.color || '#000000',
+    <>
+      <div
+        ref={containerRef}
+        onMouseDown={onMouseDown}
+        onTouchStart={onTouchStart}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!dragging) onClick();
+        }}
+        className={`map-line-marker absolute cursor-move flex items-center justify-center transition-opacity ${
+          dragging ? 'z-30 opacity-50 scale-105' : 'z-10 hover:opacity-80'
+        }`}
+        style={{
+          left: `${position.x}%`,
+          top: `${position.y}%`,
+          width: safeStyle(line.length, '%'),
+          height: Math.max(typeof line.thickness === 'number' ? line.thickness : parseFloat(line.thickness as string) || 4, 20) + 'px', 
+          transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`,
+          transformOrigin: 'center center',
+          touchAction: 'none',
+          // 選択中は薄い青枠で強調表示
+          boxShadow: isSelected ? '0 0 0 3px rgba(59, 130, 246, 0.4)' : 'none',
           borderRadius: '999px',
-        }} 
-      />
-    </div>
+        }}
+      >
+        <div 
+          style={{ 
+            width: '100%', 
+            height: safeStyle(line.thickness, 'px'), 
+            backgroundColor: line.color || '#000000',
+            borderRadius: '999px',
+          }} 
+        />
+      </div>
+
+      {/* ★選択中のみ表示される「回転の微調整ボタン」 */}
+      {isSelected && !dragging && (
+        <div
+          style={{
+            left: `${position.x}%`,
+            top: `calc(${position.y}% + 25px)`, // 線の少し下に表示
+            transform: 'translateX(-50%)',
+          }}
+          className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden items-center"
+          onClick={(e) => e.stopPropagation()} 
+        >
+          <button
+            onClick={() => onRotate((line.rotation - 1 + 360) % 360)} // 左に1度回転
+            className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700 border-r"
+          >
+            ↺
+          </button>
+          <span className="px-3 text-xs font-bold text-gray-600 whitespace-nowrap">
+            角度微調整
+          </span>
+          <button
+            onClick={() => onRotate((line.rotation + 1) % 360)} // 右に1度回転
+            className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700 border-l"
+          >
+            ↻
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -193,13 +234,13 @@ function MapMarker({
         >
           <button
             onClick={() => onSizeChange(Math.min(3, currentSize + 0.1))} 
-            className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700"
+            className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700 border-r"
           >
             ＋
           </button>
           <button
             onClick={() => onSizeChange(Math.max(0.3, currentSize - 0.1))} 
-            className="px-4 py-2 text-xl font-bold border-l hover:bg-gray-100 text-gray-700"
+            className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700"
           >
             ー
           </button>
@@ -272,7 +313,11 @@ export default function MapPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [uploading, setUploading] = useState(false);
   const [editingPin, setEditingPin] = useState<MapPinT | null>(null);
+  
+  // ★追加：選択状態を管理（ピンか線か）
   const [selectedPinId, setSelectedPinId] = useState<number | null>(null); 
+  const [selectedLineId, setSelectedLineId] = useState<number | null>(null); 
+
   const [initializedRows, setInitializedRows] = useState(false);
   const [lineModeForMap, setLineModeForMap] = useState<number | null>(null);
   const [lineColor, setLineColor] = useState<string>(LINE_DRAW_COLORS[0].color);
@@ -386,34 +431,18 @@ export default function MapPage() {
 
   const removeMap = async (index: number) => {
     if (!project) return;
-    if (
-      !window.confirm(
-        'この位置図を削除しますか？\n（配置したマーカー・線もすべて削除されます）',
-      )
-    )
-      return;
+    if (!window.confirm('この位置図を削除しますか？\n（配置したマーカー・線もすべて削除されます）')) return;
     const newUrls = project.mapUrls.filter((_, i: number) => i !== index);
     const newPins = (project.mapPins || []).filter((p) => p.mapIndex !== index);
     const newLines = (project.mapLines || [])
       .filter((l) => l.mapIndex !== index)
-      .map((l) => ({
-        ...l,
-        mapIndex: l.mapIndex > index ? l.mapIndex - 1 : l.mapIndex,
-      }));
-    setProject({
-      ...project,
-      mapUrls: newUrls,
-      mapPins: newPins,
-      mapLines: newLines,
-    });
-    await updateDoc(doc(db, "projects", id!), {
-      mapUrls: newUrls,
-      mapPins: newPins,
-      mapLines: newLines,
-    });
+      .map((l) => ({ ...l, mapIndex: l.mapIndex > index ? l.mapIndex - 1 : l.mapIndex }));
+    
+    setProject({ ...project, mapUrls: newUrls, mapPins: newPins, mapLines: newLines });
+    await updateDoc(doc(db, "projects", id!), { mapUrls: newUrls, mapPins: newPins, mapLines: newLines });
+    
     if (lineModeForMap === index) setLineModeForMap(null);
-    else if (lineModeForMap !== null && lineModeForMap > index)
-      setLineModeForMap(lineModeForMap - 1);
+    else if (lineModeForMap !== null && lineModeForMap > index) setLineModeForMap(lineModeForMap - 1);
   };
 
   const addPin = async (e: React.MouseEvent<HTMLDivElement>, mapIndex: number) => {
@@ -432,6 +461,7 @@ export default function MapPage() {
     await updateDoc(doc(db, "projects", id!), { mapPins: newPins });
     setEditingPin(newPin);
     setSelectedPinId(newPin.id); 
+    setSelectedLineId(null);
   };
 
   const savePin = async (updatedPin: MapPinT) => {
@@ -456,10 +486,17 @@ export default function MapPage() {
     setSelectedPinId(null);
   };
 
-  // ★新機能：ドラッグして移動した線の位置を保存する処理
   const saveLinePosition = async (lineId: number, x: number, y: number) => {
     if (!project) return;
     const newLines = (project.mapLines || []).map((l) => l.id === lineId ? { ...l, x, y } : l);
+    setProject({ ...project, mapLines: newLines });
+    await updateDoc(doc(db, "projects", id!), { mapLines: newLines });
+  };
+
+  // ★新機能：線の角度をFirebaseに保存する処理
+  const updateLineRotation = async (lineId: number, newRotation: number) => {
+    if (!project) return;
+    const newLines = (project.mapLines || []).map((l) => l.id === lineId ? { ...l, rotation: newRotation } : l);
     setProject({ ...project, mapLines: newLines });
     await updateDoc(doc(db, "projects", id!), { mapLines: newLines });
   };
@@ -501,7 +538,6 @@ export default function MapPage() {
     mapIndex: number,
   ) => {
     if (lineModeForMap !== mapIndex) return;
-    // ★マーカーや「配置済みの線」を触った時は、新しい線を引かないようにブロック！
     if ((e.target as HTMLElement).closest('.map-pin-marker') || (e.target as HTMLElement).closest('.map-line-marker')) return;
     
     const el = e.currentTarget;
@@ -588,7 +624,8 @@ export default function MapPage() {
   if (!project) return <LoadingSpinner />;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 font-sans overflow-x-hidden" onClick={() => setSelectedPinId(null)}>
+    // ★背景をタップしたら、ピンや線の選択状態を解除する
+    <div className="min-h-screen bg-gray-50 p-6 font-sans overflow-x-hidden" onClick={() => { setSelectedPinId(null); setSelectedLineId(null); }}>
       <div className="max-w-md mx-auto pb-12">
         <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
         <h1 className="text-3xl font-bold mb-6 text-gray-900">位置図の登録と指示</h1>
@@ -607,7 +644,7 @@ export default function MapPage() {
                 <ul className="text-sm text-red-700 font-medium space-y-1 list-disc pl-5">
                   <li>図面を<b>タップ</b>すると、赤丸が打てます。</li>
                   <li>赤丸・引いた線は<b>ドラッグ</b>で自由に移動できます。</li>
-                  <li>赤丸を<b>タップで選択</b>すると、<b>「拡大・縮小」</b>ボタンが出ます。</li>
+                  <li>赤丸や線を<b>タップで選択</b>すると、<b>「拡大・縮小」や「角度微調整」</b>ボタンが出ます。</li>
                   <li>選択中に<b>もう一度タップ</b>すると、符号や矢印の設定ができます。</li>
                   <li><b>「線を描く」</b>をオンにすると、ドラッグで線を引き、壁種などを指示できます。</li>
                 </ul>
@@ -686,10 +723,12 @@ export default function MapPage() {
                         lineModeForMap === i ? 'cursor-crosshair' : ''
                       }`}
                       onClick={(e) => {
-                        if (lineModeForMap !== i && selectedPinId === null) {
+                        // 新規でピンを追加する条件
+                        if (lineModeForMap !== i && selectedPinId === null && selectedLineId === null) {
                            addPin(e, i);
                         } else {
                            setSelectedPinId(null); 
+                           setSelectedLineId(null);
                         }
                       }}
                       onPointerDown={(e) => handleLinePointerDown(e, i)}
@@ -699,14 +738,20 @@ export default function MapPage() {
                     >
                       <img src={proxyUrl(u, i)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[60vh] pointer-events-none rounded shadow-sm" alt="" />
                       
-                      {/* ★変更：線を自由に動かせる専用部品で描画！ */}
+                      {/* ★線を自由に動かし、タップで回転ボタンが出るように描画 */}
                       {(project.mapLines || [])
                         .filter((l) => l.mapIndex === i)
                         .map((line) => (
                           <DraggableMapLine
                             key={line.id}
                             line={line}
+                            isSelected={selectedLineId === line.id}
+                            onClick={() => {
+                              setSelectedPinId(null);
+                              setSelectedLineId(line.id); // 線を選択状態にする
+                            }}
                             onDragEnd={(x, y) => saveLinePosition(line.id, x, y)}
+                            onRotate={(newRot) => updateLineRotation(line.id, newRot)}
                           />
                         ))}
                       
@@ -742,6 +787,7 @@ export default function MapPage() {
                               setEditingPin(pin); 
                             } else {
                               setSelectedPinId(pin.id); 
+                              setSelectedLineId(null);
                             }
                           }}
                           onSizeChange={(newSize) => updatePinSize(pin.id, newSize)} 
