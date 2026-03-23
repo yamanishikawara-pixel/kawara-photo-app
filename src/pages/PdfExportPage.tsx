@@ -31,17 +31,29 @@ function safeStyleLine(
   return String(val);
 }
 
-/** 本番は /api/generatePdf を先に（CORS なし）。ローカルは Cloud Run を先に。VITE_PDF_GENERATE_URL があれば最優先 */
+/**
+ * ブラウザから Cloud Run（*.run.app）へ POST すると CORS でブロックされることが多い。
+ * 本番（Firebase Hosting）では同一オリジンの /api/generatePdf のみ。失敗時はクライアント生成へ。
+ * VITE_PDF_GENERATE_URL に run.app を指定しても本番では無視して /api のみ使う。
+ */
 function pdfEndpointCandidates(): string[] {
   const env = (import.meta.env.VITE_PDF_GENERATE_URL as string | undefined)?.trim();
-  if (env) return [env];
   const isLocal =
     typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' ||
       window.location.hostname === '127.0.0.1');
-  return isLocal
-    ? [PDF_GENERATE_URL, '/api/generatePdf']
-    : ['/api/generatePdf', PDF_GENERATE_URL];
+
+  if (env) {
+    if (!isLocal && env.includes('run.app')) {
+      return ['/api/generatePdf'];
+    }
+    return [env];
+  }
+
+  if (!isLocal) {
+    return ['/api/generatePdf'];
+  }
+  return [PDF_GENERATE_URL, '/api/generatePdf'];
 }
 
 /** 生 PDF / JSON+base64 の両方を解釈 */
@@ -365,12 +377,19 @@ export default function PdfExportPage() {
 
       if (!serverOk) {
         console.warn('サーバーPDFに失敗、ブラウザで生成します', lastServerErr);
-        await exportPdfClientSide();
+        try {
+          await exportPdfClientSide();
+        } catch (clientErr) {
+          console.error(clientErr);
+          setError(
+            'PDFの保存に失敗しました。Firebase の Functions（generatePdf）のデプロイとログを確認するか、ページを再読み込みしてから再度お試しください。',
+          );
+        }
       }
     } catch (err: unknown) {
       console.error(err);
       setError(
-        'PDF作成中にエラーが発生しました。ネットワークとサーバーログを確認するか、しばらくしてから再度お試しください。',
+        'PDF作成中にエラーが発生しました。ページを再読み込みしてから再度お試しください。',
       );
     } finally {
       setIsExporting(false);
