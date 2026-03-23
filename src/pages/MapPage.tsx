@@ -201,7 +201,34 @@ function MarkerEditModal({
     </div>
   )
 }
+// @ts-nocheck
 
+// ★指示線の凡例（プレビューの下に表示）
+const LINE_LEGEND_DATA = [
+  { label: '流れ壁', color: '#3b82f6' }, // 青
+  { label: '棟（むね）', color: '#ef4444' }, // 赤
+  { label: '平壁', color: '#22c55e' },    // 緑
+  { label: '軒先（のきさき）', color: '#f97316' },  // オレンジ
+  { label: '袖壁', color: '#eab308' },    // 黄
+  { label: 'その他', color: '#ec4899' },  // ピンク
+] as const;
+
+function PdfLineLegend() {
+  return (
+    <div
+      className="flex gap-x-4 gap-y-1 flex-wrap text-xs font-medium rounded-lg p-2 shadow-sm"
+      style={{ border: '1px solid #d1d5db', backgroundColor: '#ffffff' }}
+    >
+      {LINE_LEGEND_DATA.map(type => (
+        <div key={type.label} className="flex items-center gap-1.5">
+          {/* 指定された色の小さな丸を表示 */}
+          <div style={{ backgroundColor: type.color, width: '10px', height: '10px', borderRadius: '50%' }} />
+          <span style={{ color: '#374151' }}>{type.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 export default function MapPage() {
   const { id } = useParams();
   const navigate = useNavigate();
