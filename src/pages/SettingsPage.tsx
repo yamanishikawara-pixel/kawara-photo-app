@@ -1,87 +1,69 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Building2, MapPin, Phone, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, Settings } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, auth, storage } from '../firebase';
+import { db, auth } from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
-import { ErrorMessage } from '../shared/ErrorMessage';
+
+const DEFAULT_PROCESSES = [
+  "着工前", "下地・下葺き", "防水ルーフィング施工", "瓦桟施工",
+  "流れ壁板金", "平行壁板金", "確認", "棟金具設置", "緊結状況", "施工中", "完成"
+];
+
+const DEFAULT_TEMPLATES = [
+  { label: "基準/実測", text: "基準値：\n実測値：" },
+  { label: "重ね幅(ヨコ)", text: "重ね幅（ヨコ）：" },
+  { label: "重ね幅(タテ)", text: "重ね幅（タテ）：" },
+  { label: "平行壁(立上)", text: "平行壁：立ち上げ高 " },
+  { label: "流れ壁(立上)", text: "流れ壁：立ち上げ高 " },
+  { label: "棟芯(重ね)", text: "棟芯：重ね（左右） " },
+  { label: "棟部(増張り)", text: "棟部：増し張り " },
+];
 
 export default function SettingsPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [uid, setUid] = useState<string | null>(null);
 
-  // 入力データ
   const [companyName, setCompanyName] = useState('');
-  const [address, setAddress] = useState('');
-  const [phone, setPhone] = useState('');
-  const [logoUrl, setLogoUrl] = useState('');
-  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [processes, setProcesses] = useState<string[]>(DEFAULT_PROCESSES);
+  const [templates, setTemplates] = useState<{label: string, text: string}[]>(DEFAULT_TEMPLATES);
 
-  // 画面を開いた時に、保存されている設定を読み込む
   useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const user = auth.currentUser;
-        if (!user) return;
-        const docRef = doc(db, 'users', user.uid);
-        const snap = await getDoc(docRef);
-        if (snap.exists()) {
-          const data = snap.data();
-          setCompanyName(data.companyName || '');
-          setAddress(data.address || '');
-          setPhone(data.phone || '');
-          setLogoUrl(data.logoUrl || '');
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setUid(user.uid);
+        const d = await getDoc(doc(db, 'users', user.uid));
+        if (d.exists()) {
+          const data = d.data();
+          if (data.companyName) setCompanyName(data.companyName);
+          if (data.customProcesses && data.customProcesses.length > 0) setProcesses(data.customProcesses);
+          if (data.customDescTemplates && data.customDescTemplates.length > 0) setTemplates(data.customDescTemplates);
         }
-      } catch (err) {
-        console.error(err);
-        setError('設定の読み込みに失敗しました。');
-      } finally {
-        setLoading(false);
       }
-    };
-    fetchSettings();
+      setLoading(false);
+    });
+    return () => unsub();
   }, []);
 
-  // 保存ボタンを押した時の処理
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async () => {
+    if (!uid) {
+      alert('設定を保存するにはログインが必要です。');
+      return;
+    }
     setSaving(true);
-    setError(null);
-    setSuccess(false);
-
     try {
-      const user = auth.currentUser;
-      if (!user) throw new Error('ログインしていません');
-
-      let currentLogoUrl = logoUrl;
-
-      // 新しいロゴ画像が選ばれていたら、倉庫（Storage）にアップロード
-      if (logoFile) {
-        const logoRef = ref(storage, `logos/${user.uid}/${Date.now()}_${logoFile.name}`);
-        await uploadBytes(logoRef, logoFile);
-        currentLogoUrl = await getDownloadURL(logoRef);
-        setLogoUrl(currentLogoUrl); // 画面の表示も更新
-      }
-
-      // データベース（Firestore）に会社情報を保存
-      await setDoc(doc(db, 'users', user.uid), {
+      await setDoc(doc(db, 'users', uid), {
         companyName,
-        address,
-        phone,
-        logoUrl: currentLogoUrl,
-        updatedAt: new Date().toISOString()
+        customProcesses: processes,
+        customDescTemplates: templates
       }, { merge: true });
-
-      setSuccess(true);
-      // 3秒後に成功メッセージを消す
-      setTimeout(() => setSuccess(false), 3000);
-    } catch (err) {
-      console.error(err);
-      setError('設定の保存に失敗しました。');
+      alert('自社専用のカスタマイズ設定を保存しました！\n（現場の写真入力画面に反映されます）');
+    } catch (error) {
+      console.error(error);
+      alert('保存に失敗しました。');
     } finally {
       setSaving(false);
     }
@@ -90,102 +72,117 @@ export default function SettingsPage() {
   if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 font-sans flex flex-col items-center">
-      <div className="w-full max-w-xl">
-        <div className="flex items-center gap-4 mb-6">
-          <button onClick={() => navigate('/')} className="text-gray-500 hover:text-blue-600 p-2 bg-white rounded-full shadow-sm transition-colors">
-            <ArrowLeft className="w-6 h-6" />
+    <div className="min-h-screen bg-gray-50 p-6 font-sans">
+      <div className="max-w-xl mx-auto pb-12">
+        <div className="flex justify-between items-center mb-6">
+          <button onClick={() => navigate('/')} className="flex items-center gap-2 text-blue-500 font-bold text-lg">
+            <ArrowLeft className="w-6 h-6" /> ホームへ
           </button>
-          <h1 className="text-2xl font-bold text-gray-900">自社情報の設定</h1>
+          <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-md hover:bg-blue-700 disabled:opacity-50 transition-colors">
+            <Save className="w-5 h-5" /> {saving ? '保存中...' : '設定を保存'}
+          </button>
         </div>
 
-        {error && <ErrorMessage message={error} onDismiss={() => setError(null)} />}
-        {success && (
-          <div className="bg-green-100 border border-green-200 text-green-700 p-4 rounded-xl mb-6 font-bold flex items-center justify-center shadow-sm">
-            ✅ 設定を保存しました！
-          </div>
-        )}
+        <h1 className="text-3xl font-bold mb-8 text-gray-900 flex items-center gap-3">
+          <Settings className="w-8 h-8 text-gray-700" /> 基本設定・カスタマイズ
+        </h1>
 
-        <form onSubmit={handleSave} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6">
+        <div className="space-y-8">
           
-          {/* ロゴ画像の設定 */}
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">会社ロゴ（PDFの表紙に表示されます）</label>
-            <div className="flex items-center gap-4">
-              <div className="w-24 h-24 bg-gray-100 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden shrink-0">
-                {logoFile ? (
-                  <img src={URL.createObjectURL(logoFile)} alt="preview" className="w-full h-full object-contain" />
-                ) : logoUrl ? (
-                  <img src={logoUrl} alt="logo" className="w-full h-full object-contain" />
-                ) : (
-                  <ImageIcon className="w-8 h-8 text-gray-400" />
-                )}
-              </div>
-              <div className="flex-1">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
-                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-colors cursor-pointer"
-                />
-                <p className="text-xs text-gray-500 mt-2">※正方形または横長の画像がおすすめです</p>
-              </div>
-            </div>
-          </div>
-
-          {/* 会社名 */}
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1">会社名（屋号）</label>
-            <div className="relative">
-              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          {/* 会社情報 */}
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">自社情報</h2>
+            <div>
+              <label className="block text-sm font-bold text-gray-600 mb-2">会社名・屋号</label>
               <input
                 type="text"
-                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors"
-                placeholder="例：有限会社 山西瓦店"
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="例：吉田瓦店"
+                className="w-full p-3 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
               />
+              <p className="text-xs text-gray-500 mt-2">※ここで設定した会社名が、PDF出力時の「施工業者」に反映されます。</p>
             </div>
           </div>
 
-          {/* 住所 */}
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1">住所</label>
-            <div className="relative">
-              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors"
-                placeholder="例：富山県魚津市〇〇 1-2-3"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-              />
+          {/* 工程のカスタマイズ */}
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+            <h2 className="text-xl font-bold text-gray-800 mb-2">写真の「工程」プルダウン項目</h2>
+            <p className="text-sm text-gray-500 mb-5">現場でよく使う工程名を自由に追加・編集できます。</p>
+            <div className="space-y-3 mb-5">
+              {processes.map((proc, index) => (
+                <div key={index} className="flex gap-2 items-center">
+                  <span className="text-gray-400 font-bold w-6 text-right">{index + 1}.</span>
+                  <input
+                    type="text"
+                    value={proc}
+                    onChange={(e) => {
+                      const newArr = [...processes];
+                      newArr[index] = e.target.value;
+                      setProcesses(newArr);
+                    }}
+                    className="flex-1 p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button onClick={() => setProcesses(processes.filter((_, i) => i !== index))} className="p-3 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors">
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </div>
+              ))}
             </div>
+            <button onClick={() => setProcesses([...processes, "新しい工程"])} className="w-full py-3 bg-gray-50 text-blue-600 font-bold rounded-xl border-2 border-dashed border-blue-200 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2">
+              <Plus className="w-5 h-5" /> 工程項目を追加
+            </button>
           </div>
 
-          {/* 電話番号 */}
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1">電話番号</label>
-            <div className="relative">
-              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="tel"
-                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-medium focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors"
-                placeholder="例：0765-12-3456"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
+          {/* 定型文のカスタマイズ */}
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+            <h2 className="text-xl font-bold text-gray-800 mb-2">説明欄の「ワンタップ定型文」</h2>
+            <p className="text-sm text-gray-500 mb-5">よく使う説明文をボタン一つで入力できるようにします。</p>
+            <div className="space-y-4 mb-5">
+              {templates.map((tmpl, index) => (
+                <div key={index} className="flex gap-3 items-start bg-gray-50 p-4 rounded-2xl border border-gray-200">
+                  <div className="flex-1 space-y-3">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1">ボタンの名前（短く）</label>
+                      <input
+                        type="text"
+                        value={tmpl.label}
+                        onChange={(e) => {
+                          const newArr = [...templates];
+                          newArr[index].label = e.target.value;
+                          setTemplates(newArr);
+                        }}
+                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
+                        placeholder="例：基準/実測"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1">ボタンを押した時に挿入される文章</label>
+                      <textarea
+                        value={tmpl.text}
+                        onChange={(e) => {
+                          const newArr = [...templates];
+                          newArr[index].text = e.target.value;
+                          setTemplates(newArr);
+                        }}
+                        rows={2}
+                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
+                        placeholder="例：基準値：&#13;&#10;実測値："
+                      />
+                    </div>
+                  </div>
+                  <button onClick={() => setTemplates(templates.filter((_, i) => i !== index))} className="p-2 mt-4 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </div>
+              ))}
             </div>
+            <button onClick={() => setTemplates([...templates, { label: "新規ボタン", text: "新しい説明文" }])} className="w-full py-3 bg-gray-50 text-blue-600 font-bold rounded-xl border-2 border-dashed border-blue-200 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2">
+              <Plus className="w-5 h-5" /> 定型文ボタンを追加
+            </button>
           </div>
 
-          <button
-            type="submit"
-            disabled={saving}
-            className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 transition-colors shadow-md disabled:opacity-50 text-lg flex items-center justify-center gap-2 mt-4"
-          >
-            {saving ? <LoadingSpinner /> : <><Save className="w-6 h-6" /> この内容で保存する</>}
-          </button>
-        </form>
+        </div>
       </div>
     </div>
   );

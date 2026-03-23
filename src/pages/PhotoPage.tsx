@@ -3,28 +3,19 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase';
+import { db, storage, auth } from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth'; // ★追加
 import { compressImage, proxyUrl, useDraggablePin } from '../shared/utils';
 import type { Circle, MapPin as MapPinT, Photo, Project } from '../types';
 import type { ChangeEvent, MouseEvent } from 'react';
 
-// 工程のプルダウンメニューの選択肢
-const PROCESS_OPTIONS = [
-  "着工前",
-  "下地・下葺き",
-  "防水ルーフィング施工",
-  "瓦桟施工",
-  "流れ壁板金",
-  "平行壁板金",
-  "確認",
-  "棟金具設置",
-  "緊結状況",
-  "施工中",
-  "完成"
+// ★デフォルト値（設定前用）
+const DEFAULT_PROCESS_OPTIONS = [
+  "着工前", "下地・下葺き", "防水ルーフィング施工", "瓦桟施工",
+  "流れ壁板金", "平行壁板金", "確認", "棟金具設置", "緊結状況", "施工中", "完成"
 ];
 
-// ★追加：説明欄のワンタップ入力定型文リスト
-const DESC_TEMPLATES = [
+const DEFAULT_DESC_TEMPLATES = [
   { label: "基準/実測", text: "基準値：\n実測値：" },
   { label: "重ね幅(ヨコ)", text: "重ね幅（ヨコ）：" },
   { label: "重ね幅(タテ)", text: "重ね幅（タテ）：" },
@@ -126,7 +117,31 @@ export default function PhotoPage() {
   const [currentPhotoId, setCurrentPhotoId] = useState<number | null>(null);
   const [selectedCircleId, setSelectedCircleId] = useState<number | null>(null);
 
-  useEffect(() => { getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data() as Project)); }, [id]);
+  // ★追加：会社ごとのカスタマイズ設定を保持するステート
+  const [processOptions, setProcessOptions] = useState<string[]>(DEFAULT_PROCESS_OPTIONS);
+  const [descTemplates, setDescTemplates] = useState<{label: string, text: string}[]>(DEFAULT_DESC_TEMPLATES);
+
+  useEffect(() => {
+    // ① プロジェクトデータの読み込み
+    getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data() as Project));
+
+    // ② ログイン中のユーザー（会社）の独自カスタマイズ設定を読み込み！
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const s = await getDoc(doc(db, 'users', user.uid));
+        if (s.exists()) {
+          const data = s.data();
+          if (data.customProcesses && data.customProcesses.length > 0) {
+            setProcessOptions(data.customProcesses);
+          }
+          if (data.customDescTemplates && data.customDescTemplates.length > 0) {
+            setDescTemplates(data.customDescTemplates);
+          }
+        }
+      }
+    });
+    return () => unsub();
+  }, [id]);
 
   type EditablePhotoField = keyof Pick<
     Photo,
@@ -400,7 +415,7 @@ export default function PhotoPage() {
                   <MapPin className={`w-6 h-6 ${photo.locationMap ? 'text-red-500' : 'text-gray-400'}`} />
                 </button>
 
-                {/* 工程のプルダウンメニュー */}
+                {/* ★自社カスタマイズが反映される「工程」のプルダウン */}
                 <div className="flex flex-col gap-1">
                   <label className="text-sm font-bold text-gray-600 pl-1">工程</label>
                   <select
@@ -409,28 +424,26 @@ export default function PhotoPage() {
                     onChange={(e) => updatePhoto(photo.id, "process", e.target.value)}
                   >
                     <option value="">-- 工程を選択してください --</option>
-                    {PROCESS_OPTIONS.map(opt => (
+                    {processOptions.map(opt => (
                       <option key={opt} value={opt}>{opt}</option>
                     ))}
-                    {photo.process && !PROCESS_OPTIONS.includes(photo.process) && (
+                    {photo.process && !processOptions.includes(photo.process) && (
                       <option value={photo.process}>{photo.process}</option>
                     )}
                   </select>
                 </div>
 
-                {/* ★追加・変更：説明欄と大量のワンタップ定型文ボタン */}
+                {/* ★自社カスタマイズが反映される「ワンタップ定型文ボタン」 */}
                 <div className="flex flex-col gap-1">
                   <label className="text-sm font-bold text-gray-600 pl-1 mb-1">説明</label>
                   
-                  {/* 定型文ボタン群：スマホでも押しやすいように折り返して配置 */}
                   <div className="flex flex-wrap gap-1.5 mb-2">
-                    {DESC_TEMPLATES.map((tmpl, i) => (
+                    {descTemplates.map((tmpl, i) => (
                       <button
                         key={i}
                         type="button"
                         onClick={() => {
                           const currentDesc = photo.description || '';
-                          // もし既に文字が入っていたら、自動で改行してから定型文を入れる優しさ設計
                           const prefix = currentDesc && !currentDesc.endsWith('\n') ? '\n' : '';
                           updatePhoto(photo.id, "description", currentDesc + prefix + tmpl.text);
                         }}
