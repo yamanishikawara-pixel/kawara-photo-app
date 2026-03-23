@@ -32,12 +32,11 @@ const LINE_LEGEND_DATA = [
 function PdfLineLegend() {
   return (
     <div
-      className="flex gap-x-4 gap-y-1 flex-wrap text-xs font-medium rounded-lg p-2 shadow-sm"
-      style={{ border: '1px solid #d1d5db', backgroundColor: '#ffffff' }}
+      className="flex gap-x-4 gap-y-2 flex-wrap text-xs font-medium rounded-lg p-2"
     >
       {LINE_LEGEND_DATA.map(type => (
         <div key={type.label} className="flex items-center gap-1.5">
-          <div style={{ backgroundColor: type.color, width: '12px', height: '12px', borderRadius: '50%' }} />
+          <div style={{ backgroundColor: type.color, width: '14px', height: '14px', borderRadius: '50%' }} />
           <span style={{ color: '#374151' }}>{type.label}</span>
         </div>
       ))}
@@ -79,7 +78,6 @@ function safeStyle(
   return String(val);
 }
 
-// ★線を掴んで動かし、タップで回転できる専用部品！
 function DraggableMapLine({
   line,
   isSelected,
@@ -119,7 +117,6 @@ function DraggableMapLine({
           transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`,
           transformOrigin: 'center center',
           touchAction: 'none',
-          // 選択中は薄い青枠で強調表示
           boxShadow: isSelected ? '0 0 0 3px rgba(59, 130, 246, 0.4)' : 'none',
           borderRadius: '999px',
         }}
@@ -134,19 +131,18 @@ function DraggableMapLine({
         />
       </div>
 
-      {/* ★選択中のみ表示される「回転の微調整ボタン」 */}
       {isSelected && !dragging && (
         <div
           style={{
             left: `${position.x}%`,
-            top: `calc(${position.y}% + 25px)`, // 線の少し下に表示
+            top: `calc(${position.y}% + 25px)`, 
             transform: 'translateX(-50%)',
           }}
           className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden items-center"
           onClick={(e) => e.stopPropagation()} 
         >
           <button
-            onClick={() => onRotate((line.rotation - 1 + 360) % 360)} // 左に1度回転
+            onClick={() => onRotate((line.rotation - 1 + 360) % 360)}
             className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700 border-r"
           >
             ↺
@@ -155,7 +151,7 @@ function DraggableMapLine({
             角度微調整
           </span>
           <button
-            onClick={() => onRotate((line.rotation + 1) % 360)} // 右に1度回転
+            onClick={() => onRotate((line.rotation + 1) % 360)}
             className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700 border-l"
           >
             ↻
@@ -314,7 +310,6 @@ export default function MapPage() {
   const [uploading, setUploading] = useState(false);
   const [editingPin, setEditingPin] = useState<MapPinT | null>(null);
   
-  // ★追加：選択状態を管理（ピンか線か）
   const [selectedPinId, setSelectedPinId] = useState<number | null>(null); 
   const [selectedLineId, setSelectedLineId] = useState<number | null>(null); 
 
@@ -323,6 +318,9 @@ export default function MapPage() {
   const [lineColor, setLineColor] = useState<string>(LINE_DRAW_COLORS[0].color);
   const [selectedLineWidth, setSelectedLineWidth] = useState<number>(4); 
   
+  // ★新機能：位置図ごとに「凡例」の開閉状態を記憶するためのステート
+  const [showLegend, setShowLegend] = useState<Record<number, boolean>>({});
+
   const [lineDrag, setLineDrag] = useState<{
     mapIndex: number;
     startX: number;
@@ -396,7 +394,7 @@ export default function MapPage() {
           }).promise;
           const page = await pdf.getPage(1); 
 
-          const viewport = page.getViewport({ scale: 3.0 }); 
+          const viewport = page.getViewport({ scale: 2.0 }); 
           const canvas = document.createElement('canvas');
           const context = canvas.getContext('2d');
           canvas.width = viewport.width;
@@ -493,7 +491,6 @@ export default function MapPage() {
     await updateDoc(doc(db, "projects", id!), { mapLines: newLines });
   };
 
-  // ★新機能：線の角度をFirebaseに保存する処理
   const updateLineRotation = async (lineId: number, newRotation: number) => {
     if (!project) return;
     const newLines = (project.mapLines || []).map((l) => l.id === lineId ? { ...l, rotation: newRotation } : l);
@@ -624,7 +621,6 @@ export default function MapPage() {
   if (!project) return <LoadingSpinner />;
 
   return (
-    // ★背景をタップしたら、ピンや線の選択状態を解除する
     <div className="min-h-screen bg-gray-50 p-6 font-sans overflow-x-hidden" onClick={() => { setSelectedPinId(null); setSelectedLineId(null); }}>
       <div className="max-w-md mx-auto pb-12">
         <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
@@ -649,53 +645,68 @@ export default function MapPage() {
                   <li><b>「線を描く」</b>をオンにすると、ドラッグで線を引き、壁種などを指示できます。</li>
                 </ul>
               </div>
-
-              <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm mb-4">
-                <p className="text-sm font-bold text-gray-700 mb-2">線の色と種類（凡例）</p>
-                <PdfLineLegend />
-              </div>
               
               {project.mapUrls.map((u: string, i: number) => {
                 const currentRows = (project.mapRows || []).filter((r) => r.mapIndex === i || (r.mapIndex === undefined && i === 0));
                 
                 return (
-                <div key={i} className="relative w-full border-2 border-gray-300 rounded-xl bg-gray-100 shadow-inner group overflow-hidden flex flex-col p-2">
+                <div key={i} className="relative w-full border-2 border-gray-300 rounded-xl bg-gray-100 shadow-inner group overflow-hidden flex flex-col p-2 mt-4">
                   <div className="flex flex-col gap-2 mb-2 px-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setLineModeForMap((m) => (m === i ? null : i))
-                        }
-                        className={`text-sm font-bold px-3 py-2 rounded-xl border-2 ${
-                          lineModeForMap === i
-                            ? 'bg-amber-100 border-amber-500 text-amber-900'
-                            : 'bg-white border-gray-200 text-gray-700'
-                        }`}
-                      >
-                        {lineModeForMap === i ? '線モード中（終了）' : '線を描く'}
-                      </button>
+                    
+                    {/* ★上段：線モードボタンと凡例トグルボタンを並べる */}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setLineModeForMap((m) => (m === i ? null : i))
+                          }
+                          className={`text-sm font-bold px-3 py-2 rounded-xl border-2 ${
+                            lineModeForMap === i
+                              ? 'bg-amber-100 border-amber-500 text-amber-900'
+                              : 'bg-white border-gray-200 text-gray-700'
+                          }`}
+                        >
+                          {lineModeForMap === i ? '線モード中（終了）' : '線を描く'}
+                        </button>
+                        
+                        {lineModeForMap === i && (
+                          <div className="flex flex-wrap gap-1.5 items-center bg-white p-2 rounded-xl border">
+                            <span className="text-xs font-bold text-gray-600">色:</span>
+                            {LINE_DRAW_COLORS.map((c) => (
+                              <button
+                                key={c.color}
+                                type="button"
+                                title={c.label}
+                                onClick={() => setLineColor(c.color)}
+                                className={`w-7 h-7 rounded-full border-2 shrink-0 ${
+                                  lineColor === c.color
+                                    ? 'border-gray-900 ring-2 ring-offset-1 ring-gray-400'
+                                    : 'border-white shadow-sm'
+                                }`}
+                                style={{ backgroundColor: c.color }}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       
-                      {lineModeForMap === i && (
-                        <div className="flex flex-wrap gap-1.5 items-center bg-white p-2 rounded-xl border">
-                          <span className="text-xs font-bold text-gray-600">色:</span>
-                          {LINE_DRAW_COLORS.map((c) => (
-                            <button
-                              key={c.color}
-                              type="button"
-                              title={c.label}
-                              onClick={() => setLineColor(c.color)}
-                              className={`w-7 h-7 rounded-full border-2 shrink-0 ${
-                                lineColor === c.color
-                                  ? 'border-gray-900 ring-2 ring-offset-1 ring-gray-400'
-                                  : 'border-white shadow-sm'
-                              }`}
-                              style={{ backgroundColor: c.color }}
-                            />
-                          ))}
-                        </div>
-                      )}
+                      {/* ★追加：凡例のON/OFFボタン */}
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setShowLegend(prev => ({...prev, [i]: !prev[i]})) }}
+                        className="text-xs font-bold text-gray-600 bg-white border border-gray-300 px-3 py-2 rounded-xl hover:bg-gray-50 shadow-sm"
+                      >
+                        {showLegend[i] ? '凡例を隠す ▲' : '凡例を表示 ▼'}
+                      </button>
                     </div>
+
+                    {/* ★追加：凡例本体（ONの時だけ表示される） */}
+                    {showLegend[i] && (
+                      <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm mt-1 animate-fade-in">
+                         <p className="text-xs font-bold text-gray-500 mb-1">線の色と種類</p>
+                         <PdfLineLegend />
+                      </div>
+                    )}
 
                     {lineModeForMap === i && (
                       <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border mt-1">
@@ -717,13 +728,12 @@ export default function MapPage() {
                     )}
                   </div>
 
-                  <div className="flex items-center justify-center overflow-hidden">
+                  <div className="flex items-center justify-center overflow-hidden mt-1">
                     <div
                       className={`relative inline-block max-w-full ${
                         lineModeForMap === i ? 'cursor-crosshair' : ''
                       }`}
                       onClick={(e) => {
-                        // 新規でピンを追加する条件
                         if (lineModeForMap !== i && selectedPinId === null && selectedLineId === null) {
                            addPin(e, i);
                         } else {
@@ -738,7 +748,6 @@ export default function MapPage() {
                     >
                       <img src={proxyUrl(u, i)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[60vh] pointer-events-none rounded shadow-sm" alt="" />
                       
-                      {/* ★線を自由に動かし、タップで回転ボタンが出るように描画 */}
                       {(project.mapLines || [])
                         .filter((l) => l.mapIndex === i)
                         .map((line) => (
@@ -748,7 +757,7 @@ export default function MapPage() {
                             isSelected={selectedLineId === line.id}
                             onClick={() => {
                               setSelectedPinId(null);
-                              setSelectedLineId(line.id); // 線を選択状態にする
+                              setSelectedLineId(line.id); 
                             }}
                             onDragEnd={(x, y) => saveLinePosition(line.id, x, y)}
                             onRotate={(newRot) => updateLineRotation(line.id, newRot)}
@@ -795,7 +804,7 @@ export default function MapPage() {
                       ))}
                     </div>
                   </div>
-                  <button onClick={() => removeMap(i)} className="absolute top-2 right-2 bg-white/90 rounded-full p-2 text-red-500 shadow-sm z-20"><Trash2 className="w-5 h-5" /></button>
+                  <button onClick={() => removeMap(i)} className="absolute top-12 right-2 bg-white/90 rounded-full p-2 text-red-500 shadow-sm z-20"><Trash2 className="w-5 h-5" /></button>
 
                   {(project.mapLines || []).filter((l) => l.mapIndex === i).length > 0 && (
                     <div className="w-full mt-2 px-1">
@@ -821,19 +830,18 @@ export default function MapPage() {
                     </div>
                   )}
 
-                 <div className="w-full mt-6 pt-4 border-t border-gray-300">
+                  {/* ★改修：符号・写真欄を太く、タップしやすくしました！ */}
+                  <div className="w-full mt-6 pt-4 border-t border-gray-300">
                     <h3 className="text-lg font-bold mb-3 text-gray-800">位置図 {i + 1} の説明表</h3>
                     <div className="space-y-3">
                       {currentRows.map((row) => (
                         <div key={row.id} className="flex gap-1 sm:gap-2 items-center bg-white p-2 rounded-xl border border-gray-200 shadow-sm">
-                          {/* ★ここを改修：割合を 1:2:2:7 から 2:3:2:5 に変更し、符号欄を2倍に拡大！ */}
                           <div className="flex-1 grid grid-cols-12 gap-1 sm:gap-2">
                             <input type="text" placeholder="符号" className="col-span-3 sm:col-span-2 p-2 border border-gray-300 rounded-lg text-sm sm:text-base bg-white text-center font-bold" value={row.symbol || ''} onChange={e => updateMapRow(row.id, 'symbol', e.target.value)} />
                             <input type="text" placeholder="部位" className="col-span-3 p-2 border border-gray-300 rounded-lg text-sm sm:text-base bg-white" value={row.part || ''} onChange={e => updateMapRow(row.id, 'part', e.target.value)} />
                             <input type="text" placeholder="写真" className="col-span-2 p-2 border border-gray-300 rounded-lg text-sm sm:text-base bg-white text-center font-bold" value={row.photoNo || row.relatedPhotoNumber || ''} onChange={e => updateMapRow(row.id, 'photoNo', e.target.value)} />
                             <input type="text" placeholder="備考" className="col-span-4 sm:col-span-5 p-2 border border-gray-300 rounded-lg text-sm sm:text-base bg-white" value={row.remarks || ''} onChange={e => updateMapRow(row.id, 'remarks', e.target.value)} />
                           </div>
-                          {/* ゴミ箱ボタンが潰れないように shrink-0 を追加 */}
                           <button onClick={() => removeMapRow(row.id)} className="p-2 text-red-500 bg-white border border-red-100 rounded-lg hover:bg-red-50 shrink-0"><Trash2 className="w-5 h-5" /></button>
                         </div>
                       ))}
