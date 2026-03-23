@@ -8,9 +8,7 @@ import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { proxyUrl, useDraggablePin } from '../shared/utils';
 import type { MapLine, MapPin as MapPinT, MapPinType, MapRow, Project } from '../types';
 
-// PDFを画像に変換するための最強ツール
 import * as pdfjsLib from 'pdfjs-dist';
-// ワーカーの設定
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 const LINE_DRAW_COLORS = [
@@ -22,10 +20,9 @@ const LINE_DRAW_COLORS = [
   { label: 'その他', color: '#ef4444' },
 ] as const;
 
-// ★指示線の凡例データ
 const LINE_LEGEND_DATA = [
   { label: '流れ壁', color: '#3b82f6' },
-  { label: '棟（むね）', color: '#ef4444' }, // 元の赤色を棟に変更など、名称は自由に
+  { label: '棟（むね）', color: '#ef4444' }, 
   { label: '平壁', color: '#22c55e' },
   { label: '軒先（のきさき）', color: '#f97316' },
   { label: '袖壁', color: '#eab308' },
@@ -48,7 +45,6 @@ function PdfLineLegend() {
   );
 }
 
-/** 画面上の2点（%）から MapLine の中心・長さ・角度を算出 */
 function lineFromTwoPoints(
   x1: number,
   y1: number,
@@ -81,6 +77,52 @@ function safeStyle(
   if (val == null || val === '') return `0${defaultUnit}`;
   if (typeof val === 'number') return `${val}${defaultUnit}`;
   return String(val);
+}
+
+// ★新機能：ドラッグして自由に動かせる「線」の専用部品
+function DraggableMapLine({
+  line,
+  onDragEnd,
+}: {
+  line: MapLine;
+  onDragEnd: (x: number, y: number) => void;
+}) {
+  const initialX = typeof line.x === 'number' ? line.x : parseFloat(line.x as string);
+  const initialY = typeof line.y === 'number' ? line.y : parseFloat(line.y as string);
+  
+  const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(initialX, initialY, onDragEnd);
+
+  return (
+    <div
+      ref={containerRef}
+      onMouseDown={onMouseDown}
+      onTouchStart={onTouchStart}
+      // 線描画モードの誤作動防止
+      className={`map-line-marker absolute cursor-move flex items-center justify-center transition-opacity ${
+        dragging ? 'z-30 opacity-50 scale-105' : 'z-10 hover:opacity-80'
+      }`}
+      style={{
+        left: `${position.x}%`,
+        top: `${position.y}%`,
+        width: safeStyle(line.length, '%'),
+        // ★ここがミソ！細い線でも指で掴みやすいように、見えないタッチ判定エリアを最低20px確保！
+        height: Math.max(typeof line.thickness === 'number' ? line.thickness : parseFloat(line.thickness as string) || 4, 20) + 'px', 
+        transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`,
+        transformOrigin: 'center center',
+        touchAction: 'none',
+      }}
+    >
+      {/* 見た目としての実際の線（真ん中に表示される） */}
+      <div 
+        style={{ 
+          width: '100%', 
+          height: safeStyle(line.thickness, 'px'), 
+          backgroundColor: line.color || '#000000',
+          borderRadius: '999px',
+        }} 
+      />
+    </div>
+  );
 }
 
 function MapMarker({
@@ -316,7 +358,6 @@ export default function MapPage() {
           canvas.height = viewport.height;
 
           if (context) {
-            // as any を追加して型エラーを回避！
             await page.render({ canvasContext: context, viewport: viewport } as any).promise;
             const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
             if (blob) {
@@ -415,6 +456,14 @@ export default function MapPage() {
     setSelectedPinId(null);
   };
 
+  // ★新機能：ドラッグして移動した線の位置を保存する処理
+  const saveLinePosition = async (lineId: number, x: number, y: number) => {
+    if (!project) return;
+    const newLines = (project.mapLines || []).map((l) => l.id === lineId ? { ...l, x, y } : l);
+    setProject({ ...project, mapLines: newLines });
+    await updateDoc(doc(db, "projects", id!), { mapLines: newLines });
+  };
+
   const addMapRow = async (mapIndex: number) => {
     if (!project) return;
     const currentRows = (project.mapRows || []).filter((r) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0));
@@ -452,7 +501,9 @@ export default function MapPage() {
     mapIndex: number,
   ) => {
     if (lineModeForMap !== mapIndex) return;
-    if ((e.target as HTMLElement).closest('.map-pin-marker')) return;
+    // ★マーカーや「配置済みの線」を触った時は、新しい線を引かないようにブロック！
+    if ((e.target as HTMLElement).closest('.map-pin-marker') || (e.target as HTMLElement).closest('.map-line-marker')) return;
+    
     const el = e.currentTarget;
     const rect = el.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
@@ -555,20 +606,18 @@ export default function MapPage() {
                 <p className="text-base font-bold text-red-600 flex items-center gap-2"><MapPin className="w-5 h-5" /> 現場マーカーの使い方</p>
                 <ul className="text-sm text-red-700 font-medium space-y-1 list-disc pl-5">
                   <li>図面を<b>タップ</b>すると、赤丸が打てます。</li>
-                  <li>赤丸を<b>ドラッグ</b>で自由に移動できます。</li>
+                  <li>赤丸・引いた線は<b>ドラッグ</b>で自由に移動できます。</li>
                   <li>赤丸を<b>タップで選択</b>すると、<b>「拡大・縮小」</b>ボタンが出ます。</li>
                   <li>選択中に<b>もう一度タップ</b>すると、符号や矢印の設定ができます。</li>
                   <li><b>「線を描く」</b>をオンにすると、ドラッグで線を引き、壁種などを指示できます。</li>
                 </ul>
               </div>
 
-              {/* ★凡例部分 */}
-              <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+              <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm mb-4">
                 <p className="text-sm font-bold text-gray-700 mb-2">線の色と種類（凡例）</p>
                 <PdfLineLegend />
               </div>
               
-              {/* ★ここから図面のループ */}
               {project.mapUrls.map((u: string, i: number) => {
                 const currentRows = (project.mapRows || []).filter((r) => r.mapIndex === i || (r.mapIndex === undefined && i === 0));
                 
@@ -650,22 +699,14 @@ export default function MapPage() {
                     >
                       <img src={proxyUrl(u, i)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[60vh] pointer-events-none rounded shadow-sm" alt="" />
                       
+                      {/* ★変更：線を自由に動かせる専用部品で描画！ */}
                       {(project.mapLines || [])
                         .filter((l) => l.mapIndex === i)
                         .map((line) => (
-                          <div
+                          <DraggableMapLine
                             key={line.id}
-                            className="pointer-events-none absolute"
-                            style={{
-                              left: safeStyle(line.x, '%'),
-                              top: safeStyle(line.y, '%'),
-                              width: safeStyle(line.length, '%'),
-                              height: safeStyle(line.thickness, 'px'),
-                              backgroundColor: line.color || '#000000',
-                              transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`,
-                              transformOrigin: 'center center',
-                              zIndex: 5,
-                            }}
+                            line={line}
+                            onDragEnd={(x, y) => saveLinePosition(line.id, x, y)}
                           />
                         ))}
                       
@@ -725,7 +766,7 @@ export default function MapPage() {
                             >
                               <span
                                 className="inline-block h-2 rounded-sm"
-                                style={{ backgroundColor: line.color || '#000', width: `${line.thickness}px` }} 
+                                style={{ backgroundColor: line.color || '#000', width: typeof line.thickness === 'number' ? `${Math.max(line.thickness, 4)}px` : line.thickness }} 
                               />
                               削除
                             </button>
