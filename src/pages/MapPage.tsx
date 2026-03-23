@@ -229,7 +229,7 @@ export default function MapPage() {
           canvas.height = viewport.height;
 
           if (context) {
-            await page.render({ canvasContext: context, viewport: viewport }).promise;
+            await page.render({ canvasContext: context, viewport: viewport } as any).promise;
             const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
             if (blob) {
               fileToUpload = blob;
