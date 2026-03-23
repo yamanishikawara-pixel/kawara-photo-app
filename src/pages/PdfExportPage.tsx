@@ -15,9 +15,64 @@ import {
 } from '../shared/utils';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
+import { toJpeg } from 'html-to-image';
+import { jsPDF } from 'jspdf';
 
-/** Cloud Run（Google裏サーバー）のURL */
+/** Cloud Run（Google裏サーバー）のURL — ローカルやフォールバック用 */
 const PDF_GENERATE_URL = 'https://generatepdf-ld4b4dsi5q-an.a.run.app';
+
+/** 位置図の線スタイル（数値なら単位付与、文字列はそのまま） */
+function safeStyleLine(
+  val: string | number | undefined | null,
+  defaultUnit: string,
+): string {
+  if (val == null || val === '') return `0${defaultUnit}`;
+  if (typeof val === 'number') return `${val}${defaultUnit}`;
+  return String(val);
+}
+
+/** 本番は /api/generatePdf を先に（CORS なし）。ローカルは Cloud Run を先に。VITE_PDF_GENERATE_URL があれば最優先 */
+function pdfEndpointCandidates(): string[] {
+  const env = (import.meta.env.VITE_PDF_GENERATE_URL as string | undefined)?.trim();
+  if (env) return [env];
+  const isLocal =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1');
+  return isLocal
+    ? [PDF_GENERATE_URL, '/api/generatePdf']
+    : ['/api/generatePdf', PDF_GENERATE_URL];
+}
+
+/** 生 PDF / JSON+base64 の両方を解釈 */
+async function responseToPdfBlob(response: Response): Promise<Blob> {
+  const buf = await response.arrayBuffer();
+  const u8 = new Uint8Array(buf);
+  const isPdf =
+    u8.length >= 4 &&
+    u8[0] === 0x25 &&
+    u8[1] === 0x50 &&
+    u8[2] === 0x44 &&
+    u8[3] === 0x46;
+  if (isPdf) {
+    return new Blob([buf], { type: 'application/pdf' });
+  }
+  const text = new TextDecoder().decode(buf);
+  try {
+    const data = JSON.parse(text) as { pdfBase64?: string };
+    if (data.pdfBase64) {
+      const binary = atob(data.pdfBase64);
+      const out = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        out[i] = binary.charCodeAt(i);
+      }
+      return new Blob([out], { type: 'application/pdf' });
+    }
+  } catch {
+    /* 続けてエラー */
+  }
+  throw new Error('有効なPDFデータが返りませんでした');
+}
 
 type ProjectWithOptionals = Project;
 
@@ -183,7 +238,9 @@ export default function PdfExportPage() {
     setIsExporting(true);
     setError(null);
 
-    try {
+    const pdfName = `${project.projectName || '現場報告書'}_${new Date().getTime()}.pdf`;
+
+    const buildServerHtmlPayload = (): string => {
       const styles = Array.from(
         document.querySelectorAll('style, link[rel="stylesheet"]'),
       )
@@ -217,11 +274,7 @@ export default function PdfExportPage() {
 
       const htmlContent = clone.innerHTML;
 
-      const response = await fetch(PDF_GENERATE_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          html: `<!DOCTYPE html>
+      return `<!DOCTYPE html>
           <html>
           <head>
             <meta charset="utf-8">
@@ -240,40 +293,85 @@ export default function PdfExportPage() {
           <body>
             ${htmlContent}
           </body>
-          </html>`,
-        }),
-      });
+          </html>`;
+    };
 
-      if (!response.ok) {
-        const errText = await response.text().catch(() => '');
-        throw new Error(
-          `サーバーエラー: ${response.status}${errText ? ` ${errText.slice(0, 200)}` : ''}`,
-        );
+    const exportPdfClientSide = async () => {
+      const pages = document.querySelectorAll('.pdf-page');
+      if (pages.length === 0) throw new Error('PDFページが見つかりません');
+      window.scrollTo(0, 0);
+      await new Promise((r) => setTimeout(r, 500));
+      if (document.fonts?.ready) {
+        await document.fonts.ready;
       }
 
-      const contentType = response.headers.get('content-type') || '';
-      const pdfName = `${project.projectName || '現場報告書'}_${new Date().getTime()}.pdf`;
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
 
-      if (contentType.includes('application/pdf')) {
-        const blob = await response.blob();
-        if (blob.size === 0) throw new Error('PDFデータが空です');
-        downloadPdfBlob(blob, pdfName);
-      } else {
-        const data = (await response.json()) as { pdfBase64?: string };
-        if (!data.pdfBase64) throw new Error('PDFデータが空です');
+      for (let i = 0; i < pages.length; i++) {
+        const pageEl = pages[i] as HTMLElement;
+        pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
+        await new Promise((r) => setTimeout(r, 600));
 
-        const byteCharacters = atob(data.pdfBase64);
-        const byteNumbers = new Array<number>(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        const currentTransform = pageEl.style.transform;
+        pageEl.style.transform = 'scale(1)';
+
+        const dataUrl = await toJpeg(pageEl, {
+          cacheBust: true,
+          quality: 0.95,
+          pixelRatio: 2,
+          backgroundColor: '#ffffff',
+        });
+
+        pageEl.style.transform = currentTransform;
+
+        const pdfHeight =
+          (pageEl.offsetHeight * pdfWidth) / pageEl.offsetWidth;
+        if (i > 0) pdf.addPage();
+        pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      }
+
+      pdf.save(pdfName);
+    };
+
+    try {
+      const htmlPayload = buildServerHtmlPayload();
+      const body = JSON.stringify({ html: htmlPayload });
+      let serverOk = false;
+      let lastServerErr: unknown;
+
+      for (const url of pdfEndpointCandidates()) {
+        try {
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body,
+          });
+          if (!response.ok) {
+            const errText = await response.text().catch(() => '');
+            throw new Error(
+              `サーバーエラー: ${response.status}${errText ? ` ${errText.slice(0, 200)}` : ''}`,
+            );
+          }
+          const blob = await responseToPdfBlob(response);
+          if (blob.size === 0) throw new Error('PDFデータが空です');
+          downloadPdfBlob(blob, pdfName);
+          serverOk = true;
+          break;
+        } catch (e) {
+          lastServerErr = e;
         }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'application/pdf' });
-        downloadPdfBlob(blob, pdfName);
+      }
+
+      if (!serverOk) {
+        console.warn('サーバーPDFに失敗、ブラウザで生成します', lastServerErr);
+        await exportPdfClientSide();
       }
     } catch (err: unknown) {
       console.error(err);
-      setError('PDF作成中にエラーが発生しました。裏サーバーのログを確認してください。');
+      setError(
+        'PDF作成中にエラーが発生しました。ネットワークとサーバーログを確認するか、しばらくしてから再度お試しください。',
+      );
     } finally {
       setIsExporting(false);
     }
@@ -452,28 +550,27 @@ export default function PdfExportPage() {
                             </div>
                         ))}
 
-                        {/* 線の描画（単位の二重指定エラーを回避する完全版） */}
-                        {(project.mapLines ?? []).filter((l) => l.mapIndex === mapIndex).map((line: MapLine) => {
-                            const safeStyle = (val: any, defaultUnit: string) => typeof val === 'number' ? `${val}${defaultUnit}` : val;
-                            return (
-                              <div
-                                key={`line-${line.id}`}
-                                style={{
-                                  position: 'absolute',
-                                  left: safeStyle(line.x, '%'),
-                                  top: safeStyle(line.y, '%'),
-                                  width: safeStyle(line.length, '%'),
-                                  height: safeStyle(line.thickness, 'px'),
-                                  backgroundColor: line.color || '#000000',
-                                  transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`,
-                                  transformOrigin: 'center center',
-                                  zIndex: 15,
-                                  WebkitPrintColorAdjust: 'exact',
-                                  printColorAdjust: 'exact',
-                                }}
-                              />
-                            );
-                        })}
+                        {/* 線の描画 */}
+                        {(project.mapLines ?? [])
+                          .filter((l) => l.mapIndex === mapIndex)
+                          .map((line: MapLine) => (
+                            <div
+                              key={`line-${line.id}`}
+                              style={{
+                                position: 'absolute',
+                                left: safeStyleLine(line.x, '%'),
+                                top: safeStyleLine(line.y, '%'),
+                                width: safeStyleLine(line.length, '%'),
+                                height: safeStyleLine(line.thickness, 'px'),
+                                backgroundColor: line.color || '#000000',
+                                transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`,
+                                transformOrigin: 'center center',
+                                zIndex: 15,
+                                WebkitPrintColorAdjust: 'exact',
+                                printColorAdjust: 'exact',
+                              }}
+                            />
+                          ))}
                       </div>
                     </div>
                   ) : (
