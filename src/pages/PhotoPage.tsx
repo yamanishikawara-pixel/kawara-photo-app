@@ -8,6 +8,21 @@ import { compressImage, proxyUrl, useDraggablePin } from '../shared/utils';
 import type { Circle, MapPin as MapPinT, Photo, Project } from '../types';
 import type { ChangeEvent, MouseEvent } from 'react';
 
+// ★追加：工程のプルダウンメニューの選択肢
+const PROCESS_OPTIONS = [
+  "着工前",
+  "下地・下葺き",
+  "防水ルーフィング施工",
+  "瓦桟施工",
+  "流れ壁板金",
+  "平行壁板金",
+  "確認",
+  "棟金具設置",
+  "緊結状況",
+  "施工中",
+  "完成"
+];
+
 function PhotoCircleMarker({
   circle,
   isSelected,
@@ -79,16 +94,13 @@ function PinSelectModal({
   );
 }
 
-// 日付フォーマット変換用ヘルパー関数
 const formatToYMD = (dateString: string) => {
   if (!dateString) return '';
-  // "YYYY/MM/DD" -> "YYYY-MM-DD" （input type="date" 用）
   return dateString.replace(/\//g, '-');
 };
 
 const formatToYMDSlash = (dateString: string) => {
   if (!dateString) return '';
-  // "YYYY-MM-DD" -> "YYYY/MM/DD" （PDF表示・保存用）
   return dateString.replace(/-/g, '/');
 };
 
@@ -176,7 +188,6 @@ export default function PhotoPage() {
     let newPhotos = [...project.photos];
     let uploadedCount = 0;
     
-    // 今日の日付を YYYY/MM/DD 形式で取得
     const todayStr = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/');
 
     for (let i = 0; i < files.length; i++) {
@@ -221,7 +232,6 @@ export default function PhotoPage() {
     const photoId = project.photos[index].id;
     setLoadingId(photoId);
     
-    // 今日の日付を YYYY/MM/DD 形式で取得
     const todayStr = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/');
 
     compressImage(f, async (file) => {
@@ -362,7 +372,7 @@ export default function PhotoPage() {
               </div>
 
               <div className="space-y-5">
-                {/* ★追加：撮影日時のカレンダー入力欄 */}
+                {/* 撮影日時のカレンダー入力欄 */}
                 <div className="flex items-center gap-3">
                   <div className="font-bold text-gray-600 whitespace-nowrap min-w-[4rem]">撮影日:</div>
                   <input
@@ -373,12 +383,57 @@ export default function PhotoPage() {
                   />
                 </div>
 
+                {/* 位置図の選択 */}
                 <button onClick={() => { setCurrentPhotoId(photo.id); setModalOpen(true); }} className={`w-full p-4 text-lg border-2 rounded-xl text-left flex justify-between items-center ${photo.locationMap ? 'text-red-700 font-bold border-red-300 bg-red-50' : 'text-gray-500 border-gray-300 bg-gray-50'}`}>
                   {photo.locationMap || '▼ どの場所の写真ですか？（タップして選択）'}
                   <MapPin className={`w-6 h-6 ${photo.locationMap ? 'text-red-500' : 'text-gray-400'}`} />
                 </button>
-                <input type="text" placeholder="工程 例: 葺き直し" className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" value={photo.process} onChange={(e) => updatePhoto(photo.id, "process", e.target.value)} />
-                <textarea placeholder="説明（短文）" rows={2} className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" value={photo.description} onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} />
+
+                {/* ★追加：工程のプルダウンメニュー */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-bold text-gray-600 pl-1">工程</label>
+                  <select
+                    className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white"
+                    value={photo.process}
+                    onChange={(e) => updatePhoto(photo.id, "process", e.target.value)}
+                  >
+                    <option value="">-- 工程を選択してください --</option>
+                    {PROCESS_OPTIONS.map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                    {/* 過去に入力した独自のテキストがある場合はそれも表示してあげる優しさ設計 */}
+                    {photo.process && !PROCESS_OPTIONS.includes(photo.process) && (
+                      <option value={photo.process}>{photo.process}</option>
+                    )}
+                  </select>
+                </div>
+
+                {/* ★追加：説明欄とテンプレート挿入ボタン */}
+                <div className="flex flex-col gap-1">
+                  <div className="flex justify-between items-end pl-1 mb-1">
+                    <label className="text-sm font-bold text-gray-600">説明</label>
+                    <button
+                      type="button"
+                      // クリックすると「基準値： / 実測値：」の文字を説明欄に追加！改行も自動調整。
+                      onClick={() => {
+                        const currentDesc = photo.description || '';
+                        const prefix = currentDesc && !currentDesc.endsWith('\n') ? '\n' : '';
+                        updatePhoto(photo.id, "description", currentDesc + prefix + '基準値：\n実測値：');
+                      }}
+                      className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-100 shadow-sm transition-colors"
+                    >
+                      ＋「基準値・実測値」を挿入
+                    </button>
+                  </div>
+                  <textarea 
+                    placeholder="説明（短文）" 
+                    rows={3} 
+                    className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" 
+                    value={photo.description} 
+                    onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} 
+                  />
+                </div>
+
               </div>
             </div>
           ))}
