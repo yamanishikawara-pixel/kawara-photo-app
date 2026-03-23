@@ -8,7 +8,7 @@ import { compressImage, proxyUrl, useDraggablePin } from '../shared/utils';
 import type { Circle, MapPin as MapPinT, Photo, Project } from '../types';
 import type { ChangeEvent, MouseEvent } from 'react';
 
-// ★追加：工程のプルダウンメニューの選択肢
+// 工程のプルダウンメニューの選択肢
 const PROCESS_OPTIONS = [
   "着工前",
   "下地・下葺き",
@@ -21,6 +21,17 @@ const PROCESS_OPTIONS = [
   "緊結状況",
   "施工中",
   "完成"
+];
+
+// ★追加：説明欄のワンタップ入力定型文リスト
+const DESC_TEMPLATES = [
+  { label: "基準/実測", text: "基準値：\n実測値：" },
+  { label: "重ね幅(ヨコ)", text: "重ね幅（ヨコ）：" },
+  { label: "重ね幅(タテ)", text: "重ね幅（タテ）：" },
+  { label: "平行壁(立上)", text: "平行壁：立ち上げ高 " },
+  { label: "流れ壁(立上)", text: "流れ壁：立ち上げ高 " },
+  { label: "棟芯(重ね)", text: "棟芯：重ね（左右） " },
+  { label: "棟部(増張り)", text: "棟部：増し張り " },
 ];
 
 function PhotoCircleMarker({
@@ -389,7 +400,7 @@ export default function PhotoPage() {
                   <MapPin className={`w-6 h-6 ${photo.locationMap ? 'text-red-500' : 'text-gray-400'}`} />
                 </button>
 
-                {/* ★追加：工程のプルダウンメニュー */}
+                {/* 工程のプルダウンメニュー */}
                 <div className="flex flex-col gap-1">
                   <label className="text-sm font-bold text-gray-600 pl-1">工程</label>
                   <select
@@ -401,33 +412,38 @@ export default function PhotoPage() {
                     {PROCESS_OPTIONS.map(opt => (
                       <option key={opt} value={opt}>{opt}</option>
                     ))}
-                    {/* 過去に入力した独自のテキストがある場合はそれも表示してあげる優しさ設計 */}
                     {photo.process && !PROCESS_OPTIONS.includes(photo.process) && (
                       <option value={photo.process}>{photo.process}</option>
                     )}
                   </select>
                 </div>
 
-                {/* ★追加：説明欄とテンプレート挿入ボタン */}
+                {/* ★追加・変更：説明欄と大量のワンタップ定型文ボタン */}
                 <div className="flex flex-col gap-1">
-                  <div className="flex justify-between items-end pl-1 mb-1">
-                    <label className="text-sm font-bold text-gray-600">説明</label>
-                    <button
-                      type="button"
-                      // クリックすると「基準値： / 実測値：」の文字を説明欄に追加！改行も自動調整。
-                      onClick={() => {
-                        const currentDesc = photo.description || '';
-                        const prefix = currentDesc && !currentDesc.endsWith('\n') ? '\n' : '';
-                        updatePhoto(photo.id, "description", currentDesc + prefix + '基準値：\n実測値：');
-                      }}
-                      className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-100 shadow-sm transition-colors"
-                    >
-                      ＋「基準値・実測値」を挿入
-                    </button>
+                  <label className="text-sm font-bold text-gray-600 pl-1 mb-1">説明</label>
+                  
+                  {/* 定型文ボタン群：スマホでも押しやすいように折り返して配置 */}
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {DESC_TEMPLATES.map((tmpl, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          const currentDesc = photo.description || '';
+                          // もし既に文字が入っていたら、自動で改行してから定型文を入れる優しさ設計
+                          const prefix = currentDesc && !currentDesc.endsWith('\n') ? '\n' : '';
+                          updatePhoto(photo.id, "description", currentDesc + prefix + tmpl.text);
+                        }}
+                        className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1.5 rounded-lg hover:bg-blue-100 shadow-sm transition-colors"
+                      >
+                        ＋{tmpl.label}
+                      </button>
+                    ))}
                   </div>
+                  
                   <textarea 
                     placeholder="説明（短文）" 
-                    rows={3} 
+                    rows={4} 
                     className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" 
                     value={photo.description} 
                     onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} 
