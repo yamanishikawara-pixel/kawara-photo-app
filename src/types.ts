@@ -38,7 +38,7 @@ export interface MapPin {
   type: MapPinType;
   rotation: number;
   /** 位置図上の表示スケール（未指定は 1） */
-  size?: number;
+  size?: number; // ← ★ここが追加されていれば大成功です！
 }
 
 export interface MapLine {
