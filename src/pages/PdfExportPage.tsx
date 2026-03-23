@@ -73,6 +73,9 @@ export default function PdfExportPage() {
       setError(null);
       window.scrollTo(0, 0);
       await new Promise((r) => setTimeout(r, 500));
+      if (document.fonts?.ready) {
+        await document.fonts.ready;
+      }
 
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
