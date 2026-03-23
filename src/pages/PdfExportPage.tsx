@@ -99,6 +99,16 @@ function downloadPdfBlob(blob: Blob, filename: string) {
   }, 10000);
 }
 
+/** 数値なら単位を付与、既に単位のある文字列ならそのまま */
+function safeStyle(
+  val: string | number | undefined | null,
+  defaultUnit: string,
+): string {
+  if (val == null || val === '') return `0${defaultUnit}`;
+  if (typeof val === 'number') return `${val}${defaultUnit}`;
+  return String(val);
+}
+
 export default function PdfExportPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -376,6 +386,9 @@ export default function PdfExportPage() {
       )}
 
       <div className="flex flex-col gap-8 items-center w-full">
+        {/* =========================================
+            ① 表紙ページ
+        ========================================= */}
         <div
           style={wrapperStyle}
           className="relative bg-white shadow-md shrink-0"
@@ -384,6 +397,7 @@ export default function PdfExportPage() {
             className="pdf-page absolute top-0 left-0 flex flex-col items-center origin-top-left"
             style={{ ...pageStyle, backgroundColor: '#ffffff', color: '#000000' }}
           >
+            {/* --- ロゴとタイトル --- */}
             <div className="mt-[5mm] mb-[28mm] flex flex-col items-center w-full">
               <div className="shrink-0 flex justify-center mb-6">
                 {logoUrl ? (
@@ -422,6 +436,7 @@ export default function PdfExportPage() {
               </div>
             </div>
 
+            {/* --- 案件情報（バランスよく均等に配置） --- */}
             <div className="w-[150mm] flex flex-col gap-y-[12mm]">
               {COVER_FIELDS.map((item, idx) => {
                 let value = String(project[item.key] ?? '　');
@@ -433,6 +448,7 @@ export default function PdfExportPage() {
                     className="flex items-end pb-2"
                     style={{ borderBottom: '2px solid #000000' }}
                   >
+                    {/* 項目名（均等割り付けで美しく配置） */}
                     <div className="w-[45mm] flex-shrink-0 flex justify-between text-[22px] font-bold pr-8 leading-none">
                       {item.label.split('').map((c: string, i: number) => (
                         <span key={i} className="block leading-none">
@@ -440,6 +456,7 @@ export default function PdfExportPage() {
                         </span>
                       ))}
                     </div>
+                    {/* 入力内容 */}
                     <div className="flex-1 text-[26px] font-black whitespace-nowrap overflow-hidden pl-4 leading-none pb-[2px]">
                       {value}
                     </div>
@@ -448,6 +465,7 @@ export default function PdfExportPage() {
               })}
             </div>
 
+            {/* --- 会社情報（右下に配置） --- */}
             {userSettings && (address || phone) && (
               <div
                 className="absolute bottom-[16mm] right-[15mm] text-right flex flex-col items-end pl-4 py-1"
@@ -473,6 +491,8 @@ export default function PdfExportPage() {
                 )}
               </div>
             )}
+
+            {/* --- ページ番号 --- */}
             <div
               className="absolute bottom-[10mm] right-[15mm] text-[16px] font-bold"
               style={{ color: '#000000' }}
@@ -583,14 +603,16 @@ export default function PdfExportPage() {
                               key={`line-${line.id}`}
                               style={{
                                 position: 'absolute',
-                                left: `${line.x}%`,
-                                top: `${line.y}%`,
-                                width: `${line.length}%`,
-                                height: `${line.thickness}px`,
-                                backgroundColor: line.color,
-                                transform: `translate(-50%, -50%) rotate(${line.rotation}deg)`,
+                                left: safeStyle(line.x, '%'),
+                                top: safeStyle(line.y, '%'),
+                                width: safeStyle(line.length, '%'),
+                                height: safeStyle(line.thickness, 'px'),
+                                backgroundColor: line.color || '#000000',
+                                transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`,
                                 transformOrigin: 'center center',
-                                zIndex: 5,
+                                zIndex: 15,
+                                WebkitPrintColorAdjust: 'exact',
+                                printColorAdjust: 'exact',
                               }}
                             />
                           ))}

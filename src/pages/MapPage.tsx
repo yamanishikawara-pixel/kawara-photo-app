@@ -6,7 +6,51 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { proxyUrl, useDraggablePin } from '../shared/utils';
-import type { MapPin as MapPinT, MapPinType, MapRow, Project } from '../types';
+import type { MapLine, MapPin as MapPinT, MapPinType, MapRow, Project } from '../types';
+
+const LINE_DRAW_COLORS = [
+  { label: '流れ壁', color: '#3b82f6' },
+  { label: '平行壁', color: '#eab308' },
+  { label: '棟', color: '#22c55e' },
+  { label: '軒先', color: '#f97316' },
+  { label: '袖', color: '#ec4899' },
+  { label: 'その他', color: '#ef4444' },
+] as const;
+
+/** 画面上の2点（%）から MapLine の中心・長さ・角度を算出 */
+function lineFromTwoPoints(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  rectWidth: number,
+  rectHeight: number,
+): { x: number; y: number; length: number; rotation: number } {
+  const px1x = (x1 / 100) * rectWidth;
+  const px1y = (y1 / 100) * rectHeight;
+  const px2x = (x2 / 100) * rectWidth;
+  const px2y = (y2 / 100) * rectHeight;
+  const dx = px2x - px1x;
+  const dy = px2y - px1y;
+  const lengthPx = Math.hypot(dx, dy);
+  const lengthPct = rectWidth > 0 ? (lengthPx / rectWidth) * 100 : 0;
+  const rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
+  return {
+    x: (x1 + x2) / 2,
+    y: (y1 + y2) / 2,
+    length: lengthPct,
+    rotation,
+  };
+}
+
+function safeStyle(
+  val: string | number | undefined | null,
+  defaultUnit: string,
+): string {
+  if (val == null || val === '') return `0${defaultUnit}`;
+  if (typeof val === 'number') return `${val}${defaultUnit}`;
+  return String(val);
+}
 
 function MapMarker({
   pin,
@@ -19,7 +63,7 @@ function MapMarker({
 }) {
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(pin.x, pin.y, onDragEnd);
   return (
-    <div ref={containerRef} onMouseDown={onMouseDown} onTouchStart={onTouchStart} onClick={(e) => { e.stopPropagation(); if(!dragging) onClick(); }} style={{ left: `${position.x}%`, top: `${position.y}%`, transform: 'translate(-50%, -50%)', touchAction: 'none' }} className={`absolute flex items-center justify-center cursor-pointer transition-transform ${dragging ? 'z-30 scale-125 opacity-80' : 'z-10 hover:scale-110'}`}>
+    <div ref={containerRef} onMouseDown={onMouseDown} onTouchStart={onTouchStart} onClick={(e) => { e.stopPropagation(); if(!dragging) onClick(); }} style={{ left: `${position.x}%`, top: `${position.y}%`, transform: 'translate(-50%, -50%)', touchAction: 'none' }} className={`map-pin-marker absolute flex items-center justify-center cursor-pointer transition-transform ${dragging ? 'z-30 scale-125 opacity-80' : 'z-10 hover:scale-110'}`}>
       {pin.type === 'arrow' ? (
         <div className="flex items-center gap-1 drop-shadow-md bg-white/70 px-2 py-0.5 rounded-lg border border-red-200">
           <span className="text-red-600 font-black text-2xl leading-none" style={{ transform: `rotate(${pin.rotation || 0}deg)` }}>➡</span>
@@ -99,6 +143,17 @@ export default function MapPage() {
   const [uploading, setUploading] = useState(false);
   const [editingPin, setEditingPin] = useState<MapPinT | null>(null);
   const [initializedRows, setInitializedRows] = useState(false);
+  const [lineModeForMap, setLineModeForMap] = useState<number | null>(null);
+  const [lineColor, setLineColor] = useState<string>(LINE_DRAW_COLORS[0].color);
+  const [lineDrag, setLineDrag] = useState<{
+    mapIndex: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
+  const [linePreviewEnd, setLinePreviewEnd] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
 
   useEffect(() => { getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data() as Project)); }, [id]);
 
@@ -159,11 +214,34 @@ export default function MapPage() {
   };
 
   const removeMap = async (index: number) => {
-    if(!window.confirm('この位置図を削除しますか？\n（配置したマーカーもすべて削除されます）')) return;
+    if (
+      !window.confirm(
+        'この位置図を削除しますか？\n（配置したマーカー・線もすべて削除されます）',
+      )
+    )
+      return;
     const newUrls = project.mapUrls.filter((_, i: number) => i !== index);
     const newPins = (project.mapPins || []).filter((p) => p.mapIndex !== index);
-    setProject({ ...project, mapUrls: newUrls, mapPins: newPins });
-    await updateDoc(doc(db, "projects", id!), { mapUrls: newUrls, mapPins: newPins });
+    const newLines = (project.mapLines || [])
+      .filter((l) => l.mapIndex !== index)
+      .map((l) => ({
+        ...l,
+        mapIndex: l.mapIndex > index ? l.mapIndex - 1 : l.mapIndex,
+      }));
+    setProject({
+      ...project,
+      mapUrls: newUrls,
+      mapPins: newPins,
+      mapLines: newLines,
+    });
+    await updateDoc(doc(db, "projects", id!), {
+      mapUrls: newUrls,
+      mapPins: newPins,
+      mapLines: newLines,
+    });
+    if (lineModeForMap === index) setLineModeForMap(null);
+    else if (lineModeForMap !== null && lineModeForMap > index)
+      setLineModeForMap(lineModeForMap - 1);
   };
 
   const addPin = async (e: React.MouseEvent<HTMLDivElement>, mapIndex: number) => {
@@ -216,6 +294,99 @@ export default function MapPage() {
     await updateDoc(doc(db, "projects", id!), { mapRows: newRows });
   };
 
+  const removeMapLine = async (lineId: number) => {
+    const newLines = (project.mapLines || []).filter((l) => l.id !== lineId);
+    setProject({ ...project, mapLines: newLines });
+    await updateDoc(doc(db, "projects", id!), { mapLines: newLines });
+  };
+
+  const handleLinePointerDown = (
+    e: React.PointerEvent<HTMLDivElement>,
+    mapIndex: number,
+  ) => {
+    if (lineModeForMap !== mapIndex) return;
+    if ((e.target as HTMLElement).closest('.map-pin-marker')) return;
+    const el = e.currentTarget;
+    const rect = el.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setLineDrag({ mapIndex, startX: x, startY: y });
+    setLinePreviewEnd(null);
+    el.setPointerCapture(e.pointerId);
+  };
+
+  const handleLinePointerMove = (
+    e: React.PointerEvent<HTMLDivElement>,
+    mapIndex: number,
+  ) => {
+    if (!lineDrag || lineDrag.mapIndex !== mapIndex) return;
+    const el = e.currentTarget;
+    const rect = el.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setLinePreviewEnd({ x, y });
+  };
+
+  const handleLinePointerUp = (
+    e: React.PointerEvent<HTMLDivElement>,
+    mapIndex: number,
+  ) => {
+    if (!lineDrag || lineDrag.mapIndex !== mapIndex) return;
+    const el = e.currentTarget;
+    const rect = el.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    const { startX, startY } = lineDrag;
+    if (Math.hypot(x - startX, y - startY) < 0.5) {
+      setLineDrag(null);
+      setLinePreviewEnd(null);
+      try {
+        el.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    const geom = lineFromTwoPoints(startX, startY, x, y, rect.width, rect.height);
+    const newLine: MapLine = {
+      id: Date.now() + Math.random(),
+      mapIndex,
+      x: geom.x,
+      y: geom.y,
+      length: geom.length,
+      thickness: 4,
+      color: lineColor,
+      rotation: geom.rotation,
+    };
+    setProject((prev) => {
+      if (!prev) return prev;
+      const newLines = [...(prev.mapLines || []), newLine];
+      void updateDoc(doc(db, "projects", id!), { mapLines: newLines });
+      return { ...prev, mapLines: newLines };
+    });
+    setLineDrag(null);
+    setLinePreviewEnd(null);
+    try {
+      el.releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleLinePointerCancel = (
+    e: React.PointerEvent<HTMLDivElement>,
+    mapIndex: number,
+  ) => {
+    if (!lineDrag || lineDrag.mapIndex !== mapIndex) return;
+    setLineDrag(null);
+    setLinePreviewEnd(null);
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+  };
+
   if (!project) return <LoadingSpinner />;
 
   return (
@@ -239,6 +410,7 @@ export default function MapPage() {
                   <li>図面を<b>タップ</b>すると、赤丸が打てます。</li>
                   <li>赤丸を<b>ドラッグ</b>で自由に移動できます。</li>
                   <li>赤丸を<b>もう一度タップ</b>すると、<b>「矢印」</b>への変更や文字の変更ができます。</li>
+                  <li><b>「線を描く」</b>をオンにすると、図面上で<b>ドラッグ</b>して壁種などの線を引けます（色は下から選択）。</li>
                 </ul>
               </div>
               
@@ -247,15 +419,122 @@ export default function MapPage() {
                 
                 return (
                 <div key={i} className="relative w-full border-2 border-gray-300 rounded-xl bg-gray-100 shadow-inner group overflow-hidden flex flex-col p-2">
+                  <div className="flex flex-wrap items-center gap-2 mb-2 px-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setLineModeForMap((m) => (m === i ? null : i))
+                      }
+                      className={`text-sm font-bold px-3 py-2 rounded-xl border-2 ${
+                        lineModeForMap === i
+                          ? 'bg-amber-100 border-amber-500 text-amber-900'
+                          : 'bg-white border-gray-200 text-gray-700'
+                      }`}
+                    >
+                      {lineModeForMap === i ? '線モード中（終了）' : '線を描く'}
+                    </button>
+                    {lineModeForMap === i && (
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        <span className="text-xs font-bold text-gray-600">色:</span>
+                        {LINE_DRAW_COLORS.map((c) => (
+                          <button
+                            key={c.color}
+                            type="button"
+                            title={c.label}
+                            onClick={() => setLineColor(c.color)}
+                            className={`w-7 h-7 rounded-full border-2 shrink-0 ${
+                              lineColor === c.color
+                                ? 'border-gray-900 ring-2 ring-offset-1 ring-gray-400'
+                                : 'border-white shadow-sm'
+                            }`}
+                            style={{ backgroundColor: c.color }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <div className="flex items-center justify-center overflow-hidden">
-                    <div className="relative inline-block" onClick={(e) => addPin(e, i)}>
+                    <div
+                      className={`relative inline-block max-w-full ${
+                        lineModeForMap === i ? 'cursor-crosshair' : ''
+                      }`}
+                      onClick={(e) => {
+                        if (lineModeForMap !== i) addPin(e, i);
+                      }}
+                      onPointerDown={(e) => handleLinePointerDown(e, i)}
+                      onPointerMove={(e) => handleLinePointerMove(e, i)}
+                      onPointerUp={(e) => handleLinePointerUp(e, i)}
+                      onPointerCancel={(e) => handleLinePointerCancel(e, i)}
+                    >
                       <img src={proxyUrl(u, i)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[60vh] pointer-events-none rounded shadow-sm" alt="" />
+                      {(project.mapLines || [])
+                        .filter((l) => l.mapIndex === i)
+                        .map((line) => (
+                          <div
+                            key={line.id}
+                            className="pointer-events-none absolute"
+                            style={{
+                              left: safeStyle(line.x, '%'),
+                              top: safeStyle(line.y, '%'),
+                              width: safeStyle(line.length, '%'),
+                              height: safeStyle(line.thickness, 'px'),
+                              backgroundColor: line.color || '#000000',
+                              transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`,
+                              transformOrigin: 'center center',
+                              zIndex: 5,
+                            }}
+                          />
+                        ))}
+                      {lineDrag &&
+                        lineDrag.mapIndex === i &&
+                        linePreviewEnd && (
+                          <svg
+                            viewBox="0 0 100 100"
+                            preserveAspectRatio="none"
+                            className="absolute inset-0 w-full h-full pointer-events-none"
+                            style={{ zIndex: 8 }}
+                          >
+                            <line
+                              x1={lineDrag.startX}
+                              y1={lineDrag.startY}
+                              x2={linePreviewEnd.x}
+                              y2={linePreviewEnd.y}
+                              stroke={lineColor}
+                              strokeWidth={0.8}
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                        )}
                       {(project.mapPins || []).filter((p) => p.mapIndex === i).map((pin) => (
                         <MapMarker key={pin.id} pin={pin} onDragEnd={(x: number, y: number) => savePin({...pin, x, y})} onClick={() => setEditingPin(pin)} />
                       ))}
                     </div>
                   </div>
                   <button onClick={() => removeMap(i)} className="absolute top-2 right-2 bg-white/90 rounded-full p-2 text-red-500 shadow-sm z-20"><Trash2 className="w-5 h-5" /></button>
+
+                  {(project.mapLines || []).filter((l) => l.mapIndex === i).length > 0 && (
+                    <div className="w-full mt-2 px-1">
+                      <p className="text-xs font-bold text-gray-600 mb-1">この図の線</p>
+                      <div className="flex flex-wrap gap-2">
+                        {(project.mapLines || [])
+                          .filter((l) => l.mapIndex === i)
+                          .map((line) => (
+                            <button
+                              key={line.id}
+                              type="button"
+                              onClick={() => removeMapLine(line.id)}
+                              className="text-xs font-bold px-2 py-1 rounded-lg border border-gray-300 bg-white hover:bg-red-50 hover:border-red-200 text-gray-700 flex items-center gap-1"
+                            >
+                              <span
+                                className="inline-block w-4 h-1 rounded-sm"
+                                style={{ backgroundColor: line.color || '#000' }}
+                              />
+                              削除
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="w-full mt-6 pt-4 border-t border-gray-300">
                     <h3 className="text-lg font-bold mb-3 text-gray-800">位置図 {i + 1} の説明表</h3>

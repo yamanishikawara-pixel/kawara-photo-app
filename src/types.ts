@@ -44,10 +44,11 @@ export interface MapPin {
 export interface MapLine {
   id: number;
   mapIndex: number;
-  x: number;
-  y: number;
-  length: number;
-  thickness: number;
+  /** 数値は `defaultUnit` が付与される。`'50%'` のように単位付き文字列も可 */
+  x: number | string;
+  y: number | string;
+  length: number | string;
+  thickness: number | string;
   color: string;
   rotation: number;
 }
