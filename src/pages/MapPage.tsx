@@ -396,7 +396,7 @@ export default function MapPage() {
           }).promise;
           const page = await pdf.getPage(1); 
 
-          const viewport = page.getViewport({ scale: 2.0 }); 
+          const viewport = page.getViewport({ scale: 3.0 }); 
           const canvas = document.createElement('canvas');
           const context = canvas.getContext('2d');
           canvas.width = viewport.width;
