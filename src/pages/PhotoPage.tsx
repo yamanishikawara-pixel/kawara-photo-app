@@ -79,6 +79,19 @@ function PinSelectModal({
   );
 }
 
+// 日付フォーマット変換用ヘルパー関数
+const formatToYMD = (dateString: string) => {
+  if (!dateString) return '';
+  // "YYYY/MM/DD" -> "YYYY-MM-DD" （input type="date" 用）
+  return dateString.replace(/\//g, '-');
+};
+
+const formatToYMDSlash = (dateString: string) => {
+  if (!dateString) return '';
+  // "YYYY-MM-DD" -> "YYYY/MM/DD" （PDF表示・保存用）
+  return dateString.replace(/-/g, '/');
+};
+
 export default function PhotoPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -162,6 +175,10 @@ export default function PhotoPage() {
     setBulkUploading(true);
     let newPhotos = [...project.photos];
     let uploadedCount = 0;
+    
+    // 今日の日付を YYYY/MM/DD 形式で取得
+    const todayStr = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/');
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       let targetIndex = newPhotos.findIndex(p => !p.image);
@@ -184,7 +201,7 @@ export default function PhotoPage() {
           const r = ref(storage, `photos/${id}/${Date.now()}_bulk_${i}`);
           await uploadBytes(r, compressed);
           const url = await getDownloadURL(r);
-          newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: new Date().toLocaleDateString('ja-JP'), circles: [] };
+          newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: todayStr, circles: [] };
           resolve();
         });
       });
@@ -203,11 +220,15 @@ export default function PhotoPage() {
     if (!f) return;
     const photoId = project.photos[index].id;
     setLoadingId(photoId);
+    
+    // 今日の日付を YYYY/MM/DD 形式で取得
+    const todayStr = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/');
+
     compressImage(f, async (file) => {
       const r = ref(storage, `photos/${id}/${Date.now()}`);
       await uploadBytes(r, file);
       const url = await getDownloadURL(r);
-      const newPhotos = project.photos.map((p, i: number) => p.id === photoId ? { ...p, image: url, photoNumber: String(i + 1), shootingDate: new Date().toLocaleDateString('ja-JP'), circles: [] } : p);
+      const newPhotos = project.photos.map((p, i: number) => p.id === photoId ? { ...p, image: url, photoNumber: String(i + 1), shootingDate: p.shootingDate || todayStr, circles: [] } : p);
       setProject({ ...project, photos: newPhotos });
       await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
       setLoadingId(null);
@@ -341,6 +362,17 @@ export default function PhotoPage() {
               </div>
 
               <div className="space-y-5">
+                {/* ★追加：撮影日時のカレンダー入力欄 */}
+                <div className="flex items-center gap-3">
+                  <div className="font-bold text-gray-600 whitespace-nowrap min-w-[4rem]">撮影日:</div>
+                  <input
+                    type="date"
+                    className="w-full p-3 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                    value={formatToYMD(photo.shootingDate)}
+                    onChange={(e) => updatePhoto(photo.id, "shootingDate", formatToYMDSlash(e.target.value))}
+                  />
+                </div>
+
                 <button onClick={() => { setCurrentPhotoId(photo.id); setModalOpen(true); }} className={`w-full p-4 text-lg border-2 rounded-xl text-left flex justify-between items-center ${photo.locationMap ? 'text-red-700 font-bold border-red-300 bg-red-50' : 'text-gray-500 border-gray-300 bg-gray-50'}`}>
                   {photo.locationMap || '▼ どの場所の写真ですか？（タップして選択）'}
                   <MapPin className={`w-6 h-6 ${photo.locationMap ? 'text-red-500' : 'text-gray-400'}`} />
