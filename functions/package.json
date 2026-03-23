@@ -13,10 +13,11 @@
   },
   "main": "lib/index.js",
   "dependencies": {
+    "@sparticuz/chromium": "^143.0.4",
     "cors": "^2.8.5",
     "firebase-admin": "^12.0.0",
     "firebase-functions": "^6.0.0",
-    "puppeteer": "^22.0.0"
+    "puppeteer-core": "^24.40.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

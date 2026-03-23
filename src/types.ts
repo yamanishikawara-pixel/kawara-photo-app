@@ -37,31 +37,6 @@ export interface MapPin {
   label: string;
   type: MapPinType;
   rotation: number;
-  size?: number;
-}
-
-// ==========================================
-// ★ これがないとエラーになります！（基準線の設計図）
-// ==========================================
-export interface MapLine {
-  id: number;
-  mapIndex: number;
-  x: number;
-  y: number;
-  length: number;
-  rotation: number;
-  thickness: number;
-  color: string;
-}
-
-export interface Material {
-  id: number;
-  image: string | null;
-  name: string;
-  manufacturer: string;
-  specification: string;
-  remarks: string;
-  rotation?: number;
 }
 
 export interface Project {
@@ -74,7 +49,6 @@ export interface Project {
   mapUrls: string[];
   mapRows: MapRow[];
   mapPins: MapPin[];
-  mapLines?: MapLine[]; // ★ ここにも追加
-  materials?: Material[];
   createdAt?: string;
 }
+

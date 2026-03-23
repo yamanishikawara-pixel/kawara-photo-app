@@ -1,29 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus, Sparkles } from 'lucide-react';
+import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { compressImage, proxyUrl, useDraggablePin } from '../shared/utils';
 import type { Circle, MapPin as MapPinT, Photo, Project } from '../types';
 import type { ChangeEvent, MouseEvent } from 'react';
-
-// ==========================================
-// ★ 魔法の言葉（定型文）の辞書
-// ==========================================
-const PRESET_WORDS = {
-  process: [
-    "着工前", "下地、下葺き", "重ね幅（タテ）", "重ね幅（ヨコ）", 
-    "平行壁立ち上げ高", "流れ壁立ち上げ高", "棟芯より重ね", 
-    "緊結状況", "瓦施工", "確認"
-  ],
-  description: [
-    "基準値：", "実測値：",
-    "瓦割れ", "ズレ", "凍害", "漆喰剥がれ", "棟の歪み", 
-    "雨漏り跡", "下地腐食", "ルーフィング破れ",
-    "新規瓦葺き", "漆喰詰め直し", "ビス止め固定", "防水テープ処理"
-  ]
-};
 
 function PhotoCircleMarker({
   circle,
@@ -42,35 +25,20 @@ function PhotoCircleMarker({
 }) {
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(circle.x, circle.y, onDragEnd);
 
-  const [lastTap, setLastTap] = useState(0);
-  const handleTap = (e: any) => {
-    e.stopPropagation();
-    const now = Date.now();
-    if (now - lastTap < 300) {
-      onRemove();
-    } else {
-      setLastTap(now);
-      onSelect();
-      if (e.type === 'mousedown') onMouseDown(e);
-      if (e.type === 'touchstart') onTouchStart(e);
-    }
-  };
-
   return (
     <>
       <div
         ref={containerRef}
-        onMouseDown={handleTap}
-        onTouchStart={handleTap}
-        onClick={(e) => e.stopPropagation()} // ★これを追加！タップが背景に突き抜けるのを絶対防ぐ壁！
+        onMouseDown={(e) => { onSelect(); onMouseDown(e); }}
+        onTouchStart={(e) => { onSelect(); onTouchStart(e); }}
         style={{ left: `${position.x}%`, top: `${position.y}%`, width: `${circle.size}%`, transform: 'translate(-50%, -50%)', touchAction: 'none' }}
         className={`absolute aspect-square rounded-full border-[3px] border-red-500 shadow-sm ${dragging ? 'z-30 opacity-70 scale-110' : 'z-20 cursor-pointer'} ${isSelected ? 'border-dashed bg-red-500/20' : ''}`}
       />
       {isSelected && !dragging && (
-        <div onClick={(e) => e.stopPropagation()} style={{ left: `${position.x}%`, top: `${position.y + circle.size/2 + 8}%`, transform: 'translateX(-50%)' }} className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden">
+        <div style={{ left: `${position.x}%`, top: `${position.y + circle.size/2 + 5}%`, transform: 'translateX(-50%)' }} className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden">
           <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.min(60, circle.size * 1.3))}} className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700">+</button>
           <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.max(5, circle.size * 0.7))}} className="px-4 py-2 text-xl font-bold border-l border-r hover:bg-gray-100 text-gray-700">-</button>
-          <button onClick={(e) => {e.stopPropagation(); onRemove()}} className="px-4 py-2 text-red-500 hover:bg-red-50 flex items-center justify-center gap-1 font-bold"><Trash2 className="w-5 h-5"/> 消す</button>
+          <button onClick={(e) => {e.stopPropagation(); onRemove()}} className="px-4 py-2 text-red-500 hover:bg-red-50"><Trash2 className="w-5 h-5"/></button>
         </div>
       )}
     </>
@@ -134,11 +102,6 @@ export default function PhotoPage() {
     const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, [field]: value } : p);
     setProject({ ...project, photos: newPhotos });
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
-  };
-
-  const appendWord = (photoId: number, field: 'process' | 'description', word: string, currentValue: string) => {
-    const newValue = currentValue ? `${currentValue} ${word}` : word;
-    updatePhoto(photoId, field, newValue);
   };
 
   const deletePhotoSlot = async (photoId: number) => {
@@ -337,7 +300,7 @@ export default function PhotoPage() {
                     {(photo.circles || []).map((circle) => (
                       <PhotoCircleMarker key={circle.id} circle={circle} isSelected={selectedCircleId === circle.id} onSelect={() => setSelectedCircleId(circle.id)} onDragEnd={(x: number, y: number) => updateCircle(photo.id, circle.id, { x, y })} onSizeChange={(size: number) => updateCircle(photo.id, circle.id, { size })} onRemove={() => removeCircle(photo.id, circle.id)} />
                     ))}
-                    <div className="absolute -top-3 -left-3 bg-black/70 text-white text-xs px-2 py-1 rounded-full font-bold pointer-events-none shadow">タップで選択・削除<br/>(長押しで移動)</div>
+                    <div className="absolute -top-3 -left-3 bg-black/70 text-white text-xs px-2 py-1 rounded-full font-bold pointer-events-none shadow">タップで赤丸追加</div>
                   </div>
                 ) : (
                   <div className="text-center text-gray-400">
@@ -377,51 +340,14 @@ export default function PhotoPage() {
                 </div>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <button onClick={() => { setCurrentPhotoId(photo.id); setModalOpen(true); }} className={`w-full p-4 text-lg border-2 rounded-xl text-left flex justify-between items-center ${photo.locationMap ? 'text-red-700 font-bold border-red-300 bg-red-50' : 'text-gray-500 border-gray-300 bg-gray-50'}`}>
                   {photo.locationMap || '▼ どの場所の写真ですか？（タップして選択）'}
                   <MapPin className={`w-6 h-6 ${photo.locationMap ? 'text-red-500' : 'text-gray-400'}`} />
                 </button>
-
-                {/* ★ここに追加：撮影日の自由編集欄 */}
-                <div className="relative pt-2">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-sm font-bold text-gray-600">撮影日</label>
-                  </div>
-                  <input type="text" placeholder="例: 2026/3/21" className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" value={photo.shootingDate || ''} onChange={(e) => updatePhoto(photo.id, "shootingDate", e.target.value)} />
-                </div>
-
-                <div className="relative pt-2">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-sm font-bold text-gray-600">工程</label>
-                  </div>
-                  <input type="text" placeholder="例: 現状、施工中" className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" value={photo.process || ''} onChange={(e) => updatePhoto(photo.id, "process", e.target.value)} />
-                  
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {PRESET_WORDS.process.map(word => (
-                      <button key={word} onClick={() => appendWord(photo.id, 'process', word, photo.process || '')} className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-lg text-sm font-bold transition-colors shadow-sm">
-                        + {word}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="relative pt-2">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-sm font-bold text-gray-600">説明</label>
-                  </div>
-                  <textarea placeholder="例: 瓦割れ、ズレあり" rows={2} className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" value={photo.description || ''} onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} />
-                  
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {PRESET_WORDS.description.map(word => (
-                      <button key={word} onClick={() => appendWord(photo.id, 'description', word, photo.description || '')} className="bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 px-3 py-1.5 rounded-lg text-sm font-bold transition-colors shadow-sm flex items-center gap-1">
-                        <Sparkles className="w-3 h-3" /> {word}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <input type="text" placeholder="工程 例: 葺き直し" className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" value={photo.process} onChange={(e) => updatePhoto(photo.id, "process", e.target.value)} />
+                <textarea placeholder="説明（短文）" rows={2} className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" value={photo.description} onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} />
               </div>
-
             </div>
           ))}
         </div>
