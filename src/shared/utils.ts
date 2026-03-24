@@ -38,7 +38,7 @@ export function getPreviewScale(paddingPx = 32): number {
 export const proxyUrl = (url: string, id: string | number) =>
   url ? `${url}${url.includes('?') ? '&' : '?'}cb=${id}` : '';
 
-// ★現場のメジャーの目盛りが読める最高画質設定！
+// ★高画質設定（1600px, 85%）
 const MAX_WIDTH = 1600; 
 const QUALITY = 0.85;   
 
@@ -52,52 +52,57 @@ function isHeicFile(file: File): boolean {
   );
 }
 
-function imageFileToJpegViaImgElement(
-  file: File,
-  callback: (jpeg: File) => void,
-  fallback: () => void,
-) {
-  const reader = new FileReader();
-  reader.onerror = fallback;
-  reader.onload = (e) => {
-    const img = new Image();
-    img.onerror = fallback;
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      let outW = img.width;
-      let outH = img.height;
-      if (outW > MAX_WIDTH) {
-        outH = Math.round((outH * MAX_WIDTH) / outW);
-        outW = MAX_WIDTH;
-      }
-      canvas.width = outW;
-      canvas.height = outH;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        fallback();
-        return;
-      }
-      ctx.drawImage(img, 0, 0, outW, outH);
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) {
-            fallback();
-            return;
-          }
-          callback(
-            new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), {
-              type: 'image/jpeg',
-              lastModified: file.lastModified,
-            }),
-          );
-        },
-        'image/jpeg',
-        QUALITY,
-      );
-    };
-    if (typeof e.target?.result === 'string') img.src = e.target.result;
+// ★PCがフリーズする原因（FileReader）を捨て、超軽量で瞬間読み込みできるルートに完全変更
+function processImageToJpeg(file: File, callback: (f: File) => void) {
+  const img = new Image();
+  // メモリを全く消費せずに画像を読み込む最強の仕組み
+  const objectUrl = URL.createObjectURL(file);
+
+  // 万が一エラーが起きてもフリーズさせず、元の画像をそのまま返す安全設計
+  img.onerror = () => {
+    URL.revokeObjectURL(objectUrl);
+    callback(file);
   };
-  reader.readAsDataURL(file);
+
+  img.onload = () => {
+    // 読み込み終わったらすぐにメモリを解放！
+    URL.revokeObjectURL(objectUrl);
+    
+    let outW = img.width;
+    let outH = img.height;
+    
+    if (outW > MAX_WIDTH) {
+      outH = Math.round((outH * MAX_WIDTH) / outW);
+      outW = MAX_WIDTH;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = outW;
+    canvas.height = outH;
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx) {
+      callback(file);
+      return;
+    }
+
+    ctx.drawImage(img, 0, 0, outW, outH);
+    
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          callback(file);
+          return;
+        }
+        const newName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+        callback(new File([blob], newName, { type: 'image/jpeg', lastModified: file.lastModified }));
+      },
+      'image/jpeg',
+      QUALITY
+    );
+  };
+
+  img.src = objectUrl;
 }
 
 export function compressImage(
@@ -105,11 +110,7 @@ export function compressImage(
   callback: (compressedFile: File) => void,
 ) {
   const safeCallback = (f: File) => {
-    try {
-      callback(f);
-    } catch {
-      // ignore
-    }
+    try { callback(f); } catch {}
   };
 
   if (!file.type.startsWith('image/')) {
@@ -117,39 +118,32 @@ export function compressImage(
     return;
   }
 
+  // iPhone高効率画像（HEIC）の対応
   if (isHeicFile(file)) {
     (async () => {
       try {
         if (typeof window === 'undefined' || typeof Worker === 'undefined') {
-          imageFileToJpegViaImgElement(file, safeCallback, () => safeCallback(file));
+          processImageToJpeg(file, safeCallback);
           return;
         }
         const { default: heic2any } = await import('heic2any');
-        const converted = (await heic2any({
-          blob: file,
-          toType: 'image/jpeg',
-          quality: QUALITY,
-        })) as Blob | Blob[];
+        const converted = (await heic2any({ blob: file, toType: 'image/jpeg', quality: QUALITY })) as Blob | Blob[];
         const blob = Array.isArray(converted) ? converted[0] : converted;
-        const jpegFile = new File(
-          [blob],
-          file.name.replace(/\.(heic|heif)$/i, '.jpg'),
-          { type: 'image/jpeg', lastModified: file.lastModified },
-        );
-        imageFileToJpegViaImgElement(jpegFile, safeCallback, () => safeCallback(file));
+        const jpegFile = new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), { type: 'image/jpeg', lastModified: file.lastModified });
+        processImageToJpeg(jpegFile, safeCallback);
       } catch {
-        imageFileToJpegViaImgElement(file, safeCallback, () => safeCallback(file));
+        processImageToJpeg(file, safeCallback);
       }
     })();
     return;
   }
 
-  // ★先ほど、私がまるごと書き落としてしまっていた「通常画像の処理」です！！
-  imageFileToJpegViaImgElement(file, safeCallback, () => safeCallback(file));
+  // ★通常画像（パソコンからのアップロードなど）の処理
+  processImageToJpeg(file, safeCallback);
 }
 
 // -----------------------------------------------------
-// 以下、マップのピンをドラッグするための機能
+// 以下、マップのピンをドラッグするための機能（変更なし）
 // -----------------------------------------------------
 export function useDraggablePin(
   initialX: number,
