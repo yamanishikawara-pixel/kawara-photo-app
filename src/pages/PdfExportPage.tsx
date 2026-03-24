@@ -13,38 +13,12 @@ import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 
-const PDF_GENERATE_URL = 'https://generatepdf-ld4b4dsi5q-an.a.run.app';
 const JP_FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo, sans-serif';
 
 function safeStyleLine(val: string | number | undefined | null, defaultUnit: string): string {
   if (val == null || val === '') return `0${defaultUnit}`;
   if (typeof val === 'number') return `${val}${defaultUnit}`;
   return String(val);
-}
-
-function pdfEndpointCandidates(): string[] {
-  const env = (import.meta.env.VITE_PDF_GENERATE_URL as string | undefined)?.trim();
-  const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-  if (env) return (!isLocal && env.includes('run.app')) ? ['/api/generatePdf'] : [env];
-  return isLocal ? [PDF_GENERATE_URL, '/api/generatePdf'] : ['/api/generatePdf'];
-}
-
-async function responseToPdfBlob(response: Response): Promise<Blob> {
-  const buf = await response.arrayBuffer();
-  const u8 = new Uint8Array(buf);
-  const isPdf = u8.length >= 4 && u8[0] === 0x25 && u8[1] === 0x50 && u8[2] === 0x44 && u8[3] === 0x46;
-  if (isPdf) return new Blob([buf], { type: 'application/pdf' });
-  const text = new TextDecoder().decode(buf);
-  try {
-    const data = JSON.parse(text) as { pdfBase64?: string };
-    if (data.pdfBase64) {
-      const binary = atob(data.pdfBase64);
-      const out = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
-      return new Blob([out], { type: 'application/pdf' });
-    }
-  } catch { /* ignore */ }
-  throw new Error('有効なPDFデータが返りませんでした');
 }
 
 const LINE_TYPES = [
@@ -83,17 +57,6 @@ function PdfLineLegend() {
       ))}
     </div>
   );
-}
-
-function downloadPdfBlob(blob: Blob, filename: string) {
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => window.URL.revokeObjectURL(url), 10000);
 }
 
 export default function PdfExportPage() {
@@ -160,95 +123,44 @@ export default function PdfExportPage() {
     } catch { setError('Zipファイルの作成に失敗しました。'); } finally { setIsZipping(false); }
   };
 
+  // ★ 外部サーバーに頼らず、ブラウザの力だけで完結する最強のPDF出力
   const handleExport = async () => {
     if (!project) return;
     setIsExporting(true); setError(null);
     const pdfName = `${project.projectName || '現場報告書'}_${new Date().getTime()}.pdf`;
 
-    // ★ 白飛び防止：画像をBase64に変換して埋め込む処理を完全実装
-    const buildServerHtmlPayload = async (): Promise<string> => {
-      const container = document.querySelector('.pdf-container-wrapper');
-      if (!container) throw new Error('データが見つかりません');
-      const clone = container.cloneNode(true) as HTMLElement;
-      
-      const wrappers = clone.querySelectorAll('.pdf-page-wrapper');
-      wrappers.forEach((w: Element) => {
-        const el = w as HTMLElement;
-        el.style.width = '794px'; el.style.height = '1123px'; el.style.pageBreakAfter = 'always'; el.style.margin = '0'; el.style.boxShadow = 'none';
-      });
-      
-      const pages = clone.querySelectorAll('.pdf-page');
-      pages.forEach((p: Element) => {
-        const el = p as HTMLElement;
-        el.style.transform = 'none'; el.style.position = 'relative'; el.style.width = '794px'; el.style.height = '1123px';
-      });
-
-      const images = clone.querySelectorAll('img');
-      const base64Promises = Array.from(images).map(async (img) => {
-        const src = img.getAttribute('src');
-        if (src && !src.startsWith('data:')) {
-          try {
-            const res = await fetch(src);
-            const blob = await res.blob();
-            const base64 = await new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result as string);
-              reader.readAsDataURL(blob);
-            });
-            img.setAttribute('src', base64);
-            img.removeAttribute('crossorigin');
-          } catch (e) { console.warn('Base64変換エラー:', e); }
-        }
-      });
-      await Promise.all(base64Promises);
-
-      return `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><script src="https://cdn.tailwindcss.com"></script><style>@page { margin: 0; size: A4 portrait; } body { margin: 0; padding: 0; background-color: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: ${JP_FONT}; } * { font-family: ${JP_FONT} !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }</style></head><body>${clone.innerHTML}</body></html>`;
-    };
-
-    const exportPdfClientSide = async () => {
+    try {
       const pages = document.querySelectorAll('.pdf-page');
       if (pages.length === 0) throw new Error('PDFページが見つかりません');
       window.scrollTo(0, 0);
       await new Promise((r) => setTimeout(r, 500));
       if (document.fonts?.ready) await document.fonts.ready;
+      
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
+      
       for (let i = 0; i < pages.length; i++) {
         const pageEl = pages[i] as HTMLElement;
         pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
-        await new Promise((r) => setTimeout(r, 600));
+        await new Promise((r) => setTimeout(r, 600)); // 描画待ち
+        
         const currentTransform = pageEl.style.transform;
         pageEl.style.transform = 'scale(1)';
+        // ★ Safariでのエラーを防ぐため cacheBust を true に設定
         const dataUrl = await toJpeg(pageEl, { cacheBust: true, quality: 0.95, pixelRatio: 2, backgroundColor: '#ffffff' });
         pageEl.style.transform = currentTransform;
+        
         const pdfHeight = (pageEl.offsetHeight * pdfWidth) / pageEl.offsetWidth;
         if (i > 0) pdf.addPage();
         pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
       }
       pdf.save(pdfName);
-    };
-
-    try {
-      const htmlPayload = await buildServerHtmlPayload();
-      const body = JSON.stringify({ html: htmlPayload });
-      let serverOk = false;
-      let lastServerErr: unknown;
-
-      for (const url of pdfEndpointCandidates()) {
-        try {
-          const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
-          if (!response.ok) throw new Error(`サーバーエラー: ${response.status}`);
-          const blob = await responseToPdfBlob(response);
-          if (blob.size === 0) throw new Error('PDFデータが空です');
-          downloadPdfBlob(blob, pdfName);
-          serverOk = true; break;
-        } catch (e) { lastServerErr = e; }
-      }
-      if (!serverOk) {
-        console.warn('サーバーPDFに失敗、ブラウザで生成します', lastServerErr);
-        try { await exportPdfClientSide(); } catch (clientErr) { setError('PDFの保存に失敗しました。'); }
-      }
-    } catch (err: unknown) { setError('PDF作成中にエラーが発生しました。'); } finally { setIsExporting(false); }
+    } catch (err: unknown) { 
+      console.error(err);
+      setError('PDF作成中にエラーが発生しました。安定しているChromeブラウザをご利用ください。'); 
+    } finally { 
+      setIsExporting(false); 
+    }
   };
 
   if (!project) return <LoadingSpinner />;
@@ -340,7 +252,6 @@ export default function PdfExportPage() {
                   {u ? (
                     <div className="flex items-center justify-center w-full h-full">
                       <div className="relative inline-block">
-                        {/* ★ 位置図もインラインの max-height で確実にはみ出し防止 */}
                         <img src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full" style={{ maxHeight: '150mm' }} alt="" />
                         {(project.mapPins ?? []).filter(p => p.mapIndex === mapIndex).map(pin => (
                             <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: `translate(-50%, -50%) scale(${pin.size ?? 1})`, zIndex: 10 }} className="absolute">
@@ -416,7 +327,7 @@ export default function PdfExportPage() {
           </div>
         ))}
 
-        {/* ④ 使用材料表 (はみ出し・文字切れ修正版) */}
+        {/* ④ 使用材料表 */}
         {materialPages.map((chunk, pageIndex) => (
           <div key={`material-page-${pageIndex}`} style={{ width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})`, fontFamily: JP_FONT }}>
@@ -434,7 +345,6 @@ export default function PdfExportPage() {
                     </div>
 
                     <div className="w-[40%] flex flex-col text-sm border-2 border-gray-700 bg-white shrink-0 min-h-0">
-                      {/* ★ 文字はみ出し防止：break-words whitespace-pre-wrap を追加して改行させる */}
                       <div className="flex min-h-[32px] border-b border-gray-400 shrink-0">
                         <div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">品名</div>
                         <div className="px-2 py-1 flex-1 font-bold overflow-hidden flex items-center text-xs break-words whitespace-pre-wrap">{m.name || '　'}</div>
