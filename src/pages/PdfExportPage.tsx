@@ -18,10 +18,8 @@ import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 
-/** Cloud Run（Google裏サーバー）のURL — ローカルやフォールバック用 */
 const PDF_GENERATE_URL = 'https://generatepdf-ld4b4dsi5q-an.a.run.app';
 
-/** 位置図の線スタイル（数値なら単位付与、文字列はそのまま） */
 function safeStyleLine(
   val: string | number | undefined | null,
   defaultUnit: string,
@@ -31,11 +29,6 @@ function safeStyleLine(
   return String(val);
 }
 
-/**
- * ブラウザから Cloud Run（*.run.app）へ POST すると CORS でブロックされることが多い。
- * 本番（Firebase Hosting）では同一オリジンの /api/generatePdf のみ。失敗時はクライアント生成へ。
- * VITE_PDF_GENERATE_URL に run.app を指定しても本番では無視して /api のみ使う。
- */
 function pdfEndpointCandidates(): string[] {
   const env = (import.meta.env.VITE_PDF_GENERATE_URL as string | undefined)?.trim();
   const isLocal =
@@ -56,7 +49,6 @@ function pdfEndpointCandidates(): string[] {
   return [PDF_GENERATE_URL, '/api/generatePdf'];
 }
 
-/** 生 PDF / JSON+base64 の両方を解釈 */
 async function responseToPdfBlob(response: Response): Promise<Blob> {
   const buf = await response.arrayBuffer();
   const u8 = new Uint8Array(buf);
@@ -231,7 +223,7 @@ export default function PdfExportPage() {
           const filename = `${p.photoNumber.padStart(2, '0')}${processName}.jpg`;
           imgFolder.file(filename, blob);
         } catch {
-          /* 1枚失敗しても続行 */
+          /* ignore */
         }
       });
 
@@ -381,16 +373,12 @@ export default function PdfExportPage() {
           await exportPdfClientSide();
         } catch (clientErr) {
           console.error(clientErr);
-          setError(
-            'PDFの保存に失敗しました。Firebase の Functions（generatePdf）のデプロイとログを確認するか、ページを再読み込みしてから再度お試しください。',
-          );
+          setError('PDFの保存に失敗しました。ページを再読み込みしてから再度お試しください。');
         }
       }
     } catch (err: unknown) {
       console.error(err);
-      setError(
-        'PDF作成中にエラーが発生しました。ページを再読み込みしてから再度お試しください。',
-      );
+      setError('PDF作成中にエラーが発生しました。ページを再読み込みしてから再度お試しください。');
     } finally {
       setIsExporting(false);
     }
@@ -478,7 +466,7 @@ export default function PdfExportPage() {
       )}
 
       {/* PDFとして出力される全体枠 */}
-      <div className="flex flex-col gap-8 items-center w-full">
+      <div className="flex flex-col gap-8 items-center w-full font-sans">
         
         {/* =========================================
             ① 表紙ページ
@@ -488,12 +476,13 @@ export default function PdfExportPage() {
             className="pdf-page absolute top-0 left-0 flex flex-col items-center origin-top-left"
             style={{ ...pageStyle, backgroundColor: '#ffffff', color: '#000000' }}
           >
-            <div className="mt-[5mm] mb-[28mm] flex flex-col items-center w-full">
-              <div className="shrink-0 flex justify-center mb-6">
+            <div className="mt-[10mm] mb-[30mm] flex flex-col items-center w-full">
+              <div className="shrink-0 flex justify-center items-center mb-6" style={{ width: '100%' }}>
+                {/* ★超重要ストッパー： style={{ width: '150px' }} でピクセル固定し、絶対に巨大化させない */}
                 {logoUrl ? (
-                  <img src={proxyUrl(logoUrl, `logo_${sessionId}`)} alt="自社ロゴ" className="block w-[40mm] h-auto object-contain" />
+                  <img src={proxyUrl(logoUrl, `logo_${sessionId}`)} alt="自社ロゴ" className="block" style={{ width: '150px', height: 'auto', objectFit: 'contain' }} crossOrigin="anonymous" />
                 ) : (
-                  <img src={kawaraLogo} alt="標準ロゴ" className="block w-[32mm] h-auto object-contain grayscale" />
+                  <img src={kawaraLogo} alt="標準ロゴ" className="block grayscale" style={{ width: '120px', height: 'auto', objectFit: 'contain' }} crossOrigin="anonymous" />
                 )}
               </div>
               <div className="flex flex-col items-center">
@@ -550,11 +539,11 @@ export default function PdfExportPage() {
                   {u ? (
                     <div className="flex items-center justify-center w-full h-full">
                       <div className="relative inline-block">
-                        <img src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)} className="block w-auto h-auto max-w-full max-h-[150mm]" alt="" />
+                        {/* ★ストッパー： max-h-[...] ではなく style={{ maxHeight: '550px' }} で固定 */}
+                        <img src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)} crossOrigin="anonymous" className="block" style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: '550px' }} alt="" />
                         
-                        {/* ピンの描画 */}
                         {(project.mapPins ?? []).filter((p) => p.mapIndex === mapIndex).map((pin) => (
-                            <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: `translate(-50%, -50%) scale(${pin.size ?? 1})`, zIndex: 10 }} className="absolute">
+                            <div key={pin.id} className="absolute" style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: `translate(-50%, -50%) scale(${pin.size ?? 1})`, zIndex: 10 }}>
                               {pin.type === 'arrow' ? (
                                 <div className="flex items-center gap-1 px-1 rounded" style={{ backgroundColor: 'rgba(255,255,255,0.7)', border: '1px solid #fecaca' }}>
                                   <span className="font-black text-[24px]" style={{ color: '#dc2626', transform: `rotate(${pin.rotation ?? 0}deg)` }}>➡</span>
@@ -562,14 +551,13 @@ export default function PdfExportPage() {
                                 </div>
                               ) : (
                                 <div className="relative flex items-center justify-center">
-                                  <div className="w-[14mm] h-[14mm] rounded-full" style={{ border: '4px solid #dc2626', backgroundColor: 'rgba(220,38,38,0.1)' }} />
+                                  <div className="rounded-full" style={{ width: '14mm', height: '14mm', border: '4px solid #dc2626', backgroundColor: 'rgba(220,38,38,0.1)' }} />
                                   <span className="absolute font-bold text-[18px] px-1 rounded" style={{ color: '#dc2626', backgroundColor: 'rgba(255,255,255,0.7)' }}>{pin.label}</span>
                                 </div>
                               )}
                             </div>
                         ))}
 
-                        {/* 線の描画 */}
                         {(project.mapLines ?? [])
                           .filter((l) => l.mapIndex === mapIndex)
                           .map((line: MapLine) => (
@@ -648,7 +636,8 @@ export default function PdfExportPage() {
                       {p.image ? (
                         <div className="flex items-center justify-center w-full h-full">
                           <div className="relative inline-block" style={{ transform: `rotate(${(p as Photo).rotation ?? 0}deg)`, transformOrigin: 'center center' }}>
-                            <img src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} className="block w-auto h-auto max-w-full max-h-[88mm]" alt="" />
+                            {/* ★ストッパー： max-h-[...] ではなく style={{ maxHeight: '330px' }} で固定 */}
+                            <img src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} crossOrigin="anonymous" className="block" style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: '330px' }} alt="" />
                             {(p.circles ?? []).map((circle) => (
                               <div key={circle.id} className="absolute aspect-square rounded-full" style={{ left: `${circle.x}%`, top: `${circle.y}%`, width: `${circle.size}%`, transform: 'translate(-50%, -50%)', border: '3px solid #dc2626' }} />
                             ))}
@@ -710,7 +699,8 @@ export default function PdfExportPage() {
                       {m.image ? (
                         <div className="flex items-center justify-center w-full h-full">
                           <div className="relative inline-block" style={{ transform: `rotate(${m.rotation ?? 0}deg)`, transformOrigin: 'center center' }}>
-                            <img src={proxyUrl(m.image, `material_${m.id}_${sessionId}`)} className="block w-auto h-auto max-w-full max-h-[85mm]" alt="" />
+                            {/* ★ストッパー： style={{ maxHeight: '320px' }} で固定 */}
+                            <img src={proxyUrl(m.image, `material_${m.id}_${sessionId}`)} crossOrigin="anonymous" className="block" style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: '320px' }} alt="" />
                           </div>
                         </div>
                       ) : (
