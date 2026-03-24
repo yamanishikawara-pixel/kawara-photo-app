@@ -48,13 +48,22 @@ function PhotoCircleMarker({
         onMouseDown={(e) => { e.stopPropagation(); onSelect(); onMouseDown(e); }}
         onTouchStart={(e) => { e.stopPropagation(); onSelect(); onTouchStart(e); }}
         style={{ left: `${position.x}%`, top: `${position.y}%`, width: `${circle.size}%`, transform: 'translate(-50%, -50%)', touchAction: 'none' }}
-        className={`absolute aspect-square rounded-full border-[4px] border-red-500 shadow-sm ${dragging ? 'z-30 opacity-70' : 'z-20 cursor-pointer'} ${isSelected ? 'border-dashed bg-red-500/20' : ''}`}
+        className={`absolute aspect-square rounded-full border-[4px] border-red-500 shadow-sm ${dragging ? 'z-30 opacity-70 scale-110' : 'z-20 cursor-pointer'} ${isSelected ? 'bg-red-500/20 border-dashed' : ''}`}
       />
       {isSelected && !dragging && (
-        <div style={{ left: `${position.x}%`, top: `${position.y + circle.size/2 + 5}%`, transform: 'translateX(-50%)' }} className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden">
-          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.min(60, circle.size * 1.2))}} className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700">+</button>
-          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.max(5, circle.size * 0.8))}} className="px-4 py-2 text-xl font-bold border-l border-r hover:bg-gray-100 text-gray-700">-</button>
-          <button onClick={(e) => {e.stopPropagation(); onRemove()}} className="px-4 py-2 text-red-500 hover:bg-red-50"><Trash2 className="w-5 h-5"/></button>
+        // ★ 円のすぐ下に確実にメニュー（＋、ー、ゴミ箱）を表示
+        <div 
+          style={{ 
+            left: `${position.x}%`, 
+            top: `calc(${position.y}% + ${circle.size/2}% + 15px)`,
+            transform: 'translateX(-50%)',
+            minWidth: '150px'
+          }} 
+          className="absolute z-50 flex items-center justify-around bg-white rounded-full shadow-2xl border-2 border-red-500 overflow-hidden p-1"
+        >
+          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.min(60, circle.size + 5))}} className="w-10 h-10 flex items-center justify-center text-2xl font-bold hover:bg-gray-100 text-gray-800">＋</button>
+          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.max(5, circle.size - 5))}} className="w-10 h-10 flex items-center justify-center text-2xl font-bold border-l border-r hover:bg-gray-100 text-gray-800">ー</button>
+          <button onClick={(e) => {e.stopPropagation(); onRemove()}} className="w-10 h-10 flex items-center justify-center text-red-600 hover:bg-red-50"><Trash2 className="w-6 h-6"/></button>
         </div>
       )}
     </>
@@ -215,12 +224,25 @@ export default function PhotoPage() {
   };
 
   const addCircleToPhoto = async (e: MouseEvent<HTMLDivElement>, photoId: number) => {
-    if (!project || selectedCircleId !== null) { setSelectedCircleId(null); return; }
+    if (!project) return;
+    // もし既に何かが選択されていたら、一旦解除
+    if (selectedCircleId !== null) { setSelectedCircleId(null); return; }
+    
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
-    const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: [...(p.circles || []), { id: Date.now(), x, y, size: 20 }] } : p);
+    
+    const newCircleId = Date.now();
+    const newCircle: Circle = { id: newCircleId, x, y, size: 20 };
+    
+    const newPhotos = project.photos.map((p) => {
+      if (p.id === photoId) return { ...p, circles: [...(p.circles || []), newCircle] };
+      return p;
+    });
+    
     setProject({ ...project, photos: newPhotos });
+    // ★ 追加した瞬間にその赤丸を選択状態にする
+    setSelectedCircleId(newCircleId);
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
   };
 
@@ -263,8 +285,8 @@ export default function PhotoPage() {
           {project.photos.map((photo, index) => (
             <div key={photo.id} className="bg-white p-5 rounded-3xl border border-black/5 shadow-md relative">
               <div className="absolute top-4 right-4 flex gap-2 z-10">
-                <button onClick={() => movePhoto(index, 'up')} className="bg-white p-2 rounded-lg border"><ArrowUp className="w-5 h-5" /></button>
-                <button onClick={() => movePhoto(index, 'down')} className="bg-white p-2 rounded-lg border"><ArrowDown className="w-5 h-5" /></button>
+                <button onClick={() => movePhoto(index, 'up')} className="bg-white p-2 rounded-lg border shadow-sm"><ArrowUp className="w-5 h-5" /></button>
+                <button onClick={() => movePhoto(index, 'down')} className="bg-white p-2 rounded-lg border shadow-sm"><ArrowDown className="w-5 h-5" /></button>
               </div>
 
               <div className="w-full aspect-video bg-gray-100 rounded-2xl overflow-hidden border-2 border-dashed border-gray-300 relative mb-4 mt-8 flex items-center justify-center">
@@ -296,7 +318,7 @@ export default function PhotoPage() {
                 <div className="flex gap-2">
                   <button onClick={() => rotatePhoto(photo.id)} className="p-2.5 text-gray-500 bg-gray-50 rounded-xl border">↻ 回転</button>
                   <button onClick={() => photo.image ? clearPhoto(photo.id) : deletePhotoSlot(photo.id)} className="p-2.5 text-gray-400 hover:text-red-500 bg-gray-50 rounded-xl border"><Trash2 className="w-5 h-5"/></button>
-                  <label className="bg-blue-100 text-blue-700 font-bold py-2.5 px-5 rounded-xl cursor-pointer">
+                  <label className="bg-blue-100 text-blue-700 font-bold py-2.5 px-5 rounded-xl cursor-pointer shadow-sm">
                     {photo.image ? '変更' : '選択'} <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadPhoto(e, index)} />
                   </label>
                 </div>
@@ -316,16 +338,16 @@ export default function PhotoPage() {
                 </select>
                 <div className="flex flex-wrap gap-1.5">
                   {descTemplates.map((tmpl, i) => (
-                    <button key={i} onClick={() => updatePhoto(photo.id, "description", (photo.description || '') + tmpl.text)} className="text-[10px] font-bold text-blue-700 bg-blue-50 border px-2 py-1 rounded-lg">＋{tmpl.label}</button>
+                    <button key={i} onClick={() => updatePhoto(photo.id, "description", (photo.description || '') + tmpl.text)} className="text-[14px] font-bold text-blue-700 bg-blue-50 border px-2 py-1 rounded-lg">＋{tmpl.label}</button>
                   ))}
                 </div>
-                <textarea rows={3} className="w-full p-3 border rounded-xl" value={photo.description} onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} placeholder="説明入力" />
+                <textarea rows={3} className="w-full p-3 border rounded-xl text-[16px]" value={photo.description} onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} placeholder="説明入力" />
               </div>
             </div>
           ))}
         </div>
         
-        <button onClick={addPhotoSlot} className="w-full mt-8 bg-gray-800 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2">
+        <button onClick={addPhotoSlot} className="w-full mt-8 bg-gray-800 text-white font-bold py-4 text-lg rounded-xl flex items-center justify-center gap-2">
           <Plus className="w-6 h-6" /> 写真枠を追加
         </button>
       </div>
