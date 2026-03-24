@@ -150,7 +150,7 @@ function drawImageWithOrientation(
 }
 
 // ★iPhoneの二重回転バグを防ぐため、常に1（回転なし）を返すように固定
-async function getOrientation(file: File): Promise<number> {
+async function getOrientation(_file: File): Promise<number> {
   return 1;
 }
 

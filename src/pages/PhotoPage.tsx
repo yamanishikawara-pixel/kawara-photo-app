@@ -235,11 +235,16 @@ export default function PhotoPage() {
       }
       await new Promise<void>((resolve) => {
         compressImage(file, async (compressed) => {
-          const r = ref(storage, `photos/${id}/${Date.now()}_bulk_${i}`);
-          await uploadBytes(r, compressed);
-          const url = await getDownloadURL(r);
-          newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: todayStr, circles: [] };
-          resolve();
+          try {
+            const r = ref(storage, `photos/${id}/${Date.now()}_bulk_${i}`);
+            await uploadBytes(r, compressed);
+            const url = await getDownloadURL(r);
+            newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: todayStr, circles: [] };
+          } catch (err) {
+            console.error('一括アップロード失敗', err);
+          } finally {
+            resolve();
+          }
         });
       });
       uploadedCount++;
@@ -261,13 +266,19 @@ export default function PhotoPage() {
     const todayStr = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/');
 
     compressImage(f, async (file) => {
-      const r = ref(storage, `photos/${id}/${Date.now()}`);
-      await uploadBytes(r, file);
-      const url = await getDownloadURL(r);
-      const newPhotos = project.photos.map((p, i: number) => p.id === photoId ? { ...p, image: url, photoNumber: String(i + 1), shootingDate: p.shootingDate || todayStr, circles: [] } : p);
-      setProject({ ...project, photos: newPhotos });
-      await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
-      setLoadingId(null);
+      try {
+        const r = ref(storage, `photos/${id}/${Date.now()}`);
+        await uploadBytes(r, file);
+        const url = await getDownloadURL(r);
+        const newPhotos = project.photos.map((p, i: number) => p.id === photoId ? { ...p, image: url, photoNumber: String(i + 1), shootingDate: p.shootingDate || todayStr, circles: [] } : p);
+        setProject({ ...project, photos: newPhotos });
+        await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+      } catch (err) {
+        console.error('写真アップロード失敗', err);
+        alert('写真アップロードに失敗しました。ログイン状態と通信環境をご確認ください。');
+      } finally {
+        setLoadingId(null);
+      }
     });
   };
 
