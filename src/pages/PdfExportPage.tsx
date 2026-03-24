@@ -18,8 +18,10 @@ import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 
+/** Cloud Run（Google裏サーバー）のURL — ローカルやフォールバック用 */
 const PDF_GENERATE_URL = 'https://generatepdf-ld4b4dsi5q-an.a.run.app';
 
+/** 位置図の線スタイル（数値なら単位付与、文字列はそのまま） */
 function safeStyleLine(
   val: string | number | undefined | null,
   defaultUnit: string,
@@ -29,6 +31,11 @@ function safeStyleLine(
   return String(val);
 }
 
+/**
+ * ブラウザから Cloud Run（*.run.app）へ POST すると CORS でブロックされることが多い。
+ * 本番（Firebase Hosting）では同一オリジンの /api/generatePdf のみ。失敗時はクライアント生成へ。
+ * VITE_PDF_GENERATE_URL に run.app を指定しても本番では無視して /api のみ使う。
+ */
 function pdfEndpointCandidates(): string[] {
   const env = (import.meta.env.VITE_PDF_GENERATE_URL as string | undefined)?.trim();
   const isLocal =
@@ -49,6 +56,7 @@ function pdfEndpointCandidates(): string[] {
   return [PDF_GENERATE_URL, '/api/generatePdf'];
 }
 
+/** 生 PDF / JSON+base64 の両方を解釈 */
 async function responseToPdfBlob(response: Response): Promise<Blob> {
   const buf = await response.arrayBuffer();
   const u8 = new Uint8Array(buf);
@@ -73,7 +81,7 @@ async function responseToPdfBlob(response: Response): Promise<Blob> {
       return new Blob([out], { type: 'application/pdf' });
     }
   } catch {
-    /* ignore */
+    /* 続けてエラー */
   }
   throw new Error('有効なPDFデータが返りませんでした');
 }
@@ -223,7 +231,7 @@ export default function PdfExportPage() {
           const filename = `${p.photoNumber.padStart(2, '0')}${processName}.jpg`;
           imgFolder.file(filename, blob);
         } catch {
-          /* ignore */
+          /* 1枚失敗しても続行 */
         }
       });
 
@@ -251,11 +259,13 @@ export default function PdfExportPage() {
         .map((styleEl) => styleEl.outerHTML)
         .join('');
 
-      const container = document.querySelector('.pdf-container-wrapper');
+      const container = document.querySelector(
+        '.flex.flex-col.gap-8.items-center.w-full',
+      );
       if (!container) throw new Error('データが見つかりません');
       const clone = container.cloneNode(true) as HTMLElement;
 
-      const wrappers = clone.querySelectorAll('.pdf-page-wrapper');
+      const wrappers = clone.querySelectorAll('.shrink-0');
       wrappers.forEach((w: Element) => {
         const el = w as HTMLElement;
         el.style.width = '794px';
@@ -372,7 +382,7 @@ export default function PdfExportPage() {
         } catch (clientErr) {
           console.error(clientErr);
           setError(
-            'PDFの保存に失敗しました。ページを再読み込みしてから再度お試しください。',
+            'PDFの保存に失敗しました。Firebase の Functions（generatePdf）のデプロイとログを確認するか、ページを再読み込みしてから再度お試しください。',
           );
         }
       }
@@ -417,12 +427,10 @@ export default function PdfExportPage() {
   }
 
   const totalPages = 1 + mapCount + photoPages.length + materialPages.length;
-  
   const wrapperStyle = {
     width: `${A4_WIDTH_PX * scale}px`,
     height: `${A4_HEIGHT_PX * scale}px`,
   };
-  
   const pageStyle = {
     width: `${A4_WIDTH_PX}px`,
     height: `${A4_HEIGHT_PX}px`,
@@ -470,12 +478,12 @@ export default function PdfExportPage() {
       )}
 
       {/* PDFとして出力される全体枠 */}
-      <div className="pdf-container-wrapper flex flex-col gap-8 items-center w-full">
+      <div className="flex flex-col gap-8 items-center w-full">
         
         {/* =========================================
             ① 表紙ページ
         ========================================= */}
-        <div style={wrapperStyle} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+        <div style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
           <div
             className="pdf-page absolute top-0 left-0 flex flex-col items-center origin-top-left"
             style={{ ...pageStyle, backgroundColor: '#ffffff', color: '#000000' }}
@@ -529,7 +537,7 @@ export default function PdfExportPage() {
             ② 位置図ページ
         ========================================= */}
         {mapUrlsToRender.map((u, mapIndex) => (
-          <div key={`map-page-${mapIndex}`} style={wrapperStyle} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+          <div key={`map-page-${mapIndex}`} style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
             <div
               className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left"
               style={{ ...pageStyle, backgroundColor: '#ffffff', color: '#000000' }}
@@ -544,6 +552,7 @@ export default function PdfExportPage() {
                       <div className="relative inline-block">
                         <img src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[150mm]" alt="" />
                         
+                        {/* ピンの描画 */}
                         {(project.mapPins ?? []).filter((p) => p.mapIndex === mapIndex).map((pin) => (
                             <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: `translate(-50%, -50%) scale(${pin.size ?? 1})`, zIndex: 10 }} className="absolute">
                               {pin.type === 'arrow' ? (
@@ -560,6 +569,7 @@ export default function PdfExportPage() {
                             </div>
                         ))}
 
+                        {/* 線の描画 */}
                         {(project.mapLines ?? [])
                           .filter((l) => l.mapIndex === mapIndex)
                           .map((line: MapLine) => (
@@ -626,7 +636,7 @@ export default function PdfExportPage() {
             ③ 写真ページ
         ========================================= */}
         {photoPages.map((chunk, pageIndex) => (
-          <div key={`photo-page-${pageIndex}`} style={wrapperStyle} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+          <div key={`photo-page-${pageIndex}`} style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
             <div
               className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left"
               style={{ ...pageStyle, backgroundColor: '#ffffff', color: '#000000' }}
@@ -634,7 +644,6 @@ export default function PdfExportPage() {
               <div className="flex-1 flex flex-col justify-between p-2" style={{ border: '3px solid #1f2937' }}>
                 {chunk.map((p, i) => (
                   <div key={i} className="flex gap-2 h-[32%] p-2 rounded" style={{ border: '1px solid #6b7280' }}>
-                    
                     <div className="w-[60%] flex items-center justify-center overflow-hidden relative min-h-0" style={{ border: '2px solid #374151', backgroundColor: '#f9fafb' }}>
                       {p.image ? (
                         <div className="flex items-center justify-center w-full h-full">
@@ -672,7 +681,6 @@ export default function PdfExportPage() {
                         <div className="p-3 flex-1 whitespace-pre-wrap overflow-hidden font-medium leading-relaxed flex items-start">{p.description || '　'}</div>
                       </div>
                     </div>
-
                   </div>
                 ))}
               </div>
@@ -687,7 +695,7 @@ export default function PdfExportPage() {
             ④ 使用材料表
         ========================================= */}
         {materialPages.map((chunk, pageIndex) => (
-          <div key={`material-page-${pageIndex}`} style={wrapperStyle} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+          <div key={`material-page-${pageIndex}`} style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
             <div
               className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left"
               style={{ ...pageStyle, backgroundColor: '#ffffff', color: '#000000' }}
@@ -698,7 +706,6 @@ export default function PdfExportPage() {
               <div className="flex-1 flex flex-col justify-between p-2" style={{ border: '3px solid #1f2937' }}>
                 {chunk.map((m, i) => (
                   <div key={i} className="flex gap-2 h-[32%] p-2 rounded" style={{ border: '1px solid #6b7280' }}>
-                    
                     <div className="w-[60%] flex items-center justify-center overflow-hidden relative min-h-0" style={{ border: '2px solid #374151', backgroundColor: '#f9fafb' }}>
                       {m.image ? (
                         <div className="flex items-center justify-center w-full h-full">
@@ -729,7 +736,6 @@ export default function PdfExportPage() {
                         <div className="p-3 flex-1 whitespace-pre-wrap overflow-hidden font-medium leading-relaxed flex items-start">{m.remarks || '　'}</div>
                       </div>
                     </div>
-
                   </div>
                 ))}
               </div>
