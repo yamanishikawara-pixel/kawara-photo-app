@@ -261,13 +261,13 @@ export default function PdfExportPage() {
         el.style.height = '1123px';
       });
 
-      // ★★★ これが全てのバグを解決する根本的な1行です！ ★★★
-      // サーバー側でデザイン（Tailwind）を読み込ませるための魔法のスクリプトを注入します
+      // ★★★ 追加：Google Fonts（Noto Sans JP）を読み込み、lang="ja" で中華フォントを完全排除 ★★★
       return `<!DOCTYPE html>
-          <html>
+          <html lang="ja">
           <head>
             <meta charset="utf-8">
             <script src="https://cdn.tailwindcss.com"></script>
+            <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
             <style>
               @page { margin: 0; size: A4 portrait; }
               body { 
@@ -276,9 +276,10 @@ export default function PdfExportPage() {
                 background-color: #ffffff; 
                 -webkit-print-color-adjust: exact; 
                 print-color-adjust: exact; 
-                font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+                font-family: 'Noto Sans JP', sans-serif !important;
               }
               * {
+                font-family: 'Noto Sans JP', sans-serif !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
               }
@@ -456,12 +457,12 @@ export default function PdfExportPage() {
             className="pdf-page absolute top-0 left-0 flex flex-col items-center origin-top-left bg-white text-black"
             style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})` }}
           >
-            <div className="mt-[5mm] mb-[28mm] flex flex-col items-center w-full">
+            <div className="flex flex-col items-center w-full" style={{ marginTop: '19px', marginBottom: '106px' }}>
               <div className="shrink-0 flex justify-center mb-6">
                 {logoUrl ? (
-                  <img src={proxyUrl(logoUrl, `logo_${sessionId}`)} alt="自社ロゴ" className="block w-[40mm] h-auto object-contain" crossOrigin="anonymous" />
+                  <img src={proxyUrl(logoUrl, `logo_${sessionId}`)} alt="自社ロゴ" className="block h-auto object-contain" style={{ width: '151px' }} crossOrigin="anonymous" />
                 ) : (
-                  <img src={kawaraLogo} alt="標準ロゴ" className="block w-[32mm] h-auto object-contain grayscale" crossOrigin="anonymous" />
+                  <img src={kawaraLogo} alt="標準ロゴ" className="block h-auto object-contain grayscale" style={{ width: '121px' }} crossOrigin="anonymous" />
                 )}
               </div>
               <div className="flex flex-col items-center">
