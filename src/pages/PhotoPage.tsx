@@ -1,15 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus } from 'lucide-react';
+import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus, Move } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
-import { onAuthStateChanged } from 'firebase/auth'; // ★追加
+import { onAuthStateChanged } from 'firebase/auth';
 import { compressImage, proxyUrl, useDraggablePin } from '../shared/utils';
 import type { Circle, MapPin as MapPinT, Photo, Project } from '../types';
 import type { ChangeEvent, MouseEvent } from 'react';
 
-// ★デフォルト値（設定前用）
+// ★ 型エラー回避のための定義
+interface PhotoData extends Photo {
+  zoom?: number;
+  translateX?: number;
+  translateY?: number;
+}
+
 const DEFAULT_PROCESS_OPTIONS = [
   "着工前", "下地・下葺き", "防水ルーフィング施工", "瓦桟施工",
   "流れ壁板金", "平行壁板金", "確認", "棟金具設置", "緊結状況", "施工中", "完成"
@@ -43,23 +49,35 @@ function PhotoCircleMarker({
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(circle.x, circle.y, onDragEnd);
 
   return (
-    <>
+    <div 
+      className="absolute"
+      style={{ left: `${position.x}%`, top: `${position.y}%`, transform: 'translate(-50%, -50%)', zIndex: isSelected ? 50 : 20 }}
+    >
       <div
         ref={containerRef}
-        onMouseDown={(e) => { onSelect(); onMouseDown(e); }}
-        onTouchStart={(e) => { onSelect(); onTouchStart(e); }}
-        style={{ left: `${position.x}%`, top: `${position.y}%`, width: `${circle.size}%`, transform: 'translate(-50%, -50%)', touchAction: 'none' }}
-        className={`absolute aspect-square rounded-full border-[3px] border-red-500 shadow-sm ${dragging ? 'z-30 opacity-70 scale-110' : 'z-20 cursor-pointer'} ${isSelected ? 'border-dashed bg-red-500/20' : ''}`}
-      />
+        onMouseDown={(e) => { e.stopPropagation(); onSelect(); onMouseDown(e); }}
+        onTouchStart={(e) => { e.stopPropagation(); onSelect(); onTouchStart(e); }}
+        style={{ width: `${circle.size * 5}px`, height: `${circle.size * 5}px` }}
+        className={`rounded-full border-[4px] border-red-500 shadow-lg flex items-center justify-center transition-transform ${dragging ? 'scale-110 opacity-70' : 'cursor-pointer'} ${isSelected ? 'bg-red-500/20 border-dashed' : ''}`}
+      >
+        {isSelected && !dragging && (
+          <button 
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            className="bg-white p-2 rounded-full shadow-xl text-red-600 border border-red-200 active:scale-90 transition-transform"
+          >
+            <Trash2 className="w-6 h-6" />
+          </button>
+        )}
+      </div>
+
       {isSelected && !dragging && (
-        <div style={{ left: `${position.x}%`, top: `${position.y + circle.size/2 + 5}%`, transform: 'translateX(-50%)' }} className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden">
-          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.min(60, circle.size * 1.3))}} className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700">+</button>
-          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.max(5, circle.size * 0.7))}} className="px-4 py-2 text-xl font-bold border-l border-r hover:bg-gray-100 text-gray-700">-</button>
-          <button onClick={(e) => {e.stopPropagation(); onRemove()}} className="px-4 py-2 text-red-500 hover:bg-red-50"><Trash2 className="w-5 h-5"/></button>
+        <div className="absolute top-full mt-3 left-1/2 -translate-x-1/2 flex bg-white rounded-full shadow-2xl border border-gray-200 overflow-hidden z-[60]">
+          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.min(30, circle.size + 2))}} className="px-5 py-2 text-2xl font-bold hover:bg-gray-100 text-gray-800">+</button>
+          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.max(5, circle.size - 2))}} className="px-5 py-2 text-2xl font-bold border-l hover:bg-gray-100 text-gray-800">-</button>
         </div>
       )}
-    </>
-  )
+    </div>
+  );
 }
 
 function PinSelectModal({
@@ -106,14 +124,6 @@ const formatToYMDSlash = (dateString: string) => {
   return dateString.replace(/-/g, '/');
 };
 
-const getFileExtension = (file: File): string => {
-  const byName = file.name.split('.').pop()?.toLowerCase();
-  if (byName) return byName;
-  if (file.type === 'image/png') return 'png';
-  if (file.type === 'image/webp') return 'webp';
-  return 'jpg';
-};
-
 export default function PhotoPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -124,39 +134,35 @@ export default function PhotoPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [currentPhotoId, setCurrentPhotoId] = useState<number | null>(null);
   const [selectedCircleId, setSelectedCircleId] = useState<number | null>(null);
-
-  // ★追加：会社ごとのカスタマイズ設定を保持するステート
+  const [isMoveMode, setIsMoveMode] = useState<Record<number, boolean>>({});
   const [processOptions, setProcessOptions] = useState<string[]>(DEFAULT_PROCESS_OPTIONS);
   const [descTemplates, setDescTemplates] = useState<{label: string, text: string}[]>(DEFAULT_DESC_TEMPLATES);
 
-  useEffect(() => {
-    // ① プロジェクトデータの読み込み
-    getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data() as Project));
+  const dragRef = useRef<{
+    photoId: number | null;
+    isDragging: boolean;
+    startX: number;
+    startY: number;
+    initTx: number;
+    initTy: number;
+  }>({ photoId: null, isDragging: false, startX: 0, startY: 0, initTx: 0, initTy: 0 });
 
-    // ② ログイン中のユーザー（会社）の独自カスタマイズ設定を読み込み！
+  useEffect(() => {
+    getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data() as Project));
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (user) {
         const s = await getDoc(doc(db, 'users', user.uid));
         if (s.exists()) {
           const data = s.data();
-          if (data.customProcesses && data.customProcesses.length > 0) {
-            setProcessOptions(data.customProcesses);
-          }
-          if (data.customDescTemplates && data.customDescTemplates.length > 0) {
-            setDescTemplates(data.customDescTemplates);
-          }
+          if (data.customProcesses) setProcessOptions(data.customProcesses);
+          if (data.customDescTemplates) setDescTemplates(data.customDescTemplates);
         }
       }
     });
     return () => unsub();
   }, [id]);
 
-  type EditablePhotoField = keyof Pick<
-    Photo,
-    'image' | 'photoNumber' | 'shootingDate' | 'locationMap' | 'process' | 'description' | 'circles'
-  >;
-
-  const updatePhoto = async (photoId: number, field: EditablePhotoField, value: Photo[EditablePhotoField]) => {
+  const updatePhoto = async (photoId: number, field: string, value: any) => {
     if (!project) return;
     const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, [field]: value } : p);
     setProject({ ...project, photos: newPhotos });
@@ -164,40 +170,23 @@ export default function PhotoPage() {
   };
 
   const deletePhotoSlot = async (photoId: number) => {
-    if (window.confirm('この写真枠を完全に削除しますか？')) {
-      if (!project) return;
-      const newPhotos = project.photos.filter((p) => p.id !== photoId);
-      const renumbered = newPhotos.map((p, i: number) => ({ ...p, photoNumber: String(i + 1) }));
-      setProject({ ...project, photos: renumbered });
-      await updateDoc(doc(db, "projects", id!), { photos: renumbered });
-    }
+    if (!window.confirm('この写真枠を完全に削除しますか？') || !project) return;
+    const newPhotos = project.photos.filter((p) => p.id !== photoId);
+    const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
+    setProject({ ...project, photos: renumbered });
+    await updateDoc(doc(db, "projects", id!), { photos: renumbered });
   };
 
   const clearPhoto = async (photoId: number) => {
-    if (window.confirm('この枠の画像を削除しますか？（文字は残ります）')) {
-      if (!project) return;
-      const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, image: null, circles: [] } : p);
-      setProject({ ...project, photos: newPhotos });
-      await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
-    }
+    if (!window.confirm('この枠の画像を削除しますか？') || !project) return;
+    const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, image: null, circles: [], zoom: 1, translateX: 0, translateY: 0, rotation: 0 } : p);
+    setProject({ ...project, photos: newPhotos });
+    await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
   };
 
   const addPhotoSlot = async () => {
     if (!project) return;
-    const newPhotos: Photo[] = [
-      ...project.photos,
-      {
-        id: Date.now(),
-        image: null,
-        photoNumber: String(project.photos.length + 1),
-        shootingDate: "",
-        locationMap: "",
-        process: "",
-        description: "",
-        circles: [],
-        rotation: 0,
-      },
-    ];
+    const newPhotos: Photo[] = [...project.photos, { id: Date.now(), image: null, photoNumber: String(project.photos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], rotation: 0 }];
     setProject({ ...project, photos: newPhotos });
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
   };
@@ -221,41 +210,23 @@ export default function PhotoPage() {
     setBulkUploading(true);
     let newPhotos = [...project.photos];
     let uploadedCount = 0;
-    
     const todayStr = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/');
-
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       let targetIndex = newPhotos.findIndex(p => !p.image);
       if (targetIndex === -1) {
-        newPhotos.push({
-          id: Date.now() + Math.random(),
-          image: null,
-          photoNumber: String(newPhotos.length + 1),
-          shootingDate: "",
-          locationMap: "",
-          process: "",
-          description: "",
-          circles: [],
-          rotation: 0,
-        });
+        newPhotos.push({ id: Date.now() + Math.random(), image: null, photoNumber: String(newPhotos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], rotation: 0 });
         targetIndex = newPhotos.length - 1;
       }
       await new Promise<void>((resolve) => {
         compressImage(file, async (compressed) => {
           try {
-            const ext = getFileExtension(compressed);
+            const ext = compressed.name.split('.').pop() || 'jpg';
             const r = ref(storage, `photos/${id}/${Date.now()}_bulk_${i}.${ext}`);
-            await uploadBytes(r, compressed, {
-              contentType: compressed.type || 'image/jpeg',
-            });
+            await uploadBytes(r, compressed, { contentType: compressed.type || 'image/jpeg' });
             const url = await getDownloadURL(r);
             newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: todayStr, circles: [] };
-          } catch (err) {
-            console.error('一括アップロード失敗', err);
-          } finally {
-            resolve();
-          }
+          } catch (err) { console.error(err); } finally { resolve(); }
         });
       });
       uploadedCount++;
@@ -264,7 +235,6 @@ export default function PhotoPage() {
     setProject({ ...project, photos: newPhotos });
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
     setBulkUploading(false);
-    setBulkProgress(0);
   };
 
   const uploadPhoto = async (e: ChangeEvent<HTMLInputElement>, index: number) => {
@@ -273,39 +243,27 @@ export default function PhotoPage() {
     if (!f) return;
     const photoId = project.photos[index].id;
     setLoadingId(photoId);
-    
     const todayStr = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/');
-
     compressImage(f, async (file) => {
       try {
-        const ext = getFileExtension(file);
+        const ext = file.name.split('.').pop() || 'jpg';
         const r = ref(storage, `photos/${id}/${Date.now()}.${ext}`);
-        await uploadBytes(r, file, {
-          contentType: file.type || 'image/jpeg',
-        });
+        await uploadBytes(r, file, { contentType: file.type || 'image/jpeg' });
         const url = await getDownloadURL(r);
-        const newPhotos = project.photos.map((p, i: number) => p.id === photoId ? { ...p, image: url, photoNumber: String(i + 1), shootingDate: p.shootingDate || todayStr, circles: [] } : p);
+        const newPhotos = project.photos.map((p, i) => p.id === photoId ? { ...p, image: url, photoNumber: String(i + 1), shootingDate: p.shootingDate || todayStr, circles: [] } : p);
         setProject({ ...project, photos: newPhotos });
         await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
-      } catch (err) {
-        console.error('写真アップロード失敗', err);
-        alert('写真アップロードに失敗しました。ログイン状態と通信環境をご確認ください。');
-      } finally {
-        setLoadingId(null);
-      }
+      } catch (err) { alert('失敗'); } finally { setLoadingId(null); }
     });
   };
 
   const addCircleToPhoto = async (e: MouseEvent<HTMLDivElement>, photoId: number) => {
-    if (!project) return;
+    if (!project || isMoveMode[photoId]) return;
     if (selectedCircleId !== null) { setSelectedCircleId(null); return; }
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
-    const newPhotos = project.photos.map((p) => {
-      if (p.id === photoId) return { ...p, circles: [...(p.circles || []), { id: Date.now(), x, y, size: 20 }] };
-      return p;
-    });
+    const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: [...(p.circles || []), { id: Date.now(), x, y, size: 8 }] } : p);
     setProject({ ...project, photos: newPhotos });
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
   };
@@ -328,16 +286,41 @@ export default function PhotoPage() {
   const rotatePhoto = async (photoId: number, direction: 'left' | 'right') => {
     if (!project) return;
     const delta = direction === 'left' ? -90 : 90;
-    const newPhotos = project.photos.map((p) =>
-      p.id === photoId
-        ? {
-            ...p,
-            rotation: (((p.rotation ?? 0) + delta + 360) % 360),
-          }
-        : p,
-    );
+    const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, rotation: (((p.rotation ?? 0) + delta + 360) % 360) } : p);
     setProject({ ...project, photos: newPhotos });
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>, photoId: number, currentTx: any, currentTy: any) => {
+    if (!isMoveMode[photoId]) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = { photoId, isDragging: true, startX: e.clientX, startY: e.clientY, initTx: currentTx || 0, initTy: currentTy || 0 };
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current.isDragging || dragRef.current.photoId === null) return;
+    const { startX, startY, initTx, initTy, photoId } = dragRef.current;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    setProject(prev => {
+      if (!prev) return prev;
+      return { ...prev, photos: prev.photos.map(p => p.id === photoId ? { ...p, translateX: initTx + dx, translateY: initTy + dy } as any : p) };
+    });
+  };
+
+  const handlePointerUp = async (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current.isDragging || !project) return;
+    dragRef.current.isDragging = false;
+    dragRef.current.photoId = null;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    await updateDoc(doc(db, "projects", id!), { photos: project.photos });
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>, photoId: number, currentZoom: any) => {
+    if (!isMoveMode[photoId]) return;
+    e.preventDefault();
+    const newZoom = Math.max(1, Math.min(5, (currentZoom || 1) + (e.deltaY < 0 ? 0.05 : -0.05)));
+    updatePhoto(photoId, "zoom", newZoom);
   };
 
   if (!project) return <div className="p-10 text-center font-bold text-gray-500">読み込み中...</div>;
@@ -348,164 +331,111 @@ export default function PhotoPage() {
         <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
         <h1 className="text-3xl font-bold mb-6 text-gray-900">写真の登録と赤丸記入</h1>
 
-        <div className="bg-white p-5 rounded-3xl border border-black/5 shadow-sm mb-6">
-          <label className="flex items-center justify-center gap-2 w-full bg-blue-500 text-white font-bold py-4 text-lg rounded-xl cursor-pointer shadow-md hover:bg-blue-600 transition-colors">
-            <UploadCloud className="w-6 h-6" />
-            {bulkUploading ? `一括アップロード中... (${bulkProgress}枚完了)` : "複数写真を一括追加する"}
-            <input type="file" multiple accept="image/*" className="hidden" onChange={handleBulkUpload} disabled={bulkUploading} />
-          </label>
-        </div>
+        <label className="flex items-center justify-center gap-2 w-full bg-blue-500 text-white font-bold py-4 text-lg rounded-xl cursor-pointer shadow-md mb-6">
+          <UploadCloud className="w-6 h-6" /> {bulkUploading ? `アップロード中...` : "写真を一括追加"}
+          <input type="file" multiple accept="image/*" className="hidden" onChange={handleBulkUpload} disabled={bulkUploading} />
+        </label>
 
-        <div className="space-y-8 mt-4">
-          {project.photos.map((photo, index: number) => (
+        <div className="space-y-8">
+          {project.photos.map((photo: any, index) => (
             <div key={photo.id} className="bg-white p-5 rounded-3xl border border-black/5 shadow-md relative">
               <div className="absolute top-4 right-4 flex gap-2 z-10">
-                <button onClick={() => movePhoto(index, 'up')} className="bg-white p-2 rounded-lg shadow border border-gray-200 text-gray-600 hover:bg-gray-50"><ArrowUp className="w-5 h-5" /></button>
-                <button onClick={() => movePhoto(index, 'down')} className="bg-white p-2 rounded-lg shadow border border-gray-200 text-gray-600 hover:bg-gray-50"><ArrowDown className="w-5 h-5" /></button>
+                <button onClick={() => movePhoto(index, 'up')} className="bg-white p-2 rounded-lg border shadow-sm"><ArrowUp className="w-5 h-5" /></button>
+                <button onClick={() => movePhoto(index, 'down')} className="bg-white p-2 rounded-lg border shadow-sm"><ArrowDown className="w-5 h-5" /></button>
               </div>
 
-              <div className="w-full min-h-[16rem] mt-10 bg-gray-100 rounded-2xl flex items-center justify-center overflow-hidden border-2 border-dashed border-gray-300 relative mb-4 p-2">
+              {photo.image && (
+                <div className="flex justify-center mt-6 mb-2">
+                   <button
+                     onClick={() => setIsMoveMode(prev => ({ ...prev, [photo.id]: !prev[photo.id] }))}
+                     className={`flex items-center gap-2 px-4 py-2 font-bold rounded-xl border-2 ${isMoveMode[photo.id] ? 'bg-amber-100 border-amber-500 text-amber-900' : 'bg-white border-gray-300 text-gray-600'}`}
+                   >
+                     <Move className="w-5 h-5" /> {isMoveMode[photo.id] ? "移動終了" : "拡大・移動する"}
+                   </button>
+                </div>
+              )}
+
+              <div className={`w-full h-72 bg-gray-100 rounded-2xl overflow-hidden border-2 relative mb-4 ${isMoveMode[photo.id] ? 'border-amber-500 ring-4 ring-amber-100' : 'border-gray-200'}`}>
                 {loadingId === photo.id ? (
-                  <span className="text-lg font-bold text-blue-500">保存中...</span>
+                  <div className="absolute inset-0 flex items-center justify-center text-blue-500 font-bold">保存中...</div>
                 ) : photo.image ? (
-                  <div className="relative inline-block" onClick={(e) => addCircleToPhoto(e, photo.id)}>
-                    <img
-                      src={proxyUrl(photo.image, photo.id)}
-                      crossOrigin="anonymous"
-                      className="block w-auto h-auto max-w-full max-h-[60vh] pointer-events-none rounded shadow-sm"
+                  <div 
+                    className="relative w-full h-full"
+                    onClick={(e) => addCircleToPhoto(e, photo.id)}
+                    onPointerDown={(e) => handlePointerDown(e, photo.id, photo.translateX, photo.translateY)}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onWheel={(e) => handleWheel(e, photo.id, photo.zoom)}
+                    style={{ cursor: isMoveMode[photo.id] ? 'move' : 'default', touchAction: isMoveMode[photo.id] ? 'none' : 'auto' }}
+                  >
+                    <div 
+                      className="absolute inset-0 flex items-center justify-center pointer-events-none"
                       style={{
-                        transform: `rotate(${photo.rotation ?? 0}deg)`,
+                        transform: `translate(${photo.translateX || 0}px, ${photo.translateY || 0}px) scale(${photo.zoom || 1}) rotate(${photo.rotation ?? 0}deg)`,
                         transformOrigin: 'center center',
                       }}
-                      alt=""
-                    />
-                    {(photo.circles || []).map((circle) => (
-                      <PhotoCircleMarker key={circle.id} circle={circle} isSelected={selectedCircleId === circle.id} onSelect={() => setSelectedCircleId(circle.id)} onDragEnd={(x: number, y: number) => updateCircle(photo.id, circle.id, { x, y })} onSizeChange={(size: number) => updateCircle(photo.id, circle.id, { size })} onRemove={() => removeCircle(photo.id, circle.id)} />
-                    ))}
-                    <div className="absolute -top-3 -left-3 bg-black/70 text-white text-xs px-2 py-1 rounded-full font-bold pointer-events-none shadow">タップで赤丸追加</div>
+                    >
+                      <img src={proxyUrl(photo.image, photo.id)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-full object-contain" alt="" />
+                    </div>
+                    
+                    <div className="absolute inset-0 pointer-events-auto">
+                      {(photo.circles || []).map((circle: any) => (
+                        <PhotoCircleMarker key={circle.id} circle={circle} isSelected={selectedCircleId === circle.id} onSelect={() => setSelectedCircleId(circle.id)} onDragEnd={(x, y) => updateCircle(photo.id, circle.id, { x, y })} onSizeChange={(size) => updateCircle(photo.id, circle.id, { size })} onRemove={() => removeCircle(photo.id, circle.id)} />
+                      ))}
+                    </div>
                   </div>
                 ) : (
-                  <div className="text-center text-gray-400">
-                    <Camera className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                    <span className="font-bold">画像を選択してください</span>
+                  <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                    <Camera className="w-10 h-10 mb-2" />
+                    <span className="font-bold text-sm">画像を選択</span>
                   </div>
                 )}
               </div>
 
-              <div className="flex justify-between items-center mb-5 pb-4 border-b border-gray-100">
+              <div className="flex justify-between items-center mb-5 border-b pb-4">
                 <div className="font-bold text-gray-800 text-xl">写真 {index + 1}</div>
                 <div className="flex gap-2">
-                  <div className="flex gap-1 mr-1">
-                    <button
-                      type="button"
-                      onClick={() => rotatePhoto(photo.id, 'left')}
-                      className="p-2.5 text-gray-500 bg-gray-50 rounded-xl border border-gray-200 hover:bg-gray-100"
-                    >
-                      ↺
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => rotatePhoto(photo.id, 'right')}
-                      className="p-2.5 text-gray-500 bg-gray-50 rounded-xl border border-gray-200 hover:bg-gray-100"
-                    >
-                      ↻
-                    </button>
-                  </div>
-                  {photo.image ? (
-                    <button onClick={() => clearPhoto(photo.id)} className="p-2.5 text-gray-400 hover:text-red-500 bg-gray-50 rounded-xl border border-gray-200"><Trash2 className="w-5 h-5"/></button>
-                  ) : (
-                    <button onClick={() => deletePhotoSlot(photo.id)} className="p-2.5 text-gray-400 hover:text-red-500 bg-gray-50 rounded-xl border border-gray-200"><Trash2 className="w-5 h-5"/></button>
-                  )}
-                  <label className="bg-blue-100 text-blue-700 font-bold py-2.5 px-5 rounded-xl cursor-pointer shadow-sm">
-                    {photo.image ? '画像を変更' : '画像を選択'} <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadPhoto(e, index)} />
+                  <button onClick={() => rotatePhoto(photo.id, 'right')} className="p-2.5 text-gray-500 bg-gray-50 rounded-xl border">↻ 回転</button>
+                  <button onClick={() => photo.image ? clearPhoto(photo.id) : deletePhotoSlot(photo.id)} className="p-2.5 text-gray-400 hover:text-red-500 bg-gray-50 rounded-xl border"><Trash2 className="w-5 h-5"/></button>
+                  <label className="bg-blue-100 text-blue-700 font-bold py-2.5 px-5 rounded-xl cursor-pointer">
+                    {photo.image ? '変更' : '選択'} <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadPhoto(e, index)} />
                   </label>
                 </div>
               </div>
 
-              <div className="space-y-5">
-                {/* 撮影日時のカレンダー入力欄 */}
+              <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="font-bold text-gray-600 whitespace-nowrap min-w-[4rem]">撮影日:</div>
-                  <input
-                    type="date"
-                    className="w-full p-3 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
-                    value={formatToYMD(photo.shootingDate)}
-                    onChange={(e) => updatePhoto(photo.id, "shootingDate", formatToYMDSlash(e.target.value))}
-                  />
+                  <span className="font-bold text-gray-600 min-w-[4rem]">撮影日:</span>
+                  <input type="date" className="w-full p-3 border rounded-xl" value={formatToYMD(photo.shootingDate)} onChange={(e) => updatePhoto(photo.id, "shootingDate", formatToYMDSlash(e.target.value))} />
                 </div>
-
-                {/* 位置図の選択 */}
-                <button onClick={() => { setCurrentPhotoId(photo.id); setModalOpen(true); }} className={`w-full p-4 text-lg border-2 rounded-xl text-left flex justify-between items-center ${photo.locationMap ? 'text-red-700 font-bold border-red-300 bg-red-50' : 'text-gray-500 border-gray-300 bg-gray-50'}`}>
-                  {photo.locationMap || '▼ どの場所の写真ですか？（タップして選択）'}
-                  <MapPin className={`w-6 h-6 ${photo.locationMap ? 'text-red-500' : 'text-gray-400'}`} />
+                <button onClick={() => { setCurrentPhotoId(photo.id); setModalOpen(true); }} className={`w-full p-4 border-2 rounded-xl text-left flex justify-between items-center ${photo.locationMap ? 'text-red-700 font-bold border-red-300 bg-red-50' : 'text-gray-500 border-gray-300 bg-gray-50'}`}>
+                  {photo.locationMap || '▼ 位置を選択'} <MapPin className="w-6 h-6" />
                 </button>
-
-                {/* ★自社カスタマイズが反映される「工程」のプルダウン */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-sm font-bold text-gray-600 pl-1">工程</label>
-                  <select
-                    className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white"
-                    value={photo.process}
-                    onChange={(e) => updatePhoto(photo.id, "process", e.target.value)}
-                  >
-                    <option value="">-- 工程を選択してください --</option>
-                    {processOptions.map(opt => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                    {photo.process && !processOptions.includes(photo.process) && (
-                      <option value={photo.process}>{photo.process}</option>
-                    )}
-                  </select>
+                <select className="w-full p-3 border rounded-xl bg-white" value={photo.process} onChange={(e) => updatePhoto(photo.id, "process", e.target.value)}>
+                  <option value="">-- 工程を選択 --</option>
+                  {processOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+                <div className="flex flex-wrap gap-1.5">
+                  {descTemplates.map((tmpl, i) => (
+                    <button key={i} onClick={() => updatePhoto(photo.id, "description", (photo.description || '') + tmpl.text)} className="text-[10px] font-bold text-blue-700 bg-blue-50 border px-2 py-1 rounded-lg">＋{tmpl.label}</button>
+                  ))}
                 </div>
-
-                {/* ★自社カスタマイズが反映される「ワンタップ定型文ボタン」 */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-sm font-bold text-gray-600 pl-1 mb-1">説明</label>
-                  
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    {descTemplates.map((tmpl, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => {
-                          const currentDesc = photo.description || '';
-                          const prefix = currentDesc && !currentDesc.endsWith('\n') ? '\n' : '';
-                          updatePhoto(photo.id, "description", currentDesc + prefix + tmpl.text);
-                        }}
-                        className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1.5 rounded-lg hover:bg-blue-100 shadow-sm transition-colors"
-                      >
-                        ＋{tmpl.label}
-                      </button>
-                    ))}
-                  </div>
-                  
-                  <textarea 
-                    placeholder="説明（短文）" 
-                    rows={4} 
-                    className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" 
-                    value={photo.description} 
-                    onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} 
-                  />
-                </div>
-
+                <textarea rows={3} className="w-full p-3 border rounded-xl" value={photo.description} onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} placeholder="説明入力" />
               </div>
             </div>
           ))}
         </div>
         
-        <button onClick={addPhotoSlot} className="w-full mt-8 bg-gray-800 text-white font-bold py-4 text-lg rounded-xl shadow-lg flex items-center justify-center gap-2 hover:bg-gray-700">
-          <Plus className="w-6 h-6" /> 写真枠を1つ追加する
+        <button onClick={addPhotoSlot} className="w-full mt-8 bg-gray-800 text-white font-bold py-4 text-lg rounded-xl flex items-center justify-center gap-2">
+          <Plus className="w-6 h-6" /> 写真枠を追加
         </button>
-
       </div>
+
       <PinSelectModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         pins={project.mapPins}
-        onSelect={(label: string) => {
-          if (!currentPhotoId) return;
-          void updatePhoto(currentPhotoId, "locationMap", label);
-        }}
+        onSelect={(label) => currentPhotoId && updatePhoto(currentPhotoId, "locationMap", label)}
       />
     </div>
   );
