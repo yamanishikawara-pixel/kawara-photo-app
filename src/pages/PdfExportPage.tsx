@@ -20,6 +20,9 @@ import { jsPDF } from 'jspdf';
 
 const PDF_GENERATE_URL = 'https://generatepdf-ld4b4dsi5q-an.a.run.app';
 
+// ★追加：絶対に綺麗なゴシック体を強制するフォント指定
+const GOTHIC_FONT = '"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif';
+
 function safeStyleLine(
   val: string | number | undefined | null,
   defaultUnit: string,
@@ -124,7 +127,7 @@ function createEmptyMaterial(): Material {
 
 function PdfLineLegend() {
   return (
-    <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '12px', fontWeight: 'bold', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', backgroundColor: '#ffffff' }}>
+    <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '12px', fontWeight: 'bold', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', backgroundColor: '#ffffff', fontFamily: GOTHIC_FONT }}>
       {LINE_TYPES.map((type) => (
         <div key={type.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <div style={{ backgroundColor: type.color, width: '24px', height: '2px', borderRadius: '9999px' }} />
@@ -262,6 +265,7 @@ export default function PdfExportPage() {
         el.style.height = '1123px';
       });
 
+      // ★追加：body に強制的にゴシック体を指定
       return `<!DOCTYPE html>
           <html>
           <head>
@@ -269,7 +273,15 @@ export default function PdfExportPage() {
             ${styles}
             <style>
               @page { margin: 0; size: A4 portrait; }
-              body { margin: 0; padding: 0; background-color: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              body { 
+                margin: 0; 
+                padding: 0; 
+                background-color: #ffffff; 
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact; 
+                font-family: ${GOTHIC_FONT};
+              }
+              * { font-family: inherit; }
             </style>
           </head>
           <body>
@@ -384,7 +396,6 @@ export default function PdfExportPage() {
 
   const totalPages = 1 + mapCount + photoPages.length + materialPages.length;
   
-  // ★重要：スタイルをインラインで固定化
   const wrapperStyle = {
     width: `${A4_WIDTH_PX * scale}px`,
     height: `${A4_HEIGHT_PX * scale}px`,
@@ -394,6 +405,8 @@ export default function PdfExportPage() {
     boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
     flexShrink: 0
   };
+
+  // ★追加：ページ全体にゴシック体を強制
   const pageStyle = {
     width: `${A4_WIDTH_PX}px`,
     height: `${A4_HEIGHT_PX}px`,
@@ -402,6 +415,7 @@ export default function PdfExportPage() {
     transformOrigin: 'top left',
     backgroundColor: '#ffffff',
     color: '#000000',
+    fontFamily: GOTHIC_FONT, // ★ここ！！
     boxSizing: 'border-box' as const,
     position: 'absolute' as const,
     top: 0,
@@ -434,7 +448,7 @@ export default function PdfExportPage() {
       <div className="pdf-container-wrapper flex flex-col gap-8 items-center w-full">
         
         {/* =========================================
-            ① 表紙ページ（絶対崩れないインラインスタイル版）
+            ① 表紙ページ
         ========================================= */}
         <div style={wrapperStyle} className="pdf-page-wrapper">
           <div className="pdf-page" style={{ ...pageStyle, alignItems: 'center' }}>
