@@ -18,11 +18,10 @@ import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 
+/** Cloud Run（Google裏サーバー）のURL — ローカルやフォールバック用 */
 const PDF_GENERATE_URL = 'https://generatepdf-ld4b4dsi5q-an.a.run.app';
 
-// 絶対崩れないゴシック体指定
-const GOTHIC_FONT = '"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif';
-
+/** 位置図の線スタイル（数値なら単位付与、文字列はそのまま） */
 function safeStyleLine(
   val: string | number | undefined | null,
   defaultUnit: string,
@@ -32,6 +31,11 @@ function safeStyleLine(
   return String(val);
 }
 
+/**
+ * ブラウザから Cloud Run（*.run.app）へ POST すると CORS でブロックされることが多い。
+ * 本番（Firebase Hosting）では同一オリジンの /api/generatePdf のみ。失敗時はクライアント生成へ。
+ * VITE_PDF_GENERATE_URL に run.app を指定しても本番では無視して /api のみ使う。
+ */
 function pdfEndpointCandidates(): string[] {
   const env = (import.meta.env.VITE_PDF_GENERATE_URL as string | undefined)?.trim();
   const isLocal =
@@ -52,6 +56,7 @@ function pdfEndpointCandidates(): string[] {
   return [PDF_GENERATE_URL, '/api/generatePdf'];
 }
 
+/** 生 PDF / JSON+base64 の両方を解釈 */
 async function responseToPdfBlob(response: Response): Promise<Blob> {
   const buf = await response.arrayBuffer();
   const u8 = new Uint8Array(buf);
@@ -76,7 +81,7 @@ async function responseToPdfBlob(response: Response): Promise<Blob> {
       return new Blob([out], { type: 'application/pdf' });
     }
   } catch {
-    /* ignore */
+    /* 続けてエラー */
   }
   throw new Error('有効なPDFデータが返りませんでした');
 }
@@ -127,10 +132,20 @@ function createEmptyMaterial(): Material {
 
 function PdfLineLegend() {
   return (
-    <div className="flex gap-x-4 gap-y-1 flex-wrap text-xs font-medium rounded-lg p-2 shadow-sm" style={{ border: '1px solid #d1d5db', backgroundColor: '#ffffff' }}>
+    <div
+      className="flex gap-x-4 gap-y-1 flex-wrap text-xs font-medium rounded-lg p-2 shadow-sm"
+      style={{ border: '1px solid #d1d5db', backgroundColor: '#ffffff' }}
+    >
       {LINE_TYPES.map((type) => (
         <div key={type.label} className="flex items-center gap-1.5">
-          <div style={{ backgroundColor: type.color, width: '1.5rem', height: '2px', borderRadius: '9999px' }} />
+          <div
+            style={{
+              backgroundColor: type.color,
+              width: '1.5rem',
+              height: '2px',
+              borderRadius: '9999px',
+            }}
+          />
           <span style={{ color: '#374151' }}>{type.label}</span>
         </div>
       ))}
@@ -216,7 +231,7 @@ export default function PdfExportPage() {
           const filename = `${p.photoNumber.padStart(2, '0')}${processName}.jpg`;
           imgFolder.file(filename, blob);
         } catch {
-          /* ignore */
+          /* 1枚失敗しても続行 */
         }
       });
 
@@ -238,15 +253,19 @@ export default function PdfExportPage() {
     const pdfName = `${project.projectName || '現場報告書'}_${new Date().getTime()}.pdf`;
 
     const buildServerHtmlPayload = (): string => {
-      const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      const styles = Array.from(
+        document.querySelectorAll('style, link[rel="stylesheet"]'),
+      )
         .map((styleEl) => styleEl.outerHTML)
         .join('');
 
-      const container = document.querySelector('.pdf-container-wrapper');
+      const container = document.querySelector(
+        '.flex.flex-col.gap-8.items-center.w-full',
+      );
       if (!container) throw new Error('データが見つかりません');
       const clone = container.cloneNode(true) as HTMLElement;
 
-      const wrappers = clone.querySelectorAll('.pdf-page-wrapper');
+      const wrappers = clone.querySelectorAll('.shrink-0');
       wrappers.forEach((w: Element) => {
         const el = w as HTMLElement;
         el.style.width = '794px';
@@ -265,6 +284,8 @@ export default function PdfExportPage() {
         el.style.height = '1123px';
       });
 
+      const htmlContent = clone.innerHTML;
+
       return `<!DOCTYPE html>
           <html>
           <head>
@@ -278,13 +299,11 @@ export default function PdfExportPage() {
                 background-color: #ffffff; 
                 -webkit-print-color-adjust: exact; 
                 print-color-adjust: exact; 
-                font-family: ${GOTHIC_FONT};
               }
-              * { font-family: inherit; }
             </style>
           </head>
           <body>
-            ${clone.innerHTML}
+            ${htmlContent}
           </body>
           </html>`;
     };
@@ -294,7 +313,9 @@ export default function PdfExportPage() {
       if (pages.length === 0) throw new Error('PDFページが見つかりません');
       window.scrollTo(0, 0);
       await new Promise((r) => setTimeout(r, 500));
-      if (document.fonts?.ready) await document.fonts.ready;
+      if (document.fonts?.ready) {
+        await document.fonts.ready;
+      }
 
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -316,10 +337,12 @@ export default function PdfExportPage() {
 
         pageEl.style.transform = currentTransform;
 
-        const pdfHeight = (pageEl.offsetHeight * pdfWidth) / pageEl.offsetWidth;
+        const pdfHeight =
+          (pageEl.offsetHeight * pdfWidth) / pageEl.offsetWidth;
         if (i > 0) pdf.addPage();
         pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
       }
+
       pdf.save(pdfName);
     };
 
@@ -331,10 +354,16 @@ export default function PdfExportPage() {
 
       for (const url of pdfEndpointCandidates()) {
         try {
-          const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body,
+          });
           if (!response.ok) {
             const errText = await response.text().catch(() => '');
-            throw new Error(`サーバーエラー: ${response.status}${errText ? ` ${errText.slice(0, 200)}` : ''}`);
+            throw new Error(
+              `サーバーエラー: ${response.status}${errText ? ` ${errText.slice(0, 200)}` : ''}`,
+            );
           }
           const blob = await responseToPdfBlob(response);
           if (blob.size === 0) throw new Error('PDFデータが空です');
@@ -352,12 +381,16 @@ export default function PdfExportPage() {
           await exportPdfClientSide();
         } catch (clientErr) {
           console.error(clientErr);
-          setError('PDFの保存に失敗しました。');
+          setError(
+            'PDFの保存に失敗しました。Firebase の Functions（generatePdf）のデプロイとログを確認するか、ページを再読み込みしてから再度お試しください。',
+          );
         }
       }
     } catch (err: unknown) {
       console.error(err);
-      setError('PDF作成中にエラーが発生しました。');
+      setError(
+        'PDF作成中にエラーが発生しました。ページを再読み込みしてから再度お試しください。',
+      );
     } finally {
       setIsExporting(false);
     }
@@ -394,68 +427,73 @@ export default function PdfExportPage() {
   }
 
   const totalPages = 1 + mapCount + photoPages.length + materialPages.length;
-  
   const wrapperStyle = {
     width: `${A4_WIDTH_PX * scale}px`,
     height: `${A4_HEIGHT_PX * scale}px`,
-    overflow: 'hidden',
-    position: 'relative' as const,
-    backgroundColor: '#ffffff',
-    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-    flexShrink: 0
   };
-
   const pageStyle = {
     width: `${A4_WIDTH_PX}px`,
     height: `${A4_HEIGHT_PX}px`,
     padding: '15mm',
     transform: `scale(${scale})`,
-    transformOrigin: 'top left',
-    backgroundColor: '#ffffff',
-    color: '#000000',
-    fontFamily: GOTHIC_FONT,
-    boxSizing: 'border-box' as const,
-    position: 'absolute' as const,
-    top: 0,
-    left: 0,
-    display: 'flex',
-    flexDirection: 'column' as const
   };
 
   return (
     <div className="min-h-screen bg-gray-200 p-4 sm:p-6 font-sans flex flex-col items-center pb-12 overflow-x-hidden w-full relative">
       
-      {/* 操作パネル */}
+      {/* 画面上部のボタン群 */}
       <div className="w-full max-w-2xl mb-6 flex justify-between items-center flex-wrap gap-2">
-        <button type="button" onClick={() => navigate(`/project/${id}`)} className="text-blue-500 font-bold flex items-center gap-2 text-lg">
+        <button
+          type="button"
+          onClick={() => navigate(`/project/${id}`)}
+          className="text-blue-500 font-bold flex items-center gap-2 text-lg"
+        >
           <ArrowLeft className="w-6 h-6" /> もどる
         </button>
         <div className="flex gap-2 sm:gap-4">
-          <button type="button" onClick={handleZipExport} disabled={isExporting || isZipping} className="flex items-center gap-2 bg-green-600 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold shadow-lg text-sm sm:text-base hover:bg-green-700 disabled:opacity-50">
-            <Download className="w-5 h-5" /> 写真のみ(Zip)
+          <button
+            type="button"
+            onClick={handleZipExport}
+            disabled={isExporting || isZipping}
+            className="flex items-center gap-2 bg-green-600 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold shadow-lg text-sm sm:text-base hover:bg-green-700 disabled:opacity-50"
+          >
+            <Download className="w-5 h-5" />
+            写真のみ(Zip)
           </button>
-          <button type="button" onClick={handleExport} disabled={isExporting || isZipping} className="flex items-center gap-2 bg-black text-white px-5 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg text-base sm:text-lg hover:bg-gray-800 disabled:opacity-50">
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={isExporting || isZipping}
+            className="flex items-center gap-2 bg-black text-white px-5 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg text-base sm:text-lg hover:bg-gray-800 disabled:opacity-50"
+          >
             {isExporting ? 'PDF出力中...' : 'PDF出力'}
           </button>
         </div>
       </div>
 
-      {error && <div className="w-full max-w-2xl mb-4"><ErrorMessage message={error} onDismiss={() => setError(null)} /></div>}
+      {error && (
+        <div className="w-full max-w-2xl mb-4">
+          <ErrorMessage message={error} onDismiss={() => setError(null)} />
+        </div>
+      )}
 
-      {/* PDFコンテナ */}
-      <div className="pdf-container-wrapper flex flex-col gap-8 items-center w-full">
+      {/* PDFとして出力される全体枠 */}
+      <div className="flex flex-col gap-8 items-center w-full">
         
         {/* =========================================
             ① 表紙ページ
         ========================================= */}
-        <div style={wrapperStyle} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-          <div className="pdf-page absolute top-0 left-0 flex flex-col items-center" style={pageStyle}>
-            <div className="mt-[10mm] mb-[30mm] flex flex-col items-center w-full">
+        <div style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
+          <div
+            className="pdf-page absolute top-0 left-0 flex flex-col items-center origin-top-left"
+            style={{ ...pageStyle, backgroundColor: '#ffffff', color: '#000000' }}
+          >
+            <div className="mt-[5mm] mb-[28mm] flex flex-col items-center w-full">
               <div className="shrink-0 flex justify-center mb-6">
                 {logoUrl ? (
-                  <img src={proxyUrl(logoUrl, `logo_${sessionId}`)} alt="自社ロゴ" className="block object-contain" style={{ maxWidth: '40mm', maxHeight: '40mm' }} crossOrigin="anonymous" />
+                  <img src={proxyUrl(logoUrl, `logo_${sessionId}`)} alt="自社ロゴ" className="block w-[40mm] h-auto object-contain" crossOrigin="anonymous" />
                 ) : (
-                  <img src={kawaraLogo} alt="標準ロゴ" className="block object-contain grayscale" style={{ maxWidth: '32mm', maxHeight: '32mm' }} crossOrigin="anonymous" />
+                  <img src={kawaraLogo} alt="標準ロゴ" className="block w-[32mm] h-auto object-contain grayscale" crossOrigin="anonymous" />
                 )}
               </div>
               <div className="flex flex-col items-center">
@@ -483,13 +521,13 @@ export default function PdfExportPage() {
             </div>
 
             {userSettings && (address || phone) && (
-              <div className="absolute bottom-[16mm] right-[15mm] text-right flex flex-col items-end pl-4 py-1 bg-white">
-                {companyName && <div className="text-[18px] font-bold mb-1 text-black">{companyName}</div>}
-                {address && <div className="text-[14px] text-gray-800">{address}</div>}
-                {phone && <div className="text-[14px] text-gray-800">TEL: {phone}</div>}
+              <div className="absolute bottom-[16mm] right-[15mm] text-right flex flex-col items-end pl-4 py-1" style={{ backgroundColor: '#ffffff' }}>
+                {companyName && <div className="text-[18px] font-bold mb-1" style={{ color: '#000000' }}>{companyName}</div>}
+                {address && <div className="text-[14px]" style={{ color: '#1f2937' }}>{address}</div>}
+                {phone && <div className="text-[14px]" style={{ color: '#1f2937' }}>TEL: {phone}</div>}
               </div>
             )}
-            <div className="absolute bottom-[10mm] right-[15mm] text-[16px] font-bold text-black">
+            <div className="absolute bottom-[10mm] right-[15mm] text-[16px] font-bold" style={{ color: '#000000' }}>
               - 1 / {totalPages} -
             </div>
           </div>
@@ -499,34 +537,39 @@ export default function PdfExportPage() {
             ② 位置図ページ
         ========================================= */}
         {mapUrlsToRender.map((u, mapIndex) => (
-          <div key={`map-page-${mapIndex}`} style={wrapperStyle} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-            <div className="pdf-page absolute top-0 left-0 flex flex-col" style={pageStyle}>
+          <div key={`map-page-${mapIndex}`} style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
+            <div
+              className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left"
+              style={{ ...pageStyle, backgroundColor: '#ffffff', color: '#000000' }}
+            >
               <div className="w-full h-full p-6 flex flex-col" style={{ border: '3px solid #1f2937' }}>
                 <h2 className="text-2xl font-bold mb-4 pb-2" style={{ borderBottom: '2px solid #1f2937' }}>
                   位置図 {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}
                 </h2>
-                <div className="p-2 flex-1 flex items-center justify-center overflow-hidden min-h-0 bg-gray-50 border border-gray-400">
+                <div className="p-2 flex-1 flex items-center justify-center overflow-hidden min-h-0" style={{ border: '1px solid #9ca3af', backgroundColor: '#f9fafb' }}>
                   {u ? (
                     <div className="flex items-center justify-center w-full h-full">
                       <div className="relative inline-block">
                         <img src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[150mm]" alt="" />
                         
+                        {/* ピンの描画 */}
                         {(project.mapPins ?? []).filter((p) => p.mapIndex === mapIndex).map((pin) => (
-                            <div key={pin.id} className="absolute" style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: `translate(-50%, -50%) scale(${pin.size ?? 1})`, zIndex: 10 }}>
+                            <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: `translate(-50%, -50%) scale(${pin.size ?? 1})`, zIndex: 10 }} className="absolute">
                               {pin.type === 'arrow' ? (
-                                <div className="flex items-center gap-1 px-1 rounded bg-white/70 border border-red-200">
-                                  <span className="font-black text-[24px] text-red-600" style={{ transform: `rotate(${pin.rotation ?? 0}deg)` }}>➡</span>
-                                  <span className="font-bold text-[20px] text-red-600">{pin.label}</span>
+                                <div className="flex items-center gap-1 px-1 rounded" style={{ backgroundColor: 'rgba(255,255,255,0.7)', border: '1px solid #fecaca' }}>
+                                  <span className="font-black text-[24px]" style={{ color: '#dc2626', transform: `rotate(${pin.rotation ?? 0}deg)` }}>➡</span>
+                                  <span className="font-bold text-[20px]" style={{ color: '#dc2626' }}>{pin.label}</span>
                                 </div>
                               ) : (
                                 <div className="relative flex items-center justify-center">
-                                  <div className="w-[14mm] h-[14mm] rounded-full border-4 border-red-600 bg-red-600/10" />
-                                  <span className="absolute font-bold text-[18px] px-1 rounded text-red-600 bg-white/70">{pin.label}</span>
+                                  <div className="w-[14mm] h-[14mm] rounded-full" style={{ border: '4px solid #dc2626', backgroundColor: 'rgba(220,38,38,0.1)' }} />
+                                  <span className="absolute font-bold text-[18px] px-1 rounded" style={{ color: '#dc2626', backgroundColor: 'rgba(255,255,255,0.7)' }}>{pin.label}</span>
                                 </div>
                               )}
                             </div>
                         ))}
 
+                        {/* 線の描画 */}
                         {(project.mapLines ?? [])
                           .filter((l) => l.mapIndex === mapIndex)
                           .map((line: MapLine) => (
@@ -550,7 +593,7 @@ export default function PdfExportPage() {
                       </div>
                     </div>
                   ) : (
-                    <span className="font-bold text-gray-400">位置図未登録</span>
+                    <span className="font-bold" style={{ color: '#9ca3af' }}>位置図未登録</span>
                   )}
                 </div>
                 
@@ -560,7 +603,7 @@ export default function PdfExportPage() {
                     <PdfLineLegend />
                   </div>
                   <div style={{ border: '2px solid #1f2937' }}>
-                    <div className="grid grid-cols-12 text-base font-bold bg-gray-100" style={{ borderBottom: '2px solid #1f2937' }}>
+                    <div className="grid grid-cols-12 text-base font-bold" style={{ borderBottom: '2px solid #1f2937', backgroundColor: '#f3f4f6' }}>
                       <div className="col-span-1 py-2 text-center flex justify-center items-center" style={{ borderRight: '2px solid #1f2937' }}>符号</div>
                       <div className="col-span-2 py-2 text-center flex justify-center items-center" style={{ borderRight: '2px solid #1f2937' }}>部位</div>
                       <div className="col-span-2 py-2 text-center text-sm flex justify-center items-center" style={{ borderRight: '2px solid #1f2937' }}>写真NO</div>
@@ -571,8 +614,8 @@ export default function PdfExportPage() {
                       const currentRows = rows.filter((r) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0));
                       const displayRows: MapRow[] = currentRows.length > 0 ? currentRows.slice(0, 6) : Array.from({ length: 6 }, (_, i) => ({ id: -(i + 1), symbol: '　', part: '　', photoNo: '　', remarks: '　' }));
                       return displayRows.map((row) => (
-                        <div key={row.id} className="grid grid-cols-12 text-base border-b border-gray-400">
-                          <div className="col-span-1 py-2 font-bold text-center flex justify-center items-center text-red-700" style={{ borderRight: '1px solid #9ca3af' }}>{row.symbol ?? '　'}</div>
+                        <div key={row.id} className="grid grid-cols-12 text-base" style={{ borderBottom: '1px solid #9ca3af' }}>
+                          <div className="col-span-1 py-2 font-bold text-center flex justify-center items-center" style={{ borderRight: '1px solid #9ca3af', color: '#b91c1c' }}>{row.symbol ?? '　'}</div>
                           <div className="col-span-2 px-2 py-2 flex items-center overflow-hidden" style={{ borderRight: '1px solid #9ca3af' }}>{row.part ?? '　'}</div>
                           <div className="col-span-2 py-2 text-center text-sm flex justify-center items-center overflow-hidden" style={{ borderRight: '1px solid #9ca3af' }}>{row.photoNo ?? row.relatedPhotoNumber ?? '　'}</div>
                           <div className="col-span-7 px-2 py-2 flex items-center overflow-hidden">{row.remarks ?? '　'}</div>
@@ -582,7 +625,7 @@ export default function PdfExportPage() {
                   </div>
                 </div>
               </div>
-              <div className="absolute bottom-[10mm] right-[15mm] text-xs text-gray-400">
+              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif" style={{ color: '#9ca3af' }}>
                 - {2 + mapIndex} / {totalPages} -
               </div>
             </div>
@@ -593,52 +636,55 @@ export default function PdfExportPage() {
             ③ 写真ページ
         ========================================= */}
         {photoPages.map((chunk, pageIndex) => (
-          <div key={`photo-page-${pageIndex}`} style={wrapperStyle} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-            <div className="pdf-page absolute top-0 left-0 flex flex-col" style={pageStyle}>
+          <div key={`photo-page-${pageIndex}`} style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
+            <div
+              className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left"
+              style={{ ...pageStyle, backgroundColor: '#ffffff', color: '#000000' }}
+            >
               <div className="flex-1 flex flex-col justify-between p-2" style={{ border: '3px solid #1f2937' }}>
                 {chunk.map((p, i) => (
-                  <div key={i} className="flex gap-2 h-[32%] p-2 rounded border border-gray-500">
-                    <div className="w-[60%] flex items-center justify-center overflow-hidden relative min-h-0 bg-gray-50 border-2 border-gray-700">
+                  <div key={i} className="flex gap-2 h-[32%] p-2 rounded" style={{ border: '1px solid #6b7280' }}>
+                    <div className="w-[60%] flex items-center justify-center overflow-hidden relative min-h-0" style={{ border: '2px solid #374151', backgroundColor: '#f9fafb' }}>
                       {p.image ? (
                         <div className="flex items-center justify-center w-full h-full">
                           <div className="relative inline-block" style={{ transform: `rotate(${(p as Photo).rotation ?? 0}deg)`, transformOrigin: 'center center' }}>
                             <img src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[88mm]" alt="" />
                             {(p.circles ?? []).map((circle) => (
-                              <div key={circle.id} className="absolute aspect-square rounded-full border-[3px] border-red-600" style={{ left: `${circle.x}%`, top: `${circle.y}%`, width: `${circle.size}%`, transform: 'translate(-50%, -50%)' }} />
+                              <div key={circle.id} className="absolute aspect-square rounded-full" style={{ left: `${circle.x}%`, top: `${circle.y}%`, width: `${circle.size}%`, transform: 'translate(-50%, -50%)', border: '3px solid #dc2626' }} />
                             ))}
                           </div>
                         </div>
                       ) : (
-                        <span className="font-bold text-gray-400">写真未登録</span>
+                        <span className="font-bold" style={{ color: '#9ca3af' }}>写真未登録</span>
                       )}
                     </div>
 
-                    <div className="w-[40%] flex flex-col text-sm bg-white border-2 border-gray-700">
-                      <div className="flex min-h-[36px] border-b border-gray-400">
-                        <div className="w-20 font-bold flex items-center justify-center text-center text-xs bg-gray-100 border-r border-gray-400">写真NO</div>
+                    <div className="w-[40%] flex flex-col text-sm" style={{ border: '2px solid #374151', backgroundColor: '#ffffff' }}>
+                      <div className="flex min-h-[36px]" style={{ borderBottom: '1px solid #9ca3af' }}>
+                        <div className="w-20 font-bold flex items-center justify-center text-center text-xs" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>写真NO</div>
                         <div className="px-3 flex-1 font-bold text-sm flex items-center">{p.photoNumber || '　'}</div>
                       </div>
-                      <div className="flex min-h-[36px] border-b border-gray-400">
-                        <div className="w-20 font-bold flex items-center justify-center bg-gray-100 border-r border-gray-400">撮影日</div>
+                      <div className="flex min-h-[36px]" style={{ borderBottom: '1px solid #9ca3af' }}>
+                        <div className="w-20 font-bold flex items-center justify-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>撮影日</div>
                         <div className="px-3 flex-1 flex items-center font-medium">{p.shootingDate || '　'}</div>
                       </div>
-                      <div className="flex min-h-[36px] border-b border-gray-400">
-                        <div className="w-20 font-bold flex items-center justify-center bg-gray-100 border-r border-gray-400">位置図</div>
-                        <div className="px-3 flex-1 font-bold flex items-center text-red-700">{p.locationMap || '　'}</div>
+                      <div className="flex min-h-[36px]" style={{ borderBottom: '1px solid #9ca3af' }}>
+                        <div className="w-20 font-bold flex items-center justify-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>位置図</div>
+                        <div className="px-3 flex-1 font-bold flex items-center" style={{ color: '#b91c1c' }}>{p.locationMap || '　'}</div>
                       </div>
-                      <div className="flex min-h-[36px] border-b border-gray-400">
-                        <div className="w-20 font-bold flex items-center justify-center bg-gray-100 border-r border-gray-400">工程</div>
+                      <div className="flex min-h-[36px]" style={{ borderBottom: '1px solid #9ca3af' }}>
+                        <div className="w-20 font-bold flex items-center justify-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>工程</div>
                         <div className="px-3 flex-1 flex items-center font-medium">{p.process || '　'}</div>
                       </div>
                       <div className="flex-1 flex min-h-0">
-                        <div className="w-20 py-2 font-bold flex items-center justify-center bg-gray-100 border-r border-gray-400">説明</div>
+                        <div className="w-20 py-2 font-bold flex items-center justify-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>説明</div>
                         <div className="p-3 flex-1 whitespace-pre-wrap overflow-hidden font-medium leading-relaxed flex items-start">{p.description || '　'}</div>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
-              <div className="absolute bottom-[10mm] right-[15mm] text-xs text-gray-400">
+              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif" style={{ color: '#9ca3af' }}>
                 - {2 + mapCount + pageIndex} / {totalPages} -
               </div>
             </div>
@@ -649,15 +695,18 @@ export default function PdfExportPage() {
             ④ 使用材料表
         ========================================= */}
         {materialPages.map((chunk, pageIndex) => (
-          <div key={`material-page-${pageIndex}`} style={wrapperStyle} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-            <div className="pdf-page absolute top-0 left-0 flex flex-col" style={pageStyle}>
+          <div key={`material-page-${pageIndex}`} style={wrapperStyle} className="relative bg-white shadow-md shrink-0">
+            <div
+              className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left"
+              style={{ ...pageStyle, backgroundColor: '#ffffff', color: '#000000' }}
+            >
               <div className="w-full flex justify-between items-end mb-2">
                 <h2 className="text-2xl font-bold pb-1" style={{ borderBottom: '2px solid #1f2937' }}>使用材料表</h2>
               </div>
               <div className="flex-1 flex flex-col justify-between p-2" style={{ border: '3px solid #1f2937' }}>
                 {chunk.map((m, i) => (
-                  <div key={i} className="flex gap-2 h-[32%] p-2 rounded border border-gray-500">
-                    <div className="w-[60%] flex items-center justify-center overflow-hidden relative min-h-0 bg-gray-50 border-2 border-gray-700">
+                  <div key={i} className="flex gap-2 h-[32%] p-2 rounded" style={{ border: '1px solid #6b7280' }}>
+                    <div className="w-[60%] flex items-center justify-center overflow-hidden relative min-h-0" style={{ border: '2px solid #374151', backgroundColor: '#f9fafb' }}>
                       {m.image ? (
                         <div className="flex items-center justify-center w-full h-full">
                           <div className="relative inline-block" style={{ transform: `rotate(${m.rotation ?? 0}deg)`, transformOrigin: 'center center' }}>
@@ -665,32 +714,32 @@ export default function PdfExportPage() {
                           </div>
                         </div>
                       ) : (
-                        <span className="font-bold text-gray-400">写真未登録</span>
+                        <span className="font-bold" style={{ color: '#9ca3af' }}>写真未登録</span>
                       )}
                     </div>
 
-                    <div className="w-[40%] flex flex-col text-sm bg-white border-2 border-gray-700">
-                      <div className="flex min-h-[36px] border-b border-gray-400">
-                        <div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400">品名</div>
+                    <div className="w-[40%] flex flex-col text-sm" style={{ border: '2px solid #374151', backgroundColor: '#ffffff' }}>
+                      <div className="flex min-h-[36px]" style={{ borderBottom: '1px solid #9ca3af' }}>
+                        <div className="w-24 font-bold flex items-center justify-center text-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>品名</div>
                         <div className="px-3 flex-1 font-bold text-base overflow-hidden flex items-center">{m.name || '　'}</div>
                       </div>
-                      <div className="flex min-h-[36px] border-b border-gray-400">
-                        <div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400">メーカー</div>
+                      <div className="flex min-h-[36px]" style={{ borderBottom: '1px solid #9ca3af' }}>
+                        <div className="w-24 font-bold flex items-center justify-center text-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>メーカー</div>
                         <div className="px-3 flex-1 overflow-hidden font-medium flex items-center">{m.manufacturer || '　'}</div>
                       </div>
-                      <div className="flex min-h-[48px] border-b border-gray-400">
-                        <div className="w-24 font-bold text-xs flex items-center justify-center text-center leading-tight py-1 bg-gray-100 border-r border-gray-400">規格・寸法<br />数量</div>
-                        <div className="px-3 flex-1 font-bold overflow-hidden flex items-center text-red-700">{m.specification || '　'}</div>
+                      <div className="flex min-h-[48px]" style={{ borderBottom: '1px solid #9ca3af' }}>
+                        <div className="w-24 font-bold text-xs flex items-center justify-center text-center leading-tight py-1" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>規格・寸法<br />数量</div>
+                        <div className="px-3 flex-1 font-bold overflow-hidden flex items-center" style={{ color: '#b91c1c' }}>{m.specification || '　'}</div>
                       </div>
                       <div className="flex-1 flex min-h-0">
-                        <div className="w-24 py-2 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400">備考</div>
+                        <div className="w-24 py-2 font-bold flex items-center justify-center text-center" style={{ backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af' }}>備考</div>
                         <div className="p-3 flex-1 whitespace-pre-wrap overflow-hidden font-medium leading-relaxed flex items-start">{m.remarks || '　'}</div>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
-              <div className="absolute bottom-[10mm] right-[15mm] text-xs text-gray-400">
+              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-serif" style={{ color: '#9ca3af' }}>
                 - {2 + mapCount + photoPages.length + pageIndex} / {totalPages} -
               </div>
             </div>
