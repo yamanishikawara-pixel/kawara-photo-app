@@ -265,71 +265,76 @@ export default function PhotoPage() {
         </div>
 
         <div className="space-y-16 mt-4">
-          {project.photos.map((photo, index: number) => (
-            <div key={photo.id} className="bg-white p-8 rounded-[3rem] border-2 border-gray-100 shadow-2xl relative animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="absolute top-8 right-8 flex gap-4 z-10">
-                <button onClick={() => movePhoto(index, 'up')} className="bg-white/90 backdrop-blur p-4 rounded-2xl shadow-lg border-2 border-gray-100 text-gray-700 hover:bg-white active:scale-90 transition-all"><ArrowUp className="w-7 h-7" /></button>
-                <button onClick={() => movePhoto(index, 'down')} className="bg-white/90 backdrop-blur p-4 rounded-2xl shadow-lg border-2 border-gray-100 text-gray-700 hover:bg-white active:scale-90 transition-all"><ArrowDown className="w-7 h-7" /></button>
-              </div>
+          {project.photos.map((photo, index: number) => {
+            // ★ 回転チェックを追加 ★
+            const isRotated90 = Number(photo.rotation || 0) % 180 !== 0;
+            const containerClassName = `w-full ${photo.image && isRotated90 ? 'min-h-[70vh]' : 'min-h-[22rem]'} mt-12 bg-[#f1f5f9] rounded-[2.5rem] flex items-center justify-center overflow-hidden border-4 border-dashed border-gray-200 relative mb-10 group transition-all hover:border-blue-400`;
 
-              <div className="w-full min-h-[22rem] mt-12 bg-[#f1f5f9] rounded-[2.5rem] flex items-center justify-center overflow-hidden border-4 border-dashed border-gray-200 relative mb-10 group transition-all hover:border-blue-400">
-                {loadingId === photo.id ? (
-                  <div className="flex flex-col items-center gap-6"><div className="w-14 h-14 border-6 border-blue-500 border-t-transparent rounded-full animate-spin"></div><span className="text-2xl font-black text-blue-600 tracking-widest">保存中...</span></div>
-                ) : photo.image ? (
-                  <div className="relative inline-block" onClick={(e) => addCircleToPhoto(e, photo.id)}>
-                    <img src={proxyUrl(photo.image, photo.id)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[70vh] pointer-events-none rounded-2xl shadow-2xl transition-transform duration-500" style={{ transform: `rotate(${Number(photo.rotation || 0)}deg)` }} alt="" />
-                    {(photo.circles || []).map((circle) => (
-                      <PhotoCircleMarker key={circle.id} circle={circle} isSelected={selectedCircleId === circle.id} onSelect={() => setSelectedCircleId(circle.id)} onDragEnd={(x, y) => updateCircle(photo.id, circle.id, { x, y })} onSizeChange={(size) => updateCircle(photo.id, circle.id, { size })} onRemove={() => removeCircle(photo.id, circle.id)} />
-                    ))}
-                    <div className="absolute top-6 left-6 bg-black/70 backdrop-blur text-white text-xs px-6 py-3 rounded-full font-black pointer-events-none shadow-2xl border-2 border-white/20 z-10">タップで赤丸を追加</div>
+            return (
+              <div key={photo.id} className="bg-white p-8 rounded-[3rem] border-2 border-gray-100 shadow-2xl relative animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="absolute top-8 right-8 flex gap-4 z-10">
+                  <button onClick={() => movePhoto(index, 'up')} className="bg-white/90 backdrop-blur p-4 rounded-2xl shadow-lg border-2 border-gray-100 text-gray-700 hover:bg-white active:scale-90 transition-all"><ArrowUp className="w-7 h-7" /></button>
+                  <button onClick={() => movePhoto(index, 'down')} className="bg-white/90 backdrop-blur p-4 rounded-2xl shadow-lg border-2 border-gray-100 text-gray-700 hover:bg-white active:scale-90 transition-all"><ArrowDown className="w-7 h-7" /></button>
+                </div>
+
+                <div className={containerClassName}> {/* ★ クラス名を動的に変更 ★ */}
+                  {loadingId === photo.id ? (
+                    <div className="flex flex-col items-center gap-6"><div className="w-14 h-14 border-6 border-blue-500 border-t-transparent rounded-full animate-spin"></div><span className="text-2xl font-black text-blue-600 tracking-widest">保存中...</span></div>
+                  ) : photo.image ? (
+                    <div className="relative inline-block" onClick={(e) => addCircleToPhoto(e, photo.id)}>
+                      <img src={proxyUrl(photo.image, photo.id)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[70vh] pointer-events-none rounded-2xl shadow-2xl transition-transform duration-500" style={{ transform: `rotate(${Number(photo.rotation || 0)}deg)` }} alt="" />
+                      {(photo.circles || []).map((circle) => (
+                        <PhotoCircleMarker key={circle.id} circle={circle} isSelected={selectedCircleId === circle.id} onSelect={() => setSelectedCircleId(circle.id)} onDragEnd={(x, y) => updateCircle(photo.id, circle.id, { x, y })} onSizeChange={(size) => updateCircle(photo.id, circle.id, { size })} onRemove={() => removeCircle(photo.id, circle.id)} />
+                      ))}
+                      <div className="absolute top-6 left-6 bg-black/70 backdrop-blur text-white text-xs px-6 py-3 rounded-full font-black pointer-events-none shadow-2xl border-2 border-white/20 z-10">タップで赤丸を追加</div>
+                    </div>
+                  ) : (
+                    <div className="text-center text-gray-300 py-16"><Camera className="w-24 h-24 mx-auto mb-6 opacity-20" /><span className="text-2xl font-black block">画像を選択してください</span></div>
+                  )}
+                </div>
+
+                <div className="flex justify-between items-center mb-8 pb-8 border-b-4 border-gray-50">
+                  <div className="font-black text-gray-900 text-3xl flex items-center gap-4"><span className="bg-gray-900 text-white w-12 h-12 flex items-center justify-center rounded-2xl text-xl">{index + 1}</span> 写真</div>
+                  <div className="flex gap-4">
+                    <button type="button" onClick={() => updatePhoto(photo.id, 'rotation', ((Number(photo.rotation || 0)) + 90) % 360)} className="p-4 text-gray-700 bg-gray-100 rounded-[1.5rem] border-2 border-gray-200 font-bold hover:bg-gray-200 active:scale-95 flex items-center gap-2">↻ 回転</button>
+                    <button onClick={() => deletePhotoSlot(photo.id)} className="p-4 text-red-500 bg-red-50 rounded-[1.5rem] border-2 border-red-100 hover:bg-red-100 active:scale-95"><Trash2 className="w-7 h-7"/></button>
+                    <label className="bg-blue-100 text-blue-800 font-black py-4 px-8 rounded-[1.5rem] cursor-pointer shadow-md border-2 border-blue-200 hover:bg-blue-200 active:scale-95 text-lg">
+                      {photo.image ? '変更' : '選択'} <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadPhoto(e, index)} />
+                    </label>
                   </div>
-                ) : (
-                  <div className="text-center text-gray-300 py-16"><Camera className="w-24 h-24 mx-auto mb-6 opacity-20" /><span className="text-2xl font-black block">画像を選択してください</span></div>
-                )}
-              </div>
-
-              <div className="flex justify-between items-center mb-8 pb-8 border-b-4 border-gray-50">
-                <div className="font-black text-gray-900 text-3xl flex items-center gap-4"><span className="bg-gray-900 text-white w-12 h-12 flex items-center justify-center rounded-2xl text-xl">{index + 1}</span> 写真</div>
-                <div className="flex gap-4">
-                  <button type="button" onClick={() => updatePhoto(photo.id, 'rotation', ((Number(photo.rotation || 0)) + 90) % 360)} className="p-4 text-gray-700 bg-gray-100 rounded-[1.5rem] border-2 border-gray-200 font-bold hover:bg-gray-200 active:scale-95 flex items-center gap-2">↻ 回転</button>
-                  <button onClick={() => deletePhotoSlot(photo.id)} className="p-4 text-red-500 bg-red-50 rounded-[1.5rem] border-2 border-red-100 hover:bg-red-100 active:scale-95"><Trash2 className="w-7 h-7"/></button>
-                  <label className="bg-blue-100 text-blue-800 font-black py-4 px-8 rounded-[1.5rem] cursor-pointer shadow-md border-2 border-blue-200 hover:bg-blue-200 active:scale-95 text-lg">
-                    {photo.image ? '変更' : '選択'} <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadPhoto(e, index)} />
-                  </label>
-                </div>
-              </div>
-
-              <div className="space-y-8">
-                <div className="flex items-center gap-6 bg-gray-50 p-6 rounded-[2rem] border-2 border-gray-100">
-                  <div className="font-black text-gray-500 whitespace-nowrap text-xl">撮影日:</div>
-                  {/* ★ バグ修正：formatToYMD で確実にカレンダーが機能する */}
-                  <input type="date" className="w-full bg-transparent text-2xl font-bold outline-none focus:text-blue-600 transition-colors" value={formatToYMD(photo.shootingDate)} onChange={(e) => updatePhoto(photo.id, "shootingDate", formatToYMDSlash(e.target.value))} />
                 </div>
 
-                <button onClick={() => { setCurrentPhotoId(photo.id); setModalOpen(true); }} className={`w-full p-8 text-2xl border-4 rounded-[2rem] text-left flex justify-between items-center transition-all ${photo.locationMap ? 'text-red-700 font-black border-red-200 bg-red-50 shadow-lg shadow-red-100' : 'text-gray-400 font-bold border-gray-200 bg-white hover:border-gray-400'}`}>
-                  {photo.locationMap || '▼ 場所を選択（符号と連動）'} <MapPin className={`w-10 h-10 ${photo.locationMap ? 'text-red-500' : 'text-gray-300'}`} />
-                </button>
-
-                <div className="space-y-3">
-                  <label className="text-sm font-black text-gray-400 pl-4 uppercase tracking-[0.2em]">工程 / PROCESS</label>
-                  <select className="w-full p-6 text-2xl font-black border-4 border-gray-100 rounded-[2rem] bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none" value={photo.process} onChange={(e) => updatePhoto(photo.id, "process", e.target.value)}>
-                    <option value="">-- 工程を選択 --</option>
-                    {processOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                  </select>
-                </div>
-
-                <div className="space-y-4">
-                  <label className="text-sm font-black text-gray-400 pl-4 uppercase tracking-[0.2em]">説明 / DESCRIPTION</label>
-                  <div className="flex flex-wrap gap-3 mb-2">
-                    {descTemplates.map((tmpl, i) => (
-                      <button key={i} type="button" onClick={() => updatePhoto(photo.id, "description", (photo.description || "") + tmpl.text)} className="text-base font-black text-blue-700 bg-blue-50 border-2 border-blue-100 px-6 py-3 rounded-2xl hover:bg-blue-100 active:scale-95 shadow-sm">＋{tmpl.label}</button>
-                    ))}
+                <div className="space-y-8">
+                  <div className="flex items-center gap-6 bg-gray-50 p-6 rounded-[2rem] border-2 border-gray-100">
+                    <div className="font-black text-gray-500 whitespace-nowrap text-xl">撮影日:</div>
+                    <input type="date" className="w-full bg-transparent text-2xl font-bold outline-none focus:text-blue-600 transition-colors" value={formatToYMD(photo.shootingDate)} onChange={(e) => updatePhoto(photo.id, "shootingDate", formatToYMDSlash(e.target.value))} />
                   </div>
-                  <textarea rows={4} className="w-full p-8 text-2xl font-bold border-4 border-gray-100 rounded-[2.5rem] bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-inner" value={photo.description} onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} placeholder="現場状況の詳細を入力" />
+
+                  <button onClick={() => { setCurrentPhotoId(photo.id); setModalOpen(true); }} className={`w-full p-8 text-2xl border-4 rounded-[2rem] text-left flex justify-between items-center transition-all ${photo.locationMap ? 'text-red-700 font-black border-red-200 bg-red-50 shadow-lg shadow-red-100' : 'text-gray-400 font-bold border-gray-200 bg-white hover:border-gray-400'}`}>
+                    {photo.locationMap || '▼ 場所を選択（符号と連動）'} <MapPin className={`w-10 h-10 ${photo.locationMap ? 'text-red-500' : 'text-gray-300'}`} />
+                  </button>
+
+                  <div className="space-y-3">
+                    <label className="text-sm font-black text-gray-400 pl-4 uppercase tracking-[0.2em]">工程 / PROCESS</label>
+                    <select className="w-full p-6 text-2xl font-black border-4 border-gray-100 rounded-[2rem] bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none" value={photo.process} onChange={(e) => updatePhoto(photo.id, "process", e.target.value)}>
+                      <option value="">-- 工程を選択 --</option>
+                      {processOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="space-y-4">
+                    <label className="text-sm font-black text-gray-400 pl-4 uppercase tracking-[0.2em]">説明 / DESCRIPTION</label>
+                    <div className="flex flex-wrap gap-3 mb-2">
+                      {descTemplates.map((tmpl, i) => (
+                        <button key={i} type="button" onClick={() => updatePhoto(photo.id, "description", (photo.description || "") + tmpl.text)} className="text-base font-black text-blue-700 bg-blue-50 border-2 border-blue-100 px-6 py-3 rounded-2xl hover:bg-blue-100 active:scale-95 shadow-sm">＋{tmpl.label}</button>
+                      ))}
+                    </div>
+                    <textarea rows={4} className="w-full p-8 text-2xl font-bold border-4 border-gray-100 rounded-[2.5rem] bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-inner" value={photo.description} onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} placeholder="現場状況の詳細を入力" />
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <button onClick={addPhotoSlot} className="w-full mt-24 bg-gray-900 text-white font-black py-8 text-3xl rounded-[3rem] shadow-[0_20px_60px_rgba(0,0,0,0.3)] flex items-center justify-center gap-6 hover:bg-black transition-all active:scale-95 mb-20"><Plus className="w-10 h-10" strokeWidth={4} /> 写真枠を追加する</button>
