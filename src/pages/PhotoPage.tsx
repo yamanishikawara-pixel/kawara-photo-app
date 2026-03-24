@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus, Minus } from 'lucide-react';
+import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
@@ -24,7 +24,6 @@ const DEFAULT_DESC_TEMPLATES = [
   { label: "棟部(増張り)", text: "棟部：増し張り " },
 ];
 
-// --- サブコンポーネント: 赤丸マーカー ---
 function PhotoCircleMarker({
   circle,
   isSelected,
@@ -50,23 +49,15 @@ function PhotoCircleMarker({
         onMouseDown={(e) => { e.stopPropagation(); onSelect(); onMouseDown(e); }}
         onTouchStart={(e) => { e.stopPropagation(); onSelect(); onTouchStart(e); }}
         onClick={(e) => e.stopPropagation()} 
-        style={{ 
-          left: `${position.x}%`, 
-          top: `${position.y}%`, 
-          width: `${size}%`, 
-          transform: 'translate(-50%, -50%)', 
-          touchAction: 'none',
-          zIndex: isSelected ? 100 : 20
-        }}
+        style={{ left: `${position.x}%`, top: `${position.y}%`, width: `${size}%`, transform: 'translate(-50%, -50%)', touchAction: 'none', zIndex: isSelected ? 100 : 20 }}
         className={`absolute aspect-square rounded-full border-[4px] border-red-500 shadow-sm ${dragging ? 'z-30 opacity-70 scale-110' : 'z-20 cursor-pointer'} ${isSelected ? 'border-dashed bg-red-500/20' : ''}`}
       />
       {isSelected && !dragging && (
         <div 
           onClick={(e) => e.stopPropagation()} 
           style={{ left: `${position.x}%`, top: `${position.y + size/2 + 8}%`, transform: 'translateX(-50%)' }} 
-          className="absolute z-[1000] flex bg-white rounded-xl shadow-2xl border-2 border-gray-200 overflow-hiddenanimate-in zoom-in duration-200"
+          className="absolute z-[1000] flex bg-white rounded-xl shadow-2xl border-2 border-gray-200 overflow-hidden"
         >
-          {/* コピーボタンは削除 */}
           <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.min(60, size * 1.3))}} className="px-5 py-3 text-2xl font-bold hover:bg-gray-100 text-gray-700 border-r active:bg-gray-200">＋</button>
           <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.max(5, size * 0.7))}} className="px-5 py-3 text-2xl font-bold hover:bg-gray-100 text-gray-700 border-r active:bg-gray-200">－</button>
           <button onClick={(e) => {e.stopPropagation(); onRemove()}} className="px-5 py-3 text-red-500 hover:bg-red-50 active:bg-red-100"><Trash2 className="w-6 h-6"/></button>
@@ -76,32 +67,21 @@ function PhotoCircleMarker({
   )
 }
 
-// --- サブコンポーネント: 場所選択モーダル ---
-function PinSelectModal({
-  isOpen,
-  onClose,
-  pins,
-  onSelect,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  pins: MapPinT[] | undefined;
-  onSelect: (label: string) => void;
-}) {
+function PinSelectModal({ isOpen, onClose, pins, onSelect }: { isOpen: boolean; onClose: () => void; pins: MapPinT[] | undefined; onSelect: (label: string) => void; }) {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/60 z-[2000] flex items-center justify-center p-6 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-white rounded-[2rem] w-full max-w-sm p-8 shadow-2xl space-y-6" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center pb-2 border-b">
           <h3 className="text-xl font-black text-gray-900 flex items-center gap-3"><MapPin className="text-red-500 w-7 h-7"/> 位置図の場所を選択</h3>
-          <button onClick={onClose} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors"><X className="w-6 h-6"/></button>
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"><X className="w-6 h-6"/></button>
         </div>
         {pins && pins.length > 0 ? (
           <div className="grid grid-cols-3 gap-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
             {pins.map((pin) => (
-              <button key={pin.id} onClick={() => { onSelect(pin.label); onClose(); }} className="bg-gray-50 text-gray-800 border-2 border-gray-200 font-black py-4 text-center rounded-2xl text-xl shadow-sm hover:border-red-400 hover:bg-red-50 hover:text-red-700 transition-all active:scale-95">{pin.label}</button>
+              <button key={pin.id} onClick={() => { onSelect(pin.label); onClose(); }} className="bg-gray-50 text-gray-800 border-2 border-gray-200 font-black py-4 text-center rounded-2xl text-xl shadow-sm hover:border-red-400 hover:bg-red-50 active:scale-95">{pin.label}</button>
             ))}
-            <button onClick={() => { onSelect(""); onClose(); }} className="col-span-3 bg-gray-100 text-gray-500 font-bold py-4 text-center rounded-2xl text-sm shadow-inner mt-2 hover:bg-gray-200 transition-colors">選択を解除</button>
+            <button onClick={() => { onSelect(""); onClose(); }} className="col-span-3 bg-gray-100 text-gray-500 font-bold py-4 rounded-2xl mt-2 hover:bg-gray-200 transition-colors">選択を解除</button>
           </div>
         ) : (
           <div className="text-center py-12 px-4 bg-gray-50 rounded-3xl border-4 border-dashed border-gray-200"><p className="text-gray-400 font-bold text-lg leading-relaxed">先に位置図画面で<br/><span className="text-red-400">マーカー（符号）</span>を<br/>打ってください</p></div>
@@ -111,15 +91,8 @@ function PinSelectModal({
   );
 }
 
-const formatToYMD = (dateString: string) => {
-  if (!dateString) return '';
-  return dateString.replace(/\//g, '-');
-};
-
-const formatToYMDSlash = (dateString: string) => {
-  if (!dateString) return '';
-  return dateString.replace(/-/g, '/');
-};
+const formatToYMD = (dateString: string) => dateString ? dateString.replace(/\//g, '-') : '';
+const formatToYMDSlash = (dateString: string) => dateString ? dateString.replace(/-/g, '/') : '';
 
 const getFileExtension = (file: File): string => {
   const byName = file.name.split('.').pop()?.toLowerCase();
@@ -129,7 +102,6 @@ const getFileExtension = (file: File): string => {
   return 'jpg';
 };
 
-// --- メインコンポーネント ---
 export default function PhotoPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -146,7 +118,6 @@ export default function PhotoPage() {
 
   useEffect(() => {
     getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data() as Project));
-
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (user) {
         const s = await getDoc(doc(db, 'users', user.uid));
@@ -171,7 +142,7 @@ export default function PhotoPage() {
     if (window.confirm('この写真枠を完全に削除しますか？')) {
       if (!project) return;
       const newPhotos = project.photos.filter((p) => p.id !== photoId);
-      const renumbered = newPhotos.map((p, i: number) => ({ ...p, photoNumber: String(i + 1) }));
+      const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
       setProject({ ...project, photos: renumbered });
       await updateDoc(doc(db, "projects", id!), { photos: renumbered });
     }
@@ -241,14 +212,13 @@ export default function PhotoPage() {
         const r = ref(storage, `photos/${id}/${Date.now()}.${ext}`);
         await uploadBytes(r, file);
         const url = await getDownloadURL(r);
-        const newPhotos = project.photos.map((p, i) => p.id === photoId ? { ...p, image: url, shootingDate: p.shootingDate || new Date().toLocaleDateString('ja-JP').replace(/\//g, '/'), circles: [] } : p);
+        const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, image: url, shootingDate: p.shootingDate || new Date().toLocaleDateString('ja-JP').replace(/\//g, '/'), circles: [] } : p);
         setProject({ ...project, photos: newPhotos });
         await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
       } catch { alert('失敗'); } finally { setLoadingId(null); }
     });
   };
 
-  // 純粋なタップ位置に置く（磁石機能なし）
   const addCircleToPhoto = async (e: MouseEvent<HTMLDivElement>, photoId: number) => {
     if (!project) return;
     if (selectedCircleId !== null) { setSelectedCircleId(null); return; }
@@ -281,7 +251,7 @@ export default function PhotoPage() {
   return (
     <div className="min-h-screen bg-[#f8fafc] p-6 font-sans pb-40 select-none overflow-x-hidden" onClick={() => setSelectedCircleId(null)}>
       <div className="max-w-2xl mx-auto pb-12">
-        <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-3 text-blue-600 mb-8 font-black text-xl px-6 py-3 hover:bg-blue-50 rounded-2xl transition-all active:scale-95"><ArrowLeft strokeWidth={4} /> 戻る</button>
+        <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-3 text-blue-600 mb-8 font-black text-xl px-4 py-2 hover:bg-blue-50 rounded-2xl transition-all active:scale-95"><ArrowLeft strokeWidth={4} /> 戻る</button>
         <h1 className="text-4xl font-black mb-10 text-gray-900 tracking-tighter">工事写真の登録と赤丸記入</h1>
 
         <div className="bg-white p-6 rounded-[2.5rem] border-2 border-gray-100 shadow-sm mb-12">
@@ -309,7 +279,7 @@ export default function PhotoPage() {
                     {(photo.circles || []).map((circle) => (
                       <PhotoCircleMarker key={circle.id} circle={circle} isSelected={selectedCircleId === circle.id} onSelect={() => setSelectedCircleId(circle.id)} onDragEnd={(x, y) => updateCircle(photo.id, circle.id, { x, y })} onSizeChange={(size) => updateCircle(photo.id, circle.id, { size })} onRemove={() => removeCircle(photo.id, circle.id)} />
                     ))}
-                    {/* ここにあった動く案内は削除しました */}
+                    <div className="absolute top-6 left-6 bg-black/70 backdrop-blur text-white text-xs px-6 py-3 rounded-full font-black pointer-events-none shadow-2xl border-2 border-white/20 z-10">タップで赤丸を追加</div>
                   </div>
                 ) : (
                   <div className="text-center text-gray-300 py-16"><Camera className="w-24 h-24 mx-auto mb-6 opacity-20" /><span className="text-2xl font-black block">画像を選択してください</span></div>
@@ -334,7 +304,7 @@ export default function PhotoPage() {
                 </div>
 
                 <button onClick={() => { setCurrentPhotoId(photo.id); setModalOpen(true); }} className={`w-full p-8 text-2xl border-4 rounded-[2rem] text-left flex justify-between items-center transition-all ${photo.locationMap ? 'text-red-700 font-black border-red-200 bg-red-50 shadow-lg shadow-red-100' : 'text-gray-400 font-bold border-gray-200 bg-white hover:border-gray-400'}`}>
-                  {photo.locationMap || '▼ 場所を選択（符号ピンと連動）'} <MapPin className={`w-10 h-10 ${photo.locationMap ? 'text-red-500' : 'text-gray-300'}`} />
+                  {photo.locationMap || '▼ 場所を選択（符号と連動）'} <MapPin className={`w-10 h-10 ${photo.locationMap ? 'text-red-500' : 'text-gray-300'}`} />
                 </button>
 
                 <div className="space-y-3">
@@ -352,7 +322,7 @@ export default function PhotoPage() {
                       <button key={i} type="button" onClick={() => updatePhoto(photo.id, "description", (photo.description || "") + tmpl.text)} className="text-base font-black text-blue-700 bg-blue-50 border-2 border-blue-100 px-6 py-3 rounded-2xl hover:bg-blue-100 active:scale-95 shadow-sm">＋{tmpl.label}</button>
                     ))}
                   </div>
-                  <textarea rows={4} className="w-full p-8 text-2xl font-bold border-4 border-gray-100 rounded-[2.5rem] bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-inner" value={photo.description} onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} placeholder="現場の説明を入力（実測値など）" />
+                  <textarea rows={4} className="w-full p-8 text-2xl font-bold border-4 border-gray-100 rounded-[2.5rem] bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-inner" value={photo.description} onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} placeholder="現場状況の詳細を入力" />
                 </div>
               </div>
             </div>
