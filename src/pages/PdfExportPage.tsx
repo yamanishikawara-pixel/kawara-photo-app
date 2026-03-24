@@ -491,9 +491,9 @@ export default function PdfExportPage() {
             <div className="mt-[5mm] mb-[28mm] flex flex-col items-center w-full">
               <div className="shrink-0 flex justify-center mb-6">
                 {logoUrl ? (
-                  <img src={proxyUrl(logoUrl, `logo_${sessionId}`)} alt="自社ロゴ" className="block w-[40mm] h-auto object-contain" crossOrigin="anonymous" />
+                  <img src={proxyUrl(logoUrl, `logo_${sessionId}`)} alt="自社ロゴ" className="block w-[40mm] h-auto object-contain" />
                 ) : (
-                  <img src={kawaraLogo} alt="標準ロゴ" className="block w-[32mm] h-auto object-contain grayscale" crossOrigin="anonymous" />
+                  <img src={kawaraLogo} alt="標準ロゴ" className="block w-[32mm] h-auto object-contain grayscale" />
                 )}
               </div>
               <div className="flex flex-col items-center">
@@ -550,7 +550,7 @@ export default function PdfExportPage() {
                   {u ? (
                     <div className="flex items-center justify-center w-full h-full">
                       <div className="relative inline-block">
-                        <img src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[150mm]" alt="" />
+                        <img src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)} className="block w-auto h-auto max-w-full max-h-[150mm]" alt="" />
                         
                         {/* ピンの描画 */}
                         {(project.mapPins ?? []).filter((p) => p.mapIndex === mapIndex).map((pin) => (
@@ -648,7 +648,7 @@ export default function PdfExportPage() {
                       {p.image ? (
                         <div className="flex items-center justify-center w-full h-full">
                           <div className="relative inline-block" style={{ transform: `rotate(${(p as Photo).rotation ?? 0}deg)`, transformOrigin: 'center center' }}>
-                            <img src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[88mm]" alt="" />
+                            <img src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} className="block w-auto h-auto max-w-full max-h-[88mm]" alt="" />
                             {(p.circles ?? []).map((circle) => (
                               <div key={circle.id} className="absolute aspect-square rounded-full" style={{ left: `${circle.x}%`, top: `${circle.y}%`, width: `${circle.size}%`, transform: 'translate(-50%, -50%)', border: '3px solid #dc2626' }} />
                             ))}
@@ -710,7 +710,7 @@ export default function PdfExportPage() {
                       {m.image ? (
                         <div className="flex items-center justify-center w-full h-full">
                           <div className="relative inline-block" style={{ transform: `rotate(${m.rotation ?? 0}deg)`, transformOrigin: 'center center' }}>
-                            <img src={proxyUrl(m.image, `material_${m.id}_${sessionId}`)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[85mm]" alt="" />
+                            <img src={proxyUrl(m.image, `material_${m.id}_${sessionId}`)} className="block w-auto h-auto max-w-full max-h-[85mm]" alt="" />
                           </div>
                         </div>
                       ) : (

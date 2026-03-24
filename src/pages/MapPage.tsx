@@ -201,17 +201,23 @@ export default function MapPage() {
     if (!project) return;
     const files = Array.from(e.target.files as FileList).slice(0, 2);
     if (files.length === 0) return;
-    setUploading(true);
-    const newUrls = [...(project.mapUrls || [])];
-    for (const f of files) {
-      if (newUrls.length >= 2) break;
-      const r = ref(storage, `maps/${id}/${Date.now()}_${f.name}`);
-      await uploadBytes(r, f);
-      newUrls.push(await getDownloadURL(r));
+    try {
+      setUploading(true);
+      const newUrls = [...(project.mapUrls || [])];
+      for (const f of files) {
+        if (newUrls.length >= 2) break;
+        const r = ref(storage, `maps/${id}/${Date.now()}_${f.name}`);
+        await uploadBytes(r, f);
+        newUrls.push(await getDownloadURL(r));
+      }
+      setProject({ ...project, mapUrls: newUrls });
+      await updateDoc(doc(db, "projects", id!), { mapUrls: newUrls });
+    } catch (err) {
+      console.error('位置図アップロード失敗', err);
+      alert('位置図のアップロードに失敗しました。ログイン状態と通信環境をご確認ください。');
+    } finally {
+      setUploading(false);
     }
-    setProject({ ...project, mapUrls: newUrls });
-    await updateDoc(doc(db, "projects", id!), { mapUrls: newUrls });
-    setUploading(false);
   };
 
   const removeMap = async (index: number) => {
@@ -475,7 +481,7 @@ export default function MapPage() {
                       onPointerUp={(e) => handleLinePointerUp(e, i)}
                       onPointerCancel={(e) => handleLinePointerCancel(e, i)}
                     >
-                      <img src={proxyUrl(u, i)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[60vh] pointer-events-none rounded shadow-sm" alt="" />
+                      <img src={proxyUrl(u, i)} className="block w-auto h-auto max-w-full max-h-[60vh] pointer-events-none rounded shadow-sm" alt="" />
                       {(project.mapLines || [])
                         .filter((l) => l.mapIndex === i)
                         .map((line) => (
