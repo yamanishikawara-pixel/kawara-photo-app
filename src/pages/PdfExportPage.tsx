@@ -20,6 +20,9 @@ import { jsPDF } from 'jspdf';
 
 const PDF_GENERATE_URL = 'https://generatepdf-ld4b4dsi5q-an.a.run.app';
 
+// ★中華フォントを絶対に防ぐ、パソコン内蔵の美しい日本語フォント指定
+const JP_FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo, sans-serif';
+
 function safeStyleLine(
   val: string | number | undefined | null,
   defaultUnit: string,
@@ -261,13 +264,11 @@ export default function PdfExportPage() {
         el.style.height = '1123px';
       });
 
-      // ★★★ 追加：Google Fonts（Noto Sans JP）を読み込み、lang="ja" で中華フォントを完全排除 ★★★
       return `<!DOCTYPE html>
           <html lang="ja">
           <head>
             <meta charset="utf-8">
             <script src="https://cdn.tailwindcss.com"></script>
-            <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
             <style>
               @page { margin: 0; size: A4 portrait; }
               body { 
@@ -276,10 +277,10 @@ export default function PdfExportPage() {
                 background-color: #ffffff; 
                 -webkit-print-color-adjust: exact; 
                 print-color-adjust: exact; 
-                font-family: 'Noto Sans JP', sans-serif !important;
+                font-family: ${JP_FONT};
               }
               * {
-                font-family: 'Noto Sans JP', sans-serif !important;
+                font-family: ${JP_FONT} !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
               }
@@ -410,7 +411,6 @@ export default function PdfExportPage() {
   return (
     <div className="min-h-screen bg-gray-200 p-4 sm:p-6 font-sans flex flex-col items-center pb-12 overflow-x-hidden w-full relative">
       
-      {/* 画面上部のボタン群 */}
       <div className="w-full max-w-2xl mb-6 flex justify-between items-center flex-wrap gap-2">
         <button
           type="button"
@@ -446,7 +446,6 @@ export default function PdfExportPage() {
         </div>
       )}
 
-      {/* PDFとして出力される全体枠 */}
       <div className="pdf-container-wrapper flex flex-col gap-8 items-center w-full">
         
         {/* =========================================
@@ -455,7 +454,7 @@ export default function PdfExportPage() {
         <div style={{ width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
           <div
             className="pdf-page absolute top-0 left-0 flex flex-col items-center origin-top-left bg-white text-black"
-            style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})` }}
+            style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})`, fontFamily: JP_FONT }}
           >
             <div className="flex flex-col items-center w-full" style={{ marginTop: '19px', marginBottom: '106px' }}>
               <div className="shrink-0 flex justify-center mb-6">
@@ -509,7 +508,7 @@ export default function PdfExportPage() {
           <div key={`map-page-${mapIndex}`} style={{ width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
             <div
               className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black"
-              style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})` }}
+              style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})`, fontFamily: JP_FONT }}
             >
               <div className="w-full h-full p-6 flex flex-col border-[3px] border-gray-800">
                 <h2 className="text-2xl font-bold mb-4 pb-2 border-b-2 border-gray-800">
@@ -571,7 +570,7 @@ export default function PdfExportPage() {
                     <div className="grid grid-cols-12 text-base font-bold border-b-2 border-gray-800 bg-gray-100">
                       <div className="col-span-1 py-2 text-center flex justify-center items-center border-r-2 border-gray-800">符号</div>
                       <div className="col-span-2 py-2 text-center flex justify-center items-center border-r-2 border-gray-800">部位</div>
-                      <div className="col-span-2 py-2 text-center text-sm flex justify-center items-center border-r-2 border-gray-800">写真NO</div>
+                      <div className="col-span-2 py-2 text-center flex justify-center items-center border-r-2 border-gray-800">写真NO</div>
                       <div className="col-span-7 py-2 text-center flex justify-center items-center">備考</div>
                     </div>
                     {(() => {
@@ -582,7 +581,7 @@ export default function PdfExportPage() {
                         <div key={row.id} className="grid grid-cols-12 text-base border-b border-gray-400">
                           <div className="col-span-1 py-2 font-bold text-center flex justify-center items-center border-r border-gray-400 text-red-700">{row.symbol ?? '　'}</div>
                           <div className="col-span-2 px-2 py-2 flex items-center overflow-hidden border-r border-gray-400">{row.part ?? '　'}</div>
-                          <div className="col-span-2 py-2 text-center text-sm flex justify-center items-center overflow-hidden border-r border-gray-400">{row.photoNo ?? row.relatedPhotoNumber ?? '　'}</div>
+                          <div className="col-span-2 py-2 text-center flex justify-center items-center overflow-hidden border-r border-gray-400">{row.photoNo ?? row.relatedPhotoNumber ?? '　'}</div>
                           <div className="col-span-7 px-2 py-2 flex items-center overflow-hidden">{row.remarks ?? '　'}</div>
                         </div>
                       ));
@@ -604,7 +603,7 @@ export default function PdfExportPage() {
           <div key={`photo-page-${pageIndex}`} style={{ width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
             <div
               className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black"
-              style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})` }}
+              style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})`, fontFamily: JP_FONT }}
             >
               <div className="flex-1 flex flex-col justify-between p-2 border-[3px] border-gray-800">
                 {chunk.map((p, i) => (
@@ -624,14 +623,15 @@ export default function PdfExportPage() {
                       )}
                     </div>
 
+                    {/* ★全ての項目をバランスよく均等なサイズに統一 */}
                     <div className="w-[40%] flex flex-col text-sm border-2 border-gray-700 bg-white">
                       <div className="flex min-h-[36px] border-b border-gray-400">
-                        <div className="w-20 font-bold flex items-center justify-center text-center text-xs bg-gray-100 border-r border-gray-400">写真NO</div>
-                        <div className="px-3 flex-1 font-bold text-sm flex items-center">{p.photoNumber || '　'}</div>
+                        <div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400">写真NO</div>
+                        <div className="px-3 flex-1 font-bold flex items-center">{p.photoNumber || '　'}</div>
                       </div>
                       <div className="flex min-h-[36px] border-b border-gray-400">
                         <div className="w-20 font-bold flex items-center justify-center bg-gray-100 border-r border-gray-400">撮影日</div>
-                        <div className="px-3 flex-1 flex items-center font-medium">{p.shootingDate || '　'}</div>
+                        <div className="px-3 flex-1 flex items-center font-bold">{p.shootingDate || '　'}</div>
                       </div>
                       <div className="flex min-h-[36px] border-b border-gray-400">
                         <div className="w-20 font-bold flex items-center justify-center bg-gray-100 border-r border-gray-400">位置図</div>
@@ -639,11 +639,11 @@ export default function PdfExportPage() {
                       </div>
                       <div className="flex min-h-[36px] border-b border-gray-400">
                         <div className="w-20 font-bold flex items-center justify-center bg-gray-100 border-r border-gray-400">工程</div>
-                        <div className="px-3 flex-1 flex items-center font-medium">{p.process || '　'}</div>
+                        <div className="px-3 flex-1 flex items-center font-bold">{p.process || '　'}</div>
                       </div>
                       <div className="flex-1 flex min-h-0">
                         <div className="w-20 py-2 font-bold flex items-center justify-center bg-gray-100 border-r border-gray-400">説明</div>
-                        <div className="p-3 flex-1 whitespace-pre-wrap overflow-hidden font-medium leading-relaxed flex items-start">{p.description || '　'}</div>
+                        <div className="p-3 flex-1 whitespace-pre-wrap overflow-hidden font-bold leading-relaxed flex items-start">{p.description || '　'}</div>
                       </div>
                     </div>
                   </div>
@@ -663,7 +663,7 @@ export default function PdfExportPage() {
           <div key={`material-page-${pageIndex}`} style={{ width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
             <div
               className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black"
-              style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})` }}
+              style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})`, fontFamily: JP_FONT }}
             >
               <div className="w-full flex justify-between items-end mb-2">
                 <h2 className="text-2xl font-bold pb-1 border-b-2 border-gray-800">使用材料表</h2>
@@ -686,19 +686,19 @@ export default function PdfExportPage() {
                     <div className="w-[40%] flex flex-col text-sm border-2 border-gray-700 bg-white">
                       <div className="flex min-h-[36px] border-b border-gray-400">
                         <div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400">品名</div>
-                        <div className="px-3 flex-1 font-bold text-base overflow-hidden flex items-center">{m.name || '　'}</div>
+                        <div className="px-3 flex-1 font-bold overflow-hidden flex items-center">{m.name || '　'}</div>
                       </div>
                       <div className="flex min-h-[36px] border-b border-gray-400">
                         <div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400">メーカー</div>
-                        <div className="px-3 flex-1 overflow-hidden font-medium flex items-center">{m.manufacturer || '　'}</div>
+                        <div className="px-3 flex-1 font-bold overflow-hidden flex items-center">{m.manufacturer || '　'}</div>
                       </div>
                       <div className="flex min-h-[48px] border-b border-gray-400">
-                        <div className="w-24 font-bold text-xs flex items-center justify-center text-center leading-tight py-1 bg-gray-100 border-r border-gray-400">規格・寸法<br />数量</div>
+                        <div className="w-24 font-bold flex items-center justify-center text-center leading-tight py-1 bg-gray-100 border-r border-gray-400">規格・寸法<br />数量</div>
                         <div className="px-3 flex-1 font-bold overflow-hidden flex items-center text-red-700">{m.specification || '　'}</div>
                       </div>
                       <div className="flex-1 flex min-h-0">
                         <div className="w-24 py-2 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400">備考</div>
-                        <div className="p-3 flex-1 whitespace-pre-wrap overflow-hidden font-medium leading-relaxed flex items-start">{m.remarks || '　'}</div>
+                        <div className="p-3 flex-1 whitespace-pre-wrap overflow-hidden font-bold leading-relaxed flex items-start">{m.remarks || '　'}</div>
                       </div>
                     </div>
                   </div>
