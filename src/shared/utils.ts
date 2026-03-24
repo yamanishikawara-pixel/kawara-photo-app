@@ -41,19 +41,13 @@ export function getPreviewScale(paddingPx = 32): number {
   return Math.min(1, availableWidth / A4_WIDTH_PX);
 }
 
-// 毎回ランダムな暗号をつけるのをやめ、写真ごとの固定IDを使うようにしました（これで真っ白バグが直ります）
+// 固定IDを使ってキャッシュを回避（真っ白バグ防止）
 export const proxyUrl = (url: string, id: string | number) =>
   url ? `${url}${url.includes('?') ? '&' : '?'}cb=${id}` : '';
 
-function isJpegFile(file: File): boolean {
-  const name = file.name.toLowerCase();
-  return (
-    file.type === 'image/jpeg' ||
-    file.type === 'image/jpg' ||
-    name.endsWith('.jpg') ||
-    name.endsWith('.jpeg')
-  );
-}
+// 画質とサイズの黄金比
+const QUALITY = 0.85; 
+const MAX_WIDTH = 1600; 
 
 function isHeicFile(file: File): boolean {
   const name = file.name.toLowerCase();
@@ -65,25 +59,41 @@ function isHeicFile(file: File): boolean {
   );
 }
 
-// ★修正：画質とサイズを向上させるための定数
-const QUALITY = 0.85; // 80%から85%へ向上
-const MAX_WIDTH = 1600; // 800pxから1600pxへ倍増（メジャーの目盛りが読めるレベル）
-
-function imageFileToJpegViaImgElement(
+/**
+ * ★大改修：iPhoneのEXIF二重回転バグを防ぐため、
+ * 余計な回転処理を一切せず、ブラウザの標準機能に任せて
+ * シンプルにリサイズ（縮小）と圧縮だけを行う処理に変更。
+ */
+function simpleCompressImage(
   file: File,
-  callback: (jpeg: File) => void,
-  fallback: () => void,
+  callback: (compressedFile: File) => void
 ) {
+  const safeCallback = (f: File) => {
+    try {
+      callback(f);
+    } catch {
+      // ignore
+    }
+  };
+
+  // 画像以外はそのまま返す
+  if (!file.type.startsWith('image/')) {
+    safeCallback(file);
+    return;
+  }
+
+  // FileReaderで画像を読み込む（最近のブラウザはEXIFの向きを自動で正しく表示してくれる）
   const reader = new FileReader();
-  reader.onerror = fallback;
+  reader.onerror = () => safeCallback(file);
   reader.onload = (e) => {
     const img = new Image();
-    img.onerror = fallback;
+    img.onerror = () => safeCallback(file);
     img.onload = () => {
       const canvas = document.createElement('canvas');
-
       let outW = img.width;
       let outH = img.height;
+
+      // リサイズ処理（大きすぎる場合のみ縮小）
       if (outW > MAX_WIDTH) {
         outH = Math.round((outH * MAX_WIDTH) / outW);
         outW = MAX_WIDTH;
@@ -93,167 +103,56 @@ function imageFileToJpegViaImgElement(
       canvas.height = outH;
       const ctx = canvas.getContext('2d');
       if (!ctx) {
-        fallback();
+        safeCallback(file);
         return;
       }
+
+      // そのまま描画（EXIFの向きはブラウザ側で補正済み）
       ctx.drawImage(img, 0, 0, outW, outH);
+
+      // JPEGに変換して圧縮
       canvas.toBlob(
         (blob) => {
           if (!blob) {
-            fallback();
+            safeCallback(file);
             return;
           }
-          callback(
-            new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), {
+          // HEIC等の場合は拡張子を.jpgにしておく
+          const newName = file.name.replace(/\.(heic|heif)$/i, '.jpg');
+          safeCallback(
+            new File([blob], newName, {
               type: 'image/jpeg',
               lastModified: file.lastModified,
-            }),
+            })
           );
         },
         'image/jpeg',
-        QUALITY, // ★修正：高画質設定を反映
+        QUALITY
       );
     };
-    if (typeof e.target?.result === 'string') img.src = e.target.result;
+
+    if (typeof e.target?.result === 'string') {
+      img.src = e.target.result;
+    }
   };
   reader.readAsDataURL(file);
 }
 
-function getExifOrientationFromJpeg(arrayBuffer: ArrayBuffer): number | undefined {
-  const view = new DataView(arrayBuffer);
-  if (view.byteLength < 12) return undefined;
-  if (view.getUint16(0, false) !== 0xffd8) return undefined; // SOI
-
-  let offset = 2;
-  while (offset + 4 <= view.byteLength) {
-    const marker = view.getUint16(offset, false);
-    offset += 2;
-    if (marker === 0xffd9 || marker === 0xffda) break; // EOI / SOS
-    const size = view.getUint16(offset, false);
-    offset += 2;
-    if (size < 2 || offset + (size - 2) > view.byteLength) break;
-
-    if (marker === 0xffe1) {
-      if (
-        offset + 6 <= view.byteLength &&
-        view.getUint32(offset, false) === 0x45786966 && // "Exif"
-        view.getUint16(offset + 4, false) === 0x0000
-      ) {
-        const tiffStart = offset + 6;
-        if (tiffStart + 8 > view.byteLength) return undefined;
-        const endian = view.getUint16(tiffStart, false);
-        const little = endian === 0x4949; // "II"
-        if (!little && endian !== 0x4d4d) return undefined; // "MM"
-        if (view.getUint16(tiffStart + 2, little) !== 0x002a) return undefined;
-        const ifd0Offset = view.getUint32(tiffStart + 4, little);
-        let ifdOffset = tiffStart + ifd0Offset;
-        if (ifdOffset + 2 > view.byteLength) return undefined;
-        const entries = view.getUint16(ifdOffset, little);
-        ifdOffset += 2;
-        for (let i = 0; i < entries; i++) {
-          const entryOffset = ifdOffset + i * 12;
-          if (entryOffset + 12 > view.byteLength) break;
-          const tag = view.getUint16(entryOffset, little);
-          if (tag !== 0x0112) continue; // Orientation
-          const type = view.getUint16(entryOffset + 2, little);
-          const count = view.getUint32(entryOffset + 4, little);
-          if (type === 3 && count === 1) return view.getUint16(entryOffset + 8, little);
-          return undefined;
-        }
-      }
-      return undefined;
-    }
-    offset += size - 2;
-  }
-  return undefined;
-}
-
-function drawImageWithOrientation(
-  ctx: CanvasRenderingContext2D,
-  img: CanvasImageSource,
-  outW: number,
-  outH: number,
-  orientation: number,
-) {
-  switch (orientation) {
-    case 2:
-      ctx.translate(outW, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(img, 0, 0, outW, outH);
-      return;
-    case 3:
-      ctx.translate(outW, outH);
-      ctx.rotate(Math.PI);
-      ctx.drawImage(img, 0, 0, outW, outH);
-      return;
-    case 4:
-      ctx.translate(0, outH);
-      ctx.scale(1, -1);
-      ctx.drawImage(img, 0, 0, outW, outH);
-      return;
-    case 5:
-      ctx.rotate(Math.PI / 2);
-      ctx.scale(1, -1);
-      ctx.drawImage(img, 0, 0, outH, outW);
-      return;
-    case 6:
-      ctx.translate(outW, 0);
-      ctx.rotate(Math.PI / 2);
-      ctx.drawImage(img, 0, 0, outH, outW);
-      return;
-    case 7:
-      ctx.translate(outW, outH);
-      ctx.rotate(Math.PI / 2);
-      ctx.scale(-1, 1);
-      ctx.drawImage(img, 0, 0, outH, outW);
-      return;
-    case 8:
-      ctx.translate(0, outH);
-      ctx.rotate(-Math.PI / 2);
-      ctx.drawImage(img, 0, 0, outH, outW);
-      return;
-    default:
-      ctx.drawImage(img, 0, 0, outW, outH);
-  }
-}
-
-async function getOrientation(file: File): Promise<number> {
-  if (!isJpegFile(file)) return 1;
-  try {
-    const buf = await file.arrayBuffer();
-    return getExifOrientationFromJpeg(buf) ?? 1;
-  } catch {
-    return 1;
-  }
-}
-
-function compressImageImpl(
+// HEIC対応と圧縮処理の統合
+export function compressImage(
   file: File,
   callback: (compressedFile: File) => void,
-  opts?: { skipExifOrientation?: boolean },
 ) {
   const safeCallback = (f: File) => {
-    try {
-      callback(f);
-    } catch {
-      // ignore callback errors
-    }
+    try { callback(f); } catch {}
   };
 
-  if (!file.type.startsWith('image/')) {
-    safeCallback(file);
-    return;
-  }
-
+  // HEICの場合は先に変換してからシンプル圧縮へ
   if (isHeicFile(file)) {
     (async () => {
       try {
         if (typeof window === 'undefined' || typeof Worker === 'undefined') {
-          imageFileToJpegViaImgElement(
-            file,
-            (jpeg) => compressImageImpl(jpeg, callback, { skipExifOrientation: true }),
-            () => safeCallback(file),
-          );
+          simpleCompressImage(file, callback);
           return;
         }
 
@@ -269,190 +168,21 @@ function compressImageImpl(
           file.name.replace(/\.(heic|heif)$/i, '.jpg'),
           { type: 'image/jpeg', lastModified: file.lastModified },
         );
-        compressImageImpl(jpegFile, callback, { skipExifOrientation: true });
+        simpleCompressImage(jpegFile, callback);
       } catch {
-        imageFileToJpegViaImgElement(
-          file,
-          (jpeg) => compressImageImpl(jpeg, callback, { skipExifOrientation: true }),
-          () => safeCallback(file),
-        );
+        simpleCompressImage(file, callback);
       }
     })();
     return;
   }
 
-  if (typeof createImageBitmap === 'function') {
-    (async () => {
-      try {
-        const orientation = opts?.skipExifOrientation ? 1 : await getOrientation(file);
-        const bitmap = await createImageBitmap(file, {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          imageOrientation: 'none',
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any);
-
-        const canvas = document.createElement('canvas');
-        const rotated =
-          orientation === 5 ||
-          orientation === 6 ||
-          orientation === 7 ||
-          orientation === 8;
-        const baseW = rotated ? bitmap.height : bitmap.width;
-        const baseH = rotated ? bitmap.width : bitmap.height;
-        let outW = baseW;
-        let outH = baseH;
-        if (outW > MAX_WIDTH) {
-          outH = Math.round((outH * MAX_WIDTH) / outW);
-          outW = MAX_WIDTH;
-        }
-        canvas.width = outW;
-        canvas.height = outH;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          bitmap.close?.();
-          safeCallback(file);
-          return;
-        }
-        ctx.save();
-        drawImageWithOrientation(ctx, bitmap, outW, outH, orientation);
-        ctx.restore();
-        bitmap.close?.();
-
-        canvas.toBlob(
-          (blob) => {
-            if (!blob) {
-              safeCallback(file);
-              return;
-            }
-            safeCallback(
-              new File([blob], file.name, {
-                type: 'image/jpeg',
-                lastModified: file.lastModified,
-              }),
-            );
-          },
-          'image/jpeg',
-          QUALITY, // ★修正：高画質設定を反映
-        );
-      } catch {
-        const orientation = opts?.skipExifOrientation ? 1 : await getOrientation(file);
-        const reader = new FileReader();
-        reader.onerror = () => safeCallback(file);
-        reader.onload = (e) => {
-          const img = new Image();
-          img.onerror = () => safeCallback(file);
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const rotated =
-              orientation === 5 ||
-              orientation === 6 ||
-              orientation === 7 ||
-              orientation === 8;
-            const baseW = rotated ? img.height : img.width;
-            const baseH = rotated ? img.width : img.height;
-            let outW = baseW;
-            let outH = baseH;
-            if (outW > MAX_WIDTH) {
-              outH = Math.round((outH * MAX_WIDTH) / outW);
-              outW = MAX_WIDTH;
-            }
-            canvas.width = outW;
-            canvas.height = outH;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) {
-              safeCallback(file);
-              return;
-            }
-            ctx.save();
-            drawImageWithOrientation(ctx, img, outW, outH, orientation);
-            ctx.restore();
-            canvas.toBlob(
-              (blob) => {
-                if (!blob) {
-                  safeCallback(file);
-                  return;
-                }
-                safeCallback(
-                  new File([blob], file.name, {
-                    type: 'image/jpeg',
-                    lastModified: file.lastModified,
-                  }),
-                );
-              },
-              'image/jpeg',
-              QUALITY, // ★修正：高画質設定を反映
-            );
-          };
-          if (typeof e.target?.result === 'string') img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-      }
-    })();
-    return;
-  }
-
-  const reader = new FileReader();
-  reader.onerror = () => safeCallback(file);
-  reader.onload = (e) => {
-    const img = new Image();
-    img.onerror = () => safeCallback(file);
-    img.onload = () => {
-      (async () => {
-        const orientation = opts?.skipExifOrientation ? 1 : await getOrientation(file);
-        const canvas = document.createElement('canvas');
-        const rotated =
-          orientation === 5 ||
-          orientation === 6 ||
-          orientation === 7 ||
-          orientation === 8;
-        const baseW = rotated ? img.height : img.width;
-        const baseH = rotated ? img.width : img.height;
-        let outW = baseW;
-        let outH = baseH;
-        if (outW > MAX_WIDTH) {
-          outH = Math.round((outH * MAX_WIDTH) / outW);
-          outW = MAX_WIDTH;
-        }
-        canvas.width = outW;
-        canvas.height = outH;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          safeCallback(file);
-          return;
-        }
-        ctx.save();
-        drawImageWithOrientation(ctx, img, outW, outH, orientation);
-        ctx.restore();
-        canvas.toBlob(
-          (blob) => {
-            if (!blob) {
-              safeCallback(file);
-              return;
-            }
-            safeCallback(
-              new File([blob], file.name, {
-                type: 'image/jpeg',
-                lastModified: file.lastModified,
-              }),
-            );
-          },
-          'image/jpeg',
-          QUALITY, // ★修正：高画質設定を反映
-        );
-      })();
-    };
-    if (typeof e.target?.result === 'string') img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
+  // 通常の画像はそのままシンプル圧縮へ
+  simpleCompressImage(file, callback);
 }
 
-export function compressImage(
-  file: File,
-  callback: (compressedFile: File) => void,
-) {
-  compressImageImpl(file, callback);
-}
-
+// -----------------------------------------------------
+// 以下、マップのピンをドラッグするための機能（変更なし）
+// -----------------------------------------------------
 export function useDraggablePin(
   initialX: number,
   initialY: number,
