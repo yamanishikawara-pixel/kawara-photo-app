@@ -24,21 +24,7 @@ const DEFAULT_DESC_TEMPLATES = [
   { label: "棟部(増張り)", text: "棟部：増し張り " },
 ];
 
-function PhotoCircleMarker({
-  circle,
-  isSelected,
-  onSelect,
-  onDragEnd,
-  onSizeChange,
-  onRemove,
-}: {
-  circle: Circle;
-  isSelected: boolean;
-  onSelect: () => void;
-  onDragEnd: (x: number, y: number) => void;
-  onSizeChange: (size: number) => void;
-  onRemove: () => void;
-}) {
+function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChange, onRemove }: { circle: Circle; isSelected: boolean; onSelect: () => void; onDragEnd: (x: number, y: number) => void; onSizeChange: (size: number) => void; onRemove: () => void; }) {
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(circle.x, circle.y, onDragEnd);
   const size = Number(circle.size || 20);
 
@@ -64,7 +50,7 @@ function PhotoCircleMarker({
         </div>
       )}
     </>
-  )
+  );
 }
 
 function PinSelectModal({ isOpen, onClose, pins, onSelect }: { isOpen: boolean; onClose: () => void; pins: MapPinT[] | undefined; onSelect: (label: string) => void; }) {
@@ -91,8 +77,25 @@ function PinSelectModal({ isOpen, onClose, pins, onSelect }: { isOpen: boolean; 
   );
 }
 
-const formatToYMD = (dateString: string) => dateString ? dateString.replace(/\//g, '-') : '';
-const formatToYMDSlash = (dateString: string) => dateString ? dateString.replace(/-/g, '/') : '';
+// ★ カレンダーバグ修正（ゼロ埋め処理）
+const formatToYMD = (dateString: string) => {
+  if (!dateString) return '';
+  const parts = dateString.split(/[-/]/);
+  if (parts.length === 3) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+  return dateString.replace(/\//g, '-');
+};
+
+const formatToYMDSlash = (dateString: string) => {
+  if (!dateString) return '';
+  const parts = dateString.split(/[-/]/);
+  if (parts.length === 3) return `${parts[0]}/${parts[1].padStart(2, '0')}/${parts[2].padStart(2, '0')}`;
+  return dateString.replace(/-/g, '/');
+};
+
+const getTodayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+};
 
 const getFileExtension = (file: File): string => {
   const byName = file.name.split('.').pop()?.toLowerCase();
@@ -173,7 +176,7 @@ export default function PhotoPage() {
     setBulkUploading(true);
     let newPhotos = [...project.photos];
     let uploadedCount = 0;
-    const todayStr = new Date().toLocaleDateString('ja-JP').replace(/\//g, '/');
+    const todayStr = getTodayStr(); // ★ バグ修正反映
 
     for (let i = 0; i < files.length; i++) {
       let targetIndex = newPhotos.findIndex(p => !p.image);
@@ -212,7 +215,7 @@ export default function PhotoPage() {
         const r = ref(storage, `photos/${id}/${Date.now()}.${ext}`);
         await uploadBytes(r, file);
         const url = await getDownloadURL(r);
-        const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, image: url, shootingDate: p.shootingDate || new Date().toLocaleDateString('ja-JP').replace(/\//g, '/'), circles: [] } : p);
+        const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, image: url, shootingDate: p.shootingDate || getTodayStr(), circles: [] } : p);
         setProject({ ...project, photos: newPhotos });
         await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
       } catch { alert('失敗'); } finally { setLoadingId(null); }
@@ -225,7 +228,6 @@ export default function PhotoPage() {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
-
     const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: [...(p.circles || []), { id: Date.now(), x, y, size: 20 }] } : p);
     setProject({ ...project, photos: newPhotos });
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
@@ -300,6 +302,7 @@ export default function PhotoPage() {
               <div className="space-y-8">
                 <div className="flex items-center gap-6 bg-gray-50 p-6 rounded-[2rem] border-2 border-gray-100">
                   <div className="font-black text-gray-500 whitespace-nowrap text-xl">撮影日:</div>
+                  {/* ★ バグ修正：formatToYMD で確実にカレンダーが機能する */}
                   <input type="date" className="w-full bg-transparent text-2xl font-bold outline-none focus:text-blue-600 transition-colors" value={formatToYMD(photo.shootingDate)} onChange={(e) => updatePhoto(photo.id, "shootingDate", formatToYMDSlash(e.target.value))} />
                 </div>
 
