@@ -41,11 +41,11 @@ export function getPreviewScale(paddingPx = 32): number {
   return Math.min(1, availableWidth / A4_WIDTH_PX);
 }
 
-// 固定IDを使ってキャッシュを回避（真っ白バグ防止）
+// 毎回ランダムな暗号をつけるのをやめ、写真ごとの固定IDを使うようにしました（これで真っ白バグが直ります）
 export const proxyUrl = (url: string, id: string | number) =>
   url ? `${url}${url.includes('?') ? '&' : '?'}cb=${id}` : '';
 
-// 画質とサイズの黄金比
+// ★画質とサイズの黄金比設定
 const QUALITY = 0.85; 
 const MAX_WIDTH = 1600; 
 
@@ -59,41 +59,22 @@ function isHeicFile(file: File): boolean {
   );
 }
 
-/**
- * ★大改修：iPhoneのEXIF二重回転バグを防ぐため、
- * 余計な回転処理を一切せず、ブラウザの標準機能に任せて
- * シンプルにリサイズ（縮小）と圧縮だけを行う処理に変更。
- */
-function simpleCompressImage(
+// ★iPhoneの二重回転バグを防ぐため、ブラウザ標準機能を利用した安全な圧縮処理に統合
+function safeImageToJpeg(
   file: File,
-  callback: (compressedFile: File) => void
+  callback: (jpeg: File) => void,
+  fallback: () => void,
 ) {
-  const safeCallback = (f: File) => {
-    try {
-      callback(f);
-    } catch {
-      // ignore
-    }
-  };
-
-  // 画像以外はそのまま返す
-  if (!file.type.startsWith('image/')) {
-    safeCallback(file);
-    return;
-  }
-
-  // FileReaderで画像を読み込む（最近のブラウザはEXIFの向きを自動で正しく表示してくれる）
   const reader = new FileReader();
-  reader.onerror = () => safeCallback(file);
+  reader.onerror = fallback;
   reader.onload = (e) => {
     const img = new Image();
-    img.onerror = () => safeCallback(file);
+    img.onerror = fallback;
     img.onload = () => {
       const canvas = document.createElement('canvas');
+
       let outW = img.width;
       let outH = img.height;
-
-      // リサイズ処理（大きすぎる場合のみ縮小）
       if (outW > MAX_WIDTH) {
         outH = Math.round((outH * MAX_WIDTH) / outW);
         outW = MAX_WIDTH;
@@ -103,56 +84,58 @@ function simpleCompressImage(
       canvas.height = outH;
       const ctx = canvas.getContext('2d');
       if (!ctx) {
-        safeCallback(file);
+        fallback();
         return;
       }
-
-      // そのまま描画（EXIFの向きはブラウザ側で補正済み）
+      
+      // ブラウザがEXIFを自動解釈して正しい向きで描画してくれます
       ctx.drawImage(img, 0, 0, outW, outH);
-
-      // JPEGに変換して圧縮
+      
       canvas.toBlob(
         (blob) => {
           if (!blob) {
-            safeCallback(file);
+            fallback();
             return;
           }
-          // HEIC等の場合は拡張子を.jpgにしておく
           const newName = file.name.replace(/\.(heic|heif)$/i, '.jpg');
-          safeCallback(
+          callback(
             new File([blob], newName, {
               type: 'image/jpeg',
               lastModified: file.lastModified,
-            })
+            }),
           );
         },
         'image/jpeg',
-        QUALITY
+        QUALITY,
       );
     };
-
-    if (typeof e.target?.result === 'string') {
-      img.src = e.target.result;
-    }
+    if (typeof e.target?.result === 'string') img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
 
-// HEIC対応と圧縮処理の統合
-export function compressImage(
+function compressImageImpl(
   file: File,
   callback: (compressedFile: File) => void,
 ) {
   const safeCallback = (f: File) => {
-    try { callback(f); } catch {}
+    try {
+      callback(f);
+    } catch {
+      // ignore
+    }
   };
 
-  // HEICの場合は先に変換してからシンプル圧縮へ
+  if (!file.type.startsWith('image/')) {
+    safeCallback(file);
+    return;
+  }
+
   if (isHeicFile(file)) {
     (async () => {
       try {
         if (typeof window === 'undefined' || typeof Worker === 'undefined') {
-          simpleCompressImage(file, callback);
+          safeImageToJpeg(file, safeCallback, () => safeCallback(file));
           return;
         }
 
@@ -168,21 +151,24 @@ export function compressImage(
           file.name.replace(/\.(heic|heif)$/i, '.jpg'),
           { type: 'image/jpeg', lastModified: file.lastModified },
         );
-        simpleCompressImage(jpegFile, callback);
+        safeImageToJpeg(jpegFile, safeCallback, () => safeCallback(file));
       } catch {
-        simpleCompressImage(file, callback);
+        safeImageToJpeg(file, safeCallback, () => safeCallback(file));
       }
     })();
     return;
   }
 
-  // 通常の画像はそのままシンプル圧縮へ
-  simpleCompressImage(file, callback);
+  safeImageToJpeg(file, safeCallback, () => safeCallback(file));
 }
 
-// -----------------------------------------------------
-// 以下、マップのピンをドラッグするための機能（変更なし）
-// -----------------------------------------------------
+export function compressImage(
+  file: File,
+  callback: (compressedFile: File) => void,
+) {
+  compressImageImpl(file, callback);
+}
+
 export function useDraggablePin(
   initialX: number,
   initialY: number,
