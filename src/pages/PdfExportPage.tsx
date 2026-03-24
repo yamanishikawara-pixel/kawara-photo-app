@@ -73,7 +73,7 @@ async function responseToPdfBlob(response: Response): Promise<Blob> {
       return new Blob([out], { type: 'application/pdf' });
     }
   } catch {
-    /* 続けてエラー */
+    /* ignore */
   }
   throw new Error('有効なPDFデータが返りませんでした');
 }
@@ -134,12 +134,19 @@ function PdfLineLegend() {
         padding: '8px',
         border: '1px solid #d1d5db',
         backgroundColor: '#ffffff',
-        borderRadius: '8px'
+        borderRadius: '8px',
       }}
     >
       {LINE_TYPES.map((type) => (
         <div key={type.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <div style={{ backgroundColor: type.color, width: '24px', height: '3px', borderRadius: '9999px' }} />
+          <div
+            style={{
+              backgroundColor: type.color,
+              width: '24px',
+              height: '3px',
+              borderRadius: '9999px',
+            }}
+          />
           <span style={{ color: '#374151' }}>{type.label}</span>
         </div>
       ))}
@@ -414,7 +421,6 @@ export default function PdfExportPage() {
 
   const totalPages = 1 + mapCount + photoPages.length + materialPages.length;
   
-  // ★PDFページの枠組みをガチガチに固定
   const wrapperStyle = {
     width: `${A4_WIDTH_PX * scale}px`,
     height: `${A4_HEIGHT_PX * scale}px`,
@@ -423,7 +429,7 @@ export default function PdfExportPage() {
     backgroundColor: '#ffffff',
     boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
     flexShrink: 0,
-    margin: '0 auto'
+    margin: '0 auto',
   };
 
   const pageStyle = {
@@ -439,7 +445,7 @@ export default function PdfExportPage() {
     top: 0,
     left: 0,
     display: 'flex',
-    flexDirection: 'column' as const
+    flexDirection: 'column' as const,
   };
 
   return (
@@ -490,7 +496,6 @@ export default function PdfExportPage() {
           <div className="pdf-page" style={pageStyle}>
             <div style={{ marginTop: '10mm', marginBottom: '30mm', display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', marginBottom: '24px' }}>
-                {/* ★ロゴ巨大化ストッパー： width 150px で絶対固定 */}
                 {logoUrl ? (
                   <img src={proxyUrl(logoUrl, `logo_${sessionId}`)} alt="自社ロゴ" style={{ width: '150px', height: '150px', objectFit: 'contain' }} crossOrigin="anonymous" />
                 ) : (
@@ -638,10 +643,10 @@ export default function PdfExportPage() {
               {/* 写真ページの全体枠 */}
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '8px', border: '3px solid #1f2937', boxSizing: 'border-box' }}>
                 {chunk.map((p, i) => (
-                  // ★絶対に崩れない CSS Grid レイアウト（写真60%、文字40%を強制固定）
+                  // ★絶対に崩れない CSS Grid レイアウト（写真60%、文字40%）
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '6fr 4fr', gap: '8px', height: '32%', padding: '8px', border: '1px solid #6b7280', borderRadius: '4px', boxSizing: 'border-box' }}>
                     
-                    {/* 左側：写真エリア（60%枠） */}
+                    {/* 左側：写真エリア */}
                     <div style={{ border: '2px solid #374151', backgroundColor: '#f9fafb', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative', boxSizing: 'border-box' }}>
                       {p.image ? (
                         <>
@@ -655,7 +660,7 @@ export default function PdfExportPage() {
                       )}
                     </div>
 
-                    {/* 右側：文字エリア（40%枠） */}
+                    {/* 右側：文字エリア */}
                     <div style={{ display: 'flex', flexDirection: 'column', fontSize: '14px', border: '2px solid #374151', backgroundColor: '#ffffff', boxSizing: 'border-box' }}>
                       <div style={{ display: 'flex', minHeight: '36px', borderBottom: '1px solid #9ca3af', boxSizing: 'border-box' }}>
                         <div style={{ width: '80px', flexShrink: 0, fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f3f4f6', borderRight: '1px solid #9ca3af', fontSize: '12px' }}>写真NO</div>
@@ -699,7 +704,6 @@ export default function PdfExportPage() {
               </div>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '8px', border: '3px solid #1f2937', boxSizing: 'border-box' }}>
                 {chunk.map((m, i) => (
-                  // ★絶対に崩れない CSS Grid レイアウト（材料用）
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '6fr 4fr', gap: '8px', height: '32%', padding: '8px', border: '1px solid #6b7280', borderRadius: '4px', boxSizing: 'border-box' }}>
                     
                     <div style={{ border: '2px solid #374151', backgroundColor: '#f9fafb', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative', boxSizing: 'border-box' }}>
