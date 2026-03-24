@@ -84,12 +84,14 @@ function DraggableMapLine({
   onDragEnd,
   onClick,
   onRotate,
+  onCopy, // ★コピー用の機能を渡す
 }: {
   line: MapLine;
   isSelected: boolean;
   onDragEnd: (x: number, y: number) => void;
   onClick: () => void;
   onRotate: (newRotation: number) => void;
+  onCopy: () => void;
 }) {
   const initialX = typeof line.x === 'number' ? line.x : parseFloat(line.x as string);
   const initialY = typeof line.y === 'number' ? line.y : parseFloat(line.y as string);
@@ -141,6 +143,13 @@ function DraggableMapLine({
           className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden items-center"
           onClick={(e) => e.stopPropagation()} 
         >
+          {/* ★追加：コピーボタン */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onCopy(); }}
+            className="px-4 py-2 text-sm font-black hover:bg-gray-100 text-blue-600 border-r"
+          >
+            コピー
+          </button>
           <button
             onClick={() => onRotate((line.rotation - 1 + 360) % 360)}
             className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700 border-r"
@@ -148,7 +157,7 @@ function DraggableMapLine({
             ↺
           </button>
           <span className="px-3 text-xs font-bold text-gray-600 whitespace-nowrap">
-            角度微調整
+            角度
           </span>
           <button
             onClick={() => onRotate((line.rotation + 1) % 360)}
@@ -318,14 +327,17 @@ export default function MapPage() {
   const [lineColor, setLineColor] = useState<string>(LINE_DRAW_COLORS[0].color);
   const [selectedLineWidth, setSelectedLineWidth] = useState<number>(4); 
   
-  // ★新機能：位置図ごとに「凡例」の開閉状態を記憶するためのステート
   const [showLegend, setShowLegend] = useState<Record<number, boolean>>({});
+  const [snapEnabled, setSnapEnabled] = useState<boolean>(true);
 
   const [lineDrag, setLineDrag] = useState<{
     mapIndex: number;
     startX: number;
     startY: number;
+    startClientX: number;
+    startClientY: number;
   } | null>(null);
+  
   const [linePreviewEnd, setLinePreviewEnd] = useState<{
     x: number;
     y: number;
@@ -498,6 +510,27 @@ export default function MapPage() {
     await updateDoc(doc(db, "projects", id!), { mapLines: newLines });
   };
 
+  // ★追加：選択した線をコピーする機能
+  const duplicateLine = async (lineId: number) => {
+    if (!project) return;
+    const targetLine = project.mapLines?.find(l => l.id === lineId);
+    if (!targetLine) return;
+    
+    const newLine: MapLine = {
+      ...targetLine,
+      id: Date.now() + Math.random(),
+      // 見えやすいように右下に少し（5%）ずらして配置
+      x: (typeof targetLine.x === 'number' ? targetLine.x : parseFloat(targetLine.x as string)) + 5,
+      y: (typeof targetLine.y === 'number' ? targetLine.y : parseFloat(targetLine.y as string)) + 5,
+    };
+    
+    const newLines = [...(project.mapLines || []), newLine];
+    setProject({ ...project, mapLines: newLines });
+    await updateDoc(doc(db, "projects", id!), { mapLines: newLines });
+    
+    setSelectedLineId(newLine.id);
+  };
+
   const addMapRow = async (mapIndex: number) => {
     if (!project) return;
     const currentRows = (project.mapRows || []).filter((r) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0));
@@ -541,7 +574,29 @@ export default function MapPage() {
     const rect = el.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
-    setLineDrag({ mapIndex, startX: x, startY: y });
+    
+    let startX = x;
+    let startY = y;
+
+    // ★追加：線を引き始める時、他の線の中心やピンに近づくと「磁石のようにくっつく」！
+    if (snapEnabled) {
+      let minDistance = 3; // 3%以内の近さならくっつく
+      
+      // ピンにくっつく
+      (project?.mapPins || []).filter(p => p.mapIndex === mapIndex).forEach(pin => {
+         const dist = Math.hypot(pin.x - x, pin.y - y);
+         if (dist < minDistance) { minDistance = dist; startX = pin.x; startY = pin.y; }
+      });
+      // 他の線（の中心）にくっつく
+      (project?.mapLines || []).filter(l => l.mapIndex === mapIndex).forEach(line => {
+         const lx = typeof line.x === 'number' ? line.x : parseFloat(line.x as string);
+         const ly = typeof line.y === 'number' ? line.y : parseFloat(line.y as string);
+         const dist = Math.hypot(lx - x, ly - y);
+         if (dist < minDistance) { minDistance = dist; startX = lx; startY = ly; }
+      });
+    }
+
+    setLineDrag({ mapIndex, startX, startY, startClientX: e.clientX, startClientY: e.clientY });
     setLinePreviewEnd(null);
     el.setPointerCapture(e.pointerId);
   };
@@ -555,7 +610,41 @@ export default function MapPage() {
     const rect = el.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
-    setLinePreviewEnd({ x, y });
+    
+    let snapX = x;
+    let snapY = y;
+
+    // ★追加：線を引き終わる時も、他の要素や「真っ直ぐ」にピタッと補正する！
+    if (snapEnabled) {
+      let minDistance = 3; 
+      let snappedToElement = false;
+      
+      (project?.mapPins || []).filter(p => p.mapIndex === mapIndex).forEach(pin => {
+         const dist = Math.hypot(pin.x - x, pin.y - y);
+         if (dist < minDistance) { minDistance = dist; snapX = pin.x; snapY = pin.y; snappedToElement = true; }
+      });
+      
+      (project?.mapLines || []).filter(l => l.mapIndex === mapIndex).forEach(line => {
+         const lx = typeof line.x === 'number' ? line.x : parseFloat(line.x as string);
+         const ly = typeof line.y === 'number' ? line.y : parseFloat(line.y as string);
+         const dist = Math.hypot(lx - x, ly - y);
+         if (dist < minDistance) { minDistance = dist; snapX = lx; snapY = ly; snappedToElement = true; }
+      });
+
+      // 他の線にくっつかなかった場合は、水平・垂直にピタッと補正する
+      if (!snappedToElement) {
+        const pxDx = Math.abs(e.clientX - lineDrag.startClientX);
+        const pxDy = Math.abs(e.clientY - lineDrag.startClientY);
+
+        if (pxDx > 15 && pxDy < pxDx * 0.15) {
+          snapY = lineDrag.startY;
+        } else if (pxDy > 15 && pxDx < pxDy * 0.15) {
+          snapX = lineDrag.startX;
+        }
+      }
+    }
+
+    setLinePreviewEnd({ x: snapX, y: snapY });
   };
 
   const handleLinePointerUp = (
@@ -568,7 +657,11 @@ export default function MapPage() {
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
     const { startX, startY } = lineDrag;
-    if (Math.hypot(x - startX, y - startY) < 0.5) {
+    
+    const finalEndX = linePreviewEnd ? linePreviewEnd.x : x;
+    const finalEndY = linePreviewEnd ? linePreviewEnd.y : y;
+
+    if (Math.hypot(finalEndX - startX, finalEndY - startY) < 0.5) {
       setLineDrag(null);
       setLinePreviewEnd(null);
       try {
@@ -578,7 +671,7 @@ export default function MapPage() {
       }
       return;
     }
-    const geom = lineFromTwoPoints(startX, startY, x, y, rect.width, rect.height);
+    const geom = lineFromTwoPoints(startX, startY, finalEndX, finalEndY, rect.width, rect.height);
     const newLine: MapLine = {
       id: Date.now() + Math.random(),
       mapIndex,
@@ -640,7 +733,7 @@ export default function MapPage() {
                 <ul className="text-sm text-red-700 font-medium space-y-1 list-disc pl-5">
                   <li>図面を<b>タップ</b>すると、赤丸が打てます。</li>
                   <li>赤丸・引いた線は<b>ドラッグ</b>で自由に移動できます。</li>
-                  <li>赤丸や線を<b>タップで選択</b>すると、<b>「拡大・縮小」や「角度微調整」</b>ボタンが出ます。</li>
+                  <li>線を<b>タップで選択</b>すると、<b>「コピー」や「角度微調整」</b>ボタンが出ます。</li>
                   <li>選択中に<b>もう一度タップ</b>すると、符号や矢印の設定ができます。</li>
                   <li><b>「線を描く」</b>をオンにすると、ドラッグで線を引き、壁種などを指示できます。</li>
                 </ul>
@@ -653,7 +746,6 @@ export default function MapPage() {
                 <div key={i} className="relative w-full border-2 border-gray-300 rounded-xl bg-gray-100 shadow-inner group overflow-hidden flex flex-col p-2 mt-4">
                   <div className="flex flex-col gap-2 mb-2 px-1">
                     
-                    {/* ★上段：線モードボタンと凡例トグルボタンを並べる */}
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <button
@@ -691,7 +783,6 @@ export default function MapPage() {
                         )}
                       </div>
                       
-                      {/* ★追加：凡例のON/OFFボタン */}
                       <button 
                         onClick={(e) => { e.stopPropagation(); setShowLegend(prev => ({...prev, [i]: !prev[i]})) }}
                         className="text-xs font-bold text-gray-600 bg-white border border-gray-300 px-3 py-2 rounded-xl hover:bg-gray-50 shadow-sm"
@@ -700,7 +791,6 @@ export default function MapPage() {
                       </button>
                     </div>
 
-                    {/* ★追加：凡例本体（ONの時だけ表示される） */}
                     {showLegend[i] && (
                       <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm mt-1 animate-fade-in">
                          <p className="text-xs font-bold text-gray-500 mb-1">線の色と種類</p>
@@ -709,21 +799,33 @@ export default function MapPage() {
                     )}
 
                     {lineModeForMap === i && (
-                      <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border mt-1">
-                        <span className="text-sm font-bold text-gray-700 whitespace-nowrap">線の細さ:</span>
-                        <input
-                          type="range"
-                          min="1"
-                          max="15"
-                          step="1"
-                          value={selectedLineWidth}
-                          onChange={(e) => setSelectedLineWidth(Number(e.target.value))}
-                          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
-                        />
-                        <span className="text-lg font-black text-amber-700 w-8 text-right">{selectedLineWidth}px</span>
-                        <div className="w-10 h-6 flex items-center justify-center border rounded bg-gray-50">
-                          <div style={{ backgroundColor: lineColor, width: '80%', height: `${selectedLineWidth}px` }} className="rounded-full" />
+                      <div className="flex flex-col bg-white p-2.5 rounded-xl border mt-1 gap-2">
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-bold text-gray-700 whitespace-nowrap">線の細さ:</span>
+                          <input
+                            type="range"
+                            min="1"
+                            max="15"
+                            step="1"
+                            value={selectedLineWidth}
+                            onChange={(e) => setSelectedLineWidth(Number(e.target.value))}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
+                          />
+                          <span className="text-lg font-black text-amber-700 w-8 text-right">{selectedLineWidth}px</span>
+                          <div className="w-10 h-6 flex items-center justify-center border rounded bg-gray-50 shrink-0">
+                            <div style={{ backgroundColor: lineColor, width: '80%', height: `${selectedLineWidth}px` }} className="rounded-full" />
+                          </div>
                         </div>
+                        <div className="w-full h-px bg-gray-100 my-1"></div>
+                        <label className="flex items-center gap-2 cursor-pointer px-1">
+                          <input 
+                            type="checkbox" 
+                            checked={snapEnabled} 
+                            onChange={e => setSnapEnabled(e.target.checked)} 
+                            className="w-5 h-5 accent-blue-500 rounded" 
+                          />
+                          <span className="text-sm font-bold text-gray-700">ピタッと補正（水平垂直・端部にくっつく）</span>
+                        </label>
                       </div>
                     )}
                   </div>
@@ -761,6 +863,7 @@ export default function MapPage() {
                             }}
                             onDragEnd={(x, y) => saveLinePosition(line.id, x, y)}
                             onRotate={(newRot) => updateLineRotation(line.id, newRot)}
+                            onCopy={() => duplicateLine(line.id)} // ★コピー機能を渡す！
                           />
                         ))}
                       
@@ -830,7 +933,6 @@ export default function MapPage() {
                     </div>
                   )}
 
-                  {/* ★改修：符号・写真欄を太く、タップしやすくしました！ */}
                   <div className="w-full mt-6 pt-4 border-t border-gray-300">
                     <h3 className="text-lg font-bold mb-3 text-gray-800">位置図 {i + 1} の説明表</h3>
                     <div className="space-y-3">
