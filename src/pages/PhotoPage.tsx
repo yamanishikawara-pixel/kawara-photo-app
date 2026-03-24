@@ -45,15 +45,20 @@ function PhotoCircleMarker({
     <>
       <div
         ref={containerRef}
-        onMouseDown={(e) => { onSelect(); onMouseDown(e); }}
-        onTouchStart={(e) => { onSelect(); onTouchStart(e); }}
+        onMouseDown={(e) => { e.stopPropagation(); onSelect(); onMouseDown(e); }}
+        onTouchStart={(e) => { e.stopPropagation(); onSelect(); onTouchStart(e); }}
+        onClick={(e) => e.stopPropagation()} // ★重要：下の画像にクリックを伝えない
         style={{ left: `${position.x}%`, top: `${position.y}%`, width: `${circle.size}%`, transform: 'translate(-50%, -50%)', touchAction: 'none' }}
-        className={`absolute aspect-square rounded-full border-[3px] border-red-500 shadow-sm ${dragging ? 'z-30 opacity-70 scale-110' : 'z-20 cursor-pointer'} ${isSelected ? 'border-dashed bg-red-500/20' : ''}`}
+        className={`absolute aspect-square rounded-full border-[4px] border-red-500 shadow-sm ${dragging ? 'z-30 opacity-70 scale-110' : 'z-20 cursor-pointer'} ${isSelected ? 'border-dashed bg-red-500/20' : ''}`}
       />
       {isSelected && !dragging && (
-        <div style={{ left: `${position.x}%`, top: `${position.y + circle.size/2 + 5}%`, transform: 'translateX(-50%)' }} className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden">
-          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.min(60, circle.size * 1.3))}} className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700">+</button>
-          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.max(5, circle.size * 0.7))}} className="px-4 py-2 text-xl font-bold border-l border-r hover:bg-gray-100 text-gray-700">-</button>
+        <div 
+          onClick={(e) => e.stopPropagation()} // ★メニューを触っても消えないように固定
+          style={{ left: `${position.x}%`, top: `${position.y + circle.size/2 + 8}%`, transform: 'translateX(-50%)' }} 
+          className="absolute z-[100] flex bg-white rounded-xl shadow-2xl border-2 border-gray-200 overflow-hidden"
+        >
+          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.min(60, circle.size * 1.3))}} className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700">＋</button>
+          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.max(5, circle.size * 0.7))}} className="px-4 py-2 text-xl font-bold border-l border-r hover:bg-gray-100 text-gray-700">－</button>
           <button onClick={(e) => {e.stopPropagation(); onRemove()}} className="px-4 py-2 text-red-500 hover:bg-red-50"><Trash2 className="w-5 h-5"/></button>
         </div>
       )}
@@ -135,24 +140,15 @@ export default function PhotoPage() {
         const s = await getDoc(doc(db, 'users', user.uid));
         if (s.exists()) {
           const data = s.data();
-          if (data.customProcesses && data.customProcesses.length > 0) {
-            setProcessOptions(data.customProcesses);
-          }
-          if (data.customDescTemplates && data.customDescTemplates.length > 0) {
-            setDescTemplates(data.customDescTemplates);
-          }
+          if (data.customProcesses && data.customProcesses.length > 0) setProcessOptions(data.customProcesses);
+          if (data.customDescTemplates && data.customDescTemplates.length > 0) setDescTemplates(data.customDescTemplates);
         }
       }
     });
     return () => unsub();
   }, [id]);
 
-  type EditablePhotoField = keyof Pick<
-    Photo,
-    'image' | 'photoNumber' | 'shootingDate' | 'locationMap' | 'process' | 'description' | 'circles'
-  >;
-
-  const updatePhoto = async (photoId: number, field: EditablePhotoField, value: Photo[EditablePhotoField]) => {
+  const updatePhoto = async (photoId: number, field: string, value: any) => {
     if (!project) return;
     const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, [field]: value } : p);
     setProject({ ...project, photos: newPhotos });
@@ -169,45 +165,22 @@ export default function PhotoPage() {
     }
   };
 
-  const clearPhoto = async (photoId: number) => {
-    if (window.confirm('この枠の画像を削除しますか？（文字は残ります）')) {
-      if (!project) return;
-      const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, image: null, circles: [] } : p);
-      setProject({ ...project, photos: newPhotos });
-      await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
-    }
-  };
-
   const addPhotoSlot = async () => {
     if (!project) return;
-    const newPhotos: Photo[] = [
-      ...project.photos,
-      {
-        id: Date.now(),
-        image: null,
-        photoNumber: String(project.photos.length + 1),
-        shootingDate: "",
-        locationMap: "",
-        process: "",
-        description: "",
-        circles: [],
-        rotation: 0,
-      },
-    ];
+    const newPhotos: Photo[] = [...project.photos, { id: Date.now(), image: null, photoNumber: String(project.photos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], rotation: 0 }];
     setProject({ ...project, photos: newPhotos });
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
   };
 
   const movePhoto = async (index: number, direction: 'up' | 'down') => {
     if (!project) return;
-    if (direction === 'up' && index === 0) return;
-    if (direction === 'down' && index === project.photos.length - 1) return;
+    if ((direction === 'up' && index === 0) || (direction === 'down' && index === project.photos.length - 1)) return;
     const newPhotos = [...project.photos];
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    [newPhotos[index], newPhotos[targetIndex]] = [newPhotos[targetIndex], newPhotos[index]];
-    const renumberedPhotos = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
-    setProject({ ...project, photos: renumberedPhotos });
-    await updateDoc(doc(db, "projects", id!), { photos: renumberedPhotos });
+    const targetIdx = direction === 'up' ? index - 1 : index + 1;
+    [newPhotos[index], newPhotos[targetIdx]] = [newPhotos[targetIdx], newPhotos[index]];
+    const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
+    setProject({ ...project, photos: renumbered });
+    await updateDoc(doc(db, "projects", id!), { photos: renumbered });
   };
 
   const handleBulkUpload = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -217,41 +190,23 @@ export default function PhotoPage() {
     setBulkUploading(true);
     let newPhotos = [...project.photos];
     let uploadedCount = 0;
-    
-    const todayStr = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/');
+    const todayStr = new Date().toLocaleDateString('ja-JP').replace(/\//g, '/');
 
     for (let i = 0; i < files.length; i++) {
-      const file = files[i];
       let targetIndex = newPhotos.findIndex(p => !p.image);
       if (targetIndex === -1) {
-        newPhotos.push({
-          id: Date.now() + Math.random(),
-          image: null,
-          photoNumber: String(newPhotos.length + 1),
-          shootingDate: "",
-          locationMap: "",
-          process: "",
-          description: "",
-          circles: [],
-          rotation: 0,
-        });
+        newPhotos.push({ id: Date.now() + Math.random(), image: null, photoNumber: String(newPhotos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], rotation: 0 });
         targetIndex = newPhotos.length - 1;
       }
       await new Promise<void>((resolve) => {
-        compressImage(file, async (compressed) => {
+        compressImage(files[i], async (compressed) => {
           try {
             const ext = getFileExtension(compressed);
             const r = ref(storage, `photos/${id}/${Date.now()}_bulk_${i}.${ext}`);
-            await uploadBytes(r, compressed, {
-              contentType: compressed.type || 'image/jpeg',
-            });
+            await uploadBytes(r, compressed);
             const url = await getDownloadURL(r);
             newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: todayStr, circles: [] };
-          } catch (err) {
-            console.error('一括アップロード失敗', err);
-          } finally {
-            resolve();
-          }
+          } catch {} finally { resolve(); }
         });
       });
       uploadedCount++;
@@ -260,7 +215,6 @@ export default function PhotoPage() {
     setProject({ ...project, photos: newPhotos });
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
     setBulkUploading(false);
-    setBulkProgress(0);
   };
 
   const uploadPhoto = async (e: ChangeEvent<HTMLInputElement>, index: number) => {
@@ -269,26 +223,16 @@ export default function PhotoPage() {
     if (!f) return;
     const photoId = project.photos[index].id;
     setLoadingId(photoId);
-    
-    const todayStr = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/');
-
     compressImage(f, async (file) => {
       try {
         const ext = getFileExtension(file);
         const r = ref(storage, `photos/${id}/${Date.now()}.${ext}`);
-        await uploadBytes(r, file, {
-          contentType: file.type || 'image/jpeg',
-        });
+        await uploadBytes(r, file);
         const url = await getDownloadURL(r);
-        const newPhotos = project.photos.map((p, i: number) => p.id === photoId ? { ...p, image: url, photoNumber: String(i + 1), shootingDate: p.shootingDate || todayStr, circles: [] } : p);
+        const newPhotos = project.photos.map((p, i) => p.id === photoId ? { ...p, image: url, shootingDate: p.shootingDate || new Date().toLocaleDateString('ja-JP').replace(/\//g, '/'), circles: [] } : p);
         setProject({ ...project, photos: newPhotos });
         await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
-      } catch (err) {
-        console.error('写真アップロード失敗', err);
-        alert('写真アップロードに失敗しました。ログイン状態と通信環境をご確認ください。');
-      } finally {
-        setLoadingId(null);
-      }
+      } catch { alert('失敗'); } finally { setLoadingId(null); }
     });
   };
 
@@ -298,10 +242,7 @@ export default function PhotoPage() {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
-    const newPhotos = project.photos.map((p) => {
-      if (p.id === photoId) return { ...p, circles: [...(p.circles || []), { id: Date.now(), x, y, size: 20 }] };
-      return p;
-    });
+    const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: [...(p.circles || []), { id: Date.now(), x, y, size: 20 }] } : p);
     setProject({ ...project, photos: newPhotos });
     await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
   };
@@ -321,21 +262,6 @@ export default function PhotoPage() {
     setSelectedCircleId(null);
   };
 
-  const rotatePhoto = async (photoId: number, direction: 'left' | 'right') => {
-    if (!project) return;
-    const delta = direction === 'left' ? -90 : 90;
-    const newPhotos = project.photos.map((p) =>
-      p.id === photoId
-        ? {
-            ...p,
-            rotation: (((p.rotation ?? 0) + delta + 360) % 360),
-          }
-        : p,
-    );
-    setProject({ ...project, photos: newPhotos });
-    await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
-  };
-
   if (!project) return <div className="p-10 text-center font-bold text-gray-500">読み込み中...</div>;
 
   return (
@@ -347,7 +273,7 @@ export default function PhotoPage() {
         <div className="bg-white p-5 rounded-3xl border border-black/5 shadow-sm mb-6">
           <label className="flex items-center justify-center gap-2 w-full bg-blue-500 text-white font-bold py-4 text-lg rounded-xl cursor-pointer shadow-md hover:bg-blue-600 transition-colors">
             <UploadCloud className="w-6 h-6" />
-            {bulkUploading ? `一括アップロード中... (${bulkProgress}枚完了)` : "複数写真を一括追加する"}
+            {bulkUploading ? `アップロード中... (${bulkProgress}枚)` : "複数写真を一括追加する"}
             <input type="file" multiple accept="image/*" className="hidden" onChange={handleBulkUpload} disabled={bulkUploading} />
           </label>
         </div>
@@ -356,8 +282,8 @@ export default function PhotoPage() {
           {project.photos.map((photo, index: number) => (
             <div key={photo.id} className="bg-white p-5 rounded-3xl border border-black/5 shadow-md relative">
               <div className="absolute top-4 right-4 flex gap-2 z-10">
-                <button onClick={() => movePhoto(index, 'up')} className="bg-white p-2 rounded-lg shadow border border-gray-200 text-gray-600 hover:bg-gray-50"><ArrowUp className="w-5 h-5" /></button>
-                <button onClick={() => movePhoto(index, 'down')} className="bg-white p-2 rounded-lg shadow border border-gray-200 text-gray-600 hover:bg-gray-50"><ArrowDown className="w-5 h-5" /></button>
+                <button onClick={() => movePhoto(index, 'up')} className="bg-white p-2 rounded-lg shadow border border-gray-200"><ArrowUp className="w-5 h-5 text-gray-600" /></button>
+                <button onClick={() => movePhoto(index, 'down')} className="bg-white p-2 rounded-lg shadow border border-gray-200"><ArrowDown className="w-5 h-5 text-gray-600" /></button>
               </div>
 
               <div className="w-full min-h-[16rem] mt-10 bg-gray-100 rounded-2xl flex items-center justify-center overflow-hidden border-2 border-dashed border-gray-300 relative mb-4 p-2">
@@ -365,18 +291,9 @@ export default function PhotoPage() {
                   <span className="text-lg font-bold text-blue-500">保存中...</span>
                 ) : photo.image ? (
                   <div className="relative inline-block" onClick={(e) => addCircleToPhoto(e, photo.id)}>
-                    <img
-                      src={proxyUrl(photo.image, photo.id)}
-                      crossOrigin="anonymous"
-                      className="block w-auto h-auto max-w-full max-h-[60vh] pointer-events-none rounded shadow-sm"
-                      style={{
-                        transform: `rotate(${photo.rotation ?? 0}deg)`,
-                        transformOrigin: 'center center',
-                      }}
-                      alt=""
-                    />
+                    <img src={proxyUrl(photo.image, photo.id)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[60vh] pointer-events-none rounded" style={{ transform: `rotate(${photo.rotation ?? 0}deg)` }} alt="" />
                     {(photo.circles || []).map((circle) => (
-                      <PhotoCircleMarker key={circle.id} circle={circle} isSelected={selectedCircleId === circle.id} onSelect={() => setSelectedCircleId(circle.id)} onDragEnd={(x: number, y: number) => updateCircle(photo.id, circle.id, { x, y })} onSizeChange={(size: number) => updateCircle(photo.id, circle.id, { size })} onRemove={() => removeCircle(photo.id, circle.id)} />
+                      <PhotoCircleMarker key={circle.id} circle={circle} isSelected={selectedCircleId === circle.id} onSelect={() => setSelectedCircleId(circle.id)} onDragEnd={(x, y) => updateCircle(photo.id, circle.id, { x, y })} onSizeChange={(size) => updateCircle(photo.id, circle.id, { size })} onRemove={() => removeCircle(photo.id, circle.id)} />
                     ))}
                     <div className="absolute -top-3 -left-3 bg-black/70 text-white text-xs px-2 py-1 rounded-full font-bold pointer-events-none shadow">タップで赤丸追加</div>
                   </div>
@@ -391,29 +308,10 @@ export default function PhotoPage() {
               <div className="flex justify-between items-center mb-5 pb-4 border-b border-gray-100">
                 <div className="font-bold text-gray-800 text-xl">写真 {index + 1}</div>
                 <div className="flex gap-2">
-                  <div className="flex gap-1 mr-1">
-                    <button
-                      type="button"
-                      onClick={() => rotatePhoto(photo.id, 'left')}
-                      className="p-2.5 text-gray-500 bg-gray-50 rounded-xl border border-gray-200 hover:bg-gray-100"
-                    >
-                      ↺
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => rotatePhoto(photo.id, 'right')}
-                      className="p-2.5 text-gray-500 bg-gray-50 rounded-xl border border-gray-200 hover:bg-gray-100"
-                    >
-                      ↻
-                    </button>
-                  </div>
-                  {photo.image ? (
-                    <button onClick={() => clearPhoto(photo.id)} className="p-2.5 text-gray-400 hover:text-red-500 bg-gray-50 rounded-xl border border-gray-200"><Trash2 className="w-5 h-5"/></button>
-                  ) : (
-                    <button onClick={() => deletePhotoSlot(photo.id)} className="p-2.5 text-gray-400 hover:text-red-500 bg-gray-50 rounded-xl border border-gray-200"><Trash2 className="w-5 h-5"/></button>
-                  )}
+                  <button type="button" onClick={() => updatePhoto(photo.id, 'rotation', ((photo.rotation || 0) + 90) % 360)} className="p-2.5 text-gray-500 bg-gray-50 rounded-xl border border-gray-200">↻ 回転</button>
+                  <button onClick={() => deletePhotoSlot(photo.id)} className="p-2.5 text-gray-400 hover:text-red-500 bg-gray-50 rounded-xl border border-gray-200"><Trash2 className="w-5 h-5"/></button>
                   <label className="bg-blue-100 text-blue-700 font-bold py-2.5 px-5 rounded-xl cursor-pointer shadow-sm">
-                    {photo.image ? '画像を変更' : '画像を選択'} <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadPhoto(e, index)} />
+                    {photo.image ? '変更' : '選択'} <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadPhoto(e, index)} />
                   </label>
                 </div>
               </div>
@@ -421,84 +319,34 @@ export default function PhotoPage() {
               <div className="space-y-5">
                 <div className="flex items-center gap-3">
                   <div className="font-bold text-gray-600 whitespace-nowrap min-w-[4rem]">撮影日:</div>
-                  <input
-                    type="date"
-                    className="w-full p-3 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
-                    value={formatToYMD(photo.shootingDate)}
-                    onChange={(e) => updatePhoto(photo.id, "shootingDate", formatToYMDSlash(e.target.value))}
-                  />
+                  <input type="date" className="w-full p-3 text-lg border border-gray-300 rounded-xl" value={formatToYMD(photo.shootingDate)} onChange={(e) => updatePhoto(photo.id, "shootingDate", formatToYMDSlash(e.target.value))} />
                 </div>
-
                 <button onClick={() => { setCurrentPhotoId(photo.id); setModalOpen(true); }} className={`w-full p-4 text-lg border-2 rounded-xl text-left flex justify-between items-center ${photo.locationMap ? 'text-red-700 font-bold border-red-300 bg-red-50' : 'text-gray-500 border-gray-300 bg-gray-50'}`}>
-                  {photo.locationMap || '▼ どの場所の写真ですか？（タップして選択）'}
-                  <MapPin className={`w-6 h-6 ${photo.locationMap ? 'text-red-500' : 'text-gray-400'}`} />
+                  {photo.locationMap || '▼ どの場所の写真ですか？'} <MapPin className={`w-6 h-6 ${photo.locationMap ? 'text-red-500' : 'text-gray-400'}`} />
                 </button>
-
                 <div className="flex flex-col gap-1">
                   <label className="text-sm font-bold text-gray-600 pl-1">工程</label>
-                  <select
-                    className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white"
-                    value={photo.process}
-                    onChange={(e) => updatePhoto(photo.id, "process", e.target.value)}
-                  >
-                    <option value="">-- 工程を選択してください --</option>
-                    {processOptions.map(opt => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                    {photo.process && !processOptions.includes(photo.process) && (
-                      <option value={photo.process}>{photo.process}</option>
-                    )}
+                  <select className="w-full p-3.5 text-lg border border-gray-300 rounded-xl bg-white" value={photo.process} onChange={(e) => updatePhoto(photo.id, "process", e.target.value)}>
+                    <option value="">-- 工程を選択 --</option>
+                    {processOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                   </select>
                 </div>
-
                 <div className="flex flex-col gap-1">
                   <label className="text-sm font-bold text-gray-600 pl-1 mb-1">説明</label>
-                  
                   <div className="flex flex-wrap gap-1.5 mb-2">
                     {descTemplates.map((tmpl, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => {
-                          const currentDesc = photo.description || '';
-                          const prefix = currentDesc && !currentDesc.endsWith('\n') ? '\n' : '';
-                          updatePhoto(photo.id, "description", currentDesc + prefix + tmpl.text);
-                        }}
-                        className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1.5 rounded-lg hover:bg-blue-100 shadow-sm transition-colors"
-                      >
-                        ＋{tmpl.label}
-                      </button>
+                      <button key={i} type="button" onClick={() => updatePhoto(photo.id, "description", (photo.description || "") + tmpl.text)} className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1.5 rounded-lg shadow-sm">＋{tmpl.label}</button>
                     ))}
                   </div>
-                  
-                  <textarea 
-                    placeholder="説明（短文）" 
-                    rows={4} 
-                    className="w-full p-3.5 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" 
-                    value={photo.description} 
-                    onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} 
-                  />
+                  <textarea rows={4} className="w-full p-3.5 text-lg border border-gray-300 rounded-xl" value={photo.description} onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} placeholder="説明（短文）" />
                 </div>
-
               </div>
             </div>
           ))}
         </div>
-        
-        <button onClick={addPhotoSlot} className="w-full mt-8 bg-gray-800 text-white font-bold py-4 text-lg rounded-xl shadow-lg flex items-center justify-center gap-2 hover:bg-gray-700">
-          <Plus className="w-6 h-6" /> 写真枠を1つ追加する
-        </button>
-
+        <button onClick={addPhotoSlot} className="w-full mt-8 bg-gray-800 text-white font-bold py-4 text-lg rounded-xl shadow-lg flex items-center justify-center gap-2 hover:bg-gray-700"><Plus className="w-6 h-6" /> 写真枠を追加</button>
       </div>
-      <PinSelectModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        pins={project.mapPins}
-        onSelect={(label: string) => {
-          if (!currentPhotoId) return;
-          void updatePhoto(currentPhotoId, "locationMap", label);
-        }}
-      />
+      <PinSelectModal isOpen={modalOpen} onClose={() => setModalOpen(false)} pins={project?.mapPins} onSelect={(label) => currentPhotoId && updatePhoto(currentPhotoId, "locationMap", label)} />
     </div>
   );
 }
