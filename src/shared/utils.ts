@@ -38,9 +38,9 @@ export function getPreviewScale(paddingPx = 32): number {
 export const proxyUrl = (url: string, id: string | number) =>
   url ? `${url}${url.includes('?') ? '&' : '?'}cb=${id}` : '';
 
-// ★高画質設定（1600px, 85%）
+// ★画質とサイズの黄金比
+const QUALITY = 0.85; 
 const MAX_WIDTH = 1600; 
-const QUALITY = 0.85;   
 
 function isHeicFile(file: File): boolean {
   const name = file.name.toLowerCase();
@@ -52,65 +52,119 @@ function isHeicFile(file: File): boolean {
   );
 }
 
-// ★PCがフリーズする原因（FileReader）を捨て、超軽量で瞬間読み込みできるルートに完全変更
-function processImageToJpeg(file: File, callback: (f: File) => void) {
-  const img = new Image();
-  // メモリを全く消費せずに画像を読み込む最強の仕組み
-  const objectUrl = URL.createObjectURL(file);
-
-  // 万が一エラーが起きてもフリーズさせず、元の画像をそのまま返す安全設計
-  img.onerror = () => {
-    URL.revokeObjectURL(objectUrl);
-    callback(file);
+function imageFileToJpegViaImgElement(
+  file: File,
+  callback: (jpeg: File) => void,
+  fallback: () => void,
+) {
+  const reader = new FileReader();
+  reader.onerror = fallback;
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onerror = fallback;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let outW = img.width;
+      let outH = img.height;
+      if (outW > MAX_WIDTH) {
+        outH = Math.round((outH * MAX_WIDTH) / outW);
+        outW = MAX_WIDTH;
+      }
+      canvas.width = outW;
+      canvas.height = outH;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        fallback();
+        return;
+      }
+      ctx.drawImage(img, 0, 0, outW, outH);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            fallback();
+            return;
+          }
+          callback(
+            new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), {
+              type: 'image/jpeg',
+              lastModified: file.lastModified,
+            }),
+          );
+        },
+        'image/jpeg',
+        QUALITY,
+      );
+    };
+    if (typeof e.target?.result === 'string') img.src = e.target.result;
   };
-
-  img.onload = () => {
-    // 読み込み終わったらすぐにメモリを解放！
-    URL.revokeObjectURL(objectUrl);
-    
-    let outW = img.width;
-    let outH = img.height;
-    
-    if (outW > MAX_WIDTH) {
-      outH = Math.round((outH * MAX_WIDTH) / outW);
-      outW = MAX_WIDTH;
-    }
-
-    const canvas = document.createElement('canvas');
-    canvas.width = outW;
-    canvas.height = outH;
-    const ctx = canvas.getContext('2d');
-    
-    if (!ctx) {
-      callback(file);
-      return;
-    }
-
-    ctx.drawImage(img, 0, 0, outW, outH);
-    
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) {
-          callback(file);
-          return;
-        }
-        const newName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
-        callback(new File([blob], newName, { type: 'image/jpeg', lastModified: file.lastModified }));
-      },
-      'image/jpeg',
-      QUALITY
-    );
-  };
-
-  img.src = objectUrl;
+  reader.readAsDataURL(file);
 }
 
-export function compressImage(
+function drawImageWithOrientation(
+  ctx: CanvasRenderingContext2D,
+  img: CanvasImageSource,
+  outW: number,
+  outH: number,
+  orientation: number,
+) {
+  switch (orientation) {
+    case 2:
+      ctx.translate(outW, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, 0, 0, outW, outH);
+      return;
+    case 3:
+      ctx.translate(outW, outH);
+      ctx.rotate(Math.PI);
+      ctx.drawImage(img, 0, 0, outW, outH);
+      return;
+    case 4:
+      ctx.translate(0, outH);
+      ctx.scale(1, -1);
+      ctx.drawImage(img, 0, 0, outW, outH);
+      return;
+    case 5:
+      ctx.rotate(Math.PI / 2);
+      ctx.scale(1, -1);
+      ctx.drawImage(img, 0, 0, outH, outW);
+      return;
+    case 6:
+      ctx.translate(outW, 0);
+      ctx.rotate(Math.PI / 2);
+      ctx.drawImage(img, 0, 0, outH, outW);
+      return;
+    case 7:
+      ctx.translate(outW, outH);
+      ctx.rotate(Math.PI / 2);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, 0, 0, outH, outW);
+      return;
+    case 8:
+      ctx.translate(0, outH);
+      ctx.rotate(-Math.PI / 2);
+      ctx.drawImage(img, 0, 0, outH, outW);
+      return;
+    default:
+      ctx.drawImage(img, 0, 0, outW, outH);
+  }
+}
+
+// ★iPhoneの二重回転バグを防ぐため、常に1（回転なし）を返すように固定
+async function getOrientation(file: File): Promise<number> {
+  return 1;
+}
+
+function compressImageImpl(
   file: File,
   callback: (compressedFile: File) => void,
+  opts?: { skipExifOrientation?: boolean },
 ) {
   const safeCallback = (f: File) => {
-    try { callback(f); } catch {}
+    try {
+      callback(f);
+    } catch {
+      // ignore
+    }
   };
 
   if (!file.type.startsWith('image/')) {
@@ -118,32 +172,215 @@ export function compressImage(
     return;
   }
 
-  // iPhone高効率画像（HEIC）の対応
   if (isHeicFile(file)) {
     (async () => {
       try {
         if (typeof window === 'undefined' || typeof Worker === 'undefined') {
-          processImageToJpeg(file, safeCallback);
+          imageFileToJpegViaImgElement(
+            file,
+            (jpeg) => compressImageImpl(jpeg, callback, { skipExifOrientation: true }),
+            () => safeCallback(file),
+          );
           return;
         }
+
         const { default: heic2any } = await import('heic2any');
-        const converted = (await heic2any({ blob: file, toType: 'image/jpeg', quality: QUALITY })) as Blob | Blob[];
+        const converted = (await heic2any({
+          blob: file,
+          toType: 'image/jpeg',
+          quality: QUALITY,
+        })) as Blob | Blob[];
         const blob = Array.isArray(converted) ? converted[0] : converted;
-        const jpegFile = new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), { type: 'image/jpeg', lastModified: file.lastModified });
-        processImageToJpeg(jpegFile, safeCallback);
+        const jpegFile = new File(
+          [blob],
+          file.name.replace(/\.(heic|heif)$/i, '.jpg'),
+          { type: 'image/jpeg', lastModified: file.lastModified },
+        );
+        compressImageImpl(jpegFile, callback, { skipExifOrientation: true });
       } catch {
-        processImageToJpeg(file, safeCallback);
+        imageFileToJpegViaImgElement(
+          file,
+          (jpeg) => compressImageImpl(jpeg, callback, { skipExifOrientation: true }),
+          () => safeCallback(file),
+        );
       }
     })();
     return;
   }
 
-  // ★通常画像（パソコンからのアップロードなど）の処理
-  processImageToJpeg(file, safeCallback);
+  if (typeof createImageBitmap === 'function') {
+    (async () => {
+      try {
+        const orientation = opts?.skipExifOrientation ? 1 : await getOrientation(file);
+        const bitmap = await createImageBitmap(file, {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          imageOrientation: 'none',
+        } as any);
+
+        const canvas = document.createElement('canvas');
+        const rotated =
+          orientation === 5 ||
+          orientation === 6 ||
+          orientation === 7 ||
+          orientation === 8;
+        const baseW = rotated ? bitmap.height : bitmap.width;
+        const baseH = rotated ? bitmap.width : bitmap.height;
+        let outW = baseW;
+        let outH = baseH;
+        if (outW > MAX_WIDTH) {
+          outH = Math.round((outH * MAX_WIDTH) / outW);
+          outW = MAX_WIDTH;
+        }
+        canvas.width = outW;
+        canvas.height = outH;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          bitmap.close?.();
+          safeCallback(file);
+          return;
+        }
+        ctx.save();
+        drawImageWithOrientation(ctx, bitmap, outW, outH, orientation);
+        ctx.restore();
+        bitmap.close?.();
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              safeCallback(file);
+              return;
+            }
+            safeCallback(
+              new File([blob], file.name, {
+                type: 'image/jpeg',
+                lastModified: file.lastModified,
+              }),
+            );
+          },
+          'image/jpeg',
+          QUALITY,
+        );
+      } catch {
+        const orientation = opts?.skipExifOrientation ? 1 : await getOrientation(file);
+        const reader = new FileReader();
+        reader.onerror = () => safeCallback(file);
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onerror = () => safeCallback(file);
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const rotated =
+              orientation === 5 ||
+              orientation === 6 ||
+              orientation === 7 ||
+              orientation === 8;
+            const baseW = rotated ? img.height : img.width;
+            const baseH = rotated ? img.width : img.height;
+            let outW = baseW;
+            let outH = baseH;
+            if (outW > MAX_WIDTH) {
+              outH = Math.round((outH * MAX_WIDTH) / outW);
+              outW = MAX_WIDTH;
+            }
+            canvas.width = outW;
+            canvas.height = outH;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              safeCallback(file);
+              return;
+            }
+            ctx.save();
+            drawImageWithOrientation(ctx, img, outW, outH, orientation);
+            ctx.restore();
+            canvas.toBlob(
+              (blob) => {
+                if (!blob) {
+                  safeCallback(file);
+                  return;
+                }
+                safeCallback(
+                  new File([blob], file.name, {
+                    type: 'image/jpeg',
+                    lastModified: file.lastModified,
+                  }),
+                );
+              },
+              'image/jpeg',
+              QUALITY,
+            );
+          };
+          if (typeof e.target?.result === 'string') img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    })();
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onerror = () => safeCallback(file);
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onerror = () => safeCallback(file);
+    img.onload = () => {
+      (async () => {
+        const orientation = opts?.skipExifOrientation ? 1 : await getOrientation(file);
+        const canvas = document.createElement('canvas');
+        const rotated =
+          orientation === 5 ||
+          orientation === 6 ||
+          orientation === 7 ||
+          orientation === 8;
+        const baseW = rotated ? img.height : img.width;
+        const baseH = rotated ? img.width : img.height;
+        let outW = baseW;
+        let outH = baseH;
+        if (outW > MAX_WIDTH) {
+          outH = Math.round((outH * MAX_WIDTH) / outW);
+          outW = MAX_WIDTH;
+        }
+        canvas.width = outW;
+        canvas.height = outH;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          safeCallback(file);
+          return;
+        }
+        ctx.save();
+        drawImageWithOrientation(ctx, img, outW, outH, orientation);
+        ctx.restore();
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              safeCallback(file);
+              return;
+            }
+            safeCallback(
+              new File([blob], file.name, {
+                type: 'image/jpeg',
+                lastModified: file.lastModified,
+              }),
+            );
+          },
+          'image/jpeg',
+          QUALITY,
+        );
+      })();
+    };
+    if (typeof e.target?.result === 'string') img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+export function compressImage(
+  file: File,
+  callback: (compressedFile: File) => void,
+) {
+  compressImageImpl(file, callback);
 }
 
 // -----------------------------------------------------
-// 以下、マップのピンをドラッグするための機能（変更なし）
+// 以下、マップのピンをドラッグするための機能
 // -----------------------------------------------------
 export function useDraggablePin(
   initialX: number,
