@@ -207,7 +207,9 @@ export default function MapPage() {
       for (const f of files) {
         if (newUrls.length >= 2) break;
         const r = ref(storage, `maps/${id}/${Date.now()}_${f.name}`);
-        await uploadBytes(r, f);
+        await uploadBytes(r, f, {
+          contentType: f.type || 'image/jpeg',
+        });
         newUrls.push(await getDownloadURL(r));
       }
       setProject({ ...project, mapUrls: newUrls });

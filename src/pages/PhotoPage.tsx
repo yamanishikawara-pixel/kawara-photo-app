@@ -106,6 +106,14 @@ const formatToYMDSlash = (dateString: string) => {
   return dateString.replace(/-/g, '/');
 };
 
+const getFileExtension = (file: File): string => {
+  const byName = file.name.split('.').pop()?.toLowerCase();
+  if (byName) return byName;
+  if (file.type === 'image/png') return 'png';
+  if (file.type === 'image/webp') return 'webp';
+  return 'jpg';
+};
+
 export default function PhotoPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -236,8 +244,11 @@ export default function PhotoPage() {
       await new Promise<void>((resolve) => {
         compressImage(file, async (compressed) => {
           try {
-            const r = ref(storage, `photos/${id}/${Date.now()}_bulk_${i}`);
-            await uploadBytes(r, compressed);
+            const ext = getFileExtension(compressed);
+            const r = ref(storage, `photos/${id}/${Date.now()}_bulk_${i}.${ext}`);
+            await uploadBytes(r, compressed, {
+              contentType: compressed.type || 'image/jpeg',
+            });
             const url = await getDownloadURL(r);
             newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: todayStr, circles: [] };
           } catch (err) {
@@ -267,8 +278,11 @@ export default function PhotoPage() {
 
     compressImage(f, async (file) => {
       try {
-        const r = ref(storage, `photos/${id}/${Date.now()}`);
-        await uploadBytes(r, file);
+        const ext = getFileExtension(file);
+        const r = ref(storage, `photos/${id}/${Date.now()}.${ext}`);
+        await uploadBytes(r, file, {
+          contentType: file.type || 'image/jpeg',
+        });
         const url = await getDownloadURL(r);
         const newPhotos = project.photos.map((p, i: number) => p.id === photoId ? { ...p, image: url, photoNumber: String(i + 1), shootingDate: p.shootingDate || todayStr, circles: [] } : p);
         setProject({ ...project, photos: newPhotos });
