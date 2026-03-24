@@ -27,25 +27,18 @@ export const DESC_SNIPPETS = [
   '清掃・片付け',
 ];
 
-/** A4サイズのピクセル幅（96dpi想定: 210mm ≒ 794px） */
 export const A4_WIDTH_PX = 794;
-/** A4サイズのピクセル高さ（96dpi想定: 297mm ≒ 1123px） */
 export const A4_HEIGHT_PX = 1123;
 
-/**
- * プレビュー用の scale を算出する（画面幅に収める）
- * @param paddingPx 左右の余白合計（デフォルト 32）
- */
 export function getPreviewScale(paddingPx = 32): number {
   const availableWidth = typeof window !== 'undefined' ? window.innerWidth - paddingPx : A4_WIDTH_PX;
   return Math.min(1, availableWidth / A4_WIDTH_PX);
 }
 
-// 毎回ランダムな暗号をつけるのをやめ、写真ごとの固定IDを使うようにしました（これで真っ白バグが直ります）
 export const proxyUrl = (url: string, id: string | number) =>
   url ? `${url}${url.includes('?') ? '&' : '?'}cb=${id}` : '';
 
-// ★画質とサイズの黄金比設定
+// ★画質とサイズの黄金比
 const QUALITY = 0.85; 
 const MAX_WIDTH = 1600; 
 
@@ -59,62 +52,7 @@ function isHeicFile(file: File): boolean {
   );
 }
 
-// ★iPhoneの二重回転バグを防ぐため、ブラウザ標準機能を利用した安全な圧縮処理に統合
-function safeImageToJpeg(
-  file: File,
-  callback: (jpeg: File) => void,
-  fallback: () => void,
-) {
-  const reader = new FileReader();
-  reader.onerror = fallback;
-  reader.onload = (e) => {
-    const img = new Image();
-    img.onerror = fallback;
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-
-      let outW = img.width;
-      let outH = img.height;
-      if (outW > MAX_WIDTH) {
-        outH = Math.round((outH * MAX_WIDTH) / outW);
-        outW = MAX_WIDTH;
-      }
-
-      canvas.width = outW;
-      canvas.height = outH;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        fallback();
-        return;
-      }
-      
-      // ブラウザがEXIFを自動解釈して正しい向きで描画してくれます
-      ctx.drawImage(img, 0, 0, outW, outH);
-      
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) {
-            fallback();
-            return;
-          }
-          const newName = file.name.replace(/\.(heic|heif)$/i, '.jpg');
-          callback(
-            new File([blob], newName, {
-              type: 'image/jpeg',
-              lastModified: file.lastModified,
-            }),
-          );
-        },
-        'image/jpeg',
-        QUALITY,
-      );
-    };
-    if (typeof e.target?.result === 'string') img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
-}
-
-function compressImageImpl(
+export function compressImage(
   file: File,
   callback: (compressedFile: File) => void,
 ) {
@@ -131,42 +69,84 @@ function compressImageImpl(
     return;
   }
 
+  // ★画像を描画して圧縮する共通処理（ここでブラウザが自動的に正しい向きにしてくれます）
+  const processWithCanvas = (imageSource: HTMLImageElement | ImageBitmap, width: number, height: number) => {
+    let outW = width;
+    let outH = height;
+    if (outW > MAX_WIDTH) {
+      outH = Math.round((outH * MAX_WIDTH) / outW);
+      outW = MAX_WIDTH;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = outW;
+    canvas.height = outH;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      safeCallback(file);
+      return;
+    }
+
+    ctx.drawImage(imageSource, 0, 0, outW, outH);
+    
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          safeCallback(file);
+          return;
+        }
+        const newName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+        safeCallback(new File([blob], newName, { type: 'image/jpeg', lastModified: file.lastModified }));
+      },
+      'image/jpeg',
+      QUALITY
+    );
+  };
+
+  // 古いスマホ用の読み込み方
+  const loadViaFileReader = (f: File) => {
+    const reader = new FileReader();
+    reader.onerror = () => safeCallback(f);
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => safeCallback(f);
+      img.onload = () => processWithCanvas(img, img.width, img.height);
+      if (typeof e.target?.result === 'string') img.src = e.target.result;
+    };
+    reader.readAsDataURL(f);
+  };
+
+  // iPhoneのHEIC（高効率画像）への対応
   if (isHeicFile(file)) {
     (async () => {
       try {
         if (typeof window === 'undefined' || typeof Worker === 'undefined') {
-          safeImageToJpeg(file, safeCallback, () => safeCallback(file));
+          loadViaFileReader(file);
           return;
         }
-
         const { default: heic2any } = await import('heic2any');
-        const converted = (await heic2any({
-          blob: file,
-          toType: 'image/jpeg',
-          quality: 0.92,
-        })) as Blob | Blob[];
+        const converted = (await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 })) as Blob | Blob[];
         const blob = Array.isArray(converted) ? converted[0] : converted;
-        const jpegFile = new File(
-          [blob],
-          file.name.replace(/\.(heic|heif)$/i, '.jpg'),
-          { type: 'image/jpeg', lastModified: file.lastModified },
-        );
-        safeImageToJpeg(jpegFile, safeCallback, () => safeCallback(file));
+        const jpegFile = new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), { type: 'image/jpeg', lastModified: file.lastModified });
+        loadViaFileReader(jpegFile);
       } catch {
-        safeImageToJpeg(file, safeCallback, () => safeCallback(file));
+        loadViaFileReader(file);
       }
     })();
     return;
   }
 
-  safeImageToJpeg(file, safeCallback, () => safeCallback(file));
-}
-
-export function compressImage(
-  file: File,
-  callback: (compressedFile: File) => void,
-) {
-  compressImageImpl(file, callback);
+  // ★PCからの巨大画像アップロードに対応するため、メモリ効率の良い createImageBitmap を優先（完全復活！）
+  if (typeof createImageBitmap === 'function') {
+    createImageBitmap(file)
+      .then((bitmap) => {
+        processWithCanvas(bitmap, bitmap.width, bitmap.height);
+        bitmap.close?.();
+      })
+      .catch(() => loadViaFileReader(file));
+  } else {
+    loadViaFileReader(file);
+  }
 }
 
 export function useDraggablePin(
