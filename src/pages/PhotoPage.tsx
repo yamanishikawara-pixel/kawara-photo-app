@@ -13,12 +13,38 @@ import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 
+const PDF_GENERATE_URL = 'https://generatepdf-ld4b4dsi5q-an.a.run.app';
 const JP_FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo, sans-serif';
 
 function safeStyleLine(val: string | number | undefined | null, defaultUnit: string): string {
   if (val == null || val === '') return `0${defaultUnit}`;
   if (typeof val === 'number') return `${val}${defaultUnit}`;
   return String(val);
+}
+
+function pdfEndpointCandidates(): string[] {
+  const env = (import.meta.env.VITE_PDF_GENERATE_URL as string | undefined)?.trim();
+  const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  if (env) return (!isLocal && env.includes('run.app')) ? ['/api/generatePdf'] : [env];
+  return isLocal ? [PDF_GENERATE_URL, '/api/generatePdf'] : ['/api/generatePdf'];
+}
+
+async function responseToPdfBlob(response: Response): Promise<Blob> {
+  const buf = await response.arrayBuffer();
+  const u8 = new Uint8Array(buf);
+  const isPdf = u8.length >= 4 && u8[0] === 0x25 && u8[1] === 0x50 && u8[2] === 0x44 && u8[3] === 0x46;
+  if (isPdf) return new Blob([buf], { type: 'application/pdf' });
+  const text = new TextDecoder().decode(buf);
+  try {
+    const data = JSON.parse(text) as { pdfBase64?: string };
+    if (data.pdfBase64) {
+      const binary = atob(data.pdfBase64);
+      const out = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+      return new Blob([out], { type: 'application/pdf' });
+    }
+  } catch { /* ignore */ }
+  throw new Error('有効なPDFデータが返りませんでした');
 }
 
 const LINE_TYPES = [
@@ -57,6 +83,17 @@ function PdfLineLegend() {
       ))}
     </div>
   );
+}
+
+function downloadPdfBlob(blob: Blob, filename: string) {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => window.URL.revokeObjectURL(url), 10000);
 }
 
 export default function PdfExportPage() {
@@ -128,7 +165,34 @@ export default function PdfExportPage() {
     setIsExporting(true); setError(null);
     const pdfName = `${project.projectName || '現場報告書'}_${new Date().getTime()}.pdf`;
 
-    try {
+    const buildServerHtmlPayload = (): string => {
+      const container = document.querySelector('.pdf-container-wrapper');
+      if (!container) throw new Error('データが見つかりません');
+      const clone = container.cloneNode(true) as HTMLElement;
+      
+      const wrappers = clone.querySelectorAll('.pdf-page-wrapper');
+      wrappers.forEach((w: Element) => {
+        const el = w as HTMLElement;
+        el.style.width = '794px'; el.style.height = '1123px'; el.style.pageBreakAfter = 'always'; el.style.margin = '0'; el.style.boxShadow = 'none';
+      });
+      
+      const pages = clone.querySelectorAll('.pdf-page');
+      pages.forEach((p: Element) => {
+        const el = p as HTMLElement;
+        el.style.transform = 'none'; el.style.position = 'relative'; el.style.width = '794px'; el.style.height = '1123px';
+      });
+
+      const images = clone.querySelectorAll('img');
+      images.forEach((img) => {
+        const origSrc = img.getAttribute('data-original-src');
+        if (origSrc) img.setAttribute('src', origSrc);
+        img.removeAttribute('crossorigin');
+      });
+
+      return `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><script src="https://cdn.tailwindcss.com"></script><style>@page { margin: 0; size: A4 portrait; } body { margin: 0; padding: 0; background-color: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: ${JP_FONT}; } * { font-family: ${JP_FONT} !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }</style></head><body>${clone.innerHTML}</body></html>`;
+    };
+
+    const exportPdfClientSide = async () => {
       const pages = document.querySelectorAll('.pdf-page');
       if (pages.length === 0) throw new Error('PDFページが見つかりません');
       window.scrollTo(0, 0);
@@ -153,12 +217,29 @@ export default function PdfExportPage() {
         pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
       }
       pdf.save(pdfName);
-    } catch (err: unknown) { 
-      console.error(err);
-      setError('PDF作成中にエラーが発生しました。安定しているChromeブラウザをご利用ください。'); 
-    } finally { 
-      setIsExporting(false); 
-    }
+    };
+
+    try {
+      const htmlPayload = buildServerHtmlPayload();
+      const body = JSON.stringify({ html: htmlPayload });
+      let serverOk = false;
+      let lastServerErr: unknown;
+
+      for (const url of pdfEndpointCandidates()) {
+        try {
+          const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+          if (!response.ok) throw new Error(`サーバーエラー: ${response.status}`);
+          const blob = await responseToPdfBlob(response);
+          if (blob.size === 0) throw new Error('PDFデータが空です');
+          downloadPdfBlob(blob, pdfName);
+          serverOk = true; break;
+        } catch (e) { lastServerErr = e; }
+      }
+      if (!serverOk) {
+        console.warn('サーバーPDFに失敗、ブラウザで生成します', lastServerErr);
+        try { await exportPdfClientSide(); } catch (clientErr) { setError('PDFの保存に失敗しました。安定しているChromeブラウザをご利用ください。'); }
+      }
+    } catch (err: unknown) { setError('PDF作成中にエラーが発生しました。安定しているChromeブラウザをご利用ください。'); } finally { setIsExporting(false); }
   };
 
   if (!project) return <LoadingSpinner />;
@@ -291,64 +372,81 @@ export default function PdfExportPage() {
           </div>
         ))}
 
-        {/* ③ 写真ページ */}
+        {/* ③ 写真ページ (はみ出し完全解消の calc() レイアウト) */}
         {photoPages.map((chunk, pageIndex) => (
           <div key={`photo-page-${pageIndex}`} style={{ width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})`, fontFamily: JP_FONT }}>
-              <div className="flex-1 flex flex-col justify-between p-2 border-[3px] border-gray-800">
+              
+              {/* 外枠・3等分レイアウト */}
+              <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden">
                 {chunk.map((p, i) => {
-                  // ★ 回転しているか判定し、制限枠を逆転させる
                   const isRotated = (Number(p.rotation) || 0) % 180 !== 0;
                   return (
-                    <div key={i} className="flex gap-2 h-[32%] p-2 rounded border border-gray-500">
-                      <div className="w-[60%] flex items-center justify-center overflow-hidden relative min-h-0 border-2 border-gray-700 bg-gray-50">
+                    <div key={i} className="flex gap-2 h-[calc((100%-1rem)/3)] p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0">
+                      
+                      <div className="w-[60%] flex items-center justify-center overflow-hidden relative min-h-0 border border-gray-400 bg-gray-50 shrink-0">
                         {p.image ? (
-                          <div className="flex items-center justify-center w-full h-full">
-                            <div className="relative inline-block" style={{ transform: `rotate(${Number(p.rotation) || 0}deg)`, transformOrigin: 'center center' }}>
-                              {/* ★ 回転時は縦横の最大幅を逆転させて巨大化 */}
-                              <img 
-                                src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} 
-                                data-original-src={p.image} 
-                                crossOrigin="anonymous" 
-                                className="block w-auto h-auto" 
-                                style={{ maxWidth: isRotated ? '80mm' : '100%', maxHeight: isRotated ? '104mm' : '80mm' }} 
-                                alt="" 
-                              />
-                              {(p.circles ?? []).map((circle) => (
-                                <div key={circle.id} className="absolute aspect-square rounded-full border-[3px] border-red-600" style={{ left: `${circle.x}%`, top: `${circle.y}%`, width: `${circle.size}%`, transform: 'translate(-50%, -50%)' }} />
-                              ))}
-                            </div>
+                          <div className="flex items-center justify-center w-full h-full relative p-1">
+                            <img 
+                              src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} 
+                              data-original-src={p.image} 
+                              crossOrigin="anonymous" 
+                              className="block w-auto h-auto" 
+                              style={{ transform: `rotate(${Number(p.rotation) || 0}deg)`, transformOrigin: 'center center', maxWidth: isRotated ? '75mm' : '100%', maxHeight: isRotated ? '110mm' : '100%' }} 
+                              alt="" 
+                            />
+                            {(p.circles ?? []).map((circle) => (
+                              <div key={circle.id} className="absolute aspect-square rounded-full border-[3px] border-red-600" style={{ left: `${circle.x}%`, top: `${circle.y}%`, width: `${circle.size}%`, transform: 'translate(-50%, -50%)' }} />
+                            ))}
                           </div>
                         ) : <span className="font-bold text-gray-400">写真未登録</span>}
                       </div>
-                      <div className="w-[40%] flex flex-col text-sm border-2 border-gray-700 bg-white">
-                        <div className="flex min-h-[36px] border-b border-gray-400"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400">写真NO</div><div className="px-3 flex-1 font-bold flex items-center">{p.photoNumber || '　'}</div></div>
-                        <div className="flex min-h-[36px] border-b border-gray-400"><div className="w-20 font-bold flex items-center justify-center bg-gray-100 border-r border-gray-400">撮影日</div><div className="px-3 flex-1 flex items-center font-bold">{p.shootingDate || '　'}</div></div>
-                        <div className="flex min-h-[36px] border-b border-gray-400"><div className="w-20 font-bold flex items-center justify-center bg-gray-100 border-r border-gray-400">位置図</div><div className="px-3 flex-1 font-bold flex items-center text-red-700">{p.locationMap || '　'}</div></div>
-                        <div className="flex min-h-[36px] border-b border-gray-400"><div className="w-20 font-bold flex items-center justify-center bg-gray-100 border-r border-gray-400">工程</div><div className="px-3 flex-1 flex items-center font-bold">{p.process || '　'}</div></div>
-                        <div className="flex-1 flex min-h-0"><div className="w-20 py-2 font-bold flex items-center justify-center bg-gray-100 border-r border-gray-400">説明</div><div className="p-3 flex-1 whitespace-pre-wrap overflow-hidden font-bold leading-relaxed flex items-start break-words">{p.description || '　'}</div></div>
+
+                      <div className="w-[40%] flex flex-col text-[13px] border border-gray-400 bg-white shrink-0 min-h-0">
+                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0">
+                          <div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">写真NO</div>
+                          <div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.photoNumber || '　'}</div>
+                        </div>
+                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0">
+                          <div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">撮影日</div>
+                          <div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.shootingDate || '　'}</div>
+                        </div>
+                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0">
+                          <div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">位置図</div>
+                          <div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden text-red-700 whitespace-nowrap">{p.locationMap || '　'}</div>
+                        </div>
+                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0">
+                          <div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">工程</div>
+                          <div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.process || '　'}</div>
+                        </div>
+                        <div className="flex-1 flex min-h-0">
+                          <div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">説明</div>
+                          <div className="p-2 flex-1 overflow-hidden font-bold leading-snug flex items-start break-words whitespace-pre-wrap">{p.description || '　'}</div>
+                        </div>
                       </div>
                     </div>
                   );
                 })}
               </div>
-              <div className="absolute bottom-[10mm] right-[15mm] text-xs text-gray-500">- {2 + mapCount + pageIndex} / {totalPages} -</div>
+
+              <div className="absolute bottom-[10mm] right-[15mm] text-xs text-gray-500 shrink-0">- {2 + mapCount + pageIndex} / {totalPages} -</div>
             </div>
           </div>
         ))}
 
-        {/* ④ 使用材料表 */}
+        {/* ④ 使用材料表 (はみ出し完全解消の calc() レイアウト) */}
         {materialPages.map((chunk, pageIndex) => (
           <div key={`material-page-${pageIndex}`} style={{ width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})`, fontFamily: JP_FONT }}>
-              <h2 className="text-2xl font-bold pb-1 mb-2 border-b-2 border-gray-800 shrink-0">使用材料表</h2>
+              <h2 className="text-xl font-bold pb-1 mb-2 border-b-2 border-gray-800 shrink-0">使用材料表</h2>
               
-              <div className="flex-1 flex flex-col justify-between border-[3px] border-gray-800 p-1.5 min-h-0 bg-white overflow-hidden">
+              <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden">
                 {chunk.map((m, i) => {
                   const isRotated = (Number(m.rotation) || 0) % 180 !== 0;
                   return (
-                    <div key={i} className="flex gap-2 h-[31.5%] p-1.5 rounded border border-gray-500 bg-white min-h-0">
-                      <div className="w-[60%] flex items-center justify-center overflow-hidden relative min-h-0 border-2 border-gray-700 bg-gray-50 shrink-0">
+                    <div key={i} className="flex gap-2 h-[calc((100%-1rem)/3)] p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0">
+                      
+                      <div className="w-[60%] flex items-center justify-center overflow-hidden relative min-h-0 border border-gray-400 bg-gray-50 shrink-0">
                         {m.image ? (
                           <div className="flex items-center justify-center w-full h-full relative p-1">
                             <img 
@@ -356,29 +454,29 @@ export default function PdfExportPage() {
                               data-original-src={m.image} 
                               crossOrigin="anonymous" 
                               className="block w-auto h-auto" 
-                              style={{ transform: `rotate(${Number(m.rotation) || 0}deg)`, transformOrigin: 'center center', maxWidth: isRotated ? '80mm' : '100%', maxHeight: isRotated ? '104mm' : '80mm' }} 
+                              style={{ transform: `rotate(${Number(m.rotation) || 0}deg)`, transformOrigin: 'center center', maxWidth: isRotated ? '75mm' : '100%', maxHeight: isRotated ? '110mm' : '100%' }} 
                               alt="" 
                             />
                           </div>
                         ) : <span className="font-bold text-gray-400">写真未登録</span>}
                       </div>
 
-                      <div className="w-[40%] flex flex-col text-sm border-2 border-gray-700 bg-white shrink-0 min-h-0">
+                      <div className="w-[40%] flex flex-col text-[13px] border border-gray-400 bg-white shrink-0 min-h-0">
                         <div className="flex min-h-[32px] border-b border-gray-400 shrink-0">
                           <div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">品名</div>
-                          <div className="px-2 py-1 flex-1 font-bold overflow-hidden flex items-center text-xs break-words whitespace-pre-wrap">{m.name || '　'}</div>
+                          <div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden break-words whitespace-pre-wrap">{m.name || '　'}</div>
                         </div>
                         <div className="flex min-h-[32px] border-b border-gray-400 shrink-0">
                           <div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">メーカー</div>
-                          <div className="px-2 py-1 flex-1 font-bold overflow-hidden flex items-center text-xs break-words whitespace-pre-wrap">{m.manufacturer || '　'}</div>
+                          <div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden break-words whitespace-pre-wrap">{m.manufacturer || '　'}</div>
                         </div>
                         <div className="flex min-h-[44px] border-b border-gray-400 shrink-0">
-                          <div className="w-24 font-bold flex items-center justify-center text-center leading-tight py-1 bg-gray-100 border-r border-gray-400 text-xs">規格・寸法<br />数量</div>
-                          <div className="px-2 py-1 flex-1 font-bold overflow-hidden flex items-center text-red-700 text-xs leading-snug break-words whitespace-pre-wrap">{m.specification || '　'}</div>
+                          <div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-tight">規格・寸法<br />数量</div>
+                          <div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden text-red-700 leading-snug break-words whitespace-pre-wrap">{m.specification || '　'}</div>
                         </div>
                         <div className="flex-1 flex min-h-0">
                           <div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">備考</div>
-                          <div className="p-2 flex-1 overflow-hidden font-bold leading-snug flex items-start text-[11px] break-words whitespace-pre-wrap">{m.remarks || '　'}</div>
+                          <div className="p-2 flex-1 overflow-hidden font-bold flex items-start leading-snug break-words whitespace-pre-wrap">{m.remarks || '　'}</div>
                         </div>
                       </div>
                     </div>
