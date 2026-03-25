@@ -1,461 +1,344 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Download } from 'lucide-react';
-import { doc, getDoc } from 'firebase/firestore';
-import { db, auth } from '../firebase';
-import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
-import type { Circle, MapRow, MapLine, Photo, Project, Material } from '../types';
-import kawaraLogo from '../assets/kawara-logo.png';
-import { A4_HEIGHT_PX, A4_WIDTH_PX, getPreviewScale, proxyUrl } from '../shared/utils';
-import { ErrorMessage } from '../shared/ErrorMessage';
-import { LoadingSpinner } from '../shared/LoadingSpinner';
-import { toJpeg } from 'html-to-image';
-import { jsPDF } from 'jspdf';
+import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus } from 'lucide-react';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage, auth } from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { compressImage, proxyUrl, useDraggablePin } from '../shared/utils';
+import type { Circle, MapPin as MapPinT, Photo, Project } from '../types';
+import type { ChangeEvent, MouseEvent } from 'react';
 
-const PDF_GENERATE_URL = 'https://generatepdf-ld4b4dsi5q-an.a.run.app';
-// ★ BIZ UDPゴシックを最優先に指定
-const JP_FONT = "'BIZ UDPGothic', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', Meiryo, sans-serif";
-
-function safeStyleLine(val: string | number | undefined | null, defaultUnit: string): string {
-  if (val == null || val === '') return `0${defaultUnit}`;
-  if (typeof val === 'number') return `${val}${defaultUnit}`;
-  return String(val);
-}
-
-function pdfEndpointCandidates(): string[] {
-  const env = (import.meta.env.VITE_PDF_GENERATE_URL as string | undefined)?.trim();
-  const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-  if (env) return (!isLocal && env.includes('run.app')) ? ['/api/generatePdf'] : [env];
-  return isLocal ? [PDF_GENERATE_URL, '/api/generatePdf'] : ['/api/generatePdf'];
-}
-
-async function responseToPdfBlob(response: Response): Promise<Blob> {
-  const buf = await response.arrayBuffer();
-  const u8 = new Uint8Array(buf);
-  const isPdf = u8.length >= 4 && u8[0] === 0x25 && u8[1] === 0x50 && u8[2] === 0x44 && u8[3] === 0x46;
-  if (isPdf) return new Blob([buf], { type: 'application/pdf' });
-  const text = new TextDecoder().decode(buf);
-  try {
-    const data = JSON.parse(text) as { pdfBase64?: string };
-    if (data.pdfBase64) {
-      const binary = atob(data.pdfBase64);
-      const out = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
-      return new Blob([out], { type: 'application/pdf' });
-    }
-  } catch { /* ignore */ }
-  throw new Error('有効なPDFデータが返りませんでした');
-}
-
-const LINE_TYPES = [
-  { label: '流れ壁', color: '#3b82f6' },
-  { label: '平行壁', color: '#eab308' },
-  { label: '棟', color: '#22c55e' },
-  { label: '軒先', color: '#f97316' },
-  { label: '袖', color: '#ec4899' },
-  { label: 'その他', color: '#ef4444' },
+const DEFAULT_PROCESS_OPTIONS = [
+  "着工前", "下地・下葺き", "防水ルーフィング施工", "瓦桟施工",
+  "流れ壁板金", "平行壁板金", "確認", "棟金具設置", "緊結状況", "施工中", "完成"
 ];
 
-const COVER_FIELDS: { label: string; key: keyof Project }[] = [
-  { label: '工事件名', key: 'projectName' },
-  { label: '工事場所', key: 'projectLocation' },
-  { label: '工期', key: 'constructionPeriod' },
-  { label: '施工業者', key: 'contractorName' },
-  { label: '作成年月日', key: 'creationDate' },
+const DEFAULT_DESC_TEMPLATES = [
+  { label: "基準/実測", text: "基準値：\n実測値：" },
+  { label: "重ね幅(ヨコ)", text: "重ね幅（ヨコ）：" },
+  { label: "重ね幅(タテ)", text: "重ね幅（タテ）：" },
+  { label: "平行壁(立上)", text: "平行壁：立ち上げ高 " },
+  { label: "流れ壁(立上)", text: "流れ壁：立ち上げ高 " },
+  { label: "棟芯(重ね)", text: "棟芯：重ね（左右） " },
+  { label: "棟部(増張り)", text: "棟部：増し張り " },
 ];
 
-function createEmptyPhoto(): Photo & { circles?: Circle[] } {
-  return { id: Math.random(), image: null, photoNumber: '', shootingDate: '', locationMap: '', process: '', description: '', circles: [] };
-}
+function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChange, onRemove }: { circle: Circle; isSelected: boolean; onSelect: () => void; onDragEnd: (x: number, y: number) => void; onSizeChange: (size: number) => void; onRemove: () => void; }) {
+  const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(circle.x, circle.y, onDragEnd);
+  const size = Number(circle.size || 20);
 
-function createEmptyMaterial(): Material {
-  return { id: Math.random(), image: null, name: '', manufacturer: '', specification: '', remarks: '', rotation: 0 };
-}
-
-function PdfLineLegend() {
   return (
-    <div className="flex gap-x-4 gap-y-1 flex-wrap text-xs font-medium rounded-lg p-2 shadow-sm border border-gray-300 bg-white">
-      {LINE_TYPES.map((type) => (
-        <div key={type.label} className="flex items-center gap-1.5">
-          <div style={{ backgroundColor: type.color }} className="w-6 h-[2px] rounded-full" />
-          <span className="text-gray-700">{type.label}</span>
+    <>
+      <div
+        ref={containerRef}
+        onMouseDown={(e) => { e.stopPropagation(); onSelect(); onMouseDown(e); }}
+        onTouchStart={(e) => { e.stopPropagation(); onSelect(); onTouchStart(e); }}
+        onClick={(e) => e.stopPropagation()} 
+        style={{ left: `${position.x}%`, top: `${position.y}%`, width: `${size}%`, transform: 'translate(-50%, -50%)', touchAction: 'none', zIndex: isSelected ? 100 : 20 }}
+        className={`absolute aspect-square rounded-full border-[4px] border-red-500 shadow-sm ${dragging ? 'z-30 opacity-70 scale-110' : 'z-20 cursor-pointer'} ${isSelected ? 'border-dashed bg-red-500/20' : ''}`}
+      />
+      {isSelected && !dragging && (
+        <div 
+          onClick={(e) => e.stopPropagation()} 
+          style={{ left: `${position.x}%`, top: `${position.y + size/2 + 8}%`, transform: 'translateX(-50%)' }} 
+          className="absolute z-[1000] flex bg-white rounded-xl shadow-2xl border-2 border-gray-200 overflow-hidden"
+        >
+          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.min(60, size * 1.3))}} className="px-5 py-3 text-2xl font-bold hover:bg-gray-100 text-gray-700 border-r active:bg-gray-200">＋</button>
+          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.max(5, size * 0.7))}} className="px-5 py-3 text-2xl font-bold hover:bg-gray-100 text-gray-700 border-r active:bg-gray-200">－</button>
+          <button onClick={(e) => {e.stopPropagation(); onRemove()}} className="px-5 py-3 text-red-500 hover:bg-red-50 active:bg-red-100"><Trash2 className="w-6 h-6"/></button>
         </div>
-      ))}
+      )}
+    </>
+  );
+}
+
+function PinSelectModal({ isOpen, onClose, pins, onSelect }: { isOpen: boolean; onClose: () => void; pins: MapPinT[] | undefined; onSelect: (label: string) => void; }) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/60 z-[2000] flex items-center justify-center p-6 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-[2rem] w-full max-w-sm p-8 shadow-2xl space-y-6" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center pb-2 border-b">
+          <h3 className="text-xl font-black text-gray-900 flex items-center gap-3"><MapPin className="text-red-500 w-7 h-7"/> 位置図の場所を選択</h3>
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"><X className="w-6 h-6"/></button>
+        </div>
+        {pins && pins.length > 0 ? (
+          <div className="grid grid-cols-3 gap-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+            {pins.map((pin) => (
+              <button key={pin.id} onClick={() => { onSelect(pin.label); onClose(); }} className="bg-gray-50 text-gray-800 border-2 border-gray-200 font-black py-4 text-center rounded-2xl text-xl shadow-sm hover:border-red-400 hover:bg-red-50 active:scale-95">{pin.label}</button>
+            ))}
+            <button onClick={() => { onSelect(""); onClose(); }} className="col-span-3 bg-gray-100 text-gray-500 font-bold py-4 rounded-2xl mt-2 hover:bg-gray-200 transition-colors">選択を解除</button>
+          </div>
+        ) : (
+          <div className="text-center py-12 px-4 bg-gray-50 rounded-3xl border-4 border-dashed border-gray-200"><p className="text-gray-400 font-bold text-lg leading-relaxed">先に位置図画面で<br/><span className="text-red-400">マーカー（符号）</span>を<br/>打ってください</p></div>
+        )}
+      </div>
     </div>
   );
 }
 
-function downloadPdfBlob(blob: Blob, filename: string) {
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => window.URL.revokeObjectURL(url), 10000);
-}
+const formatToYMD = (dateString: string) => {
+  if (!dateString) return '';
+  const parts = dateString.split(/[-/]/);
+  if (parts.length === 3) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+  return dateString.replace(/\//g, '-');
+};
 
-export default function PdfExportPage() {
+const formatToYMDSlash = (dateString: string) => {
+  if (!dateString) return '';
+  const parts = dateString.split(/[-/]/);
+  if (parts.length === 3) return `${parts[0]}/${parts[1].padStart(2, '0')}/${parts[2].padStart(2, '0')}`;
+  return dateString.replace(/-/g, '/');
+};
+
+const getTodayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const getFileExtension = (file: File): string => {
+  const byName = file.name.split('.').pop()?.toLowerCase();
+  if (byName) return byName;
+  if (file.type === 'image/png') return 'png';
+  if (file.type === 'image/webp') return 'webp';
+  return 'jpg';
+};
+
+export default function PhotoPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
-  const [userSettings, setUserSettings] = useState<Record<string, unknown> | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
-  const [isZipping, setIsZipping] = useState(false);
-  const [scale, setScale] = useState(1);
-  const [sessionId] = useState(() => Date.now().toString());
+  const [loadingId, setLoadingId] = useState<number | null>(null);
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState(0);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [currentPhotoId, setCurrentPhotoId] = useState<number | null>(null);
+  const [selectedCircleId, setSelectedCircleId] = useState<number | null>(null);
+
+  const [processOptions, setProcessOptions] = useState<string[]>(DEFAULT_PROCESS_OPTIONS);
+  const [descTemplates, setDescTemplates] = useState<{label: string, text: string}[]>(DEFAULT_DESC_TEMPLATES);
 
   useEffect(() => {
-    if (!id) return;
-    setError(null);
-    const fetchData = async () => {
-      try {
-        const d = await getDoc(doc(db, 'projects', id));
-        if (d.exists()) setProject(d.data() as Project);
-        const user = auth.currentUser;
-        if (user) {
-          const s = await getDoc(doc(db, 'users', user.uid));
-          if (s.exists()) setUserSettings(s.data() as Record<string, unknown>);
+    getDoc(doc(db, "projects", id!)).then(d => d.exists() && setProject(d.data() as Project));
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const s = await getDoc(doc(db, 'users', user.uid));
+        if (s.exists()) {
+          const data = s.data();
+          if (data.customProcesses && data.customProcesses.length > 0) setProcessOptions(data.customProcesses);
+          if (data.customDescTemplates && data.customDescTemplates.length > 0) setDescTemplates(data.customDescTemplates);
         }
-      } catch { setError('データの読み込みに失敗しました。'); }
-    };
-    fetchData();
+      }
+    });
+    return () => unsub();
   }, [id]);
 
-  useEffect(() => {
-    const updateScale = () => setScale(getPreviewScale(32));
-    updateScale();
-    window.addEventListener('resize', updateScale);
-    return () => window.removeEventListener('resize', updateScale);
-  }, []);
-
-  const handleZipExport = async () => {
+  const updatePhoto = async (photoId: number, field: string, value: any) => {
     if (!project) return;
-    try {
-      setIsZipping(true); setError(null);
-      await new Promise((r) => setTimeout(r, 100));
-      const zip = new JSZip();
-      const folderName = project.projectName || '現場写真';
-      const imgFolder = zip.folder(folderName);
-      if (!imgFolder) throw new Error('フォルダ作成失敗');
-      const activePhotos = (project.photos ?? []).filter((p) => p.image);
-      if (activePhotos.length === 0) {
-        setError('ダウンロードする写真がありません。'); setIsZipping(false); return;
-      }
-      const promises = activePhotos.map(async (p) => {
-        if (!p.image) return;
-        try {
-          const response = await fetch(p.image);
-          const blob = await response.blob();
-          const processName = p.process ? `_${p.process}` : '';
-          const filename = `${p.photoNumber.padStart(2, '0')}${processName}.jpg`;
-          imgFolder.file(filename, blob);
-        } catch { /* ignore */ }
-      });
-      await Promise.all(promises);
-      const content = await zip.generateAsync({ type: 'blob' });
-      saveAs(content, `${folderName}.zip`);
-    } catch { setError('Zipファイルの作成に失敗しました。'); } finally { setIsZipping(false); }
+    const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, [field]: value } : p);
+    setProject({ ...project, photos: newPhotos });
+    await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
   };
 
-  const handleExport = async () => {
-    if (!project) return;
-    setIsExporting(true); setError(null);
-    const pdfName = `${project.projectName || '現場報告書'}_${new Date().getTime()}.pdf`;
-
-    const buildServerHtmlPayload = (): string => {
-      const container = document.querySelector('.pdf-container-wrapper');
-      if (!container) throw new Error('データが見つかりません');
-      const clone = container.cloneNode(true) as HTMLElement;
-      
-      const wrappers = clone.querySelectorAll('.pdf-page-wrapper');
-      wrappers.forEach((w: Element) => {
-        const el = w as HTMLElement;
-        el.style.width = '794px'; el.style.height = '1123px'; el.style.pageBreakAfter = 'always'; el.style.margin = '0'; el.style.boxShadow = 'none';
-      });
-      
-      const pages = clone.querySelectorAll('.pdf-page');
-      pages.forEach((p: Element) => {
-        const el = p as HTMLElement;
-        el.style.transform = 'none'; el.style.position = 'relative'; el.style.width = '794px'; el.style.height = '1123px';
-      });
-
-      const images = clone.querySelectorAll('img');
-      images.forEach((img) => {
-        const origSrc = img.getAttribute('data-original-src');
-        if (origSrc) img.setAttribute('src', origSrc);
-        img.removeAttribute('crossorigin');
-      });
-
-      // ★ サーバー側にも BIZ UDPGothic を強制ダウンロードさせる
-      return `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">
-      <link rel="preconnect" href="https://fonts.googleapis.com">
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-      <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
-      <script src="https://cdn.tailwindcss.com"></script>
-      <style>
-        @page { margin: 0; size: A4 portrait; } 
-        body { margin: 0; padding: 0; background-color: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: ${JP_FONT}; } 
-        * { font-family: ${JP_FONT} !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      </style></head><body>${clone.innerHTML}</body></html>`;
-    };
-
-    const exportPdfClientSide = async () => {
-      const pages = document.querySelectorAll('.pdf-page');
-      if (pages.length === 0) throw new Error('PDFページが見つかりません');
-      window.scrollTo(0, 0);
-      await new Promise((r) => setTimeout(r, 500));
-      if (document.fonts?.ready) await document.fonts.ready;
-      
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      
-      for (let i = 0; i < pages.length; i++) {
-        const pageEl = pages[i] as HTMLElement;
-        pageEl.scrollIntoView({ behavior: 'instant', block: 'center' });
-        await new Promise((r) => setTimeout(r, 600)); 
-        
-        const currentTransform = pageEl.style.transform;
-        pageEl.style.transform = 'scale(1)';
-        const dataUrl = await toJpeg(pageEl, { cacheBust: true, quality: 0.95, pixelRatio: 2, backgroundColor: '#ffffff' });
-        pageEl.style.transform = currentTransform;
-        
-        const pdfHeight = (pageEl.offsetHeight * pdfWidth) / pageEl.offsetWidth;
-        if (i > 0) pdf.addPage();
-        pdf.addImage(dataUrl, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-      }
-      pdf.save(pdfName);
-    };
-
-    try {
-      const htmlPayload = buildServerHtmlPayload();
-      const body = JSON.stringify({ html: htmlPayload });
-      let serverOk = false;
-      let lastServerErr: unknown;
-
-      for (const url of pdfEndpointCandidates()) {
-        try {
-          const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
-          if (!response.ok) throw new Error(`サーバーエラー: ${response.status}`);
-          const blob = await responseToPdfBlob(response);
-          if (blob.size === 0) throw new Error('PDFデータが空です');
-          downloadPdfBlob(blob, pdfName);
-          serverOk = true; break;
-        } catch (e) { lastServerErr = e; }
-      }
-      if (!serverOk) {
-        console.warn('サーバーPDFに失敗、ブラウザで生成します', lastServerErr);
-        try { await exportPdfClientSide(); } catch (clientErr) { setError('PDFの保存に失敗しました。安定しているChromeブラウザをご利用ください。'); }
-      }
-    } catch (err: unknown) { setError('PDF作成中にエラーが発生しました。安定しているChromeブラウザをご利用ください。'); } finally { setIsExporting(false); }
-  };
-
-  if (!project) return <LoadingSpinner />;
-
-  const logoUrl = typeof userSettings?.logoUrl === 'string' ? userSettings.logoUrl : undefined;
-  const companyName = typeof userSettings?.companyName === 'string' ? userSettings.companyName : undefined;
-  const address = typeof userSettings?.address === 'string' ? userSettings.address : undefined;
-  const phone = typeof userSettings?.phone === 'string' ? userSettings.phone : undefined;
-
-  const mapUrlsToRender = project.mapUrls?.length ? project.mapUrls.slice(0, 3) : [''];
-  const mapCount = mapUrlsToRender.length;
-
-  const activePhotos = (project.photos ?? []).filter((p) => p.image || p.process || p.description);
-  const photoPages: (Photo & { circles?: Circle[] })[][] = [];
-  for (let i = 0; i < Math.max(activePhotos.length, 3); i += 3) {
-    const chunk = activePhotos.slice(i, i + 3);
-    while (chunk.length < 3) chunk.push(createEmptyPhoto());
-    photoPages.push(chunk);
-  }
-
-  const activeMaterials = (project.materials ?? []).filter(m => m.image || m.name || m.manufacturer || m.specification || m.remarks);
-  const materialPages: Material[][] = [];
-  if (activeMaterials.length > 0) {
-    for (let i = 0; i < Math.max(activeMaterials.length, 3); i += 3) {
-      const chunk = activeMaterials.slice(i, i + 3);
-      while (chunk.length < 3) chunk.push(createEmptyMaterial());
-      materialPages.push(chunk);
+  const deletePhotoSlot = async (photoId: number) => {
+    if (window.confirm('この写真枠を完全に削除しますか？')) {
+      if (!project) return;
+      const newPhotos = project.photos.filter((p) => p.id !== photoId);
+      const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
+      setProject({ ...project, photos: renumbered });
+      await updateDoc(doc(db, "projects", id!), { photos: renumbered });
     }
-  }
+  };
 
-  const totalPages = 1 + mapCount + photoPages.length + materialPages.length;
+  const addPhotoSlot = async () => {
+    if (!project) return;
+    const newPhotos: Photo[] = [...project.photos, { id: Date.now(), image: null, photoNumber: String(project.photos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], rotation: 0 }];
+    setProject({ ...project, photos: newPhotos });
+    await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+  };
+
+  const movePhoto = async (index: number, direction: 'up' | 'down') => {
+    if (!project) return;
+    if ((direction === 'up' && index === 0) || (direction === 'down' && index === project.photos.length - 1)) return;
+    const newPhotos = [...project.photos];
+    const targetIdx = direction === 'up' ? index - 1 : index + 1;
+    [newPhotos[index], newPhotos[targetIdx]] = [newPhotos[targetIdx], newPhotos[index]];
+    const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
+    setProject({ ...project, photos: renumbered });
+    await updateDoc(doc(db, "projects", id!), { photos: renumbered });
+  };
+
+  const handleBulkUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    if (!project) return;
+    const files = Array.from(e.target.files as FileList);
+    if (files.length === 0) return;
+    setBulkUploading(true);
+    let newPhotos = [...project.photos];
+    let uploadedCount = 0;
+    const todayStr = getTodayStr();
+
+    for (let i = 0; i < files.length; i++) {
+      let targetIndex = newPhotos.findIndex(p => !p.image);
+      if (targetIndex === -1) {
+        newPhotos.push({ id: Date.now() + Math.random(), image: null, photoNumber: String(newPhotos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], rotation: 0 });
+        targetIndex = newPhotos.length - 1;
+      }
+      await new Promise<void>((resolve) => {
+        compressImage(files[i], async (compressed) => {
+          try {
+            const ext = getFileExtension(compressed);
+            const r = ref(storage, `photos/${id}/${Date.now()}_bulk_${i}.${ext}`);
+            await uploadBytes(r, compressed);
+            const url = await getDownloadURL(r);
+            newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: todayStr, circles: [] };
+          } catch {} finally { resolve(); }
+        });
+      });
+      uploadedCount++;
+      setBulkProgress(uploadedCount);
+    }
+    setProject({ ...project, photos: newPhotos });
+    await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+    setBulkUploading(false);
+  };
+
+  const uploadPhoto = async (e: ChangeEvent<HTMLInputElement>, index: number) => {
+    if (!project) return;
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const photoId = project.photos[index].id;
+    setLoadingId(photoId);
+    compressImage(f, async (file) => {
+      try {
+        const ext = getFileExtension(file);
+        const r = ref(storage, `photos/${id}/${Date.now()}.${ext}`);
+        await uploadBytes(r, file);
+        const url = await getDownloadURL(r);
+        const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, image: url, shootingDate: p.shootingDate || getTodayStr(), circles: [] } : p);
+        setProject({ ...project, photos: newPhotos });
+        await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+      } catch { alert('失敗'); } finally { setLoadingId(null); }
+    });
+  };
+
+  const addCircleToPhoto = async (e: MouseEvent<HTMLDivElement>, photoId: number) => {
+    if (!project) return;
+    if (selectedCircleId !== null) { setSelectedCircleId(null); return; }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: [...(p.circles || []), { id: Date.now(), x, y, size: 20 }] } : p);
+    setProject({ ...project, photos: newPhotos });
+    await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+  };
+
+  const updateCircle = async (photoId: number, circleId: number, newProps: Partial<Circle>) => {
+    if (!project) return;
+    const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: p.circles.map((c) => c.id === circleId ? { ...c, ...newProps } : c) } : p);
+    setProject({ ...project, photos: newPhotos });
+    await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+  };
   
+  const removeCircle = async (photoId: number, circleId: number) => {
+    if (!project) return;
+    const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: p.circles.filter((c) => c.id !== circleId) } : p);
+    setProject({ ...project, photos: newPhotos });
+    await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+    setSelectedCircleId(null);
+  };
+
+  if (!project) return <div className="p-10 text-center font-bold text-gray-500">読み込み中...</div>;
+
   return (
-    <div className="min-h-screen bg-gray-200 p-4 sm:p-6 font-sans flex flex-col items-center pb-12 overflow-x-hidden w-full relative">
-      {/* ★ ブラウザのプレビュー画面にも BIZ UDPGothic を適用 */}
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap');
-        .pdf-container-wrapper * { font-family: ${JP_FONT} !important; }
-      `}</style>
+    <div className="min-h-screen bg-[#f8fafc] p-6 font-sans pb-40 select-none overflow-x-hidden" onClick={() => setSelectedCircleId(null)}>
+      <div className="max-w-2xl mx-auto pb-12">
+        <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-3 text-blue-600 mb-8 font-black text-xl px-4 py-2 hover:bg-blue-50 rounded-2xl transition-all active:scale-95"><ArrowLeft strokeWidth={4} /> 戻る</button>
+        <h1 className="text-4xl font-black mb-10 text-gray-900 tracking-tighter">工事写真の登録と赤丸記入</h1>
 
-      <div className="w-full max-w-2xl mb-6 flex justify-between items-center flex-wrap gap-2">
-        <button type="button" onClick={() => navigate(`/project/${id}`)} className="text-blue-500 font-bold flex items-center gap-2 text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
-        <div className="flex gap-2 sm:gap-4">
-          <button type="button" onClick={handleZipExport} disabled={isExporting || isZipping} className="flex items-center gap-2 bg-green-600 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-green-700 disabled:opacity-50"><Download className="w-5 h-5" />写真のみ(Zip)</button>
-          <button type="button" onClick={handleExport} disabled={isExporting || isZipping} className="flex items-center gap-2 bg-black text-white px-5 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-gray-800 disabled:opacity-50">{isExporting ? 'PDF出力中...' : 'PDF出力'}</button>
-        </div>
-      </div>
-
-      {error && <div className="w-full max-w-2xl mb-4"><ErrorMessage message={error} onDismiss={() => setError(null)} /></div>}
-
-      <div className="pdf-container-wrapper flex flex-col gap-8 items-center w-full">
-        {/* ① 表紙ページ */}
-        <div style={{ width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-          <div className="pdf-page absolute top-0 left-0 flex flex-col items-center origin-top-left bg-white text-black" style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})` }}>
-            <div className="flex flex-col items-center w-full" style={{ marginTop: '19px', marginBottom: '106px' }}>
-              <div className="shrink-0 flex justify-center mb-6">
-                {logoUrl ? <img src={proxyUrl(logoUrl, `logo_${sessionId}`)} data-original-src={logoUrl} alt="自社ロゴ" className="block h-auto object-contain" style={{ width: '151px' }} crossOrigin="anonymous" /> : <img src={kawaraLogo} data-original-src={kawaraLogo} alt="標準ロゴ" className="block h-auto object-contain grayscale" style={{ width: '121px' }} crossOrigin="anonymous" />}
-              </div>
-              <div className="flex flex-col items-center">
-                <h1 className="text-[48px] font-bold tracking-[0.3em] mb-4 text-center">工事写真報告書</h1>
-                <div className="w-[160mm] border-b-[4px] border-black" />
-                <div className="w-[160mm] border-b-[1px] border-black mt-1.5" />
-              </div>
-            </div>
-            <div className="w-[150mm] flex flex-col gap-y-[12mm]">
-              {COVER_FIELDS.map((item, idx) => {
-                let value = String(project[item.key] ?? '　');
-                if (item.key === 'contractorName' && companyName) value = companyName;
-                return (
-                  <div key={idx} className="flex items-end pb-2 border-b-2 border-black">
-                    <div className="w-[45mm] flex-shrink-0 flex justify-between text-[22px] font-bold pr-8 leading-none">{item.label.split('').map((c: string, i: number) => <span key={i} className="block leading-none">{c}</span>)}</div>
-                    <div className="flex-1 text-[26px] font-bold whitespace-nowrap overflow-hidden pl-4 leading-none pb-[2px]">{value}</div>
-                  </div>
-                );
-              })}
-            </div>
-            {userSettings && (address || phone) && (
-              <div className="absolute bottom-[16mm] right-[15mm] text-right flex flex-col items-end pl-4 py-1 bg-white">
-                {companyName && <div className="text-[18px] font-bold mb-1 text-black">{companyName}</div>}
-                {address && <div className="text-[14px] font-bold text-gray-800">{address}</div>}
-                {phone && <div className="text-[14px] font-bold text-gray-800">TEL: {phone}</div>}
-              </div>
-            )}
-            <div className="absolute bottom-[10mm] right-[15mm] text-[16px] font-bold text-black">- 1 / {totalPages} -</div>
-          </div>
+        <div className="bg-white p-6 rounded-[2.5rem] border-2 border-gray-100 shadow-sm mb-12">
+          <label className="flex items-center justify-center gap-4 w-full bg-blue-600 text-white font-black py-6 text-2xl rounded-3xl cursor-pointer shadow-[0_15px_40px_rgba(37,99,235,0.4)] hover:bg-blue-700 transition-all active:scale-95">
+            <UploadCloud className="w-8 h-8" />
+            {bulkUploading ? `アップロード中... (${bulkProgress}枚)` : "複数写真を一括追加する"}
+            <input type="file" multiple accept="image/*" className="hidden" onChange={handleBulkUpload} disabled={bulkUploading} />
+          </label>
         </div>
 
-        {/* ② 位置図ページ */}
-        {mapUrlsToRender.map((u, mapIndex) => (
-          <div key={`map-page-${mapIndex}`} style={{ width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})` }}>
-              <div className="w-full h-full p-6 flex flex-col border-[3px] border-gray-800">
-                <h2 className="text-2xl font-bold mb-4 pb-2 border-b-2 border-gray-800">位置図 {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}</h2>
-                <div className="p-2 flex-1 flex items-center justify-center overflow-hidden min-h-0 border border-gray-400 bg-gray-50">
-                  {u ? (
-                    <div className="flex items-center justify-center w-full h-full">
-                      <div className="relative inline-block">
-                        <img src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)} data-original-src={u} crossOrigin="anonymous" className="block w-auto h-auto max-w-full" style={{ maxHeight: '150mm' }} alt="" />
-                        {(project.mapPins ?? []).filter(p => p.mapIndex === mapIndex).map(pin => (
-                            <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: `translate(-50%, -50%) scale(${pin.size ?? 1})`, zIndex: 10 }} className="absolute">
-                              {pin.type === 'arrow' ? (
-                                <div className="flex items-center gap-1 px-1 rounded bg-white/70 border border-red-200"><span className="font-bold text-[24px] text-red-600" style={{ transform: `rotate(${pin.rotation ?? 0}deg)` }}>➡</span><span className="font-bold text-[20px] text-red-600">{pin.label}</span></div>
-                              ) : (
-                                <div className="relative flex items-center justify-center"><div className="w-[14mm] h-[14mm] rounded-full border-[4px] border-red-600 bg-red-600/10" /><span className="absolute font-bold text-[18px] px-1 rounded text-red-600 bg-white/70">{pin.label}</span></div>
-                              )}
-                            </div>
-                        ))}
-                        {(project.mapLines ?? []).filter(l => l.mapIndex === mapIndex).map((line: MapLine) => (
-                            <div key={`line-${line.id}`} className="absolute" style={{ left: safeStyleLine(line.x, '%'), top: safeStyleLine(line.y, '%'), width: safeStyleLine(line.length, '%'), height: safeStyleLine(line.thickness, 'px'), backgroundColor: line.color || '#000000', transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`, transformOrigin: 'center center', zIndex: 15 }} />
-                          ))}
-                      </div>
-                    </div>
-                  ) : <span className="font-bold text-gray-400">位置図未登録</span>}
+        <div className="space-y-16 mt-4">
+          {project.photos.map((photo, index: number) => {
+            const isRotated90 = Number(photo.rotation || 0) % 180 !== 0;
+            const containerClassName = `w-full ${photo.image && isRotated90 ? 'min-h-[70vh]' : 'min-h-[22rem]'} mt-12 bg-[#f1f5f9] rounded-[2.5rem] flex items-center justify-center overflow-hidden border-4 border-dashed border-gray-200 relative mb-10 group transition-all hover:border-blue-400`;
+
+            return (
+              <div key={photo.id} className="bg-white p-8 rounded-[3rem] border-2 border-gray-100 shadow-2xl relative animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="absolute top-8 right-8 flex gap-4 z-10">
+                  <button onClick={() => movePhoto(index, 'up')} className="bg-white/90 backdrop-blur p-4 rounded-2xl shadow-lg border-2 border-gray-100 text-gray-700 hover:bg-white active:scale-90 transition-all"><ArrowUp className="w-7 h-7" /></button>
+                  <button onClick={() => movePhoto(index, 'down')} className="bg-white/90 backdrop-blur p-4 rounded-2xl shadow-lg border-2 border-gray-100 text-gray-700 hover:bg-white active:scale-90 transition-all"><ArrowDown className="w-7 h-7" /></button>
                 </div>
-                <div className="mt-4">
-                  <div className="flex justify-between items-end mb-2"><div className="text-base font-bold">項目欄</div><PdfLineLegend /></div>
-                  <div className="border-2 border-gray-800">
-                    <div className="grid grid-cols-12 text-base font-bold border-b-2 border-gray-800 bg-gray-100">
-                      <div className="col-span-1 py-2 text-center flex justify-center items-center border-r-2 border-gray-800">符号</div><div className="col-span-2 py-2 text-center flex justify-center items-center border-r-2 border-gray-800">部位</div><div className="col-span-2 py-2 text-center flex justify-center items-center border-r-2 border-gray-800">写真NO</div><div className="col-span-7 py-2 text-center flex justify-center items-center">備考</div>
+
+                <div className={containerClassName}>
+                  {loadingId === photo.id ? (
+                    <div className="flex flex-col items-center gap-6"><div className="w-14 h-14 border-6 border-blue-500 border-t-transparent rounded-full animate-spin"></div><span className="text-2xl font-black text-blue-600 tracking-widest">保存中...</span></div>
+                  ) : photo.image ? (
+                    <div className="relative inline-block" onClick={(e) => addCircleToPhoto(e, photo.id)}>
+                      <img src={proxyUrl(photo.image, photo.id)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[70vh] pointer-events-none rounded-2xl shadow-2xl transition-transform duration-500" style={{ transform: `rotate(${Number(photo.rotation || 0)}deg)` }} alt="" />
+                      {(photo.circles || []).map((circle) => (
+                        <PhotoCircleMarker key={circle.id} circle={circle} isSelected={selectedCircleId === circle.id} onSelect={() => setSelectedCircleId(circle.id)} onDragEnd={(x, y) => updateCircle(photo.id, circle.id, { x, y })} onSizeChange={(size) => updateCircle(photo.id, circle.id, { size })} onRemove={() => removeCircle(photo.id, circle.id)} />
+                      ))}
+                      <div className="absolute top-6 left-6 bg-black/70 backdrop-blur text-white text-xs px-6 py-3 rounded-full font-black pointer-events-none shadow-2xl border-2 border-white/20 z-10">タップで赤丸を追加</div>
                     </div>
-                    {(() => {
-                      const rows: MapRow[] = project.mapRows ?? [];
-                      const currentRows = rows.filter((r) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0));
-                      const displayRows: MapRow[] = currentRows.length > 0 ? currentRows.slice(0, 6) : Array.from({ length: 6 }, (_, i) => ({ id: -(i + 1), symbol: '　', part: '　', photoNo: '　', remarks: '　' }));
-                      return displayRows.map((row) => (
-                        <div key={row.id} className="grid grid-cols-12 text-base border-b border-gray-400">
-                          <div className="col-span-1 py-2 font-bold text-center flex justify-center items-center border-r border-gray-400 text-red-700">{row.symbol ?? '　'}</div><div className="col-span-2 px-2 py-2 flex items-center overflow-hidden border-r border-gray-400">{row.part ?? '　'}</div><div className="col-span-2 py-2 text-center flex justify-center items-center overflow-hidden border-r border-gray-400">{row.photoNo ?? row.relatedPhotoNumber ?? '　'}</div><div className="col-span-7 px-2 py-2 flex items-center overflow-hidden">{row.remarks ?? '　'}</div>
-                        </div>
-                      ));
-                    })()}
+                  ) : (
+                    <div className="text-center text-gray-300 py-16"><Camera className="w-24 h-24 mx-auto mb-6 opacity-20" /><span className="text-2xl font-black block">画像を選択してください</span></div>
+                  )}
+                </div>
+
+                <div className="flex justify-between items-center mb-8 pb-8 border-b-4 border-gray-50">
+                  <div className="font-black text-gray-900 text-3xl flex items-center gap-4"><span className="bg-gray-900 text-white w-12 h-12 flex items-center justify-center rounded-2xl text-xl">{index + 1}</span> 写真</div>
+                  <div className="flex gap-4">
+                    <button type="button" onClick={() => updatePhoto(photo.id, 'rotation', ((Number(photo.rotation || 0)) + 90) % 360)} className="p-4 text-gray-700 bg-gray-100 rounded-[1.5rem] border-2 border-gray-200 font-bold hover:bg-gray-200 active:scale-95 flex items-center gap-2">↻ 回転</button>
+                    <button onClick={() => deletePhotoSlot(photo.id)} className="p-4 text-red-500 bg-red-50 rounded-[1.5rem] border-2 border-red-100 hover:bg-red-100 active:scale-95"><Trash2 className="w-7 h-7"/></button>
+                    <label className="bg-blue-100 text-blue-800 font-black py-4 px-8 rounded-[1.5rem] cursor-pointer shadow-md border-2 border-blue-200 hover:bg-blue-200 active:scale-95 text-lg">
+                      {photo.image ? '変更' : '選択'} <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadPhoto(e, index)} />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="space-y-8">
+                  <div className="flex items-center gap-6 bg-gray-50 p-6 rounded-[2rem] border-2 border-gray-100">
+                    <div className="font-black text-gray-500 whitespace-nowrap text-xl">撮影日:</div>
+                    <input type="date" className="w-full bg-transparent text-2xl font-bold outline-none focus:text-blue-600 transition-colors" value={formatToYMD(photo.shootingDate)} onChange={(e) => updatePhoto(photo.id, "shootingDate", formatToYMDSlash(e.target.value))} />
+                  </div>
+
+                  <button onClick={() => { setCurrentPhotoId(photo.id); setModalOpen(true); }} className={`w-full p-8 text-2xl border-4 rounded-[2rem] text-left flex justify-between items-center transition-all ${photo.locationMap ? 'text-red-700 font-black border-red-200 bg-red-50 shadow-lg shadow-red-100' : 'text-gray-400 font-bold border-gray-200 bg-white hover:border-gray-400'}`}>
+                    {photo.locationMap || '▼ 場所を選択（符号と連動）'} <MapPin className={`w-10 h-10 ${photo.locationMap ? 'text-red-500' : 'text-gray-300'}`} />
+                  </button>
+
+                  <div className="space-y-3">
+                    <label className="text-sm font-black text-gray-400 pl-4 uppercase tracking-[0.2em]">工程 / PROCESS</label>
+                    <select className="w-full p-6 text-2xl font-black border-4 border-gray-100 rounded-[2rem] bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none" value={photo.process} onChange={(e) => updatePhoto(photo.id, "process", e.target.value)}>
+                      <option value="">-- 工程を選択 --</option>
+                      {processOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="space-y-4">
+                    <label className="text-sm font-black text-gray-400 pl-4 uppercase tracking-[0.2em]">説明 / DESCRIPTION</label>
+                    <div className="flex flex-wrap gap-3 mb-2">
+                      {descTemplates.map((tmpl, i) => (
+                        <button key={i} type="button" onClick={() => updatePhoto(photo.id, "description", (photo.description || "") + tmpl.text)} className="text-base font-black text-blue-700 bg-blue-50 border-2 border-blue-100 px-6 py-3 rounded-2xl hover:bg-blue-100 active:scale-95 shadow-sm">＋{tmpl.label}</button>
+                      ))}
+                    </div>
+                    <textarea rows={4} className="w-full p-8 text-2xl font-bold border-4 border-gray-100 rounded-[2.5rem] bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-inner" value={photo.description} onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} placeholder="現場状況の詳細を入力" />
                   </div>
                 </div>
               </div>
-              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-bold text-gray-500">- {2 + mapIndex} / {totalPages} -</div>
-            </div>
-          </div>
-        ))}
+            );
+          })}
+        </div>
 
-        {/* ③ 写真ページ */}
-        {photoPages.map((chunk, pageIndex) => (
-          <div key={`photo-page-${pageIndex}`} style={{ width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})` }}>
-              <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden">
-                {chunk.map((p, i) => {
-                  const isRotated = (Number(p.rotation) || 0) % 180 !== 0;
-                  return (
-                    <div key={i} className="flex gap-2 h-[calc((100%-1rem)/3)] p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0">
-                      <div className="w-[60%] flex items-center justify-center overflow-hidden relative min-h-0 border border-gray-400 bg-gray-50 shrink-0">
-                        {p.image ? (
-                          <div className="flex items-center justify-center w-full h-full relative p-1">
-                            <img src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} data-original-src={p.image} crossOrigin="anonymous" className="block w-auto h-auto" style={{ transform: `rotate(${Number(p.rotation) || 0}deg)`, transformOrigin: 'center center', maxWidth: isRotated ? '75mm' : '100%', maxHeight: isRotated ? '110mm' : '100%' }} alt="" />
-                            {(p.circles ?? []).map((circle) => (
-                              <div key={circle.id} className="absolute aspect-square rounded-full border-[3px] border-red-600" style={{ left: `${circle.x}%`, top: `${circle.y}%`, width: `${circle.size}%`, transform: 'translate(-50%, -50%)' }} />
-                            ))}
-                          </div>
-                        ) : <span className="font-bold text-gray-400">写真未登録</span>}
-                      </div>
-                      <div className="w-[40%] flex flex-col text-[13px] border border-gray-400 bg-white shrink-0 min-h-0">
-                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">写真NO</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.photoNumber || '　'}</div></div>
-                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">撮影日</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.shootingDate || '　'}</div></div>
-                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">位置図</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden text-red-700 whitespace-nowrap">{p.locationMap || '　'}</div></div>
-                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">工程</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.process || '　'}</div></div>
-                        <div className="flex-1 flex min-h-0"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">説明</div><div className="p-2 flex-1 overflow-hidden font-bold leading-snug flex items-start break-words whitespace-pre-wrap">{p.description || '　'}</div></div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapCount + pageIndex} / {totalPages} -</div>
-            </div>
-          </div>
-        ))}
+        <button onClick={addPhotoSlot} className="w-full mt-24 bg-gray-900 text-white font-black py-8 text-3xl rounded-[3rem] shadow-[0_20px_60px_rgba(0,0,0,0.3)] flex items-center justify-center gap-6 hover:bg-black transition-all active:scale-95 mb-20"><Plus className="w-10 h-10" strokeWidth={4} /> 写真枠を追加する</button>
 
-        {/* ④ 使用材料表 */}
-        {materialPages.map((chunk, pageIndex) => (
-          <div key={`material-page-${pageIndex}`} style={{ width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})` }}>
-              <h2 className="text-xl font-bold pb-1 mb-2 border-b-2 border-gray-800 shrink-0">使用材料表</h2>
-              <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden">
-                {chunk.map((m, i) => {
-                  const isRotated = (Number(m.rotation) || 0) % 180 !== 0;
-                  return (
-                    <div key={i} className="flex gap-2 h-[calc((100%-1rem)/3)] p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0">
-                      <div className="w-[60%] flex items-center justify-center overflow-hidden relative min-h-0 border border-gray-400 bg-gray-50 shrink-0">
-                        {m.image ? (
-                          <div className="flex items-center justify-center w-full h-full relative p-1">
-                            <img src={proxyUrl(m.image, `material_${m.id}_${sessionId}`)} data-original-src={m.image} crossOrigin="anonymous" className="block w-auto h-auto" style={{ transform: `rotate(${Number(m.rotation) || 0}deg)`, transformOrigin: 'center center', maxWidth: isRotated ? '75mm' : '100%', maxHeight: isRotated ? '110mm' : '100%' }} alt="" />
-                          </div>
-                        ) : <span className="font-bold text-gray-400">写真未登録</span>}
-                      </div>
-                      <div className="w-[40%] flex flex-col text-[13px] border border-gray-400 bg-white shrink-0 min-h-0">
-                        <div className="flex min-h-[32px] border-b border-gray-400 shrink-0"><div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">品名</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden break-words whitespace-pre-wrap">{m.name || '　'}</div></div>
-                        <div className="flex min-h-[32px] border-b border-gray-400 shrink-0"><div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">メーカー</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden break-words whitespace-pre-wrap">{m.manufacturer || '　'}</div></div>
-                        <div className="flex min-h-[44px] border-b border-gray-400 shrink-0"><div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-tight">規格・寸法<br />数量</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden text-red-700 leading-snug break-words whitespace-pre-wrap">{m.specification || '　'}</div></div>
-                        <div className="flex-1 flex min-h-0"><div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">備考</div><div className="p-2 flex-1 overflow-hidden font-bold flex items-start leading-snug break-words whitespace-pre-wrap">{m.remarks || '　'}</div></div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapCount + photoPages.length + pageIndex} / {totalPages} -</div>
-            </div>
-          </div>
-        ))}
       </div>
+      <PinSelectModal isOpen={modalOpen} onClose={() => setModalOpen(false)} pins={project?.mapPins} onSelect={(label) => currentPhotoId && updatePhoto(currentPhotoId, "locationMap", label)} />
     </div>
   );
 }
