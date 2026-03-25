@@ -14,8 +14,8 @@ import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 
 const PDF_GENERATE_URL = 'https://generatepdf-ld4b4dsi5q-an.a.run.app';
-// ★ Webフォント（Noto Sans JP）を最優先で指定し、Macとサーバーのデザインを完全に統一
-const JP_FONT = "'Noto Sans JP', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif";
+// ★ BIZ UDPゴシックを最優先に指定
+const JP_FONT = "'BIZ UDPGothic', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', Meiryo, sans-serif";
 
 function safeStyleLine(val: string | number | undefined | null, defaultUnit: string): string {
   if (val == null || val === '') return `0${defaultUnit}`;
@@ -190,11 +190,11 @@ export default function PdfExportPage() {
         img.removeAttribute('crossorigin');
       });
 
-      // ★ サーバー側にもWebフォント（Noto Sans JP）を強制ダウンロードさせるリンクを追加
+      // ★ サーバー側にも BIZ UDPGothic を強制ダウンロードさせる
       return `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">
       <link rel="preconnect" href="https://fonts.googleapis.com">
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-      <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
+      <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
       <script src="https://cdn.tailwindcss.com"></script>
       <style>
         @page { margin: 0; size: A4 portrait; } 
@@ -285,9 +285,9 @@ export default function PdfExportPage() {
   
   return (
     <div className="min-h-screen bg-gray-200 p-4 sm:p-6 font-sans flex flex-col items-center pb-12 overflow-x-hidden w-full relative">
-      {/* ★ ブラウザのプレビュー画面にもWebフォントを適用し、PDFと全く同じ見た目にする */}
+      {/* ★ ブラウザのプレビュー画面にも BIZ UDPGothic を適用 */}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap');
         .pdf-container-wrapper * { font-family: ${JP_FONT} !important; }
       `}</style>
 
@@ -310,7 +310,7 @@ export default function PdfExportPage() {
                 {logoUrl ? <img src={proxyUrl(logoUrl, `logo_${sessionId}`)} data-original-src={logoUrl} alt="自社ロゴ" className="block h-auto object-contain" style={{ width: '151px' }} crossOrigin="anonymous" /> : <img src={kawaraLogo} data-original-src={kawaraLogo} alt="標準ロゴ" className="block h-auto object-contain grayscale" style={{ width: '121px' }} crossOrigin="anonymous" />}
               </div>
               <div className="flex flex-col items-center">
-                <h1 className="text-[48px] font-black tracking-[0.3em] mb-4 text-center">工事写真報告書</h1>
+                <h1 className="text-[48px] font-bold tracking-[0.3em] mb-4 text-center">工事写真報告書</h1>
                 <div className="w-[160mm] border-b-[4px] border-black" />
                 <div className="w-[160mm] border-b-[1px] border-black mt-1.5" />
               </div>
@@ -322,7 +322,7 @@ export default function PdfExportPage() {
                 return (
                   <div key={idx} className="flex items-end pb-2 border-b-2 border-black">
                     <div className="w-[45mm] flex-shrink-0 flex justify-between text-[22px] font-bold pr-8 leading-none">{item.label.split('').map((c: string, i: number) => <span key={i} className="block leading-none">{c}</span>)}</div>
-                    <div className="flex-1 text-[26px] font-black whitespace-nowrap overflow-hidden pl-4 leading-none pb-[2px]">{value}</div>
+                    <div className="flex-1 text-[26px] font-bold whitespace-nowrap overflow-hidden pl-4 leading-none pb-[2px]">{value}</div>
                   </div>
                 );
               })}
