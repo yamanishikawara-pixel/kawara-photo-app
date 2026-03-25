@@ -14,8 +14,8 @@ import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 
 const PDF_GENERATE_URL = 'https://generatepdf-ld4b4dsi5q-an.a.run.app';
-// ★ 変更点：フォーマルな明朝体に指定
-const JP_FONT = '"Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", "MS PMincho", serif';
+// ★ ダブルクォーテーションを排除し、PDF化の際のエラーを防ぐ最強の指定
+const JP_FONT = "'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', Meiryo, sans-serif";
 
 function safeStyleLine(val: string | number | undefined | null, defaultUnit: string): string {
   if (val == null || val === '') return `0${defaultUnit}`;
@@ -190,7 +190,8 @@ export default function PdfExportPage() {
         img.removeAttribute('crossorigin');
       });
 
-      return `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><script src="https://cdn.tailwindcss.com"></script><style>@page { margin: 0; size: A4 portrait; } body { margin: 0; padding: 0; background-color: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: ${JP_FONT}; } * { font-family: ${JP_FONT} !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; font-weight: 600; }</style></head><body>${clone.innerHTML}</body></html>`;
+      // ★ フォント指定を安全な形式に変更
+      return `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><script src="https://cdn.tailwindcss.com"></script><style>@page { margin: 0; size: A4 portrait; } body { margin: 0; padding: 0; background-color: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: ${JP_FONT}; } * { font-family: ${JP_FONT} !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }</style></head><body>${clone.innerHTML}</body></html>`;
     };
 
     const exportPdfClientSide = async () => {
@@ -294,7 +295,7 @@ export default function PdfExportPage() {
                 {logoUrl ? <img src={proxyUrl(logoUrl, `logo_${sessionId}`)} data-original-src={logoUrl} alt="自社ロゴ" className="block h-auto object-contain" style={{ width: '151px' }} crossOrigin="anonymous" /> : <img src={kawaraLogo} data-original-src={kawaraLogo} alt="標準ロゴ" className="block h-auto object-contain grayscale" style={{ width: '121px' }} crossOrigin="anonymous" />}
               </div>
               <div className="flex flex-col items-center">
-                {/* ★ 変更点：極太(font-black)を、スマートな太字(font-bold)に変更 */}
+                {/* ★ 滲みをなくすため綺麗な太字（font-bold）に統一 */}
                 <h1 className="text-[48px] font-bold tracking-[0.3em] mb-4 text-center">工事写真報告書</h1>
                 <div className="w-[160mm] border-b-[4px] border-black" />
                 <div className="w-[160mm] border-b-[1px] border-black mt-1.5" />
@@ -307,6 +308,7 @@ export default function PdfExportPage() {
                 return (
                   <div key={idx} className="flex items-end pb-2 border-b-2 border-black">
                     <div className="w-[45mm] flex-shrink-0 flex justify-between text-[22px] font-bold pr-8 leading-none">{item.label.split('').map((c: string, i: number) => <span key={i} className="block leading-none">{c}</span>)}</div>
+                    {/* ★ 滲みをなくすため綺麗な太字（font-bold）に統一 */}
                     <div className="flex-1 text-[26px] font-bold whitespace-nowrap overflow-hidden pl-4 leading-none pb-[2px]">{value}</div>
                   </div>
                 );
