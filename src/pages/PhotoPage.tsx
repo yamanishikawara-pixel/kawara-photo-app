@@ -168,6 +168,7 @@ export default function PhotoPage() {
     await updateDoc(doc(db, "projects", id!), { photos: renumbered });
   };
 
+  // ★ ここが唯一の変更点：1枚ずつ確実に保存（updateDoc）するように移動しました
   const handleBulkUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     if (!project) return;
     const files = Array.from(e.target.files as FileList);
@@ -190,15 +191,24 @@ export default function PhotoPage() {
             const r = ref(storage, `photos/${id}/${Date.now()}_bulk_${i}.${ext}`);
             await uploadBytes(r, compressed);
             const url = await getDownloadURL(r);
+            
+            // 画像URLをセット
             newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: todayStr, circles: [] };
-          } catch {} finally { resolve(); }
+
+            // ★ 1枚終わるごとに、即座にデータベースへ「確定保存」する！
+            setProject({ ...project, photos: newPhotos });
+            await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+
+          } catch (error) {
+             console.error("写真の保存に失敗しました", error);
+          } finally { resolve(); }
         });
       });
       uploadedCount++;
       setBulkProgress(uploadedCount);
     }
-    setProject({ ...project, photos: newPhotos });
-    await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+    
+    // 全て終わったらローディング表示を消すだけ
     setBulkUploading(false);
   };
 
