@@ -14,7 +14,8 @@ import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 
 const PDF_GENERATE_URL = 'https://generatepdf-ld4b4dsi5q-an.a.run.app';
-const JP_FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo, sans-serif';
+// ★ 変更点：フォーマルな明朝体に指定
+const JP_FONT = '"Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", "MS PMincho", serif';
 
 function safeStyleLine(val: string | number | undefined | null, defaultUnit: string): string {
   if (val == null || val === '') return `0${defaultUnit}`;
@@ -189,7 +190,7 @@ export default function PdfExportPage() {
         img.removeAttribute('crossorigin');
       });
 
-      return `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><script src="https://cdn.tailwindcss.com"></script><style>@page { margin: 0; size: A4 portrait; } body { margin: 0; padding: 0; background-color: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: ${JP_FONT}; } * { font-family: ${JP_FONT} !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }</style></head><body>${clone.innerHTML}</body></html>`;
+      return `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><script src="https://cdn.tailwindcss.com"></script><style>@page { margin: 0; size: A4 portrait; } body { margin: 0; padding: 0; background-color: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: ${JP_FONT}; } * { font-family: ${JP_FONT} !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; font-weight: 600; }</style></head><body>${clone.innerHTML}</body></html>`;
     };
 
     const exportPdfClientSide = async () => {
@@ -293,7 +294,8 @@ export default function PdfExportPage() {
                 {logoUrl ? <img src={proxyUrl(logoUrl, `logo_${sessionId}`)} data-original-src={logoUrl} alt="自社ロゴ" className="block h-auto object-contain" style={{ width: '151px' }} crossOrigin="anonymous" /> : <img src={kawaraLogo} data-original-src={kawaraLogo} alt="標準ロゴ" className="block h-auto object-contain grayscale" style={{ width: '121px' }} crossOrigin="anonymous" />}
               </div>
               <div className="flex flex-col items-center">
-                <h1 className="text-[48px] font-black tracking-[0.3em] mb-4 text-center">工事写真報告書</h1>
+                {/* ★ 変更点：極太(font-black)を、スマートな太字(font-bold)に変更 */}
+                <h1 className="text-[48px] font-bold tracking-[0.3em] mb-4 text-center">工事写真報告書</h1>
                 <div className="w-[160mm] border-b-[4px] border-black" />
                 <div className="w-[160mm] border-b-[1px] border-black mt-1.5" />
               </div>
@@ -305,7 +307,7 @@ export default function PdfExportPage() {
                 return (
                   <div key={idx} className="flex items-end pb-2 border-b-2 border-black">
                     <div className="w-[45mm] flex-shrink-0 flex justify-between text-[22px] font-bold pr-8 leading-none">{item.label.split('').map((c: string, i: number) => <span key={i} className="block leading-none">{c}</span>)}</div>
-                    <div className="flex-1 text-[26px] font-black whitespace-nowrap overflow-hidden pl-4 leading-none pb-[2px]">{value}</div>
+                    <div className="flex-1 text-[26px] font-bold whitespace-nowrap overflow-hidden pl-4 leading-none pb-[2px]">{value}</div>
                   </div>
                 );
               })}
@@ -313,8 +315,8 @@ export default function PdfExportPage() {
             {userSettings && (address || phone) && (
               <div className="absolute bottom-[16mm] right-[15mm] text-right flex flex-col items-end pl-4 py-1 bg-white">
                 {companyName && <div className="text-[18px] font-bold mb-1 text-black">{companyName}</div>}
-                {address && <div className="text-[14px] text-gray-800">{address}</div>}
-                {phone && <div className="text-[14px] text-gray-800">TEL: {phone}</div>}
+                {address && <div className="text-[14px] font-bold text-gray-800">{address}</div>}
+                {phone && <div className="text-[14px] font-bold text-gray-800">TEL: {phone}</div>}
               </div>
             )}
             <div className="absolute bottom-[10mm] right-[15mm] text-[16px] font-bold text-black">- 1 / {totalPages} -</div>
@@ -335,7 +337,7 @@ export default function PdfExportPage() {
                         {(project.mapPins ?? []).filter(p => p.mapIndex === mapIndex).map(pin => (
                             <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: `translate(-50%, -50%) scale(${pin.size ?? 1})`, zIndex: 10 }} className="absolute">
                               {pin.type === 'arrow' ? (
-                                <div className="flex items-center gap-1 px-1 rounded bg-white/70 border border-red-200"><span className="font-black text-[24px] text-red-600" style={{ transform: `rotate(${pin.rotation ?? 0}deg)` }}>➡</span><span className="font-bold text-[20px] text-red-600">{pin.label}</span></div>
+                                <div className="flex items-center gap-1 px-1 rounded bg-white/70 border border-red-200"><span className="font-bold text-[24px] text-red-600" style={{ transform: `rotate(${pin.rotation ?? 0}deg)` }}>➡</span><span className="font-bold text-[20px] text-red-600">{pin.label}</span></div>
                               ) : (
                                 <div className="relative flex items-center justify-center"><div className="w-[14mm] h-[14mm] rounded-full border-[4px] border-red-600 bg-red-600/10" /><span className="absolute font-bold text-[18px] px-1 rounded text-red-600 bg-white/70">{pin.label}</span></div>
                               )}
@@ -367,124 +369,74 @@ export default function PdfExportPage() {
                   </div>
                 </div>
               </div>
-              <div className="absolute bottom-[10mm] right-[15mm] text-xs text-gray-500">- {2 + mapIndex} / {totalPages} -</div>
+              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-bold text-gray-500">- {2 + mapIndex} / {totalPages} -</div>
             </div>
           </div>
         ))}
 
-        {/* ③ 写真ページ (はみ出し完全解消の calc() レイアウト) */}
+        {/* ③ 写真ページ */}
         {photoPages.map((chunk, pageIndex) => (
           <div key={`photo-page-${pageIndex}`} style={{ width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})`, fontFamily: JP_FONT }}>
-              
-              {/* 外枠・3等分レイアウト */}
               <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden">
                 {chunk.map((p, i) => {
                   const isRotated = (Number(p.rotation) || 0) % 180 !== 0;
                   return (
                     <div key={i} className="flex gap-2 h-[calc((100%-1rem)/3)] p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0">
-                      
                       <div className="w-[60%] flex items-center justify-center overflow-hidden relative min-h-0 border border-gray-400 bg-gray-50 shrink-0">
                         {p.image ? (
                           <div className="flex items-center justify-center w-full h-full relative p-1">
-                            <img 
-                              src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} 
-                              data-original-src={p.image} 
-                              crossOrigin="anonymous" 
-                              className="block w-auto h-auto" 
-                              style={{ transform: `rotate(${Number(p.rotation) || 0}deg)`, transformOrigin: 'center center', maxWidth: isRotated ? '75mm' : '100%', maxHeight: isRotated ? '110mm' : '100%' }} 
-                              alt="" 
-                            />
+                            <img src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} data-original-src={p.image} crossOrigin="anonymous" className="block w-auto h-auto" style={{ transform: `rotate(${Number(p.rotation) || 0}deg)`, transformOrigin: 'center center', maxWidth: isRotated ? '75mm' : '100%', maxHeight: isRotated ? '110mm' : '100%' }} alt="" />
                             {(p.circles ?? []).map((circle) => (
                               <div key={circle.id} className="absolute aspect-square rounded-full border-[3px] border-red-600" style={{ left: `${circle.x}%`, top: `${circle.y}%`, width: `${circle.size}%`, transform: 'translate(-50%, -50%)' }} />
                             ))}
                           </div>
                         ) : <span className="font-bold text-gray-400">写真未登録</span>}
                       </div>
-
                       <div className="w-[40%] flex flex-col text-[13px] border border-gray-400 bg-white shrink-0 min-h-0">
-                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0">
-                          <div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">写真NO</div>
-                          <div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.photoNumber || '　'}</div>
-                        </div>
-                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0">
-                          <div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">撮影日</div>
-                          <div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.shootingDate || '　'}</div>
-                        </div>
-                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0">
-                          <div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">位置図</div>
-                          <div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden text-red-700 whitespace-nowrap">{p.locationMap || '　'}</div>
-                        </div>
-                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0">
-                          <div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">工程</div>
-                          <div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.process || '　'}</div>
-                        </div>
-                        <div className="flex-1 flex min-h-0">
-                          <div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">説明</div>
-                          <div className="p-2 flex-1 overflow-hidden font-bold leading-snug flex items-start break-words whitespace-pre-wrap">{p.description || '　'}</div>
-                        </div>
+                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">写真NO</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.photoNumber || '　'}</div></div>
+                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">撮影日</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.shootingDate || '　'}</div></div>
+                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">位置図</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden text-red-700 whitespace-nowrap">{p.locationMap || '　'}</div></div>
+                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">工程</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.process || '　'}</div></div>
+                        <div className="flex-1 flex min-h-0"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">説明</div><div className="p-2 flex-1 overflow-hidden font-bold leading-snug flex items-start break-words whitespace-pre-wrap">{p.description || '　'}</div></div>
                       </div>
                     </div>
                   );
                 })}
               </div>
-
-              <div className="absolute bottom-[10mm] right-[15mm] text-xs text-gray-500 shrink-0">- {2 + mapCount + pageIndex} / {totalPages} -</div>
+              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapCount + pageIndex} / {totalPages} -</div>
             </div>
           </div>
         ))}
 
-        {/* ④ 使用材料表 (はみ出し完全解消の calc() レイアウト) */}
+        {/* ④ 使用材料表 */}
         {materialPages.map((chunk, pageIndex) => (
           <div key={`material-page-${pageIndex}`} style={{ width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})`, fontFamily: JP_FONT }}>
               <h2 className="text-xl font-bold pb-1 mb-2 border-b-2 border-gray-800 shrink-0">使用材料表</h2>
-              
               <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden">
                 {chunk.map((m, i) => {
                   const isRotated = (Number(m.rotation) || 0) % 180 !== 0;
                   return (
                     <div key={i} className="flex gap-2 h-[calc((100%-1rem)/3)] p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0">
-                      
                       <div className="w-[60%] flex items-center justify-center overflow-hidden relative min-h-0 border border-gray-400 bg-gray-50 shrink-0">
                         {m.image ? (
                           <div className="flex items-center justify-center w-full h-full relative p-1">
-                            <img 
-                              src={proxyUrl(m.image, `material_${m.id}_${sessionId}`)} 
-                              data-original-src={m.image} 
-                              crossOrigin="anonymous" 
-                              className="block w-auto h-auto" 
-                              style={{ transform: `rotate(${Number(m.rotation) || 0}deg)`, transformOrigin: 'center center', maxWidth: isRotated ? '75mm' : '100%', maxHeight: isRotated ? '110mm' : '100%' }} 
-                              alt="" 
-                            />
+                            <img src={proxyUrl(m.image, `material_${m.id}_${sessionId}`)} data-original-src={m.image} crossOrigin="anonymous" className="block w-auto h-auto" style={{ transform: `rotate(${Number(m.rotation) || 0}deg)`, transformOrigin: 'center center', maxWidth: isRotated ? '75mm' : '100%', maxHeight: isRotated ? '110mm' : '100%' }} alt="" />
                           </div>
                         ) : <span className="font-bold text-gray-400">写真未登録</span>}
                       </div>
-
                       <div className="w-[40%] flex flex-col text-[13px] border border-gray-400 bg-white shrink-0 min-h-0">
-                        <div className="flex min-h-[32px] border-b border-gray-400 shrink-0">
-                          <div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">品名</div>
-                          <div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden break-words whitespace-pre-wrap">{m.name || '　'}</div>
-                        </div>
-                        <div className="flex min-h-[32px] border-b border-gray-400 shrink-0">
-                          <div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">メーカー</div>
-                          <div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden break-words whitespace-pre-wrap">{m.manufacturer || '　'}</div>
-                        </div>
-                        <div className="flex min-h-[44px] border-b border-gray-400 shrink-0">
-                          <div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-tight">規格・寸法<br />数量</div>
-                          <div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden text-red-700 leading-snug break-words whitespace-pre-wrap">{m.specification || '　'}</div>
-                        </div>
-                        <div className="flex-1 flex min-h-0">
-                          <div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">備考</div>
-                          <div className="p-2 flex-1 overflow-hidden font-bold flex items-start leading-snug break-words whitespace-pre-wrap">{m.remarks || '　'}</div>
-                        </div>
+                        <div className="flex min-h-[32px] border-b border-gray-400 shrink-0"><div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">品名</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden break-words whitespace-pre-wrap">{m.name || '　'}</div></div>
+                        <div className="flex min-h-[32px] border-b border-gray-400 shrink-0"><div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">メーカー</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden break-words whitespace-pre-wrap">{m.manufacturer || '　'}</div></div>
+                        <div className="flex min-h-[44px] border-b border-gray-400 shrink-0"><div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-tight">規格・寸法<br />数量</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden text-red-700 leading-snug break-words whitespace-pre-wrap">{m.specification || '　'}</div></div>
+                        <div className="flex-1 flex min-h-0"><div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none">備考</div><div className="p-2 flex-1 overflow-hidden font-bold flex items-start leading-snug break-words whitespace-pre-wrap">{m.remarks || '　'}</div></div>
                       </div>
                     </div>
                   );
                 })}
               </div>
-
-              <div className="absolute bottom-[10mm] right-[15mm] text-xs text-gray-500 shrink-0">- {2 + mapCount + photoPages.length + pageIndex} / {totalPages} -</div>
+              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapCount + photoPages.length + pageIndex} / {totalPages} -</div>
             </div>
           </div>
         ))}
