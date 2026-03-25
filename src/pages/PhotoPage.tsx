@@ -14,8 +14,8 @@ import { toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 
 const PDF_GENERATE_URL = 'https://generatepdf-ld4b4dsi5q-an.a.run.app';
-// ★ ダブルクォーテーションを排除し、PDF化の際のエラーを防ぐ最強の指定
-const JP_FONT = "'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', Meiryo, sans-serif";
+// ★ Webフォント（Noto Sans JP）を最優先で指定し、Macとサーバーのデザインを完全に統一
+const JP_FONT = "'Noto Sans JP', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif";
 
 function safeStyleLine(val: string | number | undefined | null, defaultUnit: string): string {
   if (val == null || val === '') return `0${defaultUnit}`;
@@ -190,8 +190,17 @@ export default function PdfExportPage() {
         img.removeAttribute('crossorigin');
       });
 
-      // ★ フォント指定を安全な形式に変更
-      return `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><script src="https://cdn.tailwindcss.com"></script><style>@page { margin: 0; size: A4 portrait; } body { margin: 0; padding: 0; background-color: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: ${JP_FONT}; } * { font-family: ${JP_FONT} !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }</style></head><body>${clone.innerHTML}</body></html>`;
+      // ★ サーバー側にもWebフォント（Noto Sans JP）を強制ダウンロードさせるリンクを追加
+      return `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
+      <script src="https://cdn.tailwindcss.com"></script>
+      <style>
+        @page { margin: 0; size: A4 portrait; } 
+        body { margin: 0; padding: 0; background-color: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: ${JP_FONT}; } 
+        * { font-family: ${JP_FONT} !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      </style></head><body>${clone.innerHTML}</body></html>`;
     };
 
     const exportPdfClientSide = async () => {
@@ -276,6 +285,12 @@ export default function PdfExportPage() {
   
   return (
     <div className="min-h-screen bg-gray-200 p-4 sm:p-6 font-sans flex flex-col items-center pb-12 overflow-x-hidden w-full relative">
+      {/* ★ ブラウザのプレビュー画面にもWebフォントを適用し、PDFと全く同じ見た目にする */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap');
+        .pdf-container-wrapper * { font-family: ${JP_FONT} !important; }
+      `}</style>
+
       <div className="w-full max-w-2xl mb-6 flex justify-between items-center flex-wrap gap-2">
         <button type="button" onClick={() => navigate(`/project/${id}`)} className="text-blue-500 font-bold flex items-center gap-2 text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
         <div className="flex gap-2 sm:gap-4">
@@ -289,14 +304,13 @@ export default function PdfExportPage() {
       <div className="pdf-container-wrapper flex flex-col gap-8 items-center w-full">
         {/* ① 表紙ページ */}
         <div style={{ width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-          <div className="pdf-page absolute top-0 left-0 flex flex-col items-center origin-top-left bg-white text-black" style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})`, fontFamily: JP_FONT }}>
+          <div className="pdf-page absolute top-0 left-0 flex flex-col items-center origin-top-left bg-white text-black" style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})` }}>
             <div className="flex flex-col items-center w-full" style={{ marginTop: '19px', marginBottom: '106px' }}>
               <div className="shrink-0 flex justify-center mb-6">
                 {logoUrl ? <img src={proxyUrl(logoUrl, `logo_${sessionId}`)} data-original-src={logoUrl} alt="自社ロゴ" className="block h-auto object-contain" style={{ width: '151px' }} crossOrigin="anonymous" /> : <img src={kawaraLogo} data-original-src={kawaraLogo} alt="標準ロゴ" className="block h-auto object-contain grayscale" style={{ width: '121px' }} crossOrigin="anonymous" />}
               </div>
               <div className="flex flex-col items-center">
-                {/* ★ 滲みをなくすため綺麗な太字（font-bold）に統一 */}
-                <h1 className="text-[48px] font-bold tracking-[0.3em] mb-4 text-center">工事写真報告書</h1>
+                <h1 className="text-[48px] font-black tracking-[0.3em] mb-4 text-center">工事写真報告書</h1>
                 <div className="w-[160mm] border-b-[4px] border-black" />
                 <div className="w-[160mm] border-b-[1px] border-black mt-1.5" />
               </div>
@@ -308,8 +322,7 @@ export default function PdfExportPage() {
                 return (
                   <div key={idx} className="flex items-end pb-2 border-b-2 border-black">
                     <div className="w-[45mm] flex-shrink-0 flex justify-between text-[22px] font-bold pr-8 leading-none">{item.label.split('').map((c: string, i: number) => <span key={i} className="block leading-none">{c}</span>)}</div>
-                    {/* ★ 滲みをなくすため綺麗な太字（font-bold）に統一 */}
-                    <div className="flex-1 text-[26px] font-bold whitespace-nowrap overflow-hidden pl-4 leading-none pb-[2px]">{value}</div>
+                    <div className="flex-1 text-[26px] font-black whitespace-nowrap overflow-hidden pl-4 leading-none pb-[2px]">{value}</div>
                   </div>
                 );
               })}
@@ -328,7 +341,7 @@ export default function PdfExportPage() {
         {/* ② 位置図ページ */}
         {mapUrlsToRender.map((u, mapIndex) => (
           <div key={`map-page-${mapIndex}`} style={{ width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})`, fontFamily: JP_FONT }}>
+            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})` }}>
               <div className="w-full h-full p-6 flex flex-col border-[3px] border-gray-800">
                 <h2 className="text-2xl font-bold mb-4 pb-2 border-b-2 border-gray-800">位置図 {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}</h2>
                 <div className="p-2 flex-1 flex items-center justify-center overflow-hidden min-h-0 border border-gray-400 bg-gray-50">
@@ -379,7 +392,7 @@ export default function PdfExportPage() {
         {/* ③ 写真ページ */}
         {photoPages.map((chunk, pageIndex) => (
           <div key={`photo-page-${pageIndex}`} style={{ width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})`, fontFamily: JP_FONT }}>
+            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})` }}>
               <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden">
                 {chunk.map((p, i) => {
                   const isRotated = (Number(p.rotation) || 0) % 180 !== 0;
@@ -414,7 +427,7 @@ export default function PdfExportPage() {
         {/* ④ 使用材料表 */}
         {materialPages.map((chunk, pageIndex) => (
           <div key={`material-page-${pageIndex}`} style={{ width: `${A4_WIDTH_PX * scale}px`, height: `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})`, fontFamily: JP_FONT }}>
+            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: `${A4_WIDTH_PX}px`, height: `${A4_HEIGHT_PX}px`, padding: '15mm', transform: `scale(${scale})` }}>
               <h2 className="text-xl font-bold pb-1 mb-2 border-b-2 border-gray-800 shrink-0">使用材料表</h2>
               <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden">
                 {chunk.map((m, i) => {
