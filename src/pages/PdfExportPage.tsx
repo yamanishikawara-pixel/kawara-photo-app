@@ -393,13 +393,28 @@ export default function PdfExportPage() {
               <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden">
                 {chunk.map((p, i) => {
                   const isRotated = (Number(p.rotation) || 0) % 180 !== 0;
+                  // ★ 1ピクセル単位の絶対指定でPDFエンジンのバグを封じ込める
+                  const imgMaxWidth = isRotated ? '230px' : '390px';
+                  const imgMaxHeight = isRotated ? '390px' : '230px';
+                  
                   return (
                     <div key={i} className="flex gap-2 h-[calc((100%-1rem)/3)] p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0">
                       <div className="w-[60%] flex items-center justify-center overflow-hidden relative min-h-0 border border-gray-400 bg-gray-50 shrink-0">
                         {p.image ? (
-                          <div className="flex items-center justify-center w-full h-full relative p-1">
-                            {/* ★ PDF化の際にも計算が狂わないようパーセントで指定 */}
-                            <img src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} data-original-src={p.image} crossOrigin="anonymous" className="block w-auto h-auto" style={{ transform: `rotate(${Number(p.rotation) || 0}deg)`, transformOrigin: 'center center', maxWidth: isRotated ? '80%' : '100%', maxHeight: isRotated ? '120%' : '100%', flexShrink: 0 }} alt="" />
+                          <div className="relative inline-block flex items-center justify-center">
+                            <img 
+                              src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} 
+                              data-original-src={p.image} 
+                              crossOrigin="anonymous" 
+                              className="block w-auto h-auto" 
+                              style={{ 
+                                transform: `rotate(${Number(p.rotation) || 0}deg)`, 
+                                maxWidth: imgMaxWidth, 
+                                maxHeight: imgMaxHeight,
+                                objectFit: 'contain'
+                              }} 
+                              alt="" 
+                            />
                             {(p.circles ?? []).map((circle) => (
                               <div key={circle.id} className="absolute aspect-square rounded-full border-[3px] border-red-600" style={{ left: `${circle.x}%`, top: `${circle.y}%`, width: `${circle.size}%`, transform: 'translate(-50%, -50%)' }} />
                             ))}
@@ -430,13 +445,28 @@ export default function PdfExportPage() {
               <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden">
                 {chunk.map((m, i) => {
                   const isRotated = (Number(m.rotation) || 0) % 180 !== 0;
+                  // ★ ここにもピクセル絶対指定を適用
+                  const imgMaxWidth = isRotated ? '230px' : '390px';
+                  const imgMaxHeight = isRotated ? '390px' : '230px';
+                  
                   return (
                     <div key={i} className="flex gap-2 h-[calc((100%-1rem)/3)] p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0">
                       <div className="w-[60%] flex items-center justify-center overflow-hidden relative min-h-0 border border-gray-400 bg-gray-50 shrink-0">
                         {m.image ? (
-                          <div className="flex items-center justify-center w-full h-full relative p-1">
-                            {/* ★ PDF化の際にも計算が狂わないようパーセントで指定 */}
-                            <img src={proxyUrl(m.image, `material_${m.id}_${sessionId}`)} data-original-src={m.image} crossOrigin="anonymous" className="block w-auto h-auto" style={{ transform: `rotate(${Number(m.rotation) || 0}deg)`, transformOrigin: 'center center', maxWidth: isRotated ? '80%' : '100%', maxHeight: isRotated ? '120%' : '100%', flexShrink: 0 }} alt="" />
+                          <div className="relative inline-block flex items-center justify-center">
+                            <img 
+                              src={proxyUrl(m.image, `material_${m.id}_${sessionId}`)} 
+                              data-original-src={m.image} 
+                              crossOrigin="anonymous" 
+                              className="block w-auto h-auto" 
+                              style={{ 
+                                transform: `rotate(${Number(m.rotation) || 0}deg)`, 
+                                maxWidth: imgMaxWidth, 
+                                maxHeight: imgMaxHeight,
+                                objectFit: 'contain'
+                              }} 
+                              alt="" 
+                            />
                           </div>
                         ) : <span className="font-bold text-gray-400">写真未登録</span>}
                       </div>
