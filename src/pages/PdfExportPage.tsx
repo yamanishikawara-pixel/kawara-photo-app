@@ -127,14 +127,13 @@ export default function PdfExportPage() {
     } catch { setError('Zipファイルの作成に失敗しました。'); } finally { setIsZipping(false); }
   };
 
-  // ★ グレー箱を完全に防ぐ最強の印刷プログラム
+  // ★ 印刷機のエラーを防ぐ Base64変換 + 強制プリント
   const handlePrint = () => {
     if (!project) return;
     setIsPrinting(true);
     
     setTimeout(async () => {
       try {
-        // 画像をすべて「純粋なデータ(Base64)」に変換してプリンターに強制認識させる
         const images = document.querySelectorAll('.pdf-page img');
         const promises = Array.from(images).map(async (img) => {
           const src = img.getAttribute('data-original-src') || img.getAttribute('src');
@@ -153,7 +152,6 @@ export default function PdfExportPage() {
           }
         });
         await Promise.all(promises);
-        
         window.print();
       } catch (err) {
         setError('印刷の準備中にエラーが発生しました。');
@@ -199,7 +197,6 @@ export default function PdfExportPage() {
         @import url('https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap');
         .pdf-container-wrapper * { font-family: ${JP_FONT} !important; }
         
-        /* ★ 印刷時専用スタイル：プリンター向けの絶対サイズ指定(210mm x 297mm) */
         @media print {
           @page { size: A4 portrait; margin: 0; }
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background-color: white; margin: 0; padding: 0; }
@@ -327,26 +324,27 @@ export default function PdfExportPage() {
               <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black">
                 {chunk.map((p, i) => {
                   const isRotated = (Number(p.rotation) || 0) % 180 !== 0;
-                  // ★ プリンターが絶対に潰さないミリメートル(mm)の絶対指定
-                  const imgMaxWidth = isRotated ? '84mm' : '100%';
-                  const imgMaxHeight = isRotated ? '110mm' : '100%';
+                  // ★ ラッパー方式による最強の回転設定（ミリメートル絶対指定）
+                  const wrapperWidth = isRotated ? '82mm' : '100%';
+                  const wrapperHeight = isRotated ? '107mm' : '100%';
                   
                   return (
-                    <div key={i} className="flex gap-2 p-1.5 rounded border border-gray-500 bg-white shrink-0 print:border-black" style={{ height: '82mm' }}>
+                    <div key={i} className="flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black" style={{ height: '82mm' }}>
                       <div className="w-[60%] flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {p.image ? (
-                          <div className="relative inline-block flex items-center justify-center w-full h-full">
+                          <div 
+                            className="relative flex items-center justify-center origin-center"
+                            style={{
+                              width: wrapperWidth,
+                              height: wrapperHeight,
+                              transform: `rotate(${Number(p.rotation) || 0}deg)`
+                            }}
+                          >
                             <img 
                               src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} 
                               data-original-src={p.image} 
                               crossOrigin="anonymous" 
-                              className="block w-auto h-auto" 
-                              style={{ 
-                                transform: `rotate(${Number(p.rotation) || 0}deg)`, 
-                                maxWidth: imgMaxWidth, 
-                                maxHeight: imgMaxHeight,
-                                objectFit: 'contain'
-                              }} 
+                              className="absolute inset-0 w-full h-full object-contain" 
                               alt="" 
                             />
                             {(p.circles ?? []).map((circle) => (
@@ -379,25 +377,26 @@ export default function PdfExportPage() {
               <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black">
                 {chunk.map((m, i) => {
                   const isRotated = (Number(m.rotation) || 0) % 180 !== 0;
-                  const imgMaxWidth = isRotated ? '84mm' : '100%';
-                  const imgMaxHeight = isRotated ? '110mm' : '100%';
+                  const wrapperWidth = isRotated ? '78mm' : '100%';
+                  const wrapperHeight = isRotated ? '107mm' : '100%';
                   
                   return (
-                    <div key={i} className="flex gap-2 p-1.5 rounded border border-gray-500 bg-white shrink-0 print:border-black" style={{ height: '82mm' }}>
+                    <div key={i} className="flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black" style={{ height: '82mm' }}>
                       <div className="w-[60%] flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {m.image ? (
-                          <div className="relative inline-block flex items-center justify-center w-full h-full">
+                          <div 
+                            className="relative flex items-center justify-center origin-center"
+                            style={{
+                              width: wrapperWidth,
+                              height: wrapperHeight,
+                              transform: `rotate(${Number(m.rotation) || 0}deg)`
+                            }}
+                          >
                             <img 
                               src={proxyUrl(m.image, `material_${m.id}_${sessionId}`)} 
                               data-original-src={m.image} 
                               crossOrigin="anonymous" 
-                              className="block w-auto h-auto" 
-                              style={{ 
-                                transform: `rotate(${Number(m.rotation) || 0}deg)`, 
-                                maxWidth: imgMaxWidth, 
-                                maxHeight: imgMaxHeight,
-                                objectFit: 'contain'
-                              }} 
+                              className="absolute inset-0 w-full h-full object-contain" 
                               alt="" 
                             />
                           </div>
