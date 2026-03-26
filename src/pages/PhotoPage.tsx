@@ -32,31 +32,34 @@ const COLOR_PALETTE = [
 ];
 
 // SVGで寸法線とテキストを描画するコンポーネント（リアルCAD仕様：建築斜線と突き出し）
+// SVGで寸法線とテキストを描画するコンポーネント（リアルCAD仕様 ＋ 見切れ防止機能付き）
 function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChange }: { line: DimensionLine; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  
+  // 線の中心点を計算
   const midPoint = { x: (line.start.x + line.end.x) / 2, y: (line.start.y + line.end.y) / 2 };
+
+  // ★ 追加：ゴミ箱が見切れないよう、入力窓の位置を画面の「15%〜85%」の範囲内に強制的に収める（リミッター）
+  const safePopupX = Math.max(15, Math.min(85, midPoint.x));
+  const safePopupY = Math.max(15, Math.min(85, midPoint.y));
 
   useEffect(() => {
     if (isSelected && inputRef.current) inputRef.current.focus();
   }, [isSelected]);
 
   const color = line.color || "#FFFFFF"; 
-  const thickness = Number(line.size || 2); // CAD特有のシャープな細線
+  const thickness = Number(line.size || 2); 
 
   return (
     <>
       <svg className="absolute inset-0 z-20 pointer-events-none w-full h-full" style={{ overflow: 'visible' }}>
         <defs>
-          {/* リアルCADの端末記号：45度の建築斜線（Tick）と、線の突き出し（Overshoot） */}
           <marker id={`cad-tick-${line.id}`} markerWidth="16" markerHeight="16" refX="8" refY="8" orient="auto" markerUnits="userSpaceOnUse">
-            {/* 1. 線の突き出し（交点から前後に少し伸びる細線） */}
             <line x1="0" y1="8" x2="16" y2="8" stroke={color} strokeWidth={thickness} />
-            {/* 2. 建築斜線（交点に入る45度の少し太い線） */}
             <line x1="4" y1="12" x2="12" y2="4" stroke={color} strokeWidth={thickness * 1.5} />
           </marker>
         </defs>
         
-        {/* メインの寸法線 */}
         <line
           x1={`${line.start.x}%`}
           y1={`${line.start.y}%`}
@@ -72,9 +75,9 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
         />
       </svg>
       
-      {/* 選択時の入力フォーム */}
+      {/* 選択時の入力フォーム（safePopupX, safePopupY を使用して見切れを防止） */}
       {isSelected && (
-        <div style={{ left: `${midPoint.x}%`, top: `${midPoint.y}%` }} className="absolute z-30 translate-x-[-50%] translate-y-[-50%] flex flex-col items-center gap-2 bg-white p-3 rounded-xl shadow-xl border border-gray-200 min-w-[180px]" onClick={e => e.stopPropagation()}>
+        <div style={{ left: `${safePopupX}%`, top: `${safePopupY}%` }} className="absolute z-30 translate-x-[-50%] translate-y-[-50%] flex flex-col items-center gap-2 bg-white p-3 rounded-xl shadow-xl border border-gray-200 min-w-[180px]" onClick={e => e.stopPropagation()}>
           <div className="flex w-full gap-2">
             <input
               ref={inputRef}
@@ -89,14 +92,14 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
         </div>
       )}
       
-      {/* 未選択時のテキスト（CAD図面のように線をマスクして文字を置く） */}
+      {/* 未選択時のテキスト */}
       {!isSelected && line.text && (
         <div
           style={{ 
             left: `${midPoint.x}%`, 
             top: `${midPoint.y}%`, 
             color: color, 
-            backgroundColor: 'rgba(0, 0, 0, 0.4)', // 背景の線を少し隠す（白抜き効果）
+            backgroundColor: 'rgba(0, 0, 0, 0.4)',
             backdropFilter: 'blur(2px)'
           }}
           className="absolute z-20 translate-x-[-50%] translate-y-[-50%] font-bold text-xl px-2 py-0.5 rounded pointer-events-none whitespace-nowrap border border-white/10 shadow-sm"
