@@ -32,11 +32,10 @@ const COLOR_PALETTE = [
   { name: "Red", value: "#FF4500" },
 ];
 
-// SVGで寸法線とテキストを描画するコンポーネント
+// SVGで寸法線とテキストを描画するコンポーネント（修正版：スマートなCAD矢印）
 function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChange }: { line: DimensionLine; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const getPointsStr = (p1: { x: number; y: number }, p2: { x: number; y: number }) => `${p1.x},${p1.y} ${p2.x},${p2.y}`;
   const midPoint = { x: (line.start.x + line.end.x) / 2, y: (line.start.y + line.end.y) / 2 };
 
   useEffect(() => {
@@ -46,28 +45,31 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
   }, [isSelected]);
 
   const color = line.color || "#FFD700"; // デフォルトは黄色
-  const thickness = Number(line.size || 2);
+  const thickness = Number(line.size || 2) * 1.5; // 少し太くして見やすく
 
   return (
     <>
-      <svg
-        viewBox="0 0 100 100"
-        preserveAspectRatio="none"
-        className="absolute inset-0 z-20 pointer-events-none w-full h-full"
-        style={{ overflow: 'visible' }}
-      >
+      <svg className="absolute inset-0 z-20 pointer-events-none w-full h-full" style={{ overflow: 'visible' }}>
         <defs>
-          <marker id={`arrow-${line.id}`} markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
-            <polygon points="0,0 6,3 0,6" fill={color} />
+          {/* 始点の矢印（逆向きに設定・絶対サイズ） */}
+          <marker id={`arrow-start-${line.id}`} markerWidth="14" markerHeight="14" refX="0" refY="7" orient="auto" markerUnits="userSpaceOnUse">
+            <polygon points="14,2 0,7 14,12" fill={color} />
+          </marker>
+          {/* 終点の矢印（正向きに設定・絶対サイズ） */}
+          <marker id={`arrow-end-${line.id}`} markerWidth="14" markerHeight="14" refX="14" refY="7" orient="auto" markerUnits="userSpaceOnUse">
+            <polygon points="0,2 14,7 0,12" fill={color} />
           </marker>
         </defs>
-        <polyline
-          points={getPointsStr(line.start, line.end)}
+        <line
+          x1={`${line.start.x}%`}
+          y1={`${line.start.y}%`}
+          x2={`${line.end.x}%`}
+          y2={`${line.end.y}%`}
           stroke={color}
           strokeWidth={thickness}
           fill="none"
-          markerStart={`url(#arrow-${line.id})`}
-          markerEnd={`url(#arrow-${line.id})`}
+          markerStart={`url(#arrow-start-${line.id})`}
+          markerEnd={`url(#arrow-end-${line.id})`}
           className="pointer-events-auto cursor-pointer"
           onClick={(e) => { e.stopPropagation(); onSelect(); }}
         />
@@ -90,9 +92,13 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
       )}
       {!isSelected && line.text && (
         <div
-          style={{ left: `${midPoint.x}%`, top: `${midPoint.y}%`, color: color }}
-          className="absolute z-20 translate-x-[-50%] translate-y-[-120%] font-black text-xl px-4 py-2 rounded-lg pointer-events-none whitespace-nowrap"
-          onClick={(e) => { e.stopPropagation(); onSelect(); }}
+          style={{ 
+            left: `${midPoint.x}%`, 
+            top: `${midPoint.y}%`, 
+            color: color, 
+            textShadow: '1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000, 0px 2px 5px rgba(0,0,0,0.8)' // 黒いフチドリを追加して視認性爆上げ
+          }}
+          className="absolute z-20 translate-x-[-50%] translate-y-[-120%] font-black text-2xl px-2 py-1 pointer-events-none whitespace-nowrap"
         >
           {line.text}
         </div>
