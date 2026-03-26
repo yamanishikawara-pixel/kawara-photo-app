@@ -22,7 +22,6 @@ export interface Photo {
   description: string;
   circles: Circle[];
   rotation?: number;
-  dimensionLines?: DimensionLine[];
 }
 
 export interface MapRow {
