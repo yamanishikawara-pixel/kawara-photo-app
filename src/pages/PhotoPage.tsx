@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus, Edit2, Ruler, Paintbrush } from 'lucide-react';
+import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus, Edit2, Ruler, Paintbrush, CaseUpper } from 'lucide-react'; // CaseUpperを追加
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
@@ -31,7 +31,10 @@ const COLOR_PALETTE = [
   { name: "Red", value: "#FF4500" },
 ];
 
-// SVGで寸法線とテキストを描画するコンポーネント（ドラッグ移動機能付き）
+// ★ 改良：お客様説明用のよく使う部位名
+const DEFAULT_ROOF_PART_NAMES = ['棟', '袖', 'ケラバ', '谷', '隅棟', '平', '軒先'];
+
+// SVGで寸法線とテキストを描画するコンポーネント（ドラッグ移動 ＋ 部位名クイック入力機能付き）
 function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChange, onUpdate }: { line: DimensionLine; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; onUpdate: (props: Partial<DimensionLine>) => void; }) {
   const inputRef = useRef<HTMLInputElement>(null);
   
@@ -48,7 +51,7 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
     }
   }, [line.start, line.end, isDragging]);
 
-  // 初回作成時のみ自動フォーカス（ドラッグ調整後に毎回キーボードが出るのを防ぐ）
+  // フォーカス制御（ドラッグ調整後に毎回キーボードが出るのを防ぐ）
   useEffect(() => {
     if (isSelected && inputRef.current && !isDragging && !line.text) {
       inputRef.current.focus();
@@ -59,7 +62,7 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
     e.stopPropagation();
     setIsDragging(type);
     const el = e.currentTarget as Element;
-    el.setPointerCapture(e.pointerId); // マウスが速く動いても外れないようにロック
+    el.setPointerCapture(e.pointerId); 
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -67,7 +70,6 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
     const rect = (e.currentTarget as Element).closest('.cursor-crosshair')?.getBoundingClientRect();
     if (!rect) return;
     
-    // 写真の枠内に制限（0% 〜 100%）
     const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
     const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
     
@@ -79,8 +81,18 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
     if (!isDragging) return;
     const el = e.currentTarget as Element;
     el.releasePointerCapture(e.pointerId);
-    onUpdate({ start: localStart, end: localEnd }); // 指を離した時にFirestoreに保存
+    onUpdate({ start: localStart, end: localEnd }); 
     setIsDragging(null);
+  };
+
+  // 部位名をテキスト入力欄にクイック追加
+  const addPartName = (name: string) => {
+    if (inputRef.current) {
+      const currentText = inputRef.current.value;
+      const newText = currentText.startsWith(name) ? currentText : `${name} ${currentText}`; // 重複防止
+      onTextChange(newText);
+      inputRef.current.focus();
+    }
   };
 
   const midPoint = { x: (localStart.x + localEnd.x) / 2, y: (localStart.y + localEnd.y) / 2 };
@@ -118,19 +130,36 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
       
       {/* 選択時の入力フォーム（ドラッグ中は邪魔にならないように隠す） */}
       {isSelected && !isDragging && (
-        <div style={{ left: `${safePopupX}%`, top: `${safePopupY}%` }} className="absolute z-30 translate-x-[-50%] translate-y-[-50%] flex flex-col items-center gap-2 bg-white p-3 rounded-xl shadow-2xl border-2 border-gray-200 min-w-[200px]" onClick={e => e.stopPropagation()}>
-          <div className="flex w-full gap-2">
+        <div style={{ left: `${safePopupX}%`, top: `${safePopupY}%` }} className="absolute z-30 translate-x-[-50%] translate-y-[-50%] flex flex-col items-center gap-4 bg-white p-6 rounded-2xl shadow-3xl border-2 border-gray-100 min-w-[280px]" onClick={e => e.stopPropagation()}>
+          <div className="flex w-full gap-3 items-center justify-between border-b-2 border-gray-100 pb-3">
+             <h4 className="text-xl font-black text-gray-900 flex items-center gap-2"><CaseUpper className="w-6 h-6 text-blue-500"/> 部位と寸法を入力</h4>
+             <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-3 text-red-500 bg-red-50 rounded-xl hover:bg-red-100"><Trash2 className="w-6 h-6" /></button>
+          </div>
+
+          {/* ★ 改良：部位名のクイック選択ボタン群 */}
+          <div className="flex flex-wrap gap-2.5 w-full">
+            {DEFAULT_ROOF_PART_NAMES.map(name => (
+              <button 
+                key={name}
+                onClick={() => addPartName(name)}
+                className="text-base font-black text-blue-700 bg-blue-50 border-2 border-blue-100 px-5 py-3 rounded-2xl hover:bg-blue-100 hover:border-blue-200 active:scale-95 shadow-sm transition-all"
+              >
+                ＋{name}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex w-full gap-3">
             <input
               ref={inputRef}
               type="text"
               value={line.text}
               onChange={(e) => onTextChange(e.target.value)}
-              className="w-full bg-gray-50 border-2 border-gray-200 p-2 text-lg font-bold rounded-lg outline-none focus:border-blue-500 text-center"
-              placeholder="寸法 (例: 5.5m)"
+              className="w-full bg-gray-50 border-2 border-gray-100 p-4 text-xl font-bold rounded-xl outline-none focus:border-blue-400 focus:bg-white text-center shadow-inner"
+              placeholder="部位 〇〇m (例: 棟 5.5m)"
             />
-            <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-2 text-red-500 bg-red-50 rounded-lg hover:bg-red-100"><Trash2 className="w-6 h-6" /></button>
           </div>
-          <p className="text-[11px] text-blue-500 font-bold tracking-wider">端の青い丸をドラッグで位置調整</p>
+          <p className="text-xs text-blue-500 font-bold tracking-wider -mt-1">端の青い丸をドラッグで位置調整</p>
         </div>
       )}
 
@@ -138,7 +167,7 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
       {isSelected && (
         <>
           <div
-            className="absolute z-40 w-12 h-12 -ml-6 -mt-6 bg-blue-500/20 border-4 border-blue-500 rounded-full cursor-move touch-none backdrop-blur-sm"
+            className="absolute z-40 w-12 h-12 -ml-6 -mt-6 bg-blue-500/20 border-4 border-blue-500 rounded-full cursor-move touch-none backdrop-blur-sm shadow-xl"
             style={{ left: `${localStart.x}%`, top: `${localStart.y}%` }}
             onPointerDown={(e) => startDrag(e, 'start')}
             onPointerMove={handlePointerMove}
@@ -147,7 +176,7 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
             onClick={(e) => e.stopPropagation()}
           />
           <div
-            className="absolute z-40 w-12 h-12 -ml-6 -mt-6 bg-blue-500/20 border-4 border-blue-500 rounded-full cursor-move touch-none backdrop-blur-sm"
+            className="absolute z-40 w-12 h-12 -ml-6 -mt-6 bg-blue-500/20 border-4 border-blue-500 rounded-full cursor-move touch-none backdrop-blur-sm shadow-xl"
             style={{ left: `${localEnd.x}%`, top: `${localEnd.y}%` }}
             onPointerDown={(e) => startDrag(e, 'end')}
             onPointerMove={handlePointerMove}
@@ -165,10 +194,10 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
             left: `${midPoint.x}%`, 
             top: `${midPoint.y}%`, 
             color: color, 
-            backgroundColor: 'rgba(0, 0, 0, 0.4)',
+            backgroundColor: 'rgba(0, 0, 0, 0.4)', // CAD図面のように線をマスクして文字を置く（image 42.png仕様）
             backdropFilter: 'blur(2px)'
           }}
-          className="absolute z-20 translate-x-[-50%] translate-y-[-50%] font-bold text-xl px-2 py-0.5 rounded pointer-events-none whitespace-nowrap border border-white/10 shadow-sm"
+          className="absolute z-20 translate-x-[-50%] translate-y-[-50%] font-bold text-xl px-2.5 py-1 rounded pointer-events-none whitespace-nowrap border border-white/10 shadow-sm"
         >
           {line.text}
         </div>
@@ -177,6 +206,7 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
   );
 }
 
+// ... (以下、 PhotoCircleMarker, PinSelectModal, formatToYMD, formatToYMDSlash, getTodayStr, getFileExtension は既存のまま)
 function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChange, onRemove }: { circle: Circle; isSelected: boolean; onSelect: () => void; onDragEnd: (x: number, y: number) => void; onSizeChange: (size: number) => void; onRemove: () => void; }) {
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(circle.x, circle.y, onDragEnd);
   const size = Number(circle.size || 20);
@@ -502,7 +532,7 @@ export default function PhotoPage() {
                         <PhotoCircleMarker key={circle.id} circle={circle} isSelected={selectedCircleId === circle.id} onSelect={() => setSelectedCircleId(circle.id)} onDragEnd={(x, y) => updateCircle(photo.id, circle.id, { x, y })} onSizeChange={(size) => updateCircle(photo.id, circle.id, { size })} onRemove={() => removeCircle(photo.id, circle.id)} />
                       ))}
                       
-                      {/* 寸法線の描画（onUpdateを追加） */}
+                      {/* 寸法線の描画 */}
                       {(photo.dimensionLines || []).map((line) => (
                         <DimensionLineMarker 
                           key={line.id} 
