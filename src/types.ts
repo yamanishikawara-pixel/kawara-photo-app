@@ -12,6 +12,14 @@ export interface DimensionLine {
   size?: number;                   // 線の太さ
   color?: string;                  // 線の色
 }
+export interface DimensionLine {
+  id: number;
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+  text: string;
+  size?: number;
+  color?: string;
+}
 export interface Photo {
   id: number;
   image: string | null;
@@ -22,6 +30,7 @@ export interface Photo {
   description: string;
   circles: Circle[];
   rotation?: number;
+  dimensionLines?: DimensionLine[];
 }
 
 export interface MapRow {

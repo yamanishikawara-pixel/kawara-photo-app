@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus, Edit2 } from 'lucide-react';
+import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus, Edit2, Ruler, Paintbrush } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { compressImage, proxyUrl, useDraggablePin } from '../shared/utils';
-import type { Circle, MapPin as MapPinT, Photo, Project } from '../types';
+import type { Circle, MapPin as MapPinT, Photo, Project, DimensionLine } from '../types';
 import type { ChangeEvent, MouseEvent } from 'react';
 
 const DEFAULT_PROCESS_OPTIONS = [
@@ -23,6 +23,90 @@ const DEFAULT_DESC_TEMPLATES = [
   { label: "棟芯(重ね)", text: "棟芯：重ね（左右） " },
   { label: "棟部(増張り)", text: "棟部：増し張り " },
 ];
+
+const COLOR_PALETTE = [
+  { name: "Yellow", value: "#FFD700" },
+  { name: "White", value: "#FFFFFF" },
+  { name: "Black", value: "#000000" },
+  { name: "Red", value: "#FF4500" },
+];
+
+// SVGで寸法線とテキストを描画するコンポーネント（リアルCAD仕様：建築斜線と突き出し）
+function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChange }: { line: DimensionLine; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const midPoint = { x: (line.start.x + line.end.x) / 2, y: (line.start.y + line.end.y) / 2 };
+
+  useEffect(() => {
+    if (isSelected && inputRef.current) inputRef.current.focus();
+  }, [isSelected]);
+
+  const color = line.color || "#FFFFFF"; 
+  const thickness = Number(line.size || 2); // CAD特有のシャープな細線
+
+  return (
+    <>
+      <svg className="absolute inset-0 z-20 pointer-events-none w-full h-full" style={{ overflow: 'visible' }}>
+        <defs>
+          {/* リアルCADの端末記号：45度の建築斜線（Tick）と、線の突き出し（Overshoot） */}
+          <marker id={`cad-tick-${line.id}`} markerWidth="16" markerHeight="16" refX="8" refY="8" orient="auto" markerUnits="userSpaceOnUse">
+            {/* 1. 線の突き出し（交点から前後に少し伸びる細線） */}
+            <line x1="0" y1="8" x2="16" y2="8" stroke={color} strokeWidth={thickness} />
+            {/* 2. 建築斜線（交点に入る45度の少し太い線） */}
+            <line x1="4" y1="12" x2="12" y2="4" stroke={color} strokeWidth={thickness * 1.5} />
+          </marker>
+        </defs>
+        
+        {/* メインの寸法線 */}
+        <line
+          x1={`${line.start.x}%`}
+          y1={`${line.start.y}%`}
+          x2={`${line.end.x}%`}
+          y2={`${line.end.y}%`}
+          stroke={color}
+          strokeWidth={thickness}
+          fill="none"
+          markerStart={`url(#cad-tick-${line.id})`}
+          markerEnd={`url(#cad-tick-${line.id})`}
+          className="pointer-events-auto cursor-pointer"
+          onClick={(e) => { e.stopPropagation(); onSelect(); }}
+        />
+      </svg>
+      
+      {/* 選択時の入力フォーム */}
+      {isSelected && (
+        <div style={{ left: `${midPoint.x}%`, top: `${midPoint.y}%` }} className="absolute z-30 translate-x-[-50%] translate-y-[-50%] flex flex-col items-center gap-2 bg-white p-3 rounded-xl shadow-xl border border-gray-200 min-w-[180px]" onClick={e => e.stopPropagation()}>
+          <div className="flex w-full gap-2">
+            <input
+              ref={inputRef}
+              type="text"
+              value={line.text}
+              onChange={(e) => onTextChange(e.target.value)}
+              className="w-full bg-gray-50 border border-gray-200 p-2 text-lg font-bold rounded outline-none focus:border-blue-400 text-center"
+              placeholder="寸法 (例: 5.5m)"
+            />
+            <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-2 text-red-500 bg-red-50 rounded hover:bg-red-100"><Trash2 className="w-5 h-5" /></button>
+          </div>
+        </div>
+      )}
+      
+      {/* 未選択時のテキスト（CAD図面のように線をマスクして文字を置く） */}
+      {!isSelected && line.text && (
+        <div
+          style={{ 
+            left: `${midPoint.x}%`, 
+            top: `${midPoint.y}%`, 
+            color: color, 
+            backgroundColor: 'rgba(0, 0, 0, 0.4)', // 背景の線を少し隠す（白抜き効果）
+            backdropFilter: 'blur(2px)'
+          }}
+          className="absolute z-20 translate-x-[-50%] translate-y-[-50%] font-bold text-xl px-2 py-0.5 rounded pointer-events-none whitespace-nowrap border border-white/10 shadow-sm"
+        >
+          {line.text}
+        </div>
+      )}
+    </>
+  );
+}
 
 function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChange, onRemove }: { circle: Circle; isSelected: boolean; onSelect: () => void; onDragEnd: (x: number, y: number) => void; onSizeChange: (size: number) => void; onRemove: () => void; }) {
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(circle.x, circle.y, onDragEnd);
@@ -115,6 +199,12 @@ export default function PhotoPage() {
   const [currentPhotoId, setCurrentPhotoId] = useState<number | null>(null);
   const [selectedCircleId, setSelectedCircleId] = useState<number | null>(null);
 
+  // 寸法記入用の新しいステート
+  const [editingMode, setEditingMode] = useState<'circle' | 'dimension'>('circle');
+  const [selectedDimensionLineId, setSelectedDimensionLineId] = useState<number | null>(null);
+  const [drawingStartPoint, setDrawingStartPoint] = useState<{ x: number; y: number } | null>(null);
+  const [activeColor, setActiveColor] = useState<string>(COLOR_PALETTE[0].value); // 黄色
+
   const [processOptions, setProcessOptions] = useState<string[]>(DEFAULT_PROCESS_OPTIONS);
   const [descTemplates, setDescTemplates] = useState<{label: string, text: string}[]>(DEFAULT_DESC_TEMPLATES);
 
@@ -180,7 +270,7 @@ export default function PhotoPage() {
     for (let i = 0; i < files.length; i++) {
       let targetIndex = newPhotos.findIndex(p => !p.image);
       if (targetIndex === -1) {
-        newPhotos.push({ id: Date.now() + Math.random(), image: null, photoNumber: String(newPhotos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], rotation: 0 });
+        newPhotos.push({ id: Date.now() + Math.random(), image: null, photoNumber: String(newPhotos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], rotation: 0, dimensionLines: [] });
         targetIndex = newPhotos.length - 1;
       }
       await new Promise<void>((resolve) => {
@@ -190,7 +280,7 @@ export default function PhotoPage() {
             const r = ref(storage, `photos/${id}/${Date.now()}_bulk_${i}.${ext}`);
             await uploadBytes(r, compressed);
             const url = await getDownloadURL(r);
-            newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: todayStr, circles: [] };
+            newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: todayStr, circles: [], dimensionLines: [] };
             setProject({ ...project, photos: newPhotos });
             await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
           } catch (error) { console.error("失敗", error); } finally { resolve(); }
@@ -214,23 +304,45 @@ export default function PhotoPage() {
         const r = ref(storage, `photos/${id}/${Date.now()}.${ext}`);
         await uploadBytes(r, file);
         const url = await getDownloadURL(r);
-        const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, image: url, shootingDate: p.shootingDate || getTodayStr(), circles: [] } : p);
+        const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, image: url, shootingDate: p.shootingDate || getTodayStr(), circles: [], dimensionLines: [] } : p);
         setProject({ ...project, photos: newPhotos });
         await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
       } catch { alert('失敗'); } finally { setLoadingId(null); }
     });
   };
 
+  // 写真上のクリックイベントを統合
   const handlePhotoClick = async (e: MouseEvent<HTMLDivElement>, photoId: number) => {
     if (!project) return;
+
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
 
-    if (selectedCircleId !== null) { setSelectedCircleId(null); return; }
-    const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: [...(p.circles || []), { id: Date.now(), x, y, size: 20 }] } : p);
-    setProject({ ...project, photos: newPhotos });
-    await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+    if (editingMode === 'circle') {
+      if (selectedCircleId !== null) { setSelectedCircleId(null); return; }
+      const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: [...(p.circles || []), { id: Date.now(), x, y, size: 20 }] } : p);
+      setProject({ ...project, photos: newPhotos });
+      await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+    } else if (editingMode === 'dimension') {
+      if (selectedDimensionLineId !== null) { setSelectedDimensionLineId(null); return; }
+      
+      if (!drawingStartPoint) {
+        // 始点をセット
+        setDrawingStartPoint({ x, y });
+      } else {
+        // 終点をセットして寸法線を確定
+        const newLineId = Date.now();
+        const newPhotos = project.photos.map((p) => p.id === photoId ? {
+          ...p,
+          dimensionLines: [...(p.dimensionLines || []), { id: newLineId, start: drawingStartPoint, end: { x, y }, text: "", size: 2, color: activeColor }]
+        } : p);
+        setProject({ ...project, photos: newPhotos });
+        await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+        setDrawingStartPoint(null); // 描画状態をリセット
+        setSelectedDimensionLineId(newLineId); // テキスト入力を促すため選択状態にする
+      }
+    }
   };
 
   const updateCircle = async (photoId: number, circleId: number, newProps: Partial<Circle>) => {
@@ -248,13 +360,29 @@ export default function PhotoPage() {
     setSelectedCircleId(null);
   };
 
+  // 寸法線のアップデート・削除
+  const updateDimensionLine = async (photoId: number, lineId: number, newProps: Partial<DimensionLine>) => {
+    if (!project) return;
+    const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, dimensionLines: p.dimensionLines?.map((c) => c.id === lineId ? { ...c, ...newProps } : c) } : p);
+    setProject({ ...project, photos: newPhotos });
+    await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+  };
+  
+  const removeDimensionLine = async (photoId: number, lineId: number) => {
+    if (!project) return;
+    const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, dimensionLines: p.dimensionLines?.filter((c) => c.id !== lineId) } : p);
+    setProject({ ...project, photos: newPhotos });
+    await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+    setSelectedDimensionLineId(null);
+  };
+
   if (!project) return <div className="p-10 text-center font-bold text-gray-500">読み込み中...</div>;
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] p-6 font-sans pb-40 select-none overflow-x-hidden" onClick={() => { setSelectedCircleId(null); }}>
+    <div className="min-h-screen bg-[#f8fafc] p-6 font-sans pb-40 select-none overflow-x-hidden" onClick={() => { setSelectedCircleId(null); setSelectedDimensionLineId(null); }}>
       <div className="max-w-2xl mx-auto pb-12">
         <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-3 text-blue-600 mb-8 font-black text-xl px-4 py-2 hover:bg-blue-50 rounded-2xl transition-all active:scale-95"><ArrowLeft strokeWidth={4} /> 戻る</button>
-        <h1 className="text-4xl font-black mb-10 text-gray-900 tracking-tighter">工事写真の登録</h1>
+        <h1 className="text-4xl font-black mb-10 text-gray-900 tracking-tighter">工事写真の登録と赤丸・寸法記入</h1>
 
         <div className="bg-white p-6 rounded-[2.5rem] border-2 border-gray-100 shadow-sm mb-12 flex flex-col gap-6">
           <label className="flex items-center justify-center gap-4 w-full bg-blue-600 text-white font-black py-6 text-2xl rounded-3xl cursor-pointer shadow-[0_15px_40px_rgba(37,99,235,0.4)] hover:bg-blue-700 transition-all active:scale-95">
@@ -262,6 +390,30 @@ export default function PhotoPage() {
             {bulkUploading ? `アップロード中... (${bulkProgress}枚)` : "複数写真を一括追加する"}
             <input type="file" multiple accept="image/*" className="hidden" onChange={handleBulkUpload} disabled={bulkUploading} />
           </label>
+
+          {/* 編集モードの切り替えパネル */}
+          <div className="grid grid-cols-2 gap-4 border-2 border-gray-100 rounded-3xl p-3 bg-gray-50">
+            <button onClick={() => { setEditingMode('circle'); setDrawingStartPoint(null); }} className={`flex items-center gap-3 justify-center py-5 rounded-2xl font-black text-xl transition-all ${editingMode === 'circle' ? 'bg-red-500 text-white shadow-lg' : 'text-gray-600 hover:bg-gray-100'}`}>
+              <Edit2 className="w-7 h-7" /> 赤丸を追加
+            </button>
+            <button onClick={() => setEditingMode('dimension')} className={`flex items-center gap-3 justify-center py-5 rounded-2xl font-black text-xl transition-all ${editingMode === 'dimension' ? 'bg-gray-900 text-white shadow-lg' : 'text-gray-600 hover:bg-gray-100'}`}>
+              <Ruler className="w-7 h-7" /> 寸法記入
+            </button>
+          </div>
+          {editingMode === 'dimension' && (
+            <div className="flex items-center gap-3 p-4 bg-gray-100 rounded-2xl border border-gray-200">
+               <Paintbrush className="w-6 h-6 text-gray-500"/>
+               <span className="font-bold text-gray-600 mr-2">寸法線の色：</span>
+              {COLOR_PALETTE.map(color => (
+                <button
+                  key={color.name}
+                  onClick={() => setActiveColor(color.value)}
+                  className={`w-10 h-10 rounded-full border-4 transition-all ${activeColor === color.value ? 'border-gray-900 scale-110 shadow-lg' : 'border-white hover:scale-105'}`}
+                  style={{ backgroundColor: color.value }}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="space-y-16 mt-4">
@@ -283,12 +435,26 @@ export default function PhotoPage() {
                     <div className="relative inline-block cursor-crosshair" onClick={(e) => handlePhotoClick(e, photo.id)}>
                       <img src={proxyUrl(photo.image, photo.id)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[70vh] pointer-events-none rounded-2xl shadow-2xl transition-transform duration-500" style={{ transform: `rotate(${Number(photo.rotation || 0)}deg)` }} alt="" />
                       
+                      {/* 赤丸の描画 */}
                       {(photo.circles || []).map((circle) => (
                         <PhotoCircleMarker key={circle.id} circle={circle} isSelected={selectedCircleId === circle.id} onSelect={() => setSelectedCircleId(circle.id)} onDragEnd={(x, y) => updateCircle(photo.id, circle.id, { x, y })} onSizeChange={(size) => updateCircle(photo.id, circle.id, { size })} onRemove={() => removeCircle(photo.id, circle.id)} />
                       ))}
+                      
+                      {/* 寸法線の描画 */}
+                      {(photo.dimensionLines || []).map((line) => (
+                        <DimensionLineMarker key={line.id} line={line} isSelected={selectedDimensionLineId === line.id} onSelect={() => setSelectedDimensionLineId(line.id)} onRemove={() => removeDimensionLine(photo.id, line.id)} onTextChange={(text) => updateDimensionLine(photo.id, line.id, {text})} />
+                      ))}
+
+                      {/* 描画中の始点フィードバック */}
+                      {drawingStartPoint && editingMode === 'dimension' && (
+                        <div
+                          style={{ left: `${drawingStartPoint.x}%`, top: `${drawingStartPoint.y}%`, backgroundColor: activeColor }}
+                          className="absolute w-4 h-4 rounded-full border-2 border-white shadow-xl pointer-events-none z-20"
+                        />
+                      )}
 
                       <div className="absolute top-6 left-6 bg-black/70 backdrop-blur text-white text-xs px-6 py-3 rounded-full font-black pointer-events-none shadow-2xl border-2 border-white/20 z-10 flex items-center gap-2">
-                        <Edit2 className="w-4 h-4 text-red-400"/> タップで赤丸を追加
+                        {editingMode === 'circle' ? <><Edit2 className="w-4 h-4 text-red-400"/> タップで赤丸を追加</> : !drawingStartPoint ? <><Ruler className="w-4 h-4 text-blue-400"/> 始点をタップ</> : <><Ruler className="w-4 h-4 text-yellow-400"/> 終点をタップ</>}
                       </div>
                     </div>
                   ) : (
