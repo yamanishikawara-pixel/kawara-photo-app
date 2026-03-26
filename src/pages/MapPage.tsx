@@ -78,13 +78,15 @@ function safeStyle(
   return String(val);
 }
 
+
+// ★改良1：図面の線（色付き線）もビシッと1%刻みで止まるようにする
 function DraggableMapLine({
   line,
   isSelected,
   onDragEnd,
   onClick,
   onRotate,
-  onCopy, // ★コピー用の機能を渡す
+  onCopy,
 }: {
   line: MapLine;
   isSelected: boolean;
@@ -93,10 +95,20 @@ function DraggableMapLine({
   onRotate: (newRotation: number) => void;
   onCopy: () => void;
 }) {
+  // 見えない方眼紙（1%刻み）
+  const snap = (value: number) => Math.round(value);
+
   const initialX = typeof line.x === 'number' ? line.x : parseFloat(line.x as string);
   const initialY = typeof line.y === 'number' ? line.y : parseFloat(line.y as string);
   
-  const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(initialX, initialY, onDragEnd);
+  const handleDragEnd = (x: number, y: number) => {
+    onDragEnd(snap(x), snap(y));
+  };
+
+  const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(initialX, initialY, handleDragEnd);
+
+  const displayX = dragging ? position.x : snap(position.x);
+  const displayY = dragging ? position.y : snap(position.y);
 
   return (
     <>
@@ -108,18 +120,18 @@ function DraggableMapLine({
           e.stopPropagation();
           if (!dragging) onClick();
         }}
-        className={`map-line-marker absolute cursor-move flex items-center justify-center transition-opacity ${
-          dragging ? 'z-30 opacity-50 scale-105' : 'z-10 hover:opacity-80'
+        className={`map-line-marker absolute cursor-move flex items-center justify-center transition-all duration-75 ${
+          dragging ? 'z-30 opacity-60 scale-105 shadow-xl' : 'z-10 hover:opacity-80'
         }`}
         style={{
-          left: `${position.x}%`,
-          top: `${position.y}%`,
+          left: `${displayX}%`,
+          top: `${displayY}%`,
           width: safeStyle(line.length, '%'),
           height: Math.max(typeof line.thickness === 'number' ? line.thickness : parseFloat(line.thickness as string) || 4, 20) + 'px', 
           transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`,
           transformOrigin: 'center center',
           touchAction: 'none',
-          boxShadow: isSelected ? '0 0 0 3px rgba(59, 130, 246, 0.4)' : 'none',
+          boxShadow: isSelected && !dragging ? '0 0 0 3px rgba(59, 130, 246, 0.4)' : 'none',
           borderRadius: '999px',
         }}
       >
@@ -136,14 +148,13 @@ function DraggableMapLine({
       {isSelected && !dragging && (
         <div
           style={{
-            left: `${position.x}%`,
-            top: `calc(${position.y}% + 25px)`, 
+            left: `${displayX}%`,
+            top: `calc(${displayY}% + 25px)`, 
             transform: 'translateX(-50%)',
           }}
           className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden items-center"
           onClick={(e) => e.stopPropagation()} 
         >
-          {/* ★追加：コピーボタン */}
           <button
             onClick={(e) => { e.stopPropagation(); onCopy(); }}
             className="px-4 py-2 text-sm font-black hover:bg-gray-100 text-blue-600 border-r"
@@ -171,6 +182,7 @@ function DraggableMapLine({
   );
 }
 
+// ★改良2：位置図の番号ピンもビシッと1%刻みで止まるようにする
 function MapMarker({
   pin,
   isSelected,
@@ -184,8 +196,19 @@ function MapMarker({
   onClick: () => void;
   onSizeChange: (newSize: number) => void;
 }) {
-  const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(pin.x, pin.y, onDragEnd);
+  // 見えない方眼紙（1%刻み）
+  const snap = (value: number) => Math.round(value);
+
+  const handleDragEnd = (x: number, y: number) => {
+    onDragEnd(snap(x), snap(y));
+  };
+
+  const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(pin.x, pin.y, handleDragEnd);
+  
   const currentSize = pin.size || 1; 
+  
+  const displayX = dragging ? position.x : snap(position.x);
+  const displayY = dragging ? position.y : snap(position.y);
 
   return (
     <>
@@ -198,14 +221,15 @@ function MapMarker({
           if (!dragging) onClick();
         }}
         style={{
-          left: `${position.x}%`,
-          top: `${position.y}%`,
+          left: `${displayX}%`,
+          top: `${displayY}%`,
           transform: `translate(-50%, -50%) scale(${currentSize})`,
           touchAction: 'none',
+          zIndex: isSelected ? 100 : (dragging ? 30 : 10)
         }}
-        className={`map-pin-marker absolute flex items-center justify-center cursor-pointer transition-transform ${
-          dragging ? 'z-30 opacity-80' : 'z-10'
-        } ${isSelected ? 'ring-4 ring-red-500 ring-offset-2 ring-offset-white/50 rounded-full' : ''}`}
+        className={`map-pin-marker absolute flex items-center justify-center cursor-pointer transition-all duration-75 ${
+          dragging ? 'opacity-80 scale-105' : ''
+        } ${isSelected && !dragging ? 'ring-4 ring-red-500 ring-offset-2 ring-offset-white/50 rounded-full' : ''}`}
       >
         {pin.type === 'arrow' ? (
           <div className="flex items-center gap-1 drop-shadow-md bg-white/70 px-2 py-0.5 rounded-lg border border-red-200">
@@ -230,21 +254,21 @@ function MapMarker({
       {isSelected && !dragging && (
         <div
           style={{
-            left: `${position.x}%`,
-            top: `${position.y + 10 * currentSize}%`,
+            left: `${displayX}%`,
+            top: `${displayY + 10 * currentSize}%`,
             transform: 'translateX(-50%)',
           }}
           className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden"
           onClick={(e) => e.stopPropagation()} 
         >
           <button
-            onClick={() => onSizeChange(Math.min(3, currentSize + 0.1))} 
+            onClick={() => onSizeChange(Math.min(3, Math.round((currentSize + 0.1) * 10) / 10))} 
             className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700 border-r"
           >
             ＋
           </button>
           <button
-            onClick={() => onSizeChange(Math.max(0.3, currentSize - 0.1))} 
+            onClick={() => onSizeChange(Math.max(0.3, Math.round((currentSize - 0.1) * 10) / 10))} 
             className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700"
           >
             ー
