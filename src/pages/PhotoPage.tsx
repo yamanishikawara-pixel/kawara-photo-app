@@ -31,21 +31,63 @@ const COLOR_PALETTE = [
   { name: "Red", value: "#FF4500" },
 ];
 
-// SVGで寸法線とテキストを描画するコンポーネント（リアルCAD仕様：建築斜線と突き出し）
-// SVGで寸法線とテキストを描画するコンポーネント（リアルCAD仕様 ＋ 見切れ防止機能付き）
-function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChange }: { line: DimensionLine; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; }) {
+// SVGで寸法線とテキストを描画するコンポーネント（ドラッグ移動機能付き）
+function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChange, onUpdate }: { line: DimensionLine; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; onUpdate: (props: Partial<DimensionLine>) => void; }) {
   const inputRef = useRef<HTMLInputElement>(null);
   
-  // 線の中心点を計算
-  const midPoint = { x: (line.start.x + line.end.x) / 2, y: (line.start.y + line.end.y) / 2 };
+  // ドラッグ操作用のローカルステート
+  const [localStart, setLocalStart] = useState(line.start);
+  const [localEnd, setLocalEnd] = useState(line.end);
+  const [isDragging, setIsDragging] = useState<'start' | 'end' | null>(null);
 
-  // ★ 追加：ゴミ箱が見切れないよう、入力窓の位置を画面の「15%〜85%」の範囲内に強制的に収める（リミッター）
+  // 外部からの更新を同期
+  useEffect(() => {
+    if (!isDragging) {
+      setLocalStart(line.start);
+      setLocalEnd(line.end);
+    }
+  }, [line.start, line.end, isDragging]);
+
+  // 初回作成時のみ自動フォーカス（ドラッグ調整後に毎回キーボードが出るのを防ぐ）
+  useEffect(() => {
+    if (isSelected && inputRef.current && !isDragging && !line.text) {
+      inputRef.current.focus();
+    }
+  }, [isSelected, isDragging, line.text]);
+
+  const startDrag = (e: React.PointerEvent, type: 'start' | 'end') => {
+    e.stopPropagation();
+    setIsDragging(type);
+    const el = e.currentTarget as Element;
+    el.setPointerCapture(e.pointerId); // マウスが速く動いても外れないようにロック
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDragging) return;
+    const rect = (e.currentTarget as Element).closest('.cursor-crosshair')?.getBoundingClientRect();
+    if (!rect) return;
+    
+    // 写真の枠内に制限（0% 〜 100%）
+    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+    
+    if (isDragging === 'start') setLocalStart({ x, y });
+    else setLocalEnd({ x, y });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!isDragging) return;
+    const el = e.currentTarget as Element;
+    el.releasePointerCapture(e.pointerId);
+    onUpdate({ start: localStart, end: localEnd }); // 指を離した時にFirestoreに保存
+    setIsDragging(null);
+  };
+
+  const midPoint = { x: (localStart.x + localEnd.x) / 2, y: (localStart.y + localEnd.y) / 2 };
+  
+  // 見切れ防止リミッター
   const safePopupX = Math.max(15, Math.min(85, midPoint.x));
   const safePopupY = Math.max(15, Math.min(85, midPoint.y));
-
-  useEffect(() => {
-    if (isSelected && inputRef.current) inputRef.current.focus();
-  }, [isSelected]);
 
   const color = line.color || "#FFFFFF"; 
   const thickness = Number(line.size || 2); 
@@ -59,12 +101,11 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
             <line x1="4" y1="12" x2="12" y2="4" stroke={color} strokeWidth={thickness * 1.5} />
           </marker>
         </defs>
-        
         <line
-          x1={`${line.start.x}%`}
-          y1={`${line.start.y}%`}
-          x2={`${line.end.x}%`}
-          y2={`${line.end.y}%`}
+          x1={`${localStart.x}%`}
+          y1={`${localStart.y}%`}
+          x2={`${localEnd.x}%`}
+          y2={`${localEnd.y}%`}
           stroke={color}
           strokeWidth={thickness}
           fill="none"
@@ -75,21 +116,46 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
         />
       </svg>
       
-      {/* 選択時の入力フォーム（safePopupX, safePopupY を使用して見切れを防止） */}
-      {isSelected && (
-        <div style={{ left: `${safePopupX}%`, top: `${safePopupY}%` }} className="absolute z-30 translate-x-[-50%] translate-y-[-50%] flex flex-col items-center gap-2 bg-white p-3 rounded-xl shadow-xl border border-gray-200 min-w-[180px]" onClick={e => e.stopPropagation()}>
+      {/* 選択時の入力フォーム（ドラッグ中は邪魔にならないように隠す） */}
+      {isSelected && !isDragging && (
+        <div style={{ left: `${safePopupX}%`, top: `${safePopupY}%` }} className="absolute z-30 translate-x-[-50%] translate-y-[-50%] flex flex-col items-center gap-2 bg-white p-3 rounded-xl shadow-2xl border-2 border-gray-200 min-w-[200px]" onClick={e => e.stopPropagation()}>
           <div className="flex w-full gap-2">
             <input
               ref={inputRef}
               type="text"
               value={line.text}
               onChange={(e) => onTextChange(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 p-2 text-lg font-bold rounded outline-none focus:border-blue-400 text-center"
+              className="w-full bg-gray-50 border-2 border-gray-200 p-2 text-lg font-bold rounded-lg outline-none focus:border-blue-500 text-center"
               placeholder="寸法 (例: 5.5m)"
             />
-            <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-2 text-red-500 bg-red-50 rounded hover:bg-red-100"><Trash2 className="w-5 h-5" /></button>
+            <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-2 text-red-500 bg-red-50 rounded-lg hover:bg-red-100"><Trash2 className="w-6 h-6" /></button>
           </div>
+          <p className="text-[11px] text-blue-500 font-bold tracking-wider">端の青い丸をドラッグで位置調整</p>
         </div>
+      )}
+
+      {/* 選択時のみ表示されるドラッグ用の操作ハンドル */}
+      {isSelected && (
+        <>
+          <div
+            className="absolute z-40 w-12 h-12 -ml-6 -mt-6 bg-blue-500/20 border-4 border-blue-500 rounded-full cursor-move touch-none backdrop-blur-sm"
+            style={{ left: `${localStart.x}%`, top: `${localStart.y}%` }}
+            onPointerDown={(e) => startDrag(e, 'start')}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            onClick={(e) => e.stopPropagation()}
+          />
+          <div
+            className="absolute z-40 w-12 h-12 -ml-6 -mt-6 bg-blue-500/20 border-4 border-blue-500 rounded-full cursor-move touch-none backdrop-blur-sm"
+            style={{ left: `${localEnd.x}%`, top: `${localEnd.y}%` }}
+            onPointerDown={(e) => startDrag(e, 'end')}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </>
       )}
       
       {/* 未選択時のテキスト */}
@@ -202,11 +268,10 @@ export default function PhotoPage() {
   const [currentPhotoId, setCurrentPhotoId] = useState<number | null>(null);
   const [selectedCircleId, setSelectedCircleId] = useState<number | null>(null);
 
-  // 寸法記入用の新しいステート
   const [editingMode, setEditingMode] = useState<'circle' | 'dimension'>('circle');
   const [selectedDimensionLineId, setSelectedDimensionLineId] = useState<number | null>(null);
   const [drawingStartPoint, setDrawingStartPoint] = useState<{ x: number; y: number } | null>(null);
-  const [activeColor, setActiveColor] = useState<string>(COLOR_PALETTE[0].value); // 黄色
+  const [activeColor, setActiveColor] = useState<string>(COLOR_PALETTE[0].value); 
 
   const [processOptions, setProcessOptions] = useState<string[]>(DEFAULT_PROCESS_OPTIONS);
   const [descTemplates, setDescTemplates] = useState<{label: string, text: string}[]>(DEFAULT_DESC_TEMPLATES);
@@ -314,7 +379,6 @@ export default function PhotoPage() {
     });
   };
 
-  // 写真上のクリックイベントを統合
   const handlePhotoClick = async (e: MouseEvent<HTMLDivElement>, photoId: number) => {
     if (!project) return;
 
@@ -331,10 +395,8 @@ export default function PhotoPage() {
       if (selectedDimensionLineId !== null) { setSelectedDimensionLineId(null); return; }
       
       if (!drawingStartPoint) {
-        // 始点をセット
         setDrawingStartPoint({ x, y });
       } else {
-        // 終点をセットして寸法線を確定
         const newLineId = Date.now();
         const newPhotos = project.photos.map((p) => p.id === photoId ? {
           ...p,
@@ -342,8 +404,8 @@ export default function PhotoPage() {
         } : p);
         setProject({ ...project, photos: newPhotos });
         await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
-        setDrawingStartPoint(null); // 描画状態をリセット
-        setSelectedDimensionLineId(newLineId); // テキスト入力を促すため選択状態にする
+        setDrawingStartPoint(null); 
+        setSelectedDimensionLineId(newLineId); 
       }
     }
   };
@@ -363,7 +425,6 @@ export default function PhotoPage() {
     setSelectedCircleId(null);
   };
 
-  // 寸法線のアップデート・削除
   const updateDimensionLine = async (photoId: number, lineId: number, newProps: Partial<DimensionLine>) => {
     if (!project) return;
     const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, dimensionLines: p.dimensionLines?.map((c) => c.id === lineId ? { ...c, ...newProps } : c) } : p);
@@ -394,7 +455,6 @@ export default function PhotoPage() {
             <input type="file" multiple accept="image/*" className="hidden" onChange={handleBulkUpload} disabled={bulkUploading} />
           </label>
 
-          {/* 編集モードの切り替えパネル */}
           <div className="grid grid-cols-2 gap-4 border-2 border-gray-100 rounded-3xl p-3 bg-gray-50">
             <button onClick={() => { setEditingMode('circle'); setDrawingStartPoint(null); }} className={`flex items-center gap-3 justify-center py-5 rounded-2xl font-black text-xl transition-all ${editingMode === 'circle' ? 'bg-red-500 text-white shadow-lg' : 'text-gray-600 hover:bg-gray-100'}`}>
               <Edit2 className="w-7 h-7" /> 赤丸を追加
@@ -438,17 +498,23 @@ export default function PhotoPage() {
                     <div className="relative inline-block cursor-crosshair" onClick={(e) => handlePhotoClick(e, photo.id)}>
                       <img src={proxyUrl(photo.image, photo.id)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[70vh] pointer-events-none rounded-2xl shadow-2xl transition-transform duration-500" style={{ transform: `rotate(${Number(photo.rotation || 0)}deg)` }} alt="" />
                       
-                      {/* 赤丸の描画 */}
                       {(photo.circles || []).map((circle) => (
                         <PhotoCircleMarker key={circle.id} circle={circle} isSelected={selectedCircleId === circle.id} onSelect={() => setSelectedCircleId(circle.id)} onDragEnd={(x, y) => updateCircle(photo.id, circle.id, { x, y })} onSizeChange={(size) => updateCircle(photo.id, circle.id, { size })} onRemove={() => removeCircle(photo.id, circle.id)} />
                       ))}
                       
-                      {/* 寸法線の描画 */}
+                      {/* 寸法線の描画（onUpdateを追加） */}
                       {(photo.dimensionLines || []).map((line) => (
-                        <DimensionLineMarker key={line.id} line={line} isSelected={selectedDimensionLineId === line.id} onSelect={() => setSelectedDimensionLineId(line.id)} onRemove={() => removeDimensionLine(photo.id, line.id)} onTextChange={(text) => updateDimensionLine(photo.id, line.id, {text})} />
+                        <DimensionLineMarker 
+                          key={line.id} 
+                          line={line} 
+                          isSelected={selectedDimensionLineId === line.id} 
+                          onSelect={() => setSelectedDimensionLineId(line.id)} 
+                          onRemove={() => removeDimensionLine(photo.id, line.id)} 
+                          onTextChange={(text) => updateDimensionLine(photo.id, line.id, {text})} 
+                          onUpdate={(newProps) => updateDimensionLine(photo.id, line.id, newProps)}
+                        />
                       ))}
 
-                      {/* 描画中の始点フィードバック */}
                       {drawingStartPoint && editingMode === 'dimension' && (
                         <div
                           style={{ left: `${drawingStartPoint.x}%`, top: `${drawingStartPoint.y}%`, backgroundColor: activeColor }}
