@@ -206,67 +206,56 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
   );
 }
 
-// 写真上の赤丸マーカー（ビシッと止まるプロ仕様版）
+// 写真上の赤丸マーカー（ビシッと止まるプロ仕様スナップ版）
 function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChange, onRemove }: { circle: Circle; isSelected: boolean; onSelect: () => void; onDragEnd: (x: number, y: number) => void; onSizeChange: (size: number) => void; onRemove: () => void; }) {
   
-  // ★追加：見えない方眼紙。1%刻みで数値を丸めることで、ビシッと止まるようにする
+  // ★ 見えない方眼紙：座標を1%刻みで丸めることで、ビシッと整列するようにする
   const snap = (value: number) => Math.round(value);
 
+  // 指を離した時にスナップさせた座標を保存する
   const handleDragEnd = (x: number, y: number) => {
     onDragEnd(snap(x), snap(y));
   };
 
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(circle.x, circle.y, handleDragEnd);
   
+  // ドラッグ中は指についてくるが、離すとスナップした位置に表示される
+  const displayX = dragging ? position.x : snap(position.x);
+  const displayY = dragging ? position.y : snap(position.y);
+  
+  // サイズも5%刻みのキリの良い数字にする
   const size = snap(Number(circle.size || 20));
-  const snappedX = snap(position.x);
-  const snappedY = snap(position.y);
 
   return (
     <>
-      {/* メインの赤丸（選択時以外はここをタップして選択） */}
       <div
-        onClick={(e) => { e.stopPropagation(); onSelect(); }}
+        ref={containerRef}
+        onMouseDown={(e) => { e.stopPropagation(); onSelect(); onMouseDown(e); }}
+        onTouchStart={(e) => { e.stopPropagation(); onSelect(); onTouchStart(e); }}
+        onClick={(e) => e.stopPropagation()} 
         style={{ 
-          left: `${snappedX}%`, 
-          top: `${snappedY}%`, 
+          left: `${displayX}%`, 
+          top: `${displayY}%`, 
           width: `${size}%`, 
           transform: 'translate(-50%, -50%)', 
+          touchAction: 'none', 
           zIndex: isSelected ? 100 : 20 
         }}
-        className={`absolute aspect-square rounded-full border-[4px] border-red-500 transition-all duration-75 ${isSelected ? 'border-dashed bg-red-500/10' : 'cursor-pointer hover:bg-red-500/20'}`}
+        // 選択時は点線になり、ドラッグ中は少し濃くなって吸い付き感を強調
+        className={`absolute aspect-square rounded-full border-[4px] border-red-500 shadow-sm transition-all duration-75 ${dragging ? 'z-30 opacity-80 scale-105 bg-red-500/20' : 'cursor-pointer hover:bg-red-500/20'} ${isSelected && !dragging ? 'border-dashed bg-red-500/10' : ''}`}
       />
-
-      {/* 選択時のみ出現する操作UI */}
-      {isSelected && (
-        <>
-          {/* ★追加：寸法線と同じ、ドラッグ専用の「青い操作ハンドル」を中心に配置 */}
-          <div
-            ref={containerRef}
-            onMouseDown={(e) => { e.stopPropagation(); onMouseDown(e); }}
-            onTouchStart={(e) => { e.stopPropagation(); onTouchStart(e); }}
-            onClick={(e) => e.stopPropagation()}
-            style={{ left: `${snappedX}%`, top: `${snappedY}%`, transform: 'translate(-50%, -50%)', touchAction: 'none' }}
-            className={`absolute z-[110] w-14 h-14 bg-blue-500/20 border-4 border-blue-500 rounded-full cursor-move backdrop-blur-sm shadow-xl flex items-center justify-center transition-transform ${dragging ? 'scale-110 bg-blue-500/40' : ''}`}
-          >
-            {/* ハンドルの中心点（照準器のようなデザイン） */}
-            <div className="w-3 h-3 bg-blue-600 rounded-full" />
-          </div>
-
-          {/* サイズ変更・削除メニュー（ドラッグ中は邪魔にならないように隠す） */}
-          {!dragging && (
-            <div 
-              onClick={(e) => e.stopPropagation()} 
-              style={{ left: `${snappedX}%`, top: `${snappedY + size/2 + 8}%`, transform: 'translateX(-50%)' }} 
-              className="absolute z-[1000] flex bg-white rounded-xl shadow-2xl border-2 border-gray-200 overflow-hidden"
-            >
-              {/* ★追加：サイズ変更もフワフワさせず、5%刻みでカチッ、カチッと変更させる */}
-              <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.min(80, size + 5))}} className="px-5 py-3 text-2xl font-bold hover:bg-gray-100 text-gray-700 border-r active:bg-gray-200">＋</button>
-              <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.max(5, size - 5))}} className="px-5 py-3 text-2xl font-bold hover:bg-gray-100 text-gray-700 border-r active:bg-gray-200">－</button>
-              <button onClick={(e) => {e.stopPropagation(); onRemove()}} className="px-5 py-3 text-red-500 hover:bg-red-50 active:bg-red-100"><Trash2 className="w-6 h-6"/></button>
-            </div>
-          )}
-        </>
+      
+      {isSelected && !dragging && (
+        <div 
+          onClick={(e) => e.stopPropagation()} 
+          style={{ left: `${displayX}%`, top: `${displayY + size/2 + 8}%`, transform: 'translateX(-50%)' }} 
+          className="absolute z-[1000] flex bg-white rounded-xl shadow-2xl border-2 border-gray-200 overflow-hidden"
+        >
+          {/* サイズ変更も5%刻みでカチッカチッと変わるように修正 */}
+          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.min(80, size + 5))}} className="px-5 py-3 text-2xl font-bold hover:bg-gray-100 text-gray-700 border-r active:bg-gray-200">＋</button>
+          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.max(5, size - 5))}} className="px-5 py-3 text-2xl font-bold hover:bg-gray-100 text-gray-700 border-r active:bg-gray-200">－</button>
+          <button onClick={(e) => {e.stopPropagation(); onRemove()}} className="px-5 py-3 text-red-500 hover:bg-red-50 active:bg-red-100"><Trash2 className="w-6 h-6"/></button>
+        </div>
       )}
     </>
   );
