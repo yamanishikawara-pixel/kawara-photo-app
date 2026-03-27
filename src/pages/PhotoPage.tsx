@@ -206,25 +206,18 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
   );
 }
 
-// 写真上の赤丸マーカー（ビシッと止まるプロ仕様スナップ版）
+// 写真上の赤丸マーカー（確実に止まる、サイズ固定版）
 function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChange, onRemove }: { circle: Circle; isSelected: boolean; onSelect: () => void; onDragEnd: (x: number, y: number) => void; onSizeChange: (size: number) => void; onRemove: () => void; }) {
   
-  // ★ 見えない方眼紙：座標を1%刻みで丸めることで、ビシッと整列するようにする
-  const snap = (value: number) => Math.round(value);
-
-  // 指を離した時にスナップさせた座標を保存する
+  // ★ snap(丸め処理)を完全廃止。指を離した瞬間の正確な座標で保存！
   const handleDragEnd = (x: number, y: number) => {
-    onDragEnd(snap(x), snap(y));
+    onDragEnd(x, y); // 生の座標を渡す
   };
 
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(circle.x, circle.y, handleDragEnd);
   
-  // ドラッグ中は指についてくるが、離すとスナップした位置に表示される
-  const displayX = dragging ? position.x : snap(position.x);
-  const displayY = dragging ? position.y : snap(position.y);
-  
-  // サイズも5%刻みのキリの良い数字にする
-  const size = snap(Number(circle.size || 20));
+  // ★ サイズは保存されているものをそのまま使う。ドラッグ中も変わらない。
+  const size = Number(circle.size || 20);
 
   return (
     <>
@@ -234,32 +227,33 @@ function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChan
         onTouchStart={(e) => { e.stopPropagation(); onSelect(); onTouchStart(e); }}
         onClick={(e) => e.stopPropagation()} 
         style={{ 
-          left: `${displayX}%`, 
-          top: `${displayY}%`, 
+          left: `${position.x}%`, // 生の座標
+          top: `${position.y}%`,  // 生の座標
           width: `${size}%`, 
           transform: 'translate(-50%, -50%)', 
           touchAction: 'none', 
-          zIndex: isSelected ? 100 : 20 
+          zIndex: isSelected ? 100 : (dragging ? 30 : 20) 
         }}
-        // 選択時は点線になり、ドラッグ中は少し濃くなって吸い付き感を強調
-        className={`absolute aspect-square rounded-full border-[4px] border-red-500 shadow-sm transition-all duration-75 ${dragging ? 'z-30 opacity-80 scale-105 bg-red-500/20' : 'cursor-pointer hover:bg-red-500/20'} ${isSelected && !dragging ? 'border-dashed bg-red-500/10' : ''}`}
+        // ★ scale-105 を削除。ドラッグ中の背景色の変更も Hover のみにして、サイズが変わる違和感を消す。ドラッグ中はOpacityとZIndexで強調。
+        className={`absolute aspect-square rounded-full border-[4px] border-red-500 shadow-sm transition-all duration-75 ${dragging ? 'z-30 opacity-80' : 'cursor-pointer hover:bg-red-500/10'} ${isSelected && !dragging ? 'border-dashed bg-red-500/10' : ''}`}
       />
       
       {isSelected && !dragging && (
         <div 
           onClick={(e) => e.stopPropagation()} 
-          style={{ left: `${displayX}%`, top: `${displayY + size/2 + 8}%`, transform: 'translateX(-50%)' }} 
+          style={{ left: `${position.x}%`, top: `${position.y + size/2 + 8}%`, transform: 'translateX(-50%)' }} 
           className="absolute z-[1000] flex bg-white rounded-xl shadow-2xl border-2 border-gray-200 overflow-hidden"
         >
-          {/* サイズ変更も5%刻みでカチッカチッと変わるように修正 */}
-          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.min(80, size + 5))}} className="px-5 py-3 text-2xl font-bold hover:bg-gray-100 text-gray-700 border-r active:bg-gray-200">＋</button>
-          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.max(5, size - 5))}} className="px-5 py-3 text-2xl font-bold hover:bg-gray-100 text-gray-700 border-r active:bg-gray-200">－</button>
+          {/* ★ サイズ変更はフワフワさせず、5%刻みでカチッ、カチッと変更させる */}
+          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.min(80, Math.round(size + 5)))}} className="px-5 py-3 text-2xl font-bold hover:bg-gray-100 text-gray-700 border-r active:bg-gray-200">＋</button>
+          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.max(5, Math.round(size - 5)))}} className="px-5 py-3 text-2xl font-bold hover:bg-gray-100 text-gray-700 border-r active:bg-gray-200">－</button>
           <button onClick={(e) => {e.stopPropagation(); onRemove()}} className="px-5 py-3 text-red-500 hover:bg-red-50 active:bg-red-100"><Trash2 className="w-6 h-6"/></button>
         </div>
       )}
     </>
   );
 }
+
 
 function PinSelectModal({ isOpen, onClose, pins, onSelect }: { isOpen: boolean; onClose: () => void; pins: MapPinT[] | undefined; onSelect: (label: string) => void; }) {
   if (!isOpen) return null;
