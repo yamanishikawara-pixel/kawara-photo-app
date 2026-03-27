@@ -79,7 +79,7 @@ function safeStyle(
 }
 
 
-// ★改良1：図面の線（色付き線）もビシッと1%刻みで止まるようにする
+// ★修正版1：離した瞬間に絶対にズレない！正確な座標を維持する色付き線
 function DraggableMapLine({
   line,
   isSelected,
@@ -95,20 +95,11 @@ function DraggableMapLine({
   onRotate: (newRotation: number) => void;
   onCopy: () => void;
 }) {
-  // 見えない方眼紙（1%刻み）
-  const snap = (value: number) => Math.round(value);
-
   const initialX = typeof line.x === 'number' ? line.x : parseFloat(line.x as string);
   const initialY = typeof line.y === 'number' ? line.y : parseFloat(line.y as string);
   
-  const handleDragEnd = (x: number, y: number) => {
-    onDragEnd(snap(x), snap(y));
-  };
-
-  const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(initialX, initialY, handleDragEnd);
-
-  const displayX = dragging ? position.x : snap(position.x);
-  const displayY = dragging ? position.y : snap(position.y);
+  // ★ 丸め処理(snap)を完全廃止。指で決めたミクロな座標をそのまま保存！
+  const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(initialX, initialY, onDragEnd);
 
   return (
     <>
@@ -124,8 +115,8 @@ function DraggableMapLine({
           dragging ? 'z-30 opacity-60 scale-105 shadow-xl' : 'z-10 hover:opacity-80'
         }`}
         style={{
-          left: `${displayX}%`,
-          top: `${displayY}%`,
+          left: `${position.x}%`, // 丸めない生の座標
+          top: `${position.y}%`,  // 丸めない生の座標
           width: safeStyle(line.length, '%'),
           height: Math.max(typeof line.thickness === 'number' ? line.thickness : parseFloat(line.thickness as string) || 4, 20) + 'px', 
           transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`,
@@ -148,8 +139,8 @@ function DraggableMapLine({
       {isSelected && !dragging && (
         <div
           style={{
-            left: `${displayX}%`,
-            top: `calc(${displayY}% + 25px)`, 
+            left: `${position.x}%`,
+            top: `calc(${position.y}% + 25px)`, 
             transform: 'translateX(-50%)',
           }}
           className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden items-center"
@@ -182,7 +173,7 @@ function DraggableMapLine({
   );
 }
 
-// ★改良2：位置図の番号ピンもビシッと1%刻みで止まるようにする
+// ★修正版2：番号ピンも離した瞬間に絶対にズレないように修正
 function MapMarker({
   pin,
   isSelected,
@@ -196,19 +187,10 @@ function MapMarker({
   onClick: () => void;
   onSizeChange: (newSize: number) => void;
 }) {
-  // 見えない方眼紙（1%刻み）
-  const snap = (value: number) => Math.round(value);
-
-  const handleDragEnd = (x: number, y: number) => {
-    onDragEnd(snap(x), snap(y));
-  };
-
-  const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(pin.x, pin.y, handleDragEnd);
+  // ★ 丸め処理(snap)を完全廃止
+  const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(pin.x, pin.y, onDragEnd);
   
   const currentSize = pin.size || 1; 
-  
-  const displayX = dragging ? position.x : snap(position.x);
-  const displayY = dragging ? position.y : snap(position.y);
 
   return (
     <>
@@ -221,8 +203,8 @@ function MapMarker({
           if (!dragging) onClick();
         }}
         style={{
-          left: `${displayX}%`,
-          top: `${displayY}%`,
+          left: `${position.x}%`, // 丸めない生の座標
+          top: `${position.y}%`,  // 丸めない生の座標
           transform: `translate(-50%, -50%) scale(${currentSize})`,
           touchAction: 'none',
           zIndex: isSelected ? 100 : (dragging ? 30 : 10)
@@ -254,8 +236,8 @@ function MapMarker({
       {isSelected && !dragging && (
         <div
           style={{
-            left: `${displayX}%`,
-            top: `${displayY + 10 * currentSize}%`,
+            left: `${position.x}%`,
+            top: `${position.y + 10 * currentSize}%`,
             transform: 'translateX(-50%)',
           }}
           className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden"
@@ -278,6 +260,9 @@ function MapMarker({
     </>
   );
 }
+
+
+
 
 function MarkerEditModal({
   pin,
