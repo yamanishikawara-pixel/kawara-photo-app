@@ -322,24 +322,31 @@ export default function PdfExportPage() {
             <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
               <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black">
                 {chunk.map((p, i) => {
+                  const isRotated = (Number(p.rotation) || 0) % 180 !== 0;
+                  const maxImgWidth = isRotated ? '78mm' : '100%';
+                  const maxImgHeight = isRotated ? '120mm' : '78mm';
+
                   return (
                     <div key={i} className="flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black" style={{ height: '82mm' }}>
                       <div className="w-[60%] flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {p.image ? (
-                          <div className="relative inline-block">
+                          <div className="relative" style={{ display: 'inline-block' }}>
                             <img 
                               src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} 
                               data-original-src={p.image} 
                               crossOrigin="anonymous" 
-                              className="block w-auto h-auto max-w-full" 
                               style={{ 
-                                maxHeight: '78mm',
+                                display: 'block',
+                                maxWidth: maxImgWidth, 
+                                maxHeight: maxImgHeight,
+                                width: 'auto',
+                                height: 'auto',
+                                objectFit: 'contain',
                                 transform: `rotate(${Number(p.rotation) || 0}deg)` 
                               }}
                               alt="" 
                             />
                             
-                            {/* 赤丸の描画 */}
                             {(p.circles ?? []).map((circle) => {
                               const size = Number(circle.size || 20);
                               return (
@@ -356,7 +363,6 @@ export default function PdfExportPage() {
                               );
                             })}
 
-                            {/* 寸法線の描画 */}
                             {(p.dimensionLines ?? []).map((line) => {
                               const color = line.color || "#FFFFFF";
                               const thickness = Number(line.size || 2);
@@ -381,8 +387,8 @@ export default function PdfExportPage() {
                                   </svg>
                                   {line.text && (
                                     <div
-                                      style={{ left: `${midX}%`, top: `${midY}%`, color: color, backgroundColor: 'rgba(0, 0, 0, 0.4)' }}
-                                      className="absolute z-20 translate-x-[-50%] translate-y-[-50%] font-bold text-[10px] px-1 py-0.5 rounded pointer-events-none whitespace-nowrap"
+                                      style={{ left: `${midX}%`, top: `${midY}%`, color: color, backgroundColor: 'rgba(0, 0, 0, 0.4)', backdropFilter: 'blur(2px)' }}
+                                      className="absolute z-20 translate-x-[-50%] translate-y-[-50%] font-bold text-[10px] px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap"
                                     >
                                       {line.text}
                                     </div>
@@ -416,18 +422,26 @@ export default function PdfExportPage() {
               <h2 className="text-xl font-bold pb-1 mb-2 border-b-2 border-gray-800 shrink-0 print:border-black">使用材料表</h2>
               <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black">
                 {chunk.map((m, i) => {
+                  const isRotated = (Number(m.rotation) || 0) % 180 !== 0;
+                  const maxImgWidth = isRotated ? '78mm' : '100%';
+                  const maxImgHeight = isRotated ? '120mm' : '78mm';
+
                   return (
                     <div key={i} className="flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black" style={{ height: '82mm' }}>
                       <div className="w-[60%] flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {m.image ? (
-                          <div className="relative inline-block">
+                          <div className="relative" style={{ display: 'inline-block' }}>
                             <img 
                               src={proxyUrl(m.image, `material_${m.id}_${sessionId}`)} 
                               data-original-src={m.image} 
                               crossOrigin="anonymous" 
-                              className="block w-auto h-auto max-w-full"
                               style={{ 
-                                maxHeight: '78mm',
+                                display: 'block',
+                                maxWidth: maxImgWidth, 
+                                maxHeight: maxImgHeight,
+                                width: 'auto',
+                                height: 'auto',
+                                objectFit: 'contain',
                                 transform: `rotate(${Number(m.rotation) || 0}deg)` 
                               }}
                               alt="" 
