@@ -127,7 +127,6 @@ export default function PdfExportPage() {
     } catch { setError('Zipファイルの作成に失敗しました。'); } finally { setIsZipping(false); }
   };
 
-  // ★ 印刷機のエラーを防ぐ Base64変換 + 強制プリント
   const handlePrint = () => {
     if (!project) return;
     setIsPrinting(true);
@@ -323,46 +322,74 @@ export default function PdfExportPage() {
             <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
               <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black">
                 {chunk.map((p, i) => {
-                  const isRotated = (Number(p.rotation) || 0) % 180 !== 0;
-                  // ★ ラッパー方式による最強の回転設定（ミリメートル絶対指定）
-                  const wrapperWidth = isRotated ? '82mm' : '100%';
-                  const wrapperHeight = isRotated ? '107mm' : '100%';
-                  
                   return (
                     <div key={i} className="flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black" style={{ height: '82mm' }}>
                       <div className="w-[60%] flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {p.image ? (
-                          <div 
-                            className="relative flex items-center justify-center origin-center"
-                            style={{
-                              width: wrapperWidth,
-                              height: wrapperHeight,
-                              transform: `rotate(${Number(p.rotation) || 0}deg)`
-                            }}
-                          >
+                          <div className="relative inline-block">
                             <img 
                               src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} 
                               data-original-src={p.image} 
                               crossOrigin="anonymous" 
-                              className="absolute inset-0 w-full h-full object-contain" 
+                              className="block w-auto h-auto max-w-full" 
+                              style={{ 
+                                maxHeight: '78mm',
+                                transform: `rotate(${Number(p.rotation) || 0}deg)` 
+                              }}
                               alt="" 
                             />
+                            
+                            {/* 赤丸の描画 */}
                             {(p.circles ?? []).map((circle) => {
-  // ★ PDFバグ対策：transformを使わず、CSSの calc() で円の半径分を左上に引き算して中心を合わせる
-  const size = circle.size || 20;
-  return (
-    <div 
-      key={circle.id} 
-      className="absolute aspect-square rounded-full border-[3px] border-red-600 print:border-[2px]" 
-      style={{ 
-        left: `calc(${circle.x}% - ${size / 2}%)`, 
-        top: `calc(${circle.y}% - ${size / 2}%)`, 
-        width: `${size}%`,
-        height: `${size}%` // 印刷時に円が潰れないよう高さも明示的に指定
-      }} 
-    />
-  );
-})} 
+                              const size = Number(circle.size || 20);
+                              return (
+                                <div 
+                                  key={circle.id} 
+                                  className="absolute aspect-square rounded-full border-[3px] border-red-500 print:border-[2px]" 
+                                  style={{ 
+                                    left: `${circle.x}%`, 
+                                    top: `${circle.y}%`, 
+                                    width: `${size}%`, 
+                                    transform: 'translate(-50%, -50%)' 
+                                  }} 
+                                />
+                              );
+                            })}
+
+                            {/* 寸法線の描画 */}
+                            {(p.dimensionLines ?? []).map((line) => {
+                              const color = line.color || "#FFFFFF";
+                              const thickness = Number(line.size || 2);
+                              const midX = (line.start.x + line.end.x) / 2;
+                              const midY = (line.start.y + line.end.y) / 2;
+                              return (
+                                <div key={line.id} className="absolute inset-0 z-20 pointer-events-none w-full h-full" style={{ overflow: 'visible' }}>
+                                  <svg className="absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
+                                    <defs>
+                                      <marker id={`cad-tick-pdf-${line.id}`} markerWidth="16" markerHeight="16" refX="8" refY="8" orient="auto" markerUnits="userSpaceOnUse">
+                                        <line x1="0" y1="8" x2="16" y2="8" stroke={color} strokeWidth={thickness} />
+                                        <line x1="4" y1="12" x2="12" y2="4" stroke={color} strokeWidth={thickness * 1.5} />
+                                      </marker>
+                                    </defs>
+                                    <line
+                                      x1={`${line.start.x}%`} y1={`${line.start.y}%`}
+                                      x2={`${line.end.x}%`} y2={`${line.end.y}%`}
+                                      stroke={color} strokeWidth={thickness} fill="none"
+                                      markerStart={`url(#cad-tick-pdf-${line.id})`}
+                                      markerEnd={`url(#cad-tick-pdf-${line.id})`}
+                                    />
+                                  </svg>
+                                  {line.text && (
+                                    <div
+                                      style={{ left: `${midX}%`, top: `${midY}%`, color: color, backgroundColor: 'rgba(0, 0, 0, 0.4)' }}
+                                      className="absolute z-20 translate-x-[-50%] translate-y-[-50%] font-bold text-[10px] px-1 py-0.5 rounded pointer-events-none whitespace-nowrap"
+                                    >
+                                      {line.text}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         ) : <span className="font-bold text-gray-400">写真未登録</span>}
                       </div>
@@ -389,27 +416,20 @@ export default function PdfExportPage() {
               <h2 className="text-xl font-bold pb-1 mb-2 border-b-2 border-gray-800 shrink-0 print:border-black">使用材料表</h2>
               <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black">
                 {chunk.map((m, i) => {
-                  const isRotated = (Number(m.rotation) || 0) % 180 !== 0;
-                  const wrapperWidth = isRotated ? '78mm' : '100%';
-                  const wrapperHeight = isRotated ? '107mm' : '100%';
-                  
                   return (
                     <div key={i} className="flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black" style={{ height: '82mm' }}>
                       <div className="w-[60%] flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {m.image ? (
-                          <div 
-                            className="relative flex items-center justify-center origin-center"
-                            style={{
-                              width: wrapperWidth,
-                              height: wrapperHeight,
-                              transform: `rotate(${Number(m.rotation) || 0}deg)`
-                            }}
-                          >
+                          <div className="relative inline-block">
                             <img 
                               src={proxyUrl(m.image, `material_${m.id}_${sessionId}`)} 
                               data-original-src={m.image} 
                               crossOrigin="anonymous" 
-                              className="absolute inset-0 w-full h-full object-contain" 
+                              className="block w-auto h-auto max-w-full"
+                              style={{ 
+                                maxHeight: '78mm',
+                                transform: `rotate(${Number(m.rotation) || 0}deg)` 
+                              }}
                               alt="" 
                             />
                           </div>
