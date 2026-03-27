@@ -347,9 +347,22 @@ export default function PdfExportPage() {
                               className="absolute inset-0 w-full h-full object-contain" 
                               alt="" 
                             />
-                            {(p.circles ?? []).map((circle) => (
-                              <div key={circle.id} className="absolute aspect-square rounded-full border-[3px] border-red-600" style={{ left: `${circle.x}%`, top: `${circle.y}%`, width: `${circle.size}%`, transform: 'translate(-50%, -50%)' }} />
-                            ))}
+                            {(p.circles ?? []).map((circle) => {
+  // ★ PDFバグ対策：transformを使わず、CSSの calc() で円の半径分を左上に引き算して中心を合わせる
+  const size = circle.size || 20;
+  return (
+    <div 
+      key={circle.id} 
+      className="absolute aspect-square rounded-full border-[3px] border-red-600 print:border-[2px]" 
+      style={{ 
+        left: `calc(${circle.x}% - ${size / 2}%)`, 
+        top: `calc(${circle.y}% - ${size / 2}%)`, 
+        width: `${size}%`,
+        height: `${size}%` // 印刷時に円が潰れないよう高さも明示的に指定
+      }} 
+    />
+  );
+})} 
                           </div>
                         ) : <span className="font-bold text-gray-400">写真未登録</span>}
                       </div>
