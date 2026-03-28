@@ -71,8 +71,12 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
   };
 
   const midPoint = { x: (localStart.x + localEnd.x) / 2, y: (localStart.y + localEnd.y) / 2 };
-  const safePopupX = Math.max(15, Math.min(85, midPoint.x));
-  const safePopupY = Math.max(15, Math.min(80, midPoint.y));
+  const safePopupX = Math.max(20, Math.min(80, midPoint.x));
+  
+  // ★ 修正：線が上半分にあるか下半分にあるかで、メニューを出す位置を大きく反転（自動回避）させる
+  const isUpperHalf = midPoint.y < 50;
+  const offsetY = isUpperHalf ? '+ 140px' : '- 140px';
+
   const color = line.color || "#FFFFFF"; 
   const thickness = Number(line.size || 2); 
 
@@ -97,7 +101,7 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
       </svg>
       
       {isSelected && !isDragging && (
-        <div style={{ left: `${safePopupX}%`, top: `calc(${safePopupY}% + 70px)` }} className="absolute z-30 translate-x-[-50%] translate-y-[-50%] flex flex-col items-center gap-3 bg-white p-5 rounded-2xl shadow-3xl border-2 border-gray-100 min-w-[300px]" onPointerDown={e => e.stopPropagation()}>
+        <div style={{ left: `${safePopupX}%`, top: `calc(${midPoint.y}% ${offsetY})` }} className="absolute z-30 translate-x-[-50%] translate-y-[-50%] flex flex-col items-center gap-3 bg-white p-5 rounded-2xl shadow-3xl border-2 border-gray-100 min-w-[300px]" onPointerDown={e => e.stopPropagation()}>
           <div className="flex w-full gap-2 items-center justify-between border-b border-gray-100 pb-2">
              <h4 className="text-base font-black text-gray-900 flex items-center gap-1"><CaseUpper className="w-4 h-4 text-blue-500"/> 文字と線</h4>
              <div className="flex items-center gap-1">
