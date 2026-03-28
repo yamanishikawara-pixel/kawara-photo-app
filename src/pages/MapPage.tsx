@@ -372,12 +372,10 @@ export default function MapPage() {
                       onClick={() => setSelectedPinId(pin.id)} 
                       onSizeChange={(size) => { const newPins = mapPins.map(p => p.id === pin.id ? { ...p, size } : p); setMapPins(newPins); saveProjectMapData(newPins, mapRows, mapDimensionLines, showLegendTable); }} 
                       onRemove={() => { 
-                        if (window.confirm('このピンを削除しますか？')) { 
-                          const newPins = mapPins.filter(p => p.id !== pin.id); 
-                          setMapPins(newPins); 
-                          setSelectedPinId(null); 
-                          saveProjectMapData(newPins, mapRows, mapDimensionLines, showLegendTable); 
-                        } 
+                        const newPins = mapPins.filter(p => p.id !== pin.id); 
+                        setMapPins(newPins); 
+                        setSelectedPinId(null); 
+                        saveProjectMapData(newPins, mapRows, mapDimensionLines, showLegendTable); 
                       }} 
                     />
                   ))}
@@ -406,7 +404,13 @@ export default function MapPage() {
                       <input type="text" value={row.part} placeholder="軒先" onChange={(e) => { const newRows = mapRows.map(r => r.id === row.id ? { ...r, part: e.target.value } : r); setMapRows(newRows); }} className="col-span-4 py-3 px-2 font-bold bg-transparent outline-none border-r border-gray-100" />
                       <input type="text" value={row.remarks} placeholder="..." onChange={(e) => { const newRows = mapRows.map(r => r.id === row.id ? { ...r, remarks: e.target.value } : r); setMapRows(newRows); }} className="col-span-5 py-3 px-2 font-bold bg-transparent outline-none border-r border-gray-100" />
                       <div className="col-span-1 flex items-center justify-center">
-                        <button onClick={(e) => { e.stopPropagation(); if (window.confirm('この行を削除しますか？')) { const newRows = mapRows.filter(r => r.id !== row.id); setMapRows(newRows); setSelectedRowId(null); saveProjectMapData(mapPins, newRows, mapDimensionLines, showLegendTable); } }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-lg transition-colors"><Trash2 className="w-5 h-5"/></button>
+                        <button onClick={(e) => { 
+                          e.stopPropagation(); 
+                          const newRows = mapRows.filter(r => r.id !== row.id); 
+                          setMapRows(newRows); 
+                          setSelectedRowId(null); 
+                          saveProjectMapData(mapPins, newRows, mapDimensionLines, showLegendTable); 
+                        }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-lg transition-colors"><Trash2 className="w-5 h-5"/></button>
                       </div>
                     </div>
                   )) : (
