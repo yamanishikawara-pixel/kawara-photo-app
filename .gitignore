@@ -1,4 +1,17 @@
-# Logs
+# --- セキュリティ（金庫を守る） ---
+.env
+.env.local
+.env.*.local
+.firebase
+.firebaserc
+
+# --- 依存関係とビルド成果物 ---
+node_modules
+dist
+dist-ssr
+*.local
+
+# --- キャッシュ・ログ ---
 logs
 *.log
 npm-debug.log*
@@ -6,13 +19,19 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+.eslintcache
+.stylelintcache
+.vite
+.vitest
 
-node_modules
-dist
-dist-ssr
-*.local
+# --- Firebase固有 ---
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+functions/.cache/
+functions/node_modules/
 
-# Editor directories and files
+# --- エディタ・OS固有 ---
 .vscode/*
 !.vscode/extensions.json
 .idea
@@ -22,6 +41,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-
-functions/.cache/
-functions/node_modules/
