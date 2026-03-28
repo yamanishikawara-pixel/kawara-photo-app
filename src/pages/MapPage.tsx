@@ -72,7 +72,7 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
 
   const midPoint = { x: (localStart.x + localEnd.x) / 2, y: (localStart.y + localEnd.y) / 2 };
   const safePopupX = Math.max(15, Math.min(85, midPoint.x));
-  const safePopupY = Math.max(15, Math.min(85, midPoint.y));
+  const safePopupY = Math.max(15, Math.min(80, midPoint.y));
   const color = line.color || "#FFFFFF"; 
   const thickness = Number(line.size || 2); 
 
@@ -97,10 +97,16 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
       </svg>
       
       {isSelected && !isDragging && (
-        <div style={{ left: `${safePopupX}%`, top: `${safePopupY}%` }} className="absolute z-30 translate-x-[-50%] translate-y-[-50%] flex flex-col items-center gap-3 bg-white p-5 rounded-2xl shadow-3xl border-2 border-gray-100 min-w-[260px]" onPointerDown={e => e.stopPropagation()}>
+        <div style={{ left: `${safePopupX}%`, top: `calc(${safePopupY}% + 70px)` }} className="absolute z-30 translate-x-[-50%] translate-y-[-50%] flex flex-col items-center gap-3 bg-white p-5 rounded-2xl shadow-3xl border-2 border-gray-100 min-w-[300px]" onPointerDown={e => e.stopPropagation()}>
           <div className="flex w-full gap-2 items-center justify-between border-b border-gray-100 pb-2">
-             <h4 className="text-lg font-black text-gray-900 flex items-center gap-2"><CaseUpper className="w-5 h-5 text-blue-500"/> 線・寸法の設定</h4>
-             <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-2 text-red-500 bg-red-50 rounded-lg hover:bg-red-100"><Trash2 className="w-5 h-5" /></button>
+             <h4 className="text-base font-black text-gray-900 flex items-center gap-1"><CaseUpper className="w-4 h-4 text-blue-500"/> 文字と線</h4>
+             <div className="flex items-center gap-1">
+               <button onClick={(e) => { e.stopPropagation(); onUpdate({ size: Math.max(1, thickness - 1) }); }} className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded font-bold text-gray-700">ー</button>
+               <span className="text-xs font-bold text-gray-400 mx-1">{thickness}</span>
+               <button onClick={(e) => { e.stopPropagation(); onUpdate({ size: Math.min(10, thickness + 1) }); }} className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded font-bold text-gray-700 mr-2">＋</button>
+               <div className="w-px h-6 bg-gray-200 mx-1"></div>
+               <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-2 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 ml-1"><Trash2 className="w-5 h-5" /></button>
+             </div>
           </div>
           <div className="flex flex-wrap gap-2 w-full">
             {DEFAULT_MAP_PART_NAMES.map(name => (
@@ -132,10 +138,17 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
         </>
       )}
       
-      {!isSelected && line.text && (
+      {line.text && (
         <div
-          style={{ left: `${midPoint.x}%`, top: `${midPoint.y}%`, color: color, backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(2px)' }}
-          className="absolute z-20 translate-x-[-50%] translate-y-[-50%] font-bold text-base px-2 py-0.5 rounded pointer-events-none whitespace-nowrap border border-white/20 shadow-sm"
+          style={{ 
+            left: `${midPoint.x}%`, 
+            top: `${midPoint.y}%`, 
+            color: color, 
+            backgroundColor: 'rgba(0, 0, 0, 0.5)', 
+            backdropFilter: 'blur(2px)',
+            fontSize: `${14 + (thickness - 2) * 4}px` 
+          }}
+          className={`absolute translate-x-[-50%] translate-y-[-50%] font-bold px-2 py-0.5 rounded pointer-events-none whitespace-nowrap border border-white/20 shadow-sm ${isSelected ? 'z-40' : 'z-20'}`}
         >
           {line.text}
         </div>
