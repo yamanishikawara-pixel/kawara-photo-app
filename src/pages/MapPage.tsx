@@ -144,7 +144,7 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
   );
 }
 
-function MapMarker({ pin, isSelected, onDragEnd, onClick, onSizeChange }: { pin: MapPinT; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; onSizeChange: (newSize: number) => void; }) {
+function MapMarker({ pin, isSelected, onDragEnd, onClick, onSizeChange, onRemove }: { pin: MapPinT; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; onSizeChange: (newSize: number) => void; onRemove: () => void; }) {
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(pin.x, pin.y, onDragEnd);
   const currentSize = pin.size || 1; 
 
@@ -168,7 +168,8 @@ function MapMarker({ pin, isSelected, onDragEnd, onClick, onSizeChange }: { pin:
       {isSelected && !dragging && (
         <div style={{ left: `${position.x}%`, top: `${position.y + 10 * currentSize}%`, transform: 'translateX(-50%)' }} className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden" onPointerDown={(e) => e.stopPropagation()}>
           <button onClick={() => onSizeChange(Math.min(3, Math.round((currentSize + 0.1) * 10) / 10))} className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700 border-r">＋</button>
-          <button onClick={() => onSizeChange(Math.max(0.3, Math.round((currentSize - 0.1) * 10) / 10))} className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700">ー</button>
+          <button onClick={() => onSizeChange(Math.max(0.3, Math.round((currentSize - 0.1) * 10) / 10))} className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700 border-r">ー</button>
+          <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="px-4 py-2 text-red-500 hover:bg-red-50 active:bg-red-100"><Trash2 className="w-5 h-5"/></button>
         </div>
       )}
     </>
@@ -363,36 +364,13 @@ export default function MapPage() {
                   </div>
 
                   {mapPins.filter(p => (p.mapIndex || 0) === currentMapIndex).map(pin => (
-                    <MapMarker key={pin.id} pin={pin} isSelected={selectedPinId === pin.id} onDragEnd={(x, y) => { const newPins = mapPins.map(p => p.id === pin.id ? { ...p, x, y } : p); setMapPins(newPins); saveProjectMapData(newPins, mapRows, mapDimensionLines, showLegendTable); }} onClick={() => setSelectedPinId(pin.id)} onSizeChange={(size) => { const newPins = mapPins.map(p => p.id === pin.id ? { ...p, size } : p); setMapPins(newPins); saveProjectMapData(newPins, mapRows, mapDimensionLines, showLegendTable); }} />
+                    <MapMarker key={pin.id} pin={pin} isSelected={selectedPinId === pin.id} onDragEnd={(x, y) => { const newPins = mapPins.map(p => p.id === pin.id ? { ...p, x, y } : p); setMapPins(newPins); saveProjectMapData(newPins, mapRows, mapDimensionLines, showLegendTable); }} onClick={() => setSelectedPinId(pin.id)} onSizeChange={(size) => { const newPins = mapPins.map(p => p.id === pin.id ? { ...p, size } : p); setMapPins(newPins); saveProjectMapData(newPins, mapRows, mapDimensionLines, showLegendTable); }} onRemove={() => { if (window.confirm('このピンを削除しますか？')) { const newPins = mapPins.filter(p => p.id !== pin.id); setMapPins(newPins); setSelectedPinId(null); saveProjectMapData(newPins, mapRows, mapDimensionLines, showLegendTable); } }} />
                   ))}
                 </div>
               ) : (
                 <div className="text-center text-gray-400 py-16"><MapPin className="w-20 h-20 mx-auto mb-4 opacity-20" /><span className="text-xl font-black block">位置図・図面が未登録です</span></div>
               )}
             </div>
-            
-            {(selectedPinId || selectedRowId) && (
-              <div className="mt-6 pt-6 border-t-2 border-gray-100 flex justify-end">
-                {/* ★修正：削除ボタンを押す時に背景の選択解除が発動するのを防ぐ(e.stopPropagation()) */}
-                <button 
-                  onPointerDown={(e) => e.stopPropagation()} 
-                  onClick={() => { 
-                    if (window.confirm('選択した要素を削除しますか？')) { 
-                      const newPins = mapPins.filter(p => p.id !== selectedPinId); 
-                      const newRows = mapRows.filter(r => r.id !== selectedRowId); 
-                      setMapPins(newPins); 
-                      setMapRows(newRows); 
-                      setSelectedPinId(null); 
-                      setSelectedRowId(null); 
-                      saveProjectMapData(newPins, newRows, mapDimensionLines, showLegendTable); 
-                    } 
-                  }} 
-                  className="flex w-full sm:w-auto justify-center items-center gap-2 bg-red-50 text-red-600 font-black px-6 py-4 rounded-xl hover:bg-red-100 active:scale-95 transition-all"
-                >
-                  <Trash2 className="w-6 h-6" /> 選択中を削除
-                </button>
-              </div>
-            )}
           </div>
 
           {showLegendTable && (
@@ -402,16 +380,19 @@ export default function MapPage() {
                 <div className="grid grid-cols-12 text-xs lg:text-sm font-black bg-gray-100 border-b-2 border-gray-200 text-gray-600">
                   <div className="col-span-2 py-3 text-center border-r-2 border-gray-200">符号</div>
                   <div className="col-span-4 py-3 text-center border-r-2 border-gray-200">部位</div>
-                  <div className="col-span-6 py-3 text-center">備考</div>
+                  <div className="col-span-5 py-3 text-center border-r-2 border-gray-200">備考</div>
+                  <div className="col-span-1 py-3 text-center text-gray-400">削</div>
                 </div>
                 {(() => {
                   const currentRows = mapRows.filter((r) => (r.mapIndex || 0) === currentMapIndex);
                   return currentRows.length > 0 ? currentRows.map((row) => (
-                    // ★修正：行をタップした時も背景の選択解除が貫通するのを防ぐ
-                    <div key={row.id} onPointerDown={(e) => { e.stopPropagation(); setSelectedRowId(row.id); }} className={`grid grid-cols-12 text-base lg:text-lg border-b border-gray-100 last:border-b-0 cursor-pointer ${selectedRowId === row.id ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+                    <div key={row.id} onPointerDown={() => setSelectedRowId(row.id)} className={`grid grid-cols-12 text-base lg:text-lg border-b border-gray-100 last:border-b-0 cursor-pointer ${selectedRowId === row.id ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
                       <input type="text" value={row.symbol} onChange={(e) => { const newRows = mapRows.map(r => r.id === row.id ? { ...r, symbol: e.target.value } : r); setMapRows(newRows); }} className="col-span-2 py-3 text-center font-black text-red-700 bg-transparent outline-none border-r border-gray-100" />
                       <input type="text" value={row.part} placeholder="軒先" onChange={(e) => { const newRows = mapRows.map(r => r.id === row.id ? { ...r, part: e.target.value } : r); setMapRows(newRows); }} className="col-span-4 py-3 px-2 font-bold bg-transparent outline-none border-r border-gray-100" />
-                      <input type="text" value={row.remarks} placeholder="..." onChange={(e) => { const newRows = mapRows.map(r => r.id === row.id ? { ...r, remarks: e.target.value } : r); setMapRows(newRows); }} className="col-span-6 py-3 px-2 font-bold bg-transparent outline-none" />
+                      <input type="text" value={row.remarks} placeholder="..." onChange={(e) => { const newRows = mapRows.map(r => r.id === row.id ? { ...r, remarks: e.target.value } : r); setMapRows(newRows); }} className="col-span-5 py-3 px-2 font-bold bg-transparent outline-none border-r border-gray-100" />
+                      <div className="col-span-1 flex items-center justify-center">
+                        <button onClick={(e) => { e.stopPropagation(); if (window.confirm('この行を削除しますか？')) { const newRows = mapRows.filter(r => r.id !== row.id); setMapRows(newRows); setSelectedRowId(null); saveProjectMapData(mapPins, newRows, mapDimensionLines, showLegendTable); } }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-lg transition-colors"><Trash2 className="w-5 h-5"/></button>
+                      </div>
                     </div>
                   )) : (
                     <div className="text-center py-8 text-gray-400 font-bold bg-gray-50 text-sm">ピンを追加すると<br/>ここに行が追加されます</div>
