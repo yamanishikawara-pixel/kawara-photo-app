@@ -3,20 +3,18 @@ import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager
 import { getStorage } from "firebase/storage";
 import { getAuth } from "firebase/auth";
 
-// ★ 相棒が発掘した本物のFirebase設定！
+// 金庫（.env）から鍵をこっそり取り出す仕組み
 const firebaseConfig = {
-  apiKey: "AIzaSyB9XDlErN8cUdcpMbAPEt0uCZtboBWFn6Q", // ←ここが「n6Q」が正解でした！
-  authDomain: "kawara-photo-app.firebaseapp.com",
-  projectId: "kawara-photo-app",
-  storageBucket: "kawara-photo-app.firebasestorage.app",
-  messagingSenderId: "777689245112",
-  appId: "1:777689245112:web:a1d1a534fcc8a040ee5b4d"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// ★オフライン防衛線を起動したデータベース
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()})
 });
