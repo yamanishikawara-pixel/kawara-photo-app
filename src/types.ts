@@ -19,6 +19,7 @@ export interface DimensionLine {
   text: string;
   size?: number;
   color?: string;
+  mapIndex?: number;
 }
 export interface Photo {
   id: number;
@@ -94,5 +95,7 @@ export interface Project {
   /** 使用材料（任意） */
   materials?: Material[];
   createdAt?: string;
+  mapDimensionLines?: DimensionLine[];
+  showLegendTable?: boolean;
 }
 
