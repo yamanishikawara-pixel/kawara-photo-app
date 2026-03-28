@@ -4,14 +4,7 @@ export interface Circle {
   y: number;
   size: number;
 }
-export interface DimensionLine {
-  id: number;
-  start: { x: number; y: number }; // 始点のX,Y座標（%）
-  end: { x: number; y: number };   // 終点のX,Y座標（%）
-  text: string;                    // 入力する文字
-  size?: number;                   // 線の太さ
-  color?: string;                  // 線の色
-}
+
 export interface DimensionLine {
   id: number;
   start: { x: number; y: number };
