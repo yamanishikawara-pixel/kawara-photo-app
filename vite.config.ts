@@ -12,8 +12,8 @@ export default defineConfig({
       output: {
         manualChunks: {
           firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage'],
-          pdf: ['pdfjs-dist'],
           zip: ['jszip'],
+          // ↑ pdfの行を完全に削除しました！
         }
       }
     }
