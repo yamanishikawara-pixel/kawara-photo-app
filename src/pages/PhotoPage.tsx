@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus, Edit2, Ruler, Paintbrush, CaseUpper } from 'lucide-react'; // CaseUpperを追加
+import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus, Edit2, Ruler, Paintbrush, CaseUpper } from 'lucide-react'; 
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { compressImage, proxyUrl, useDraggablePin } from '../shared/utils';
+// ★ 修正：自作のcompressImageを削除し、強力なプロツールに置き換え
+import imageCompression from 'browser-image-compression';
+import { proxyUrl, useDraggablePin } from '../shared/utils';
 import type { Circle, MapPin as MapPinT, Photo, Project, DimensionLine } from '../types';
 import type { ChangeEvent, MouseEvent } from 'react';
 
@@ -31,19 +33,32 @@ const COLOR_PALETTE = [
   { name: "Red", value: "#FF4500" },
 ];
 
-// ★ 改良：お客様説明用のよく使う部位名
 const DEFAULT_ROOF_PART_NAMES = ['棟', '袖', 'ケラバ', '谷', '隅棟', '平', '軒先'];
 
-// SVGで寸法線とテキストを描画するコンポーネント（ドラッグ移動 ＋ 部位名クイック入力機能付き）
+// ★ 新規追加：画質をキープしつつファイルサイズを極限まで小さくする魔法の圧縮関数
+const compressPhotoWithQuality = async (file: File) => {
+  const options = {
+    maxSizeMB: 1,          // どんなに重い画像でも最大1MBまでに抑える
+    maxWidthOrHeight: 1920, // フルHDサイズ（A4印刷でも十分すぎる画質）
+    useWebWorker: true,     // スマホの裏側（別スレッド）で処理して画面が固まらないようにする
+    fileType: 'image/jpeg', // iPhoneのHEICなども一律で扱いやすいJPEGに変換
+    initialQuality: 0.8,    // 画質80%（人間の目では劣化がわからないレベル）
+  };
+  try {
+    return await imageCompression(file, options);
+  } catch (error) {
+    console.warn("画像の圧縮に失敗しました。元のファイルで続行します。", error);
+    return file; // 万が一圧縮に失敗しても、元のファイルでエラーなく進める安全設計
+  }
+};
+
 function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChange, onUpdate }: { line: DimensionLine; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; onUpdate: (props: Partial<DimensionLine>) => void; }) {
   const inputRef = useRef<HTMLInputElement>(null);
   
-  // ドラッグ操作用のローカルステート
   const [localStart, setLocalStart] = useState(line.start);
   const [localEnd, setLocalEnd] = useState(line.end);
   const [isDragging, setIsDragging] = useState<'start' | 'end' | null>(null);
 
-  // 外部からの更新を同期
   useEffect(() => {
     if (!isDragging) {
       setLocalStart(line.start);
@@ -51,7 +66,6 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
     }
   }, [line.start, line.end, isDragging]);
 
-  // フォーカス制御（ドラッグ調整後に毎回キーボードが出るのを防ぐ）
   useEffect(() => {
     if (isSelected && inputRef.current && !isDragging && !line.text) {
       inputRef.current.focus();
@@ -85,11 +99,10 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
     setIsDragging(null);
   };
 
-  // 部位名をテキスト入力欄にクイック追加
   const addPartName = (name: string) => {
     if (inputRef.current) {
       const currentText = inputRef.current.value;
-      const newText = currentText.startsWith(name) ? currentText : `${name} ${currentText}`; // 重複防止
+      const newText = currentText.startsWith(name) ? currentText : `${name} ${currentText}`;
       onTextChange(newText);
       inputRef.current.focus();
     }
@@ -97,7 +110,6 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
 
   const midPoint = { x: (localStart.x + localEnd.x) / 2, y: (localStart.y + localEnd.y) / 2 };
   
-  // 見切れ防止リミッター
   const safePopupX = Math.max(15, Math.min(85, midPoint.x));
   const safePopupY = Math.max(15, Math.min(85, midPoint.y));
 
@@ -128,7 +140,6 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
         />
       </svg>
       
-      {/* 選択時の入力フォーム（ドラッグ中は邪魔にならないように隠す） */}
       {isSelected && !isDragging && (
         <div style={{ left: `${safePopupX}%`, top: `${safePopupY}%` }} className="absolute z-30 translate-x-[-50%] translate-y-[-50%] flex flex-col items-center gap-4 bg-white p-6 rounded-2xl shadow-3xl border-2 border-gray-100 min-w-[280px]" onClick={e => e.stopPropagation()}>
           <div className="flex w-full gap-3 items-center justify-between border-b-2 border-gray-100 pb-3">
@@ -136,7 +147,6 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
              <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-3 text-red-500 bg-red-50 rounded-xl hover:bg-red-100"><Trash2 className="w-6 h-6" /></button>
           </div>
 
-          {/* ★ 改良：部位名のクイック選択ボタン群 */}
           <div className="flex flex-wrap gap-2.5 w-full">
             {DEFAULT_ROOF_PART_NAMES.map(name => (
               <button 
@@ -163,7 +173,6 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
         </div>
       )}
 
-      {/* 選択時のみ表示されるドラッグ用の操作ハンドル */}
       {isSelected && (
         <>
           <div
@@ -187,14 +196,13 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
         </>
       )}
       
-      {/* 未選択時のテキスト */}
       {!isSelected && line.text && (
         <div
           style={{ 
             left: `${midPoint.x}%`, 
             top: `${midPoint.y}%`, 
             color: color, 
-            backgroundColor: 'rgba(0, 0, 0, 0.4)', // CAD図面のように線をマスクして文字を置く（image 42.png仕様）
+            backgroundColor: 'rgba(0, 0, 0, 0.4)', 
             backdropFilter: 'blur(2px)'
           }}
           className="absolute z-20 translate-x-[-50%] translate-y-[-50%] font-bold text-xl px-2.5 py-1 rounded pointer-events-none whitespace-nowrap border border-white/10 shadow-sm"
@@ -206,17 +214,14 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
   );
 }
 
-// 写真上の赤丸マーカー（確実に止まる、サイズ固定版）
 function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChange, onRemove }: { circle: Circle; isSelected: boolean; onSelect: () => void; onDragEnd: (x: number, y: number) => void; onSizeChange: (size: number) => void; onRemove: () => void; }) {
   
-  // ★ snap(丸め処理)を完全廃止。指を離した瞬間の正確な座標で保存！
   const handleDragEnd = (x: number, y: number) => {
-    onDragEnd(x, y); // 生の座標を渡す
+    onDragEnd(x, y); 
   };
 
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(circle.x, circle.y, handleDragEnd);
   
-  // ★ サイズは保存されているものをそのまま使う。ドラッグ中も変わらない。
   const size = Number(circle.size || 20);
 
   return (
@@ -227,14 +232,13 @@ function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChan
         onTouchStart={(e) => { e.stopPropagation(); onSelect(); onTouchStart(e); }}
         onClick={(e) => e.stopPropagation()} 
         style={{ 
-          left: `${position.x}%`, // 生の座標
-          top: `${position.y}%`,  // 生の座標
+          left: `${position.x}%`, 
+          top: `${position.y}%`,  
           width: `${size}%`, 
           transform: 'translate(-50%, -50%)', 
           touchAction: 'none', 
           zIndex: isSelected ? 100 : (dragging ? 30 : 20) 
         }}
-        // ★ scale-105 を削除。ドラッグ中の背景色の変更も Hover のみにして、サイズが変わる違和感を消す。ドラッグ中はOpacityとZIndexで強調。
         className={`absolute aspect-square rounded-full border-[4px] border-red-500 shadow-sm transition-all duration-75 ${dragging ? 'z-30 opacity-80' : 'cursor-pointer hover:bg-red-500/10'} ${isSelected && !dragging ? 'border-dashed bg-red-500/10' : ''}`}
       />
       
@@ -244,7 +248,6 @@ function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChan
           style={{ left: `${position.x}%`, top: `${position.y + size/2 + 8}%`, transform: 'translateX(-50%)' }} 
           className="absolute z-[1000] flex bg-white rounded-xl shadow-2xl border-2 border-gray-200 overflow-hidden"
         >
-          {/* ★ サイズ変更はフワフワさせず、5%刻みでカチッ、カチッと変更させる */}
           <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.min(80, Math.round(size + 5)))}} className="px-5 py-3 text-2xl font-bold hover:bg-gray-100 text-gray-700 border-r active:bg-gray-200">＋</button>
           <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.max(5, Math.round(size - 5)))}} className="px-5 py-3 text-2xl font-bold hover:bg-gray-100 text-gray-700 border-r active:bg-gray-200">－</button>
           <button onClick={(e) => {e.stopPropagation(); onRemove()}} className="px-5 py-3 text-red-500 hover:bg-red-50 active:bg-red-100"><Trash2 className="w-6 h-6"/></button>
@@ -253,7 +256,6 @@ function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChan
     </>
   );
 }
-
 
 function PinSelectModal({ isOpen, onClose, pins, onSelect }: { isOpen: boolean; onClose: () => void; pins: MapPinT[] | undefined; onSelect: (label: string) => void; }) {
   if (!isOpen) return null;
@@ -296,14 +298,6 @@ const formatToYMDSlash = (dateString: string) => {
 const getTodayStr = () => {
   const d = new Date();
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
-};
-
-const getFileExtension = (file: File): string => {
-  const byName = file.name.split('.').pop()?.toLowerCase();
-  if (byName) return byName;
-  if (file.type === 'image/png') return 'png';
-  if (file.type === 'image/webp') return 'webp';
-  return 'jpg';
 };
 
 export default function PhotoPage() {
@@ -375,6 +369,7 @@ export default function PhotoPage() {
     await updateDoc(doc(db, "projects", id!), { photos: renumbered });
   };
 
+  // ★ 修正：複数枚アップロード時の画質キープ＆超絶圧縮処理
   const handleBulkUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     if (!project) return;
     const files = Array.from(e.target.files as FileList);
@@ -390,42 +385,50 @@ export default function PhotoPage() {
         newPhotos.push({ id: Date.now() + Math.random(), image: null, photoNumber: String(newPhotos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], rotation: 0, dimensionLines: [] });
         targetIndex = newPhotos.length - 1;
       }
-      await new Promise<void>((resolve) => {
-        compressImage(files[i], async (compressed) => {
-          try {
-            const ext = getFileExtension(compressed);
-            const r = ref(storage, `photos/${id}/${Date.now()}_bulk_${i}.${ext}`);
-            await uploadBytes(r, compressed);
-            const url = await getDownloadURL(r);
-            newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: todayStr, circles: [], dimensionLines: [] };
-            setProject({ ...project, photos: newPhotos });
-            await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
-          } catch (error) { console.error("失敗", error); } finally { resolve(); }
-        });
-      });
+      
+      try {
+        // ★ 魔法の圧縮関数を呼び出し
+        const compressedFile = await compressPhotoWithQuality(files[i]);
+        const r = ref(storage, `photos/${id}/${Date.now()}_bulk_${i}.jpg`); // jpegで統一して保存
+        await uploadBytes(r, compressedFile);
+        const url = await getDownloadURL(r);
+        
+        newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: todayStr, circles: [], dimensionLines: [] };
+        setProject({ ...project, photos: newPhotos });
+        await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+      } catch (error) { 
+        console.error("アップロード失敗", error); 
+      }
+      
       uploadedCount++;
       setBulkProgress(uploadedCount);
     }
     setBulkUploading(false);
   };
 
+  // ★ 修正：1枚アップロード時の画質キープ＆超絶圧縮処理
   const uploadPhoto = async (e: ChangeEvent<HTMLInputElement>, index: number) => {
     if (!project) return;
     const f = e.target.files?.[0];
     if (!f) return;
     const photoId = project.photos[index].id;
     setLoadingId(photoId);
-    compressImage(f, async (file) => {
-      try {
-        const ext = getFileExtension(file);
-        const r = ref(storage, `photos/${id}/${Date.now()}.${ext}`);
-        await uploadBytes(r, file);
-        const url = await getDownloadURL(r);
-        const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, image: url, shootingDate: p.shootingDate || getTodayStr(), circles: [], dimensionLines: [] } : p);
-        setProject({ ...project, photos: newPhotos });
-        await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
-      } catch { alert('失敗'); } finally { setLoadingId(null); }
-    });
+    
+    try {
+      // ★ 魔法の圧縮関数を呼び出し
+      const compressedFile = await compressPhotoWithQuality(f);
+      const r = ref(storage, `photos/${id}/${Date.now()}.jpg`); // jpegで統一して保存
+      await uploadBytes(r, compressedFile);
+      const url = await getDownloadURL(r);
+      
+      const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, image: url, shootingDate: p.shootingDate || getTodayStr(), circles: [], dimensionLines: [] } : p);
+      setProject({ ...project, photos: newPhotos });
+      await updateDoc(doc(db, "projects", id!), { photos: newPhotos });
+    } catch { 
+      alert('アップロードに失敗しました。電波の良いところでお試しください。'); 
+    } finally { 
+      setLoadingId(null); 
+    }
   };
 
   const handlePhotoClick = async (e: MouseEvent<HTMLDivElement>, photoId: number) => {
