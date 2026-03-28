@@ -364,7 +364,22 @@ export default function MapPage() {
                   </div>
 
                   {mapPins.filter(p => (p.mapIndex || 0) === currentMapIndex).map(pin => (
-                    <MapMarker key={pin.id} pin={pin} isSelected={selectedPinId === pin.id} onDragEnd={(x, y) => { const newPins = mapPins.map(p => p.id === pin.id ? { ...p, x, y } : p); setMapPins(newPins); saveProjectMapData(newPins, mapRows, mapDimensionLines, showLegendTable); }} onClick={() => setSelectedPinId(pin.id)} onSizeChange={(size) => { const newPins = mapPins.map(p => p.id === pin.id ? { ...p, size } : p); setMapPins(newPins); saveProjectMapData(newPins, mapRows, mapDimensionLines, showLegendTable); }} onRemove={() => { if (window.confirm('このピンを削除しますか？')) { const newPins = mapPins.filter(p => p.id !== pin.id); setMapPins(newPins); setSelectedPinId(null); saveProjectMapData(newPins, mapRows, mapDimensionLines, showLegendTable); } }} />
+                    <MapMarker 
+                      key={pin.id} 
+                      pin={pin} 
+                      isSelected={selectedPinId === pin.id} 
+                      onDragEnd={(x, y) => { const newPins = mapPins.map(p => p.id === pin.id ? { ...p, x, y } : p); setMapPins(newPins); saveProjectMapData(newPins, mapRows, mapDimensionLines, showLegendTable); }} 
+                      onClick={() => setSelectedPinId(pin.id)} 
+                      onSizeChange={(size) => { const newPins = mapPins.map(p => p.id === pin.id ? { ...p, size } : p); setMapPins(newPins); saveProjectMapData(newPins, mapRows, mapDimensionLines, showLegendTable); }} 
+                      onRemove={() => { 
+                        if (window.confirm('このピンを削除しますか？')) { 
+                          const newPins = mapPins.filter(p => p.id !== pin.id); 
+                          setMapPins(newPins); 
+                          setSelectedPinId(null); 
+                          saveProjectMapData(newPins, mapRows, mapDimensionLines, showLegendTable); 
+                        } 
+                      }} 
+                    />
                   ))}
                 </div>
               ) : (
