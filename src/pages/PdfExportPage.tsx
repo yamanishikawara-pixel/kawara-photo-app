@@ -189,6 +189,9 @@ export default function PdfExportPage() {
 
   const totalPages = 1 + mapCount + photoPages.length + materialPages.length;
   
+  // ★ 凡例表を表示するかどうか（古いデータで undefined の場合は true 扱い）
+  const showLegendTable = project.showLegendTable !== false;
+  
   return (
     <div className={`min-h-screen font-sans flex flex-col items-center pb-12 overflow-x-hidden w-full relative ${isPrinting ? 'bg-white p-0' : 'bg-gray-200 p-4 sm:p-6'}`}>
       
@@ -265,17 +268,28 @@ export default function PdfExportPage() {
           </div>
         </div>
 
-        {/* ② 位置図ページ */}
+        {/* ② 位置図ページ（★表のON/OFFでレイアウト自動調整） */}
         {mapUrlsToRender.map((u, mapIndex) => (
           <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
               <div className="w-full h-full p-6 flex flex-col border-[3px] border-gray-800 print:border-black">
-                <h2 className="text-2xl font-bold mb-4 pb-2 border-b-2 border-gray-800 print:border-black">位置図 {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}</h2>
+                <h2 className="text-2xl font-bold mb-4 pb-2 border-b-2 border-gray-800 print:border-black shrink-0">位置図 {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}</h2>
+                
+                {/* ★ 凡例表がOFFなら、min-h-0 と flex-1 で A4の限界まで領域を広げ、画像のmaxHeightも245mmに拡張！ */}
                 <div className="p-2 flex-1 flex items-center justify-center overflow-hidden min-h-0 border border-gray-400 bg-gray-50 print:bg-white print:border-gray-500">
                   {u ? (
-                    <div className="flex items-center justify-center w-full h-full">
-                      <div className="relative inline-block">
-                        <img src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)} data-original-src={u} crossOrigin="anonymous" className="block w-auto h-auto max-w-full" style={{ maxHeight: '150mm' }} alt="" />
+                    <div className="flex items-center justify-center w-full h-full relative">
+                      <div className="relative inline-block" style={{ display: 'inline-block' }}>
+                        <img 
+                          src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)} 
+                          data-original-src={u} 
+                          crossOrigin="anonymous" 
+                          className="block w-auto h-auto max-w-full" 
+                          style={{ maxHeight: showLegendTable ? '150mm' : '245mm', objectFit: 'contain' }} 
+                          alt="" 
+                        />
+                        
+                        {/* ピンの描画 */}
                         {(project.mapPins ?? []).filter(p => p.mapIndex === mapIndex).map(pin => (
                             <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: `translate(-50%, -50%) scale(${pin.size ?? 1})`, zIndex: 10 }} className="absolute">
                               {pin.type === 'arrow' ? (
@@ -285,38 +299,80 @@ export default function PdfExportPage() {
                               )}
                             </div>
                         ))}
+                        
+                        {/* 過去の互換性のための色付き線の描画 */}
                         {(project.mapLines ?? []).filter(l => l.mapIndex === mapIndex).map((line: MapLine) => (
                             <div key={`line-${line.id}`} className="absolute" style={{ left: safeStyleLine(line.x, '%'), top: safeStyleLine(line.y, '%'), width: safeStyleLine(line.length, '%'), height: safeStyleLine(line.thickness, 'px'), backgroundColor: line.color || '#000000', transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`, transformOrigin: 'center center', zIndex: 15 }} />
                           ))}
+
+                        {/* ★NEW: 新しい「寸法線と文字」の描画 */}
+                        {(project.mapDimensionLines ?? []).filter(l => (l.mapIndex || 0) === mapIndex).map((line) => {
+                          const color = line.color || "#FFFFFF";
+                          const thickness = Number(line.size || 2);
+                          const midX = (line.start.x + line.end.x) / 2;
+                          const midY = (line.start.y + line.end.y) / 2;
+                          return (
+                            <div key={line.id} className="absolute inset-0 z-20 pointer-events-none w-full h-full" style={{ overflow: 'visible' }}>
+                              <svg className="absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
+                                <defs>
+                                  <marker id={`cad-tick-pdf-map-${line.id}`} markerWidth="16" markerHeight="16" refX="8" refY="8" orient="auto" markerUnits="userSpaceOnUse">
+                                    <line x1="0" y1="8" x2="16" y2="8" stroke={color} strokeWidth={thickness} />
+                                    <line x1="4" y1="12" x2="12" y2="4" stroke={color} strokeWidth={thickness * 1.5} />
+                                  </marker>
+                                </defs>
+                                <line
+                                  x1={`${line.start.x}%`} y1={`${line.start.y}%`}
+                                  x2={`${line.end.x}%`} y2={`${line.end.y}%`}
+                                  stroke={color} strokeWidth={thickness} fill="none"
+                                  markerStart={`url(#cad-tick-pdf-map-${line.id})`}
+                                  markerEnd={`url(#cad-tick-pdf-map-${line.id})`}
+                                />
+                              </svg>
+                              {line.text && (
+                                <div
+                                  style={{ left: `${midX}%`, top: `${midY}%`, color: color, backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+                                  className="absolute z-20 translate-x-[-50%] translate-y-[-50%] font-bold text-[12px] px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap"
+                                >
+                                  {line.text}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+
                       </div>
                     </div>
                   ) : <span className="font-bold text-gray-400">位置図未登録</span>}
                 </div>
-                <div className="mt-4">
-                  <div className="flex justify-between items-end mb-2"><div className="text-base font-bold">項目欄</div><PdfLineLegend /></div>
-                  <div className="border-2 border-gray-800 print:border-black">
-                    <div className="grid grid-cols-12 text-base font-bold border-b-2 border-gray-800 bg-gray-100 print:bg-gray-50 print:border-black">
-                      <div className="col-span-1 py-2 text-center flex justify-center items-center border-r-2 border-gray-800 print:border-black">符号</div><div className="col-span-2 py-2 text-center flex justify-center items-center border-r-2 border-gray-800 print:border-black">部位</div><div className="col-span-2 py-2 text-center flex justify-center items-center border-r-2 border-gray-800 print:border-black">写真NO</div><div className="col-span-7 py-2 text-center flex justify-center items-center">備考</div>
+                
+                {/* ★ 凡例表がONの場合のみ、下の項目欄を描画する */}
+                {showLegendTable && (
+                  <div className="mt-4 shrink-0">
+                    <div className="flex justify-between items-end mb-2"><div className="text-base font-bold">項目欄</div><PdfLineLegend /></div>
+                    <div className="border-2 border-gray-800 print:border-black">
+                      <div className="grid grid-cols-12 text-base font-bold border-b-2 border-gray-800 bg-gray-100 print:bg-gray-50 print:border-black">
+                        <div className="col-span-1 py-2 text-center flex justify-center items-center border-r-2 border-gray-800 print:border-black">符号</div><div className="col-span-2 py-2 text-center flex justify-center items-center border-r-2 border-gray-800 print:border-black">部位</div><div className="col-span-2 py-2 text-center flex justify-center items-center border-r-2 border-gray-800 print:border-black">写真NO</div><div className="col-span-7 py-2 text-center flex justify-center items-center">備考</div>
+                      </div>
+                      {(() => {
+                        const rows: MapRow[] = project.mapRows ?? [];
+                        const currentRows = rows.filter((r) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0));
+                        const displayRows: MapRow[] = currentRows.length > 0 ? currentRows.slice(0, 6) : Array.from({ length: 6 }, (_, i) => ({ id: -(i + 1), symbol: '　', part: '　', photoNo: '　', remarks: '　' }));
+                        return displayRows.map((row) => (
+                          <div key={row.id} className="grid grid-cols-12 text-base border-b border-gray-400 print:border-black">
+                            <div className="col-span-1 py-2 font-bold text-center flex justify-center items-center border-r border-gray-400 text-red-700 print:border-black">{row.symbol ?? '　'}</div><div className="col-span-2 px-2 py-2 flex items-center overflow-hidden border-r border-gray-400 print:border-black">{row.part ?? '　'}</div><div className="col-span-2 py-2 text-center flex justify-center items-center overflow-hidden border-r border-gray-400 print:border-black">{row.photoNo ?? row.relatedPhotoNumber ?? '　'}</div><div className="col-span-7 px-2 py-2 flex items-center overflow-hidden">{row.remarks ?? '　'}</div>
+                          </div>
+                        ));
+                      })()}
                     </div>
-                    {(() => {
-                      const rows: MapRow[] = project.mapRows ?? [];
-                      const currentRows = rows.filter((r) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0));
-                      const displayRows: MapRow[] = currentRows.length > 0 ? currentRows.slice(0, 6) : Array.from({ length: 6 }, (_, i) => ({ id: -(i + 1), symbol: '　', part: '　', photoNo: '　', remarks: '　' }));
-                      return displayRows.map((row) => (
-                        <div key={row.id} className="grid grid-cols-12 text-base border-b border-gray-400 print:border-black">
-                          <div className="col-span-1 py-2 font-bold text-center flex justify-center items-center border-r border-gray-400 text-red-700 print:border-black">{row.symbol ?? '　'}</div><div className="col-span-2 px-2 py-2 flex items-center overflow-hidden border-r border-gray-400 print:border-black">{row.part ?? '　'}</div><div className="col-span-2 py-2 text-center flex justify-center items-center overflow-hidden border-r border-gray-400 print:border-black">{row.photoNo ?? row.relatedPhotoNumber ?? '　'}</div><div className="col-span-7 px-2 py-2 flex items-center overflow-hidden">{row.remarks ?? '　'}</div>
-                        </div>
-                      ));
-                    })()}
                   </div>
-                </div>
+                )}
               </div>
-              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-bold text-gray-500">- {2 + mapIndex} / {totalPages} -</div>
+              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapIndex} / {totalPages} -</div>
             </div>
           </div>
         ))}
 
-        {/* ③ 写真ページ */}
+        {/* ③ 写真ページ（回転時のサイズ縮み対策済み） */}
         {photoPages.map((chunk, pageIndex) => (
           <div key={`photo-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
@@ -415,7 +471,7 @@ export default function PdfExportPage() {
           </div>
         ))}
 
-        {/* ④ 使用材料表 */}
+        {/* ④ 使用材料表（回転時のサイズ縮み対策済み） */}
         {materialPages.map((chunk, pageIndex) => (
           <div key={`material-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
