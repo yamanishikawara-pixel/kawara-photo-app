@@ -227,12 +227,10 @@ export default function MapPage() {
         mapRows: newRows,
         mapDimensionLines: newDimLines,
         showLegendTable: newTableShow,
-        // mapLines は今後使わないので更新しない（DBから消さないだけで無視）
       });
     } catch { setError('保存に失敗しました。'); } finally { setIsSaving(false); }
   };
 
-  // ★修正：確実にタップを拾うための専用処理
   const handleMapPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
@@ -343,7 +341,6 @@ export default function MapPage() {
                 <div className="relative inline-block pointer-events-auto shadow-md">
                   <img src={proxyUrl(currentMapUrl, `map_${currentMapIndex}_${sessionId}`)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full pointer-events-none" style={{ maxHeight: '70vh' }} alt="" />
                   
-                  {/* ★修正：確実なタップ判定領域（透明カバー） */}
                   <div 
                     className="absolute inset-0 z-0 cursor-crosshair touch-none"
                     onPointerDown={handleMapPointerDown}
@@ -376,7 +373,24 @@ export default function MapPage() {
             
             {(selectedPinId || selectedRowId) && (
               <div className="mt-6 pt-6 border-t-2 border-gray-100 flex justify-end">
-                <button onClick={() => { if (window.confirm('選択した要素を削除しますか？')) { const newPins = mapPins.filter(p => p.id !== selectedPinId); const newRows = mapRows.filter(r => r.id !== selectedRowId); setMapPins(newPins); setMapRows(newRows); setSelectedPinId(null); setSelectedRowId(null); saveProjectMapData(newPins, newRows, mapDimensionLines, showLegendTable); } }} className="flex w-full sm:w-auto justify-center items-center gap-2 bg-red-50 text-red-600 font-black px-6 py-4 rounded-xl hover:bg-red-100 active:scale-95 transition-all"><Trash2 className="w-6 h-6" /> 選択中を削除</button>
+                {/* ★修正：削除ボタンを押す時に背景の選択解除が発動するのを防ぐ(e.stopPropagation()) */}
+                <button 
+                  onPointerDown={(e) => e.stopPropagation()} 
+                  onClick={() => { 
+                    if (window.confirm('選択した要素を削除しますか？')) { 
+                      const newPins = mapPins.filter(p => p.id !== selectedPinId); 
+                      const newRows = mapRows.filter(r => r.id !== selectedRowId); 
+                      setMapPins(newPins); 
+                      setMapRows(newRows); 
+                      setSelectedPinId(null); 
+                      setSelectedRowId(null); 
+                      saveProjectMapData(newPins, newRows, mapDimensionLines, showLegendTable); 
+                    } 
+                  }} 
+                  className="flex w-full sm:w-auto justify-center items-center gap-2 bg-red-50 text-red-600 font-black px-6 py-4 rounded-xl hover:bg-red-100 active:scale-95 transition-all"
+                >
+                  <Trash2 className="w-6 h-6" /> 選択中を削除
+                </button>
               </div>
             )}
           </div>
@@ -393,7 +407,8 @@ export default function MapPage() {
                 {(() => {
                   const currentRows = mapRows.filter((r) => (r.mapIndex || 0) === currentMapIndex);
                   return currentRows.length > 0 ? currentRows.map((row) => (
-                    <div key={row.id} onPointerDown={() => setSelectedRowId(row.id)} className={`grid grid-cols-12 text-base lg:text-lg border-b border-gray-100 last:border-b-0 cursor-pointer ${selectedRowId === row.id ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+                    // ★修正：行をタップした時も背景の選択解除が貫通するのを防ぐ
+                    <div key={row.id} onPointerDown={(e) => { e.stopPropagation(); setSelectedRowId(row.id); }} className={`grid grid-cols-12 text-base lg:text-lg border-b border-gray-100 last:border-b-0 cursor-pointer ${selectedRowId === row.id ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
                       <input type="text" value={row.symbol} onChange={(e) => { const newRows = mapRows.map(r => r.id === row.id ? { ...r, symbol: e.target.value } : r); setMapRows(newRows); }} className="col-span-2 py-3 text-center font-black text-red-700 bg-transparent outline-none border-r border-gray-100" />
                       <input type="text" value={row.part} placeholder="軒先" onChange={(e) => { const newRows = mapRows.map(r => r.id === row.id ? { ...r, part: e.target.value } : r); setMapRows(newRows); }} className="col-span-4 py-3 px-2 font-bold bg-transparent outline-none border-r border-gray-100" />
                       <input type="text" value={row.remarks} placeholder="..." onChange={(e) => { const newRows = mapRows.map(r => r.id === row.id ? { ...r, remarks: e.target.value } : r); setMapRows(newRows); }} className="col-span-6 py-3 px-2 font-bold bg-transparent outline-none" />
