@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Download, Printer } from 'lucide-react';
+import { ArrowLeft, Download, Printer, RotateCw } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import JSZip from 'jszip';
@@ -67,6 +67,9 @@ export default function PdfExportPage() {
   const [scale, setScale] = useState(1);
   const [sessionId] = useState(() => Date.now().toString());
   const [isPrinting, setIsPrinting] = useState(false);
+  
+  // ★NEW: 図面を回転させて最大化するかどうかのスイッチ
+  const [rotateMap, setRotateMap] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -189,7 +192,6 @@ export default function PdfExportPage() {
 
   const totalPages = 1 + mapCount + photoPages.length + materialPages.length;
   
-  // ★ 凡例表を表示するかどうか（古いデータで undefined の場合は true 扱い）
   const showLegendTable = project.showLegendTable !== false;
   
   return (
@@ -222,7 +224,14 @@ export default function PdfExportPage() {
 
       <div className={`w-full max-w-2xl mb-6 flex justify-between items-center flex-wrap gap-2 no-print ${isPrinting ? 'hidden' : ''}`}>
         <button type="button" onClick={() => navigate(`/project/${id}`)} className="text-blue-500 font-bold flex items-center gap-2 text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
-        <div className="flex gap-2 sm:gap-4">
+        <div className="flex gap-2 sm:gap-4 flex-wrap justify-end">
+          {/* ★NEW: 凡例表が非表示の時だけ出現する「回転ボタン」 */}
+          {!showLegendTable && mapCount > 0 && (
+             <button type="button" onClick={() => setRotateMap(!rotateMap)} className={`flex items-center gap-2 px-4 py-3 sm:py-4 rounded-xl font-bold shadow-lg transition-all ${rotateMap ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 border-2 border-indigo-600'}`}>
+               <RotateCw className={`w-5 h-5 transition-transform duration-300 ${rotateMap ? 'rotate-90' : ''}`} /> 
+               {rotateMap ? '図面を縦に戻す' : '図面を90°回転して最大化'}
+             </button>
+          )}
           <button type="button" onClick={handleZipExport} disabled={isZipping || isPrinting} className="flex items-center gap-2 bg-green-600 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-green-700 disabled:opacity-50"><Download className="w-5 h-5" />写真のみ(Zip)</button>
           <button type="button" onClick={handlePrint} disabled={isZipping || isPrinting} className="flex items-center gap-2 bg-black text-white px-5 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-gray-800 disabled:opacity-50"><Printer className="w-5 h-5" /> {isPrinting ? '画像処理中...' : 'PDF作成・印刷'}</button>
         </div>
@@ -268,28 +277,52 @@ export default function PdfExportPage() {
           </div>
         </div>
 
-        {/* ② 位置図ページ（★表のON/OFFでレイアウト自動調整） */}
+        {/* ② 位置図ページ（★回転フルサイズ対応） */}
         {mapUrlsToRender.map((u, mapIndex) => (
           <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
-              <div className="w-full h-full p-6 flex flex-col border-[3px] border-gray-800 print:border-black">
-                <h2 className="text-2xl font-bold mb-4 pb-2 border-b-2 border-gray-800 print:border-black shrink-0">位置図 {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}</h2>
+              
+              <div className={`w-full h-full flex flex-col border-[3px] border-gray-800 print:border-black ${showLegendTable ? 'p-6' : 'p-1'}`}>
+                <h2 className={`text-2xl font-bold border-gray-800 print:border-black shrink-0 ${showLegendTable ? 'mb-4 pb-2 border-b-2' : 'mb-2 pb-1 border-b-2'}`}>
+                  位置図 {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}
+                </h2>
                 
-                {/* ★ 凡例表がOFFなら、min-h-0 と flex-1 で A4の限界まで領域を広げ、画像のmaxHeightも245mmに拡張！ */}
-                <div className="p-2 flex-1 flex items-center justify-center overflow-hidden min-h-0 border border-gray-400 bg-gray-50 print:bg-white print:border-gray-500">
+                {/* 図面コンテナ */}
+                <div className={`flex-1 relative flex items-center justify-center overflow-visible bg-gray-50 print:bg-white ${showLegendTable ? 'p-2 border border-gray-400 print:border-gray-500' : 'p-0'}`}>
                   {u ? (
                     <div className="flex items-center justify-center w-full h-full relative">
-                      <div className="relative inline-block" style={{ display: 'inline-block' }}>
+                      
+                      {/* ★魔法の回転箱（rotateMapがONの時だけ、幅265mm・高さ178mmの箱を作って90度回す） */}
+                      <div 
+                        className="relative flex items-center justify-center" 
+                        style={(!showLegendTable && rotateMap) ? {
+                          width: '265mm',
+                          height: '178mm',
+                          transform: 'rotate(90deg)',
+                          transformOrigin: 'center center',
+                          position: 'absolute'
+                        } : {
+                          maxWidth: '100%',
+                          maxHeight: '100%'
+                        }}
+                      >
                         <img 
                           src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)} 
                           data-original-src={u} 
                           crossOrigin="anonymous" 
-                          className="block w-auto h-auto max-w-full" 
-                          style={{ maxHeight: showLegendTable ? '150mm' : '245mm', objectFit: 'contain' }} 
+                          className="block w-auto h-auto" 
+                          style={(!showLegendTable && rotateMap) ? {
+                            maxWidth: '100%',
+                            maxHeight: '100%',
+                            objectFit: 'contain'
+                          } : { 
+                            maxWidth: '100%',
+                            maxHeight: showLegendTable ? '150mm' : '265mm',
+                            objectFit: 'contain'
+                          }} 
                           alt="" 
                         />
                         
-                        {/* ピンの描画 */}
                         {(project.mapPins ?? []).filter(p => p.mapIndex === mapIndex).map(pin => (
                             <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: `translate(-50%, -50%) scale(${pin.size ?? 1})`, zIndex: 10 }} className="absolute">
                               {pin.type === 'arrow' ? (
@@ -300,12 +333,10 @@ export default function PdfExportPage() {
                             </div>
                         ))}
                         
-                        {/* 過去の互換性のための色付き線の描画 */}
                         {(project.mapLines ?? []).filter(l => l.mapIndex === mapIndex).map((line: MapLine) => (
                             <div key={`line-${line.id}`} className="absolute" style={{ left: safeStyleLine(line.x, '%'), top: safeStyleLine(line.y, '%'), width: safeStyleLine(line.length, '%'), height: safeStyleLine(line.thickness, 'px'), backgroundColor: line.color || '#000000', transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`, transformOrigin: 'center center', zIndex: 15 }} />
                           ))}
 
-                        {/* ★NEW: 新しい「寸法線と文字」の描画 */}
                         {(project.mapDimensionLines ?? []).filter(l => (l.mapIndex || 0) === mapIndex).map((line) => {
                           const color = line.color || "#FFFFFF";
                           const thickness = Number(line.size || 2);
@@ -345,7 +376,6 @@ export default function PdfExportPage() {
                   ) : <span className="font-bold text-gray-400">位置図未登録</span>}
                 </div>
                 
-                {/* ★ 凡例表がONの場合のみ、下の項目欄を描画する */}
                 {showLegendTable && (
                   <div className="mt-4 shrink-0">
                     <div className="flex justify-between items-end mb-2"><div className="text-base font-bold">項目欄</div><PdfLineLegend /></div>
@@ -372,7 +402,7 @@ export default function PdfExportPage() {
           </div>
         ))}
 
-        {/* ③ 写真ページ（回転時のサイズ縮み対策済み） */}
+        {/* ③ 写真ページ */}
         {photoPages.map((chunk, pageIndex) => (
           <div key={`photo-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
@@ -471,7 +501,7 @@ export default function PdfExportPage() {
           </div>
         ))}
 
-        {/* ④ 使用材料表（回転時のサイズ縮み対策済み） */}
+        {/* ④ 使用材料表 */}
         {materialPages.map((chunk, pageIndex) => (
           <div key={`material-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
