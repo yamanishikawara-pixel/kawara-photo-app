@@ -68,7 +68,6 @@ export default function PdfExportPage() {
   const [sessionId] = useState(() => Date.now().toString());
   const [isPrinting, setIsPrinting] = useState(false);
   
-  // ★NEW: 図面を回転させて最大化するかどうかのスイッチ
   const [rotateMap, setRotateMap] = useState(false);
 
   useEffect(() => {
@@ -225,7 +224,6 @@ export default function PdfExportPage() {
       <div className={`w-full max-w-2xl mb-6 flex justify-between items-center flex-wrap gap-2 no-print ${isPrinting ? 'hidden' : ''}`}>
         <button type="button" onClick={() => navigate(`/project/${id}`)} className="text-blue-500 font-bold flex items-center gap-2 text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
         <div className="flex gap-2 sm:gap-4 flex-wrap justify-end">
-          {/* ★NEW: 凡例表が非表示の時だけ出現する「回転ボタン」 */}
           {!showLegendTable && mapCount > 0 && (
              <button type="button" onClick={() => setRotateMap(!rotateMap)} className={`flex items-center gap-2 px-4 py-3 sm:py-4 rounded-xl font-bold shadow-lg transition-all ${rotateMap ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 border-2 border-indigo-600'}`}>
                <RotateCw className={`w-5 h-5 transition-transform duration-300 ${rotateMap ? 'rotate-90' : ''}`} /> 
@@ -277,7 +275,7 @@ export default function PdfExportPage() {
           </div>
         </div>
 
-        {/* ② 位置図ページ（★回転フルサイズ対応） */}
+        {/* ② 位置図ページ（★回転フルサイズ ＆ 文字の拡大縮小対応） */}
         {mapUrlsToRender.map((u, mapIndex) => (
           <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
@@ -287,12 +285,10 @@ export default function PdfExportPage() {
                   位置図 {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}
                 </h2>
                 
-                {/* 図面コンテナ */}
                 <div className={`flex-1 relative flex items-center justify-center overflow-visible bg-gray-50 print:bg-white ${showLegendTable ? 'p-2 border border-gray-400 print:border-gray-500' : 'p-0'}`}>
                   {u ? (
                     <div className="flex items-center justify-center w-full h-full relative">
                       
-                      {/* ★魔法の回転箱（rotateMapがONの時だけ、幅265mm・高さ178mmの箱を作って90度回す） */}
                       <div 
                         className="relative flex items-center justify-center" 
                         style={(!showLegendTable && rotateMap) ? {
@@ -342,6 +338,9 @@ export default function PdfExportPage() {
                           const thickness = Number(line.size || 2);
                           const midX = (line.start.x + line.end.x) / 2;
                           const midY = (line.start.y + line.end.y) / 2;
+                          // ★編集画面と同じ動的フォントサイズを適用！
+                          const dynamicFontSize = 14 + (thickness - 2) * 4; 
+                          
                           return (
                             <div key={line.id} className="absolute inset-0 z-20 pointer-events-none w-full h-full" style={{ overflow: 'visible' }}>
                               <svg className="absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
@@ -361,8 +360,14 @@ export default function PdfExportPage() {
                               </svg>
                               {line.text && (
                                 <div
-                                  style={{ left: `${midX}%`, top: `${midY}%`, color: color, backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
-                                  className="absolute z-20 translate-x-[-50%] translate-y-[-50%] font-bold text-[12px] px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap"
+                                  style={{ 
+                                    left: `${midX}%`, 
+                                    top: `${midY}%`, 
+                                    color: color, 
+                                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                                    fontSize: `${dynamicFontSize}px` // ★ここで文字サイズを反映
+                                  }}
+                                  className="absolute z-20 translate-x-[-50%] translate-y-[-50%] font-bold px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap"
                                 >
                                   {line.text}
                                 </div>
@@ -402,7 +407,7 @@ export default function PdfExportPage() {
           </div>
         ))}
 
-        {/* ③ 写真ページ */}
+        {/* ③ 写真ページ（★文字の拡大縮小対応） */}
         {photoPages.map((chunk, pageIndex) => (
           <div key={`photo-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
             <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
@@ -454,6 +459,9 @@ export default function PdfExportPage() {
                               const thickness = Number(line.size || 2);
                               const midX = (line.start.x + line.end.x) / 2;
                               const midY = (line.start.y + line.end.y) / 2;
+                              // ★写真画面用の動的フォントサイズを適用（枠が小さいので倍率を微調整）
+                              const dynamicFontSize = 10 + (thickness - 2) * 2.5;
+
                               return (
                                 <div key={line.id} className="absolute inset-0 z-20 pointer-events-none w-full h-full" style={{ overflow: 'visible' }}>
                                   <svg className="absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
@@ -473,8 +481,15 @@ export default function PdfExportPage() {
                                   </svg>
                                   {line.text && (
                                     <div
-                                      style={{ left: `${midX}%`, top: `${midY}%`, color: color, backgroundColor: 'rgba(0, 0, 0, 0.4)', backdropFilter: 'blur(2px)' }}
-                                      className="absolute z-20 translate-x-[-50%] translate-y-[-50%] font-bold text-[10px] px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap"
+                                      style={{ 
+                                        left: `${midX}%`, 
+                                        top: `${midY}%`, 
+                                        color: color, 
+                                        backgroundColor: 'rgba(0, 0, 0, 0.4)', 
+                                        backdropFilter: 'blur(2px)',
+                                        fontSize: `${dynamicFontSize}px` // ★ここで文字サイズを反映
+                                      }}
+                                      className="absolute z-20 translate-x-[-50%] translate-y-[-50%] font-bold px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap"
                                     >
                                       {line.text}
                                     </div>
