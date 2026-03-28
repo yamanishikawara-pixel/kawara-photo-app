@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, MapPin, CaseUpper, FileText, LayoutGrid, Ruler, Paintbrush, Save } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -17,7 +17,8 @@ const COLOR_PALETTE = [
   { name: "Red", value: "#ef4444" },
 ];
 
-function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChange, onUpdate }: { line: DimensionLine; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; onUpdate: (props: Partial<DimensionLine>) => void; }) {
+// ★チューニング1：DimensionLineMarkerをReact.memoで囲み、無駄な再描画を防ぐ
+const DimensionLineMarker = React.memo(({ line, isSelected, onSelect, onRemove, onTextChange, onUpdate }: { line: DimensionLine; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; onUpdate: (props: Partial<DimensionLine>) => void; }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [localStart, setLocalStart] = useState(line.start);
   const [localEnd, setLocalEnd] = useState(line.end);
@@ -72,11 +73,8 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
 
   const midPoint = { x: (localStart.x + localEnd.x) / 2, y: (localStart.y + localEnd.y) / 2 };
   const safePopupX = Math.max(20, Math.min(80, midPoint.x));
-  
-  // ★ 修正：線が上半分にあるか下半分にあるかで、メニューを出す位置を大きく反転（自動回避）させる
   const isUpperHalf = midPoint.y < 50;
   const offsetY = isUpperHalf ? '+ 140px' : '- 140px';
-
   const color = line.color || "#FFFFFF"; 
   const thickness = Number(line.size || 2); 
 
@@ -159,9 +157,10 @@ function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChang
       )}
     </>
   );
-}
+});
 
-function MapMarker({ pin, isSelected, onDragEnd, onClick, onSizeChange, onRemove }: { pin: MapPinT; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; onSizeChange: (newSize: number) => void; onRemove: () => void; }) {
+// ★チューニング2：MapMarkerをReact.memoで囲む
+const MapMarker = React.memo(({ pin, isSelected, onDragEnd, onClick, onSizeChange, onRemove }: { pin: MapPinT; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; onSizeChange: (newSize: number) => void; onRemove: () => void; }) => {
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(pin.x, pin.y, onDragEnd);
   const currentSize = pin.size || 1; 
 
@@ -191,7 +190,21 @@ function MapMarker({ pin, isSelected, onDragEnd, onClick, onSizeChange, onRemove
       )}
     </>
   );
-}
+});
+
+// ★チューニング3：凡例表の行もReact.memoで囲む
+const LegendRow = React.memo(({ row, isSelected, onSelect, onChange, onRemove }: { row: MapRow; isSelected: boolean; onSelect: () => void; onChange: (updates: Partial<MapRow>) => void; onRemove: () => void; }) => {
+  return (
+    <div onPointerDown={onSelect} className={`grid grid-cols-12 text-base lg:text-lg border-b border-gray-100 last:border-b-0 cursor-pointer ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+      <input type="text" value={row.symbol} onChange={(e) => onChange({ symbol: e.target.value })} className="col-span-2 py-3 text-center font-black text-red-700 bg-transparent outline-none border-r border-gray-100" />
+      <input type="text" value={row.part} placeholder="軒先" onChange={(e) => onChange({ part: e.target.value })} className="col-span-4 py-3 px-2 font-bold bg-transparent outline-none border-r border-gray-100" />
+      <input type="text" value={row.remarks} placeholder="..." onChange={(e) => onChange({ remarks: e.target.value })} className="col-span-5 py-3 px-2 font-bold bg-transparent outline-none border-r border-gray-100" />
+      <div className="col-span-1 flex items-center justify-center">
+        <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-lg transition-colors"><Trash2 className="w-5 h-5"/></button>
+      </div>
+    </div>
+  );
+});
 
 export default function MapPage() {
   const { id } = useParams();
@@ -236,7 +249,8 @@ export default function MapPage() {
     fetchData();
   }, [id]);
 
-  const saveProjectMapData = async (newPins: MapPinT[], newRows: MapRow[], newDimLines: DimensionLine[], newTableShow: boolean) => {
+  // ★チューニング4：保存関数をuseCallbackでメモ化
+  const saveProjectMapData = useCallback(async (newPins: MapPinT[], newRows: MapRow[], newDimLines: DimensionLine[], newTableShow: boolean) => {
     if (!id) return;
     setIsSaving(true);
     try {
@@ -247,9 +261,9 @@ export default function MapPage() {
         showLegendTable: newTableShow,
       });
     } catch { setError('保存に失敗しました。'); } finally { setIsSaving(false); }
-  };
+  }, [id]);
 
-  const handleMapPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+  const handleMapPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
@@ -281,25 +295,66 @@ export default function MapPage() {
         setSelectedDimensionLineId(newLineId); 
       }
     }
-  };
+  }, [editingMode, selectedPinId, selectedDimensionLineId, mapPins, mapRows, mapDimensionLines, currentMapIndex, drawingStartPoint, activeColor, showLegendTable, saveProjectMapData]);
+
+  // ★チューニング5：各ハンドラーをuseCallbackでメモ化
+  const updateDimensionLine = useCallback((lineId: number, newProps: Partial<DimensionLine>) => {
+    setMapDimensionLines(prev => {
+      const newDimLines = prev.map(l => l.id === lineId ? { ...l, ...newProps } : l);
+      saveProjectMapData(mapPins, mapRows, newDimLines, showLegendTable);
+      return newDimLines;
+    });
+  }, [mapPins, mapRows, showLegendTable, saveProjectMapData]);
+
+  const removeDimensionLine = useCallback((lineId: number) => {
+    setMapDimensionLines(prev => {
+      const newDimLines = prev.filter(l => l.id !== lineId);
+      saveProjectMapData(mapPins, mapRows, newDimLines, showLegendTable);
+      return newDimLines;
+    });
+    setSelectedDimensionLineId(null);
+  }, [mapPins, mapRows, showLegendTable, saveProjectMapData]);
+
+  const updateMapMarker = useCallback((pinId: number, newProps: Partial<MapPinT>) => {
+    setMapPins(prev => {
+      const newPins = prev.map(p => p.id === pinId ? { ...p, ...newProps } : p);
+      saveProjectMapData(newPins, mapRows, mapDimensionLines, showLegendTable);
+      return newPins;
+    });
+  }, [mapRows, mapDimensionLines, showLegendTable, saveProjectMapData]);
+
+  const removeMapMarker = useCallback((pinId: number) => {
+    setMapPins(prev => {
+      const newPins = prev.filter(p => p.id !== pinId);
+      saveProjectMapData(newPins, mapRows, mapDimensionLines, showLegendTable);
+      return newPins;
+    });
+    setSelectedPinId(null);
+  }, [mapRows, mapDimensionLines, showLegendTable, saveProjectMapData]);
+
+  const updateMapRow = useCallback((rowId: number, newProps: Partial<MapRow>) => {
+    setMapRows(prev => prev.map(r => r.id === rowId ? { ...r, ...newProps } : r));
+  }, []);
+
+  const removeMapRow = useCallback((rowId: number) => {
+    setMapRows(prev => {
+      const newRows = prev.filter(r => r.id !== rowId);
+      saveProjectMapData(mapPins, newRows, mapDimensionLines, showLegendTable);
+      return newRows;
+    });
+    setSelectedRowId(null);
+  }, [mapPins, mapDimensionLines, showLegendTable, saveProjectMapData]);
+
+  // ★チューニング6：表示用の配列をuseMemoでキャッシュ
+  const currentMapPins = useMemo(() => mapPins.filter(p => (p.mapIndex || 0) === currentMapIndex), [mapPins, currentMapIndex]);
+  const currentMapDimensionLines = useMemo(() => mapDimensionLines.filter(l => (l.mapIndex || 0) === currentMapIndex), [mapDimensionLines, currentMapIndex]);
+  const currentMapRows = useMemo(() => mapRows.filter(r => (r.mapIndex || 0) === currentMapIndex), [mapRows, currentMapIndex]);
 
   const currentMapUrl = project?.mapUrls?.[currentMapIndex];
   const totalMaps = project?.mapUrls?.length || 0;
 
   if (loading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={error} />;
-
-  const updateDimensionLine = (lineId: number, newProps: Partial<DimensionLine>) => {
-    const newDimLines = mapDimensionLines.map(l => l.id === lineId ? { ...l, ...newProps } : l);
-    setMapDimensionLines(newDimLines);
-    saveProjectMapData(mapPins, mapRows, newDimLines, showLegendTable);
-  };
-  const removeDimensionLine = (lineId: number) => {
-    const newDimLines = mapDimensionLines.filter(l => l.id !== lineId);
-    setMapDimensionLines(newDimLines);
-    setSelectedDimensionLineId(null);
-    saveProjectMapData(mapPins, mapRows, newDimLines, showLegendTable);
-  };
 
   return (
     <div className="min-h-screen bg-[#f8fafc] p-4 lg:p-6 font-sans pb-40 select-none overflow-x-hidden" onPointerDown={() => { setSelectedPinId(null); setSelectedRowId(null); setSelectedDimensionLineId(null); }}>
@@ -364,7 +419,7 @@ export default function MapPage() {
                     onPointerDown={handleMapPointerDown}
                   />
                   
-                  {(mapDimensionLines || []).filter(l => (l.mapIndex || 0) === currentMapIndex).map((line) => (
+                  {currentMapDimensionLines.map((line) => (
                     <DimensionLineMarker 
                       key={line.id} line={line} isSelected={selectedDimensionLineId === line.id} 
                       onSelect={() => setSelectedDimensionLineId(line.id)} onRemove={() => removeDimensionLine(line.id)} 
@@ -380,20 +435,15 @@ export default function MapPage() {
                     {editingMode === 'pin' ? <><LayoutGrid className="w-4 h-4 text-red-400"/> タップでピンを追加</> : !drawingStartPoint ? <><Ruler className="w-4 h-4 text-blue-400"/> 線の始点をタップ</> : <><Ruler className="w-4 h-4 text-yellow-400"/> 線の終点をタップ</>}
                   </div>
 
-                  {mapPins.filter(p => (p.mapIndex || 0) === currentMapIndex).map(pin => (
+                  {currentMapPins.map(pin => (
                     <MapMarker 
                       key={pin.id} 
                       pin={pin} 
                       isSelected={selectedPinId === pin.id} 
-                      onDragEnd={(x, y) => { const newPins = mapPins.map(p => p.id === pin.id ? { ...p, x, y } : p); setMapPins(newPins); saveProjectMapData(newPins, mapRows, mapDimensionLines, showLegendTable); }} 
+                      onDragEnd={(x, y) => updateMapMarker(pin.id, { x, y })} 
                       onClick={() => setSelectedPinId(pin.id)} 
-                      onSizeChange={(size) => { const newPins = mapPins.map(p => p.id === pin.id ? { ...p, size } : p); setMapPins(newPins); saveProjectMapData(newPins, mapRows, mapDimensionLines, showLegendTable); }} 
-                      onRemove={() => { 
-                        const newPins = mapPins.filter(p => p.id !== pin.id); 
-                        setMapPins(newPins); 
-                        setSelectedPinId(null); 
-                        saveProjectMapData(newPins, mapRows, mapDimensionLines, showLegendTable); 
-                      }} 
+                      onSizeChange={(size) => updateMapMarker(pin.id, { size })} 
+                      onRemove={() => removeMapMarker(pin.id)} 
                     />
                   ))}
                 </div>
@@ -413,27 +463,15 @@ export default function MapPage() {
                   <div className="col-span-5 py-3 text-center border-r-2 border-gray-200">備考</div>
                   <div className="col-span-1 py-3 text-center text-gray-400">削</div>
                 </div>
-                {(() => {
-                  const currentRows = mapRows.filter((r) => (r.mapIndex || 0) === currentMapIndex);
-                  return currentRows.length > 0 ? currentRows.map((row) => (
-                    <div key={row.id} onPointerDown={() => setSelectedRowId(row.id)} className={`grid grid-cols-12 text-base lg:text-lg border-b border-gray-100 last:border-b-0 cursor-pointer ${selectedRowId === row.id ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
-                      <input type="text" value={row.symbol} onChange={(e) => { const newRows = mapRows.map(r => r.id === row.id ? { ...r, symbol: e.target.value } : r); setMapRows(newRows); }} className="col-span-2 py-3 text-center font-black text-red-700 bg-transparent outline-none border-r border-gray-100" />
-                      <input type="text" value={row.part} placeholder="軒先" onChange={(e) => { const newRows = mapRows.map(r => r.id === row.id ? { ...r, part: e.target.value } : r); setMapRows(newRows); }} className="col-span-4 py-3 px-2 font-bold bg-transparent outline-none border-r border-gray-100" />
-                      <input type="text" value={row.remarks} placeholder="..." onChange={(e) => { const newRows = mapRows.map(r => r.id === row.id ? { ...r, remarks: e.target.value } : r); setMapRows(newRows); }} className="col-span-5 py-3 px-2 font-bold bg-transparent outline-none border-r border-gray-100" />
-                      <div className="col-span-1 flex items-center justify-center">
-                        <button onClick={(e) => { 
-                          e.stopPropagation(); 
-                          const newRows = mapRows.filter(r => r.id !== row.id); 
-                          setMapRows(newRows); 
-                          setSelectedRowId(null); 
-                          saveProjectMapData(mapPins, newRows, mapDimensionLines, showLegendTable); 
-                        }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-lg transition-colors"><Trash2 className="w-5 h-5"/></button>
-                      </div>
-                    </div>
-                  )) : (
-                    <div className="text-center py-8 text-gray-400 font-bold bg-gray-50 text-sm">ピンを追加すると<br/>ここに行が追加されます</div>
-                  );
-                })()}
+                {currentMapRows.length > 0 ? currentMapRows.map((row) => (
+                  <LegendRow 
+                    key={row.id} row={row} isSelected={selectedRowId === row.id} 
+                    onSelect={() => setSelectedRowId(row.id)} onChange={(updates) => updateMapRow(row.id, updates)} 
+                    onRemove={() => removeMapRow(row.id)} 
+                  />
+                )) : (
+                  <div className="text-center py-8 text-gray-400 font-bold bg-gray-50 text-sm">ピンを追加すると<br/>ここに行が追加されます</div>
+                )}
               </div>
               <button onClick={() => { const newRows = [...mapRows, { id: Date.now(), symbol: '', part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }]; setMapRows(newRows); saveProjectMapData(mapPins, newRows, mapDimensionLines, showLegendTable); }} className="w-full bg-gray-100 text-gray-800 font-black py-4 px-6 rounded-2xl flex items-center justify-center gap-2 hover:bg-gray-200 active:scale-95"><Plus className="w-5 h-5"/> 行を手動追加</button>
             </div>
