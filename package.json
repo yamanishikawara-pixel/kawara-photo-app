@@ -12,8 +12,6 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@react-three/drei": "^10.7.7",
-    "@react-three/fiber": "^9.5.0",
     "browser-image-compression": "^2.0.2",
     "file-saver": "^2.0.5",
     "firebase": "^12.10.0",
@@ -23,7 +21,6 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.1",
-    "three": "^0.183.2",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
@@ -33,7 +30,6 @@
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
-    "@types/three": "^0.183.1",
     "@vitejs/plugin-react": "^5.1.1",
     "@vitest/coverage-v8": "^4.1.0",
     "autoprefixer": "^10.4.27",
