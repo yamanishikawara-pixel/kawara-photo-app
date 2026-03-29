@@ -15,6 +15,9 @@ const ProjectListPage = lazy(() => import('./pages/ProjectListPage').then(module
 const HomePage = lazy(() => import('./pages/HomePage').then(module => ({ default: module.HomePage })));
 const CoverPage = lazy(() => import('./pages/CoverPage').then(module => ({ default: module.CoverPage })));
 
+// ★ 追加：秘密の実験室を読み込む！
+const Sandbox3DPage = lazy(() => import('./pages/Sandbox3DPage').then(module => ({ default: module.Sandbox3DPage })));
+
 // ★ 修正：ここではカギの確認をせず、親(App)から渡されたuserの有無だけで弾く
 function ProtectedRoute({ user, children }: { user: User | null, children: React.ReactNode }) {
   if (!user) {
@@ -59,6 +62,10 @@ export default function App() {
 
           {/* 各画面には、確認済みのuser情報を渡すだけ */}
           <Route path="/" element={<ProtectedRoute user={user}><ProjectListPage /></ProtectedRoute>} />
+          
+          {/* ★ 追加：秘密の実験室へのルート！ */}
+         <Route path="/sandbox" element={<Sandbox3DPage />} />
+          
           <Route path="/settings" element={<ProtectedRoute user={user}><SettingsPage /></ProtectedRoute>} />
           <Route path="/project/:id" element={<ProtectedRoute user={user}><HomePage /></ProtectedRoute>} />
           <Route path="/project/:id/cover" element={<ProtectedRoute user={user}><CoverPage /></ProtectedRoute>} />
