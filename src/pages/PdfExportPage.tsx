@@ -194,7 +194,7 @@ export default function PdfExportPage() {
   const showLegendTable = project.showLegendTable !== false;
   
   return (
-    <div className={`min-h-screen font-sans flex flex-col items-center pb-12 overflow-x-hidden w-full relative ${isPrinting ? 'bg-white p-0' : 'bg-gray-200 p-4 sm:p-6'}`}>
+    <div className={`min-h-screen font-sans pb-12 overflow-x-hidden w-full relative ${isPrinting ? 'bg-white p-0 block' : 'bg-gray-200 p-4 sm:p-6 flex flex-col items-center'}`}>
       
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap');
@@ -209,8 +209,12 @@ export default function PdfExportPage() {
             height: 297mm !important; 
             transform: none !important; 
             box-shadow: none !important; 
-            margin: 0 !important; 
-            page-break-after: always; 
+            margin: 0 auto !important; 
+            page-break-after: always !important; 
+            break-after: page !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            display: block !important;
           }
           .pdf-page { 
             width: 210mm !important; 
@@ -237,10 +241,10 @@ export default function PdfExportPage() {
 
       {error && <div className="w-full max-w-2xl mb-4 no-print"><ErrorMessage message={error} onDismiss={() => setError(null)} /></div>}
 
-      <div className={`pdf-container-wrapper flex flex-col items-center w-full ${isPrinting ? 'gap-0' : 'gap-8'}`}>
+      <div className={`pdf-container-wrapper w-full ${isPrinting ? 'block' : 'flex flex-col items-center gap-8'}`}>
         
         {/* ① 表紙ページ */}
-        <div style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+        <div style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0 print:block print:break-after-page print:break-inside-avoid">
           <div className="pdf-page absolute top-0 left-0 flex flex-col items-center origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
             <div className="flex flex-col items-center w-full" style={{ marginTop: '19px', marginBottom: '106px' }}>
               <div className="shrink-0 flex justify-center mb-6">
@@ -275,9 +279,9 @@ export default function PdfExportPage() {
           </div>
         </div>
 
-        {/* ② 位置図ページ（★回転フルサイズ ＆ 文字の拡大縮小対応） */}
+        {/* ② 位置図ページ */}
         {mapUrlsToRender.map((u, mapIndex) => (
-          <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+          <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0 print:block print:break-after-page print:break-inside-avoid">
             <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
               
               <div className={`w-full h-full flex flex-col border-[3px] border-gray-800 print:border-black ${showLegendTable ? 'p-6' : 'p-1'}`}>
@@ -338,7 +342,6 @@ export default function PdfExportPage() {
                           const thickness = Number(line.size || 2);
                           const midX = (line.start.x + line.end.x) / 2;
                           const midY = (line.start.y + line.end.y) / 2;
-                          // ★編集画面と同じ動的フォントサイズを適用！
                           const dynamicFontSize = 14 + (thickness - 2) * 4; 
                           
                           return (
@@ -365,7 +368,7 @@ export default function PdfExportPage() {
                                     top: `${midY}%`, 
                                     color: color, 
                                     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                                    fontSize: `${dynamicFontSize}px` // ★ここで文字サイズを反映
+                                    fontSize: `${dynamicFontSize}px`
                                   }}
                                   className="absolute z-20 translate-x-[-50%] translate-y-[-50%] font-bold px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap"
                                 >
@@ -407,9 +410,9 @@ export default function PdfExportPage() {
           </div>
         ))}
 
-        {/* ③ 写真ページ（★文字の拡大縮小対応） */}
+        {/* ③ 写真ページ */}
         {photoPages.map((chunk, pageIndex) => (
-          <div key={`photo-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+          <div key={`photo-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0 print:block print:break-after-page print:break-inside-avoid">
             <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
               <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black">
                 {chunk.map((p, i) => {
@@ -459,7 +462,6 @@ export default function PdfExportPage() {
                               const thickness = Number(line.size || 2);
                               const midX = (line.start.x + line.end.x) / 2;
                               const midY = (line.start.y + line.end.y) / 2;
-                              // ★写真画面用の動的フォントサイズを適用（枠が小さいので倍率を微調整）
                               const dynamicFontSize = 10 + (thickness - 2) * 2.5;
 
                               return (
@@ -487,7 +489,7 @@ export default function PdfExportPage() {
                                         color: color, 
                                         backgroundColor: 'rgba(0, 0, 0, 0.4)', 
                                         backdropFilter: 'blur(2px)',
-                                        fontSize: `${dynamicFontSize}px` // ★ここで文字サイズを反映
+                                        fontSize: `${dynamicFontSize}px`
                                       }}
                                       className="absolute z-20 translate-x-[-50%] translate-y-[-50%] font-bold px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap"
                                     >
@@ -518,7 +520,7 @@ export default function PdfExportPage() {
 
         {/* ④ 使用材料表 */}
         {materialPages.map((chunk, pageIndex) => (
-          <div key={`material-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+          <div key={`material-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0 print:block print:break-after-page print:break-inside-avoid">
             <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
               <h2 className="text-xl font-bold pb-1 mb-2 border-b-2 border-gray-800 shrink-0 print:border-black">使用材料表</h2>
               <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black">
