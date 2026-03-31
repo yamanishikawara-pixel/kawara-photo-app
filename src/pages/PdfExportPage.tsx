@@ -520,6 +520,8 @@ export default function PdfExportPage() {
               <div className="flex-1 w-full h-full flex flex-col justify-between gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black print:gap-2">
                 {chunk.map((p, i) => {
                   const isRotated = (Number(p.rotation) || 0) % 180 !== 0;
+                  const maxImgWidth = isRotated ? (isPrinting ? '70mm' : '78mm') : '100%';
+                  const maxImgHeight = isRotated ? (isPrinting ? '110mm' : '120mm') : '100%';
 
                   return (
                     <div key={i} className="flex-1 flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black">
@@ -532,10 +534,12 @@ export default function PdfExportPage() {
                               crossOrigin="anonymous" 
                               style={{ 
                                 display: 'block',
-                                width: '100%',
-                                height: '100%',
-                                objectFit: 'cover',
-                                transform: `rotate(${Number(p.rotation) || 0}deg) scale(${isRotated ? 1.35 : 1})` 
+                                width: isRotated ? 'auto' : '100%',
+                                height: isRotated ? 'auto' : '100%',
+                                maxWidth: maxImgWidth,
+                                maxHeight: maxImgHeight,
+                                objectFit: isRotated ? 'contain' : 'cover',
+                                transform: `rotate(${Number(p.rotation) || 0}deg)` 
                               }}
                               alt="" 
                             />
@@ -625,23 +629,26 @@ export default function PdfExportPage() {
               <div className="flex-1 w-full h-full flex flex-col justify-between gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black print:gap-2">
                 {chunk.map((m, i) => {
                   const isRotated = (Number(m.rotation) || 0) % 180 !== 0;
+                  const maxImgWidth = isRotated ? (isPrinting ? '70mm' : '78mm') : '100%';
+                  const maxImgHeight = isRotated ? (isPrinting ? '110mm' : '120mm') : '100%';
 
                   return (
                     <div key={i} className="flex-1 flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black">
                       <div className="w-[60%] h-full flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {m.image ? (
                           <div className="relative w-full h-full overflow-hidden flex items-center justify-center">
-                            {/* ★ 材料ページも写真ページと全く同じ「枠目一杯＆回転ズーム」に統一！ */}
                             <img 
                               src={proxyUrl(m.image, `material_${m.id}_${sessionId}`)} 
                               data-original-src={m.image} 
                               crossOrigin="anonymous" 
                               style={{ 
                                 display: 'block',
-                                width: '100%',
-                                height: '100%',
-                                objectFit: 'cover',
-                                transform: `rotate(${Number(m.rotation) || 0}deg) scale(${isRotated ? 1.35 : 1})` 
+                                width: isRotated ? 'auto' : '100%',
+                                height: isRotated ? 'auto' : '100%',
+                                maxWidth: maxImgWidth,
+                                maxHeight: maxImgHeight,
+                                objectFit: isRotated ? 'contain' : 'cover',
+                                transform: `rotate(${Number(m.rotation) || 0}deg)` 
                               }}
                               alt="" 
                             />
