@@ -5,13 +5,21 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import type { Circle, MapRow, Photo, Project, Material } from '../types';
+// ★ 修正：MapLine を復活させました
+import type { Circle, MapRow, MapLine, Photo, Project, Material } from '../types';
 import kawaraLogo from '../assets/kawara-logo.png';
 import { A4_HEIGHT_PX, A4_WIDTH_PX, getPreviewScale, proxyUrl } from '../shared/utils';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 
 const JP_FONT = "'BIZ UDPGothic', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', Meiryo, sans-serif";
+
+// ★ 修正：safeStyleLine 関数を復活させました
+function safeStyleLine(val: string | number | undefined | null, defaultUnit: string): string {
+  if (val == null || val === '') return `0${defaultUnit}`;
+  if (typeof val === 'number') return `${val}${defaultUnit}`;
+  return String(val);
+}
 
 const LINE_TYPES = [
   { label: '流れ壁', color: '#3b82f6' },
@@ -428,6 +436,10 @@ export default function PdfExportPage() {
                             </div>
                         ))}
                         
+                        {(project.mapLines ?? []).filter(l => l.mapIndex === mapIndex).map((line: MapLine) => (
+                            <div key={`line-${line.id}`} className="absolute" style={{ left: safeStyleLine(line.x, '%'), top: safeStyleLine(line.y, '%'), width: safeStyleLine(line.length, '%'), height: safeStyleLine(line.thickness, 'px'), backgroundColor: line.color || '#000000', transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`, transformOrigin: 'center center', zIndex: 15 }} />
+                          ))}
+
                         {(project.mapDimensionLines ?? []).filter(l => (l.mapIndex || 0) === mapIndex).map((line) => {
                           const color = line.color || "#FFFFFF";
                           const thickness = Number(line.size || 2);
@@ -526,7 +538,7 @@ export default function PdfExportPage() {
                                 height: isRotated ? 'auto' : '100%',
                                 maxWidth: maxImgWidth,
                                 maxHeight: maxImgHeight,
-                                objectFit: isRotated ? 'contain' : 'cover',
+                                objectFit: 'contain',
                                 transform: `rotate(${Number(p.rotation) || 0}deg)` 
                               }}
                               alt="" 
@@ -635,7 +647,7 @@ export default function PdfExportPage() {
                                 height: isRotated ? 'auto' : '100%',
                                 maxWidth: maxImgWidth,
                                 maxHeight: maxImgHeight,
-                                objectFit: isRotated ? 'contain' : 'cover',
+                                objectFit: 'contain',
                                 transform: `rotate(${Number(m.rotation) || 0}deg)` 
                               }}
                               alt="" 
