@@ -133,8 +133,8 @@ export default function MaterialPage() {
                           style={{ transform: `rotate(${material.rotation || 0}deg)` }}
                           crossOrigin="anonymous"
                         />
-                        {/* 回転ボタン */}
-                        <div className="absolute bottom-2 right-2 flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity bg-black/60 p-1.5 rounded-lg backdrop-blur-sm shadow-lg">
+                        {/* ★ 回転ボタンをiPadでも常に表示するように修正！ */}
+                        <div className="absolute bottom-2 right-2 flex gap-1 bg-black/60 p-1.5 rounded-lg backdrop-blur-sm shadow-lg z-20">
                           <button onClick={() => rotateImage(material.id, material.rotation || 0, -90)} className="p-1.5 text-white hover:bg-white/30 rounded"><RotateCcw className="w-5 h-5" /></button>
                           <button onClick={() => rotateImage(material.id, material.rotation || 0, 90)} className="p-1.5 text-white hover:bg-white/30 rounded"><RotateCw className="w-5 h-5" /></button>
                         </div>
@@ -162,7 +162,7 @@ export default function MaterialPage() {
                   )}
                 </div>
 
-                {/* 入力項目エリア（スマホ最適化サイズ） */}
+                {/* 入力項目エリア */}
                 <div className="w-full sm:w-[60%] flex flex-col gap-3">
                   <div>
                     <label className="text-xs font-bold text-gray-500 mb-1 block">品名</label>
