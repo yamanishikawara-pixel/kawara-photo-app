@@ -130,15 +130,12 @@ export default function PdfExportPage() {
     } catch { setError('Zipファイルの作成に失敗しました。'); } finally { setIsZipping(false); }
   };
 
-  // ── 印刷用画像最適化（Canvas経由でリサイズ＋再圧縮） ──
-  // A4 150dpi = 1240px幅で十分。元画像1920pxをそのままBase64化するとメモリを食うため、
-  // 印刷に必要十分な解像度に落としてからBase64化する。
   const optimizeImageForPrint = (imgEl: HTMLImageElement): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
-        const MAX_PRINT_PX = 1200; // A4 150dpi相当
+        const MAX_PRINT_PX = 1200; 
         let { width, height } = img;
         if (width > MAX_PRINT_PX || height > MAX_PRINT_PX) {
           const ratio = Math.min(MAX_PRINT_PX / width, MAX_PRINT_PX / height);
@@ -151,23 +148,20 @@ export default function PdfExportPage() {
         const ctx = canvas.getContext('2d');
         if (!ctx) { resolve(img.src); return; }
         
-        // JPEG変換時に透過PNGの透明部分が黒くなるのを防止（背景白塗り）
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
         
         const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
-        // Canvas参照を即座に解放（iPad Safari のGC対策）
         canvas.width = 0;
         canvas.height = 0;
         resolve(dataUrl);
       };
-      img.onerror = () => resolve(imgEl.src); // 失敗時は元画像をそのまま使う
+      img.onerror = () => resolve(imgEl.src); 
       img.src = imgEl.getAttribute('data-original-src') || imgEl.src;
     });
   };
 
-  // UIスレッドに制御を返すユーティリティ
   const yieldToUI = () => new Promise<void>((r) => setTimeout(r, 0));
 
   const handlePrint = () => {
@@ -184,7 +178,7 @@ export default function PdfExportPage() {
         });
         
         const total = needsConversion.length;
-        const BATCH_SIZE = 3; // 3枚ずつ処理してメモリスパイクを防ぐ
+        const BATCH_SIZE = 3; 
         
         for (let i = 0; i < total; i += BATCH_SIZE) {
           const batch = needsConversion.slice(i, i + BATCH_SIZE);
@@ -198,13 +192,11 @@ export default function PdfExportPage() {
             } catch (e) { console.warn('画像変換スキップ:', e); }
           }));
           
-          // バッチ間でUIスレッドに制御を返す→フリーズ防止
           await yieldToUI();
         }
         
         setPrintProgress('PDF生成中...');
         
-        // Safari描画パイプライン完了待ち
         await new Promise<void>((resolve) => {
           requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 100)));
         });
@@ -252,7 +244,7 @@ export default function PdfExportPage() {
   const showLegendTable = project.showLegendTable !== false;
   
   return (
-    <div className={`min-h-screen font-sans overflow-x-hidden w-full relative ${isPrinting ? 'bg-white p-0 block' : 'pb-12 bg-gray-200 p-4 sm:p-6 flex flex-col items-center'}`}>
+    <div className={`min-h-screen font-sans pb-12 overflow-x-hidden w-full relative ${isPrinting ? 'bg-white p-0 block' : 'bg-gray-200 p-4 sm:p-6 flex flex-col items-center'}`}>
       
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap');
@@ -278,14 +270,11 @@ export default function PdfExportPage() {
             margin: 0 !important;
           }
 
-          /* ━━━ ページラッパー ━━━ */
           .pdf-page-wrapper { 
             position: relative !important;
             display: block !important;
-            /* iPadの物理余白を避けるため幅も2mm削る */
-            width: 208mm !important; 
+            width: 200mm !important; 
             height: auto !important;
-            /* 削った分を中央寄せ */
             margin: 0 auto !important; 
             padding: 0 !important;
             overflow: hidden !important;
@@ -316,11 +305,10 @@ export default function PdfExportPage() {
             position: relative !important;
             top: auto !important;
             left: auto !important;
-            /* ★ 核心修正④: 高さ・幅を数ミリ削り、絶対にはみ出させない */
-            width: 208mm !important; 
-            height: 294mm !important; 
-            /* 箱が小さくなった分、中のコンテンツが詰まらないようPaddingも1mm削る */
-            padding: 14mm !important; 
+            /* ★ A4から完全に一回り縮小した安全地帯 */
+            width: 200mm !important; 
+            height: 285mm !important; 
+            padding: 10mm !important; 
             box-sizing: border-box !important;
             overflow: hidden !important;
             transform: none !important; 
@@ -328,6 +316,7 @@ export default function PdfExportPage() {
             transform-origin: unset !important;
             -webkit-transform-origin: unset !important;
           }
+
           .pdf-page img {
             max-width: 100% !important;
           }
@@ -362,9 +351,9 @@ export default function PdfExportPage() {
       <div className={`pdf-container-wrapper w-full ${isPrinting ? 'block' : 'flex flex-col items-center gap-8'}`}>
         
         {/* ① 表紙ページ */}
-        <div style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? '297mm' : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-          <div className={`pdf-page flex flex-col items-center bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
-            <div className="flex flex-col items-center w-full" style={{ marginTop: '19px', marginBottom: '106px' }}>
+        <div style={{ width: isPrinting ? `200mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `285mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+          <div className="pdf-page absolute top-0 left-0 flex flex-col items-center origin-top-left bg-white text-black" style={{ width: isPrinting ? `200mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `285mm` : `${A4_HEIGHT_PX}px`, padding: '10mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
+            <div className="flex flex-col items-center w-full" style={{ marginTop: '19px', marginBottom: '80px' }}>
               <div className="shrink-0 flex justify-center mb-6">
                 {logoUrl ? <img src={proxyUrl(logoUrl, `logo_${sessionId}`)} data-original-src={logoUrl} alt="自社ロゴ" className="block h-auto object-contain" style={{ width: '151px' }} crossOrigin="anonymous" /> : <img src={kawaraLogo} data-original-src={kawaraLogo} alt="標準ロゴ" className="block h-auto object-contain grayscale" style={{ width: '121px' }} crossOrigin="anonymous" />}
               </div>
@@ -374,7 +363,7 @@ export default function PdfExportPage() {
                 <div className="w-[160mm] border-b-[1px] border-black mt-1.5" />
               </div>
             </div>
-            <div className="w-[150mm] flex flex-col gap-y-[12mm]">
+            <div className="w-[150mm] flex flex-col gap-y-[10mm]">
               {COVER_FIELDS.map((item, idx) => {
                 let value = String(project[item.key] ?? '　');
                 if (item.key === 'contractorName' && companyName) value = companyName;
@@ -387,20 +376,20 @@ export default function PdfExportPage() {
               })}
             </div>
             {userSettings && (address || phone) && (
-              <div className="absolute bottom-[16mm] right-[15mm] text-right flex flex-col items-end pl-4 py-1 bg-white">
+              <div className="absolute bottom-[16mm] right-[10mm] text-right flex flex-col items-end pl-4 py-1 bg-white">
                 {companyName && <div className="text-[18px] font-bold mb-1 text-black">{companyName}</div>}
                 {address && <div className="text-[14px] font-bold text-gray-800">{address}</div>}
                 {phone && <div className="text-[14px] font-bold text-gray-800">TEL: {phone}</div>}
               </div>
             )}
-            <div className="absolute bottom-[10mm] right-[15mm] text-[16px] font-bold text-black">- 1 / {totalPages} -</div>
+            <div className="absolute bottom-[8mm] right-[10mm] text-[16px] font-bold text-black">- 1 / {totalPages} -</div>
           </div>
         </div>
 
         {/* ② 位置図ページ */}
         {mapUrlsToRender.map((u, mapIndex) => (
-          <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? '297mm' : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-            <div className={`pdf-page flex flex-col bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
+          <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `200mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `285mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `200mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `285mm` : `${A4_HEIGHT_PX}px`, padding: '10mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
               
               <div className={`w-full h-full flex flex-col border-[3px] border-gray-800 print:border-black ${showLegendTable ? 'p-6' : 'p-1'}`}>
                 <h2 className={`text-2xl font-bold border-gray-800 print:border-black shrink-0 ${showLegendTable ? 'mb-4 pb-2 border-b-2' : 'mb-2 pb-1 border-b-2'}`}>
@@ -435,7 +424,7 @@ export default function PdfExportPage() {
                             objectFit: 'contain'
                           } : { 
                             maxWidth: '100%',
-                            maxHeight: showLegendTable ? '150mm' : '265mm',
+                            maxHeight: showLegendTable ? '145mm' : '255mm',
                             objectFit: 'contain'
                           }} 
                           alt="" 
@@ -523,15 +512,15 @@ export default function PdfExportPage() {
                   </div>
                 )}
               </div>
-              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapIndex} / {totalPages} -</div>
+              <div className="absolute bottom-[8mm] right-[10mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapIndex} / {totalPages} -</div>
             </div>
           </div>
         ))}
 
         {/* ③ 写真ページ */}
         {photoPages.map((chunk, pageIndex) => (
-          <div key={`photo-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? '297mm' : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-            <div className={`pdf-page flex flex-col bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
+          <div key={`photo-page-${pageIndex}`} style={{ width: isPrinting ? `200mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `285mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `200mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `285mm` : `${A4_HEIGHT_PX}px`, padding: '10mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
               <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black">
                 {chunk.map((p, i) => {
                   const isRotated = (Number(p.rotation) || 0) % 180 !== 0;
@@ -539,7 +528,7 @@ export default function PdfExportPage() {
                   const maxImgHeight = isRotated ? '120mm' : '78mm';
 
                   return (
-                    <div key={i} className="flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black" style={{ height: '82mm' }}>
+                    <div key={i} className="flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black" style={{ height: '80mm' }}>
                       <div className="w-[60%] flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {p.image ? (
                           <div className="relative" style={{ display: 'inline-block' }}>
@@ -631,24 +620,24 @@ export default function PdfExportPage() {
                   );
                 })}
               </div>
-              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapCount + pageIndex} / {totalPages} -</div>
+              <div className="absolute bottom-[8mm] right-[10mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapCount + pageIndex} / {totalPages} -</div>
             </div>
           </div>
         ))}
 
         {/* ④ 使用材料表 */}
         {materialPages.map((chunk, pageIndex) => (
-          <div key={`material-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? '297mm' : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-            <div className={`pdf-page flex flex-col bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
-              <h2 className="text-xl font-bold pb-1 mb-2 border-b-2 border-gray-800 shrink-0 print:border-black print:pb-0 print:mb-1">使用材料表</h2>
-              <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black print:gap-1 print:p-1">
+          <div key={`material-page-${pageIndex}`} style={{ width: isPrinting ? `200mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `285mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `200mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `285mm` : `${A4_HEIGHT_PX}px`, padding: '10mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
+              <h2 className="text-xl font-bold pb-1 mb-2 border-b-2 border-gray-800 shrink-0 print:border-black">使用材料表</h2>
+              <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black">
                 {chunk.map((m, i) => {
                   const isRotated = (Number(m.rotation) || 0) % 180 !== 0;
                   const maxImgWidth = isRotated ? '78mm' : '100%';
                   const maxImgHeight = isRotated ? '120mm' : '78mm';
 
                   return (
-                    <div key={i} className="flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black" style={{ height: '82mm' }}>
+                    <div key={i} className="flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black" style={{ height: '80mm' }}>
                       <div className="w-[60%] flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {m.image ? (
                           <div className="relative" style={{ display: 'inline-block' }}>
@@ -680,7 +669,7 @@ export default function PdfExportPage() {
                   );
                 })}
               </div>
-              <div className="absolute bottom-[10mm] right-[15mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapCount + photoPages.length + pageIndex} / {totalPages} -</div>
+              <div className="absolute bottom-[8mm] right-[10mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapCount + photoPages.length + pageIndex} / {totalPages} -</div>
             </div>
           </div>
         ))}
