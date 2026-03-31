@@ -67,6 +67,7 @@ export default function PdfExportPage() {
   const [scale, setScale] = useState(1);
   const [sessionId] = useState(() => Date.now().toString());
   const [isPrinting, setIsPrinting] = useState(false);
+  const [printProgress, setPrintProgress] = useState('');
   
   const [rotateMap, setRotateMap] = useState(false);
 
@@ -95,7 +96,7 @@ export default function PdfExportPage() {
   }, []);
 
   useEffect(() => {
-    const handleAfterPrint = () => setIsPrinting(false);
+    const handleAfterPrint = () => { setIsPrinting(false); setPrintProgress(''); };
     window.addEventListener('afterprint', handleAfterPrint);
     return () => window.removeEventListener('afterprint', handleAfterPrint);
   }, []);
@@ -129,36 +130,93 @@ export default function PdfExportPage() {
     } catch { setError('Zipファイルの作成に失敗しました。'); } finally { setIsZipping(false); }
   };
 
+  // ── 印刷用画像最適化（Canvas経由でリサイズ＋再圧縮） ──
+  // A4 150dpi = 1240px幅で十分。元画像1920pxをそのままBase64化するとメモリを食うため、
+  // 印刷に必要十分な解像度に落としてからBase64化する。
+  const optimizeImageForPrint = (imgEl: HTMLImageElement): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const MAX_PRINT_PX = 1200; // A4 150dpi相当
+        let { width, height } = img;
+        if (width > MAX_PRINT_PX || height > MAX_PRINT_PX) {
+          const ratio = Math.min(MAX_PRINT_PX / width, MAX_PRINT_PX / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(img.src); return; }
+        
+        // JPEG変換時に透過PNGの透明部分が黒くなるのを防止（背景白塗り）
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+        // Canvas参照を即座に解放（iPad Safari のGC対策）
+        canvas.width = 0;
+        canvas.height = 0;
+        resolve(dataUrl);
+      };
+      img.onerror = () => resolve(imgEl.src); // 失敗時は元画像をそのまま使う
+      img.src = imgEl.getAttribute('data-original-src') || imgEl.src;
+    });
+  };
+
+  // UIスレッドに制御を返すユーティリティ
+  const yieldToUI = () => new Promise<void>((r) => setTimeout(r, 0));
+
   const handlePrint = () => {
     if (!project) return;
     setIsPrinting(true);
+    setPrintProgress('準備中...');
     
     setTimeout(async () => {
       try {
-        const images = document.querySelectorAll('.pdf-page img');
-        const promises = Array.from(images).map(async (img) => {
+        const images = Array.from(document.querySelectorAll('.pdf-page img'));
+        const needsConversion = images.filter((img) => {
           const src = img.getAttribute('data-original-src') || img.getAttribute('src');
-          if (src && !src.startsWith('data:')) {
+          return src && !src.startsWith('data:');
+        });
+        
+        const total = needsConversion.length;
+        const BATCH_SIZE = 3; // 3枚ずつ処理してメモリスパイクを防ぐ
+        
+        for (let i = 0; i < total; i += BATCH_SIZE) {
+          const batch = needsConversion.slice(i, i + BATCH_SIZE);
+          setPrintProgress(`画像を最適化中... (${Math.min(i + BATCH_SIZE, total)}/${total})`);
+          
+          await Promise.all(batch.map(async (img) => {
             try {
-              const res = await fetch(src);
-              const blob = await res.blob();
-              const base64 = await new Promise<string>((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.readAsDataURL(blob);
-              });
-              img.setAttribute('src', base64);
+              const dataUrl = await optimizeImageForPrint(img as HTMLImageElement);
+              img.setAttribute('src', dataUrl);
               img.removeAttribute('crossorigin');
             } catch (e) { console.warn('画像変換スキップ:', e); }
-          }
+          }));
+          
+          // バッチ間でUIスレッドに制御を返す→フリーズ防止
+          await yieldToUI();
+        }
+        
+        setPrintProgress('PDF生成中...');
+        
+        // Safari描画パイプライン完了待ち
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 100)));
         });
-        await Promise.all(promises);
+        
         window.print();
       } catch (err) {
         setError('印刷の準備中にエラーが発生しました。');
         setIsPrinting(false);
+      } finally {
+        setPrintProgress('');
       }
-    }, 300);
+    }, 500);
   };
 
   if (!project) return <LoadingSpinner />;
@@ -194,59 +252,104 @@ export default function PdfExportPage() {
   const showLegendTable = project.showLegendTable !== false;
   
   return (
-    <div className={`min-h-screen font-sans pb-12 w-full relative ${isPrinting ? 'bg-white p-0 block overflow-visible' : 'bg-gray-200 p-4 sm:p-6 flex flex-col items-center overflow-x-hidden'}`}>
+    <div className={`min-h-screen font-sans pb-12 overflow-x-hidden w-full relative ${isPrinting ? 'bg-white p-0 block' : 'bg-gray-200 p-4 sm:p-6 flex flex-col items-center'}`}>
       
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap');
         .pdf-container-wrapper * { font-family: ${JP_FONT} !important; }
         
         @media print {
+          /* ━━━ 基本：CSS標準仕様に準拠したページ設定 ━━━ */
           @page { size: A4 portrait; margin: 0; }
-          html, body {
-            width: 210mm !important;
-            margin: 0 !important;
+          html, body { 
+            -webkit-print-color-adjust: exact !important; 
+            print-color-adjust: exact !important; 
+            background: white !important; 
+            margin: 0 !important; 
             padding: 0 !important;
-            background-color: white !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
+            width: 100% !important;
+            /* visible にしないとSafari/Chromeが2ページ目以降を切り捨てるケースがある */
             overflow: visible !important;
           }
-          * { overflow-x: visible !important; }
           .no-print { display: none !important; }
-          
+
+          /* ━━━ レイアウトフロー正常化 ━━━
+             画面表示ではflex+scaleで縮小プレビューを実現しているが、
+             印刷時はこれらを全て解除して通常のブロックフローに戻す。
+             これはハックではなく「印刷用にレイアウトモードを切り替える」正攻法。
+             将来のOS更新で壊れるリスクは極めて低い。 */
           .pdf-container-wrapper {
             display: block !important;
+            width: 100% !important;
+            padding: 0 !important;
             margin: 0 !important;
-            padding: 0 !important;
           }
-          
+
+          /* ━━━ ページ単位の制御 ━━━ */
           .pdf-page-wrapper { 
-            width: 210mm !important; 
-            height: 296mm !important; /* 297mmだとiPadが謎の余白を検知して増殖するため1mm削る */
-            transform: none !important; 
-            box-shadow: none !important; 
-            margin: 0 auto !important; 
-            padding: 0 !important;
-            page-break-after: always !important; 
-            break-after: page !important;
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-            display: block !important;
+            /* ブロック要素として通常フローに参加させる */
             position: relative !important;
-            box-sizing: border-box !important;
-            overflow: hidden !important; /* はみ出しを強制カット */
-            border: none !important;
-          }
-          .pdf-page { 
+            display: block !important;
             width: 210mm !important; 
-            height: 296mm !important; 
+            height: 297mm !important; 
+            margin: 0 !important; 
+            padding: 0 !important;
+            overflow: hidden !important;
+            box-shadow: none !important;
+            /* transform解除：標準 → -webkit- の順（Safari 16以前はprefixed版を優先する） */
+            transform: none !important; 
+            -webkit-transform: none !important;
+            /* ページ分割：CSS3 → CSS2.1 → -webkit- の3段構えフォールバック */
+            break-after: page !important;
+            page-break-after: always !important; 
+            -webkit-page-break-after: always !important;
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+            -webkit-page-break-inside: avoid !important;
+          }
+          .pdf-page-wrapper:last-child {
+            break-after: auto !important;
+            page-break-after: auto !important;
+            -webkit-page-break-after: auto !important;
+          }
+
+          .pdf-page { 
+            /* absoluteからrelativeへの変更が最も重要な修正。
+               Safari印刷エンジンはabsolute要素をページフロー計算に含めないため、
+               全ページが1ページ目に重なる。relativeにすることで正常にページ送りされる。
+               この挙動はCSS仕様に準拠しており（absoluteはフロー外）、ハックではない。 */
+            position: relative !important;
+            top: auto !important;
+            left: auto !important;
+            width: 210mm !important; 
+            height: 297mm !important; 
             padding: 15mm !important; 
-            transform: none !important;
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
             box-sizing: border-box !important;
             overflow: hidden !important;
+            transform: none !important; 
+            -webkit-transform: none !important;
+            transform-origin: unset !important;
+            -webkit-transform-origin: unset !important;
+          }
+
+          /* ━━━ 画像のはみ出し防止 ━━━
+             ページ内の画像がコンテナを超えないようにする標準的な制約。
+             印刷時は画面プレビューと異なるビューポートになるため必要。 */
+          .pdf-page img {
+            max-width: 100% !important;
+          }
+
+          /* ━━━ ルートラッパーのリセット ━━━
+             :has() で pdf-container-wrapper の親を構造的に特定。
+             Tailwindのクラス名に依存しないため、将来のTW更新にも耐える。
+             :has() は Safari 15.4+, Chrome 105+, Firefox 121+ で対応済み。 */
+          :has(> .pdf-container-wrapper) {
+            min-height: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: white !important;
+            display: block !important;
+            overflow: visible !important;
           }
         }
       `}</style>
@@ -261,7 +364,7 @@ export default function PdfExportPage() {
              </button>
           )}
           <button type="button" onClick={handleZipExport} disabled={isZipping || isPrinting} className="flex items-center gap-2 bg-green-600 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-green-700 disabled:opacity-50"><Download className="w-5 h-5" />写真のみ(Zip)</button>
-          <button type="button" onClick={handlePrint} disabled={isZipping || isPrinting} className="flex items-center gap-2 bg-black text-white px-5 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-gray-800 disabled:opacity-50"><Printer className="w-5 h-5" /> {isPrinting ? '画像処理中...' : 'PDF作成・印刷'}</button>
+          <button type="button" onClick={handlePrint} disabled={isZipping || isPrinting} className="flex items-center gap-2 bg-black text-white px-5 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-gray-800 disabled:opacity-50"><Printer className="w-5 h-5" /> {isPrinting ? (printProgress || '画像処理中...') : 'PDF作成・印刷'}</button>
         </div>
       </div>
 
@@ -270,8 +373,8 @@ export default function PdfExportPage() {
       <div className={`pdf-container-wrapper w-full ${isPrinting ? 'block' : 'flex flex-col items-center gap-8'}`}>
         
         {/* ① 表紙ページ */}
-        <div style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `296mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0 print:block print:break-after-page print:break-inside-avoid">
-          <div className="pdf-page absolute top-0 left-0 flex flex-col items-center origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `296mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
+        <div style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0 print:block print:break-after-page print:break-inside-avoid">
+          <div className="pdf-page absolute top-0 left-0 flex flex-col items-center origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
             <div className="flex flex-col items-center w-full" style={{ marginTop: '19px', marginBottom: '106px' }}>
               <div className="shrink-0 flex justify-center mb-6">
                 {logoUrl ? <img src={proxyUrl(logoUrl, `logo_${sessionId}`)} data-original-src={logoUrl} alt="自社ロゴ" className="block h-auto object-contain" style={{ width: '151px' }} crossOrigin="anonymous" /> : <img src={kawaraLogo} data-original-src={kawaraLogo} alt="標準ロゴ" className="block h-auto object-contain grayscale" style={{ width: '121px' }} crossOrigin="anonymous" />}
@@ -307,8 +410,8 @@ export default function PdfExportPage() {
 
         {/* ② 位置図ページ */}
         {mapUrlsToRender.map((u, mapIndex) => (
-          <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `296mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0 print:block print:break-after-page print:break-inside-avoid">
-            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `296mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
+          <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0 print:block print:break-after-page print:break-inside-avoid">
+            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
               
               <div className={`w-full h-full flex flex-col border-[3px] border-gray-800 print:border-black ${showLegendTable ? 'p-6' : 'p-1'}`}>
                 <h2 className={`text-2xl font-bold border-gray-800 print:border-black shrink-0 ${showLegendTable ? 'mb-4 pb-2 border-b-2' : 'mb-2 pb-1 border-b-2'}`}>
@@ -438,8 +541,8 @@ export default function PdfExportPage() {
 
         {/* ③ 写真ページ */}
         {photoPages.map((chunk, pageIndex) => (
-          <div key={`photo-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `296mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0 print:block print:break-after-page print:break-inside-avoid">
-            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `296mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
+          <div key={`photo-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0 print:block print:break-after-page print:break-inside-avoid">
+            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
               <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black">
                 {chunk.map((p, i) => {
                   const isRotated = (Number(p.rotation) || 0) % 180 !== 0;
@@ -546,8 +649,8 @@ export default function PdfExportPage() {
 
         {/* ④ 使用材料表 */}
         {materialPages.map((chunk, pageIndex) => (
-          <div key={`material-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `296mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0 print:block print:break-after-page print:break-inside-avoid">
-            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `296mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
+          <div key={`material-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0 print:block print:break-after-page print:break-inside-avoid">
+            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
               <h2 className="text-xl font-bold pb-1 mb-2 border-b-2 border-gray-800 shrink-0 print:border-black">使用材料表</h2>
               <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black">
                 {chunk.map((m, i) => {
