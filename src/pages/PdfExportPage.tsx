@@ -240,7 +240,6 @@ export default function PdfExportPage() {
   }
 
   const totalPages = 1 + mapCount + photoPages.length + materialPages.length;
-  
   const showLegendTable = project.showLegendTable !== false;
   
   return (
@@ -273,7 +272,7 @@ export default function PdfExportPage() {
           .pdf-page-wrapper { 
             position: relative !important;
             display: block !important;
-            width: 200mm !important; 
+            width: 190mm !important; 
             height: auto !important;
             margin: 0 auto !important; 
             padding: 0 !important;
@@ -305,10 +304,10 @@ export default function PdfExportPage() {
             position: relative !important;
             top: auto !important;
             left: auto !important;
-            /* ★ A4から完全に一回り縮小した安全地帯 */
-            width: 200mm !important; 
-            height: 285mm !important; 
-            padding: 10mm !important; 
+            /* ★ はみ出しを100%防ぐための最終安全領域（190mm x 265mm） */
+            width: 190mm !important; 
+            height: 265mm !important; 
+            padding: 8mm !important; 
             box-sizing: border-box !important;
             overflow: hidden !important;
             transform: none !important; 
@@ -351,9 +350,9 @@ export default function PdfExportPage() {
       <div className={`pdf-container-wrapper w-full ${isPrinting ? 'block' : 'flex flex-col items-center gap-8'}`}>
         
         {/* ① 表紙ページ */}
-        <div style={{ width: isPrinting ? `200mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `285mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-          <div className="pdf-page absolute top-0 left-0 flex flex-col items-center origin-top-left bg-white text-black" style={{ width: isPrinting ? `200mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `285mm` : `${A4_HEIGHT_PX}px`, padding: '10mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
-            <div className="flex flex-col items-center w-full" style={{ marginTop: '19px', marginBottom: '80px' }}>
+        <div style={{ width: isPrinting ? `190mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+          <div className="pdf-page absolute top-0 left-0 flex flex-col items-center origin-top-left bg-white text-black" style={{ width: isPrinting ? `190mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
+            <div className="flex flex-col items-center w-full" style={{ marginTop: '19px', marginBottom: '60px' }}>
               <div className="shrink-0 flex justify-center mb-6">
                 {logoUrl ? <img src={proxyUrl(logoUrl, `logo_${sessionId}`)} data-original-src={logoUrl} alt="自社ロゴ" className="block h-auto object-contain" style={{ width: '151px' }} crossOrigin="anonymous" /> : <img src={kawaraLogo} data-original-src={kawaraLogo} alt="標準ロゴ" className="block h-auto object-contain grayscale" style={{ width: '121px' }} crossOrigin="anonymous" />}
               </div>
@@ -388,11 +387,11 @@ export default function PdfExportPage() {
 
         {/* ② 位置図ページ */}
         {mapUrlsToRender.map((u, mapIndex) => (
-          <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `200mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `285mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `200mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `285mm` : `${A4_HEIGHT_PX}px`, padding: '10mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
+          <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `190mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `190mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
               
-              <div className={`w-full h-full flex flex-col border-[3px] border-gray-800 print:border-black ${showLegendTable ? 'p-6' : 'p-1'}`}>
-                <h2 className={`text-2xl font-bold border-gray-800 print:border-black shrink-0 ${showLegendTable ? 'mb-4 pb-2 border-b-2' : 'mb-2 pb-1 border-b-2'}`}>
+              <div className={`w-full h-full flex flex-col border-[3px] border-gray-800 print:border-black ${showLegendTable ? 'p-6 print:p-2' : 'p-1'}`}>
+                <h2 className={`text-2xl font-bold border-gray-800 print:border-black shrink-0 ${showLegendTable ? 'mb-4 pb-2 border-b-2 print:mb-2' : 'mb-2 pb-1 border-b-2'}`}>
                   位置図 {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}
                 </h2>
                 
@@ -424,7 +423,7 @@ export default function PdfExportPage() {
                             objectFit: 'contain'
                           } : { 
                             maxWidth: '100%',
-                            maxHeight: showLegendTable ? '145mm' : '255mm',
+                            maxHeight: showLegendTable ? (isPrinting ? '130mm' : '150mm') : (isPrinting ? '230mm' : '265mm'),
                             objectFit: 'contain'
                           }} 
                           alt="" 
@@ -519,16 +518,16 @@ export default function PdfExportPage() {
 
         {/* ③ 写真ページ */}
         {photoPages.map((chunk, pageIndex) => (
-          <div key={`photo-page-${pageIndex}`} style={{ width: isPrinting ? `200mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `285mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `200mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `285mm` : `${A4_HEIGHT_PX}px`, padding: '10mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
-              <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black">
+          <div key={`photo-page-${pageIndex}`} style={{ width: isPrinting ? `190mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `190mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
+              <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black print:gap-1">
                 {chunk.map((p, i) => {
                   const isRotated = (Number(p.rotation) || 0) % 180 !== 0;
-                  const maxImgWidth = isRotated ? '78mm' : '100%';
-                  const maxImgHeight = isRotated ? '120mm' : '78mm';
+                  const maxImgWidth = isRotated ? '73mm' : '100%';
+                  const maxImgHeight = isRotated ? '115mm' : '73mm';
 
                   return (
-                    <div key={i} className="flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black" style={{ height: '80mm' }}>
+                    <div key={i} className="flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black" style={{ height: isPrinting ? '75mm' : '82mm' }}>
                       <div className="w-[60%] flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {p.image ? (
                           <div className="relative" style={{ display: 'inline-block' }}>
@@ -610,10 +609,10 @@ export default function PdfExportPage() {
                         ) : <span className="font-bold text-gray-400">写真未登録</span>}
                       </div>
                       <div className="w-[40%] flex flex-col text-[13px] border border-gray-400 bg-white shrink-0 h-full print:border-black">
-                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0 print:border-black"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">写真NO</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.photoNumber || '　'}</div></div>
-                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0 print:border-black"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">撮影日</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.shootingDate || '　'}</div></div>
-                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0 print:border-black"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">位置図</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden text-red-700 whitespace-nowrap">{p.locationMap || '　'}</div></div>
-                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0 print:border-black"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">工程</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.process || '　'}</div></div>
+                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0 print:border-black print:min-h-[25px]"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">写真NO</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.photoNumber || '　'}</div></div>
+                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0 print:border-black print:min-h-[25px]"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">撮影日</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.shootingDate || '　'}</div></div>
+                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0 print:border-black print:min-h-[25px]"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">位置図</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden text-red-700 whitespace-nowrap">{p.locationMap || '　'}</div></div>
+                        <div className="flex min-h-[30px] border-b border-gray-400 shrink-0 print:border-black print:min-h-[25px]"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">工程</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.process || '　'}</div></div>
                         <div className="flex-1 flex min-h-0"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">説明</div><div className="p-2 flex-1 overflow-hidden font-bold leading-snug flex items-start break-words whitespace-pre-wrap">{p.description || '　'}</div></div>
                       </div>
                     </div>
@@ -627,17 +626,17 @@ export default function PdfExportPage() {
 
         {/* ④ 使用材料表 */}
         {materialPages.map((chunk, pageIndex) => (
-          <div key={`material-page-${pageIndex}`} style={{ width: isPrinting ? `200mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `285mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `200mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `285mm` : `${A4_HEIGHT_PX}px`, padding: '10mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
-              <h2 className="text-xl font-bold pb-1 mb-2 border-b-2 border-gray-800 shrink-0 print:border-black">使用材料表</h2>
-              <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black">
+          <div key={`material-page-${pageIndex}`} style={{ width: isPrinting ? `190mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+            <div className="pdf-page absolute top-0 left-0 flex flex-col origin-top-left bg-white text-black" style={{ width: isPrinting ? `190mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '15mm', transform: isPrinting ? 'scale(1)' : `scale(${scale})` }}>
+              <h2 className="text-xl font-bold pb-1 mb-2 border-b-2 border-gray-800 shrink-0 print:border-black print:pb-0 print:mb-1">使用材料表</h2>
+              <div className="flex-1 flex flex-col gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black print:gap-1">
                 {chunk.map((m, i) => {
                   const isRotated = (Number(m.rotation) || 0) % 180 !== 0;
-                  const maxImgWidth = isRotated ? '78mm' : '100%';
-                  const maxImgHeight = isRotated ? '120mm' : '78mm';
+                  const maxImgWidth = isRotated ? '73mm' : '100%';
+                  const maxImgHeight = isRotated ? '115mm' : '73mm';
 
                   return (
-                    <div key={i} className="flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black" style={{ height: '80mm' }}>
+                    <div key={i} className="flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black" style={{ height: isPrinting ? '75mm' : '82mm' }}>
                       <div className="w-[60%] flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {m.image ? (
                           <div className="relative" style={{ display: 'inline-block' }}>
@@ -660,9 +659,9 @@ export default function PdfExportPage() {
                         ) : <span className="font-bold text-gray-400">写真未登録</span>}
                       </div>
                       <div className="w-[40%] flex flex-col text-[13px] border border-gray-400 bg-white shrink-0 h-full print:border-black">
-                        <div className="flex min-h-[32px] border-b border-gray-400 shrink-0 print:border-black"><div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">品名</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden break-words whitespace-pre-wrap">{m.name || '　'}</div></div>
-                        <div className="flex min-h-[32px] border-b border-gray-400 shrink-0 print:border-black"><div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">メーカー</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden break-words whitespace-pre-wrap">{m.manufacturer || '　'}</div></div>
-                        <div className="flex min-h-[44px] border-b border-gray-400 shrink-0 print:border-black"><div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-tight print:bg-gray-50 print:border-black">規格・寸法<br />数量</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden text-red-700 leading-snug break-words whitespace-pre-wrap">{m.specification || '　'}</div></div>
+                        <div className="flex min-h-[32px] border-b border-gray-400 shrink-0 print:border-black print:min-h-[25px]"><div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">品名</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden break-words whitespace-pre-wrap">{m.name || '　'}</div></div>
+                        <div className="flex min-h-[32px] border-b border-gray-400 shrink-0 print:border-black print:min-h-[25px]"><div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">メーカー</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden break-words whitespace-pre-wrap">{m.manufacturer || '　'}</div></div>
+                        <div className="flex min-h-[44px] border-b border-gray-400 shrink-0 print:border-black print:min-h-[35px]"><div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-tight print:bg-gray-50 print:border-black">規格・寸法<br />数量</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden text-red-700 leading-snug break-words whitespace-pre-wrap">{m.specification || '　'}</div></div>
                         <div className="flex-1 flex min-h-0"><div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">備考</div><div className="p-2 flex-1 overflow-hidden font-bold flex items-start leading-snug break-words whitespace-pre-wrap">{m.remarks || '　'}</div></div>
                       </div>
                     </div>
