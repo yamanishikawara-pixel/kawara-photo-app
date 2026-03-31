@@ -5,19 +5,13 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import type { Circle, MapRow, MapLine, Photo, Project, Material } from '../types';
+import type { Circle, MapRow, Photo, Project, Material } from '../types';
 import kawaraLogo from '../assets/kawara-logo.png';
 import { A4_HEIGHT_PX, A4_WIDTH_PX, getPreviewScale, proxyUrl } from '../shared/utils';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 
 const JP_FONT = "'BIZ UDPGothic', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', Meiryo, sans-serif";
-
-function safeStyleLine(val: string | number | undefined | null, defaultUnit: string): string {
-  if (val == null || val === '') return `0${defaultUnit}`;
-  if (typeof val === 'number') return `${val}${defaultUnit}`;
-  return String(val);
-}
 
 const LINE_TYPES = [
   { label: '流れ壁', color: '#3b82f6' },
@@ -434,10 +428,6 @@ export default function PdfExportPage() {
                             </div>
                         ))}
                         
-                        {(project.mapLines ?? []).filter(l => l.mapIndex === mapIndex).map((line: MapLine) => (
-                            <div key={`line-${line.id}`} className="absolute" style={{ left: safeStyleLine(line.x, '%'), top: safeStyleLine(line.y, '%'), width: safeStyleLine(line.length, '%'), height: safeStyleLine(line.thickness, 'px'), backgroundColor: line.color || '#000000', transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`, transformOrigin: 'center center', zIndex: 15 }} />
-                          ))}
-
                         {(project.mapDimensionLines ?? []).filter(l => (l.mapIndex || 0) === mapIndex).map((line) => {
                           const color = line.color || "#FFFFFF";
                           const thickness = Number(line.size || 2);
@@ -526,7 +516,6 @@ export default function PdfExportPage() {
                       <div className="w-[60%] h-full flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {p.image ? (
                           <div className="relative w-full h-full overflow-hidden flex items-center justify-center">
-                            {/* ★ 写真ページ：通常は枠目一杯、縦写真(回転)は拡大せずcontain */}
                             <img 
                               src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} 
                               data-original-src={p.image} 
@@ -636,7 +625,6 @@ export default function PdfExportPage() {
                       <div className="w-[60%] h-full flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {m.image ? (
                           <div className="relative w-full h-full overflow-hidden flex items-center justify-center">
-                            {/* ★ 材料ページ：写真ページと全く同じルール（縦写真以外はcover）に統一！ */}
                             <img 
                               src={proxyUrl(m.image, `material_${m.id}_${sessionId}`)} 
                               data-original-src={m.image} 

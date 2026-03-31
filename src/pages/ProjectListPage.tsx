@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2, LogOut, Settings } from 'lucide-react';
-// ★ 修正：orderBy を追加！
-import { collection, addDoc, deleteDoc, doc, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, addDoc, deleteDoc, doc, getDoc, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { ref, listAll, deleteObject } from 'firebase/storage';
 import { signOut } from 'firebase/auth';
 
@@ -36,7 +35,6 @@ export function ProjectListPage() {
           return;
         }
 
-        // ★ 修正：Firestore側で「作成日時が新しい順」にソートさせて取得！
         const q = query(
           collection(db, 'projects'),
           where('userId', '==', user.uid),
@@ -45,12 +43,9 @@ export function ProjectListPage() {
         
         const snap = await getDocs(q);
         const fetchedProjects = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ProjectWithId));
-        
-        // ※ クライアント側での .sort() 処理は不要になったので削除！
         setProjects(fetchedProjects);
       } catch (err: any) {
         console.error(err);
-        // ★ インデックス未作成の場合、ここにFirebaseからの「インデックス作成リンク」付きエラーが出ます
         if (err.code === 'failed-precondition') {
            setError('初回実行のため、インデックスの作成が必要です。コンソールの指示に従ってください。');
         } else {
@@ -63,22 +58,27 @@ export function ProjectListPage() {
     fetch();
   }, []);
 
-  // --- 削除処理・新規追加処理は変更なし ---
   const addProject = async () => {
     setError(null);
     try {
       const user = auth.currentUser;
       if (!user) throw new Error("Not logged in");
+
+      // ★ バグ修正：設定画面で保存した会社名を取得し、新規現場のデフォルトに設定
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      const savedCompanyName = userDoc.exists() ? userDoc.data().companyName : '';
+
       const docRef = await addDoc(collection(db, 'projects'), {
         userId: user.uid,
         projectName: '新規現場',
         projectLocation: '',
         constructionPeriod: '',
-        contractorName: '山西瓦店',
+        contractorName: savedCompanyName || '', // ★ ここでセット
         creationDate: new Date().toLocaleDateString('ja-JP'),
         photos: [
-          { id: Date.now(), image: null, photoNumber: '1', shootingDate: '', locationMap: '', process: '', description: '', circles: [] },
+          { id: Date.now(), image: null, photoNumber: '1', shootingDate: '', locationMap: '', process: '', description: '', circles: [], dimensionLines: [] },
         ],
+        materials: [], // ★ バグ修正：materials配列が欠落していたのを追加
         mapUrls: [],
         mapRows: [{ id: 1, symbol: '', part: '本棟', relatedPhotoNumber: '' }],
         mapPins: [],

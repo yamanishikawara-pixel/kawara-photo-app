@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Camera, RotateCcw, RotateCw } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Camera, RotateCcw, RotateCw, ArrowUp, ArrowDown } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
@@ -17,9 +17,13 @@ export default function MaterialPage() {
   // 現場データの読み込み
   useEffect(() => {
     if (!id) return;
-    getDoc(doc(db, "projects", id)).then(d => {
-      if (d.exists()) setProject(d.data() as Project);
-    });
+    getDoc(doc(db, "projects", id))
+      .then(d => {
+        if (d.exists()) setProject(d.data() as Project);
+      })
+      .catch(() => {
+        alert('材料データの読み込みに失敗しました。');
+      });
   }, [id]);
 
   // Firebaseへの自動保存
@@ -55,6 +59,17 @@ export default function MaterialPage() {
   const removeMaterial = (materialId: number) => {
     if (!window.confirm('この材料データを削除しますか？')) return;
     const newMaterials = (project?.materials || []).filter(m => m.id !== materialId);
+    saveMaterials(newMaterials);
+  };
+
+  // 材料の順序を移動（並べ替え機能）
+  const moveMaterial = (index: number, direction: 'up' | 'down') => {
+    const newMaterials = [...(project?.materials || [])];
+    if (direction === 'up' && index > 0) {
+      [newMaterials[index - 1], newMaterials[index]] = [newMaterials[index], newMaterials[index - 1]];
+    } else if (direction === 'down' && index < newMaterials.length - 1) {
+      [newMaterials[index], newMaterials[index + 1]] = [newMaterials[index + 1], newMaterials[index]];
+    }
     saveMaterials(newMaterials);
   };
 
@@ -99,7 +114,7 @@ export default function MaterialPage() {
           <span className="text-sm font-bold text-gray-500">{materials.length} 件登録済み</span>
         </div>
 
-        {/* ガイダンス（オンオフ機能の説明） */}
+        {/* ガイダンス */}
         <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-6 shadow-sm">
           <p className="text-sm text-blue-800 font-bold leading-relaxed">
             💡 ここに材料（パッケージやラベル）を登録すると、写真台帳の前に「材料報告書」が自動で追加されます。小規模な修理などで不要な場合は、空のままでOKです！
@@ -113,14 +128,36 @@ export default function MaterialPage() {
               <div className="absolute top-4 left-4 bg-gray-800 text-white text-xs font-bold px-3 py-1 rounded-full z-10 shadow">
                 材料 {index + 1}
               </div>
+              
+              {/* 並べ替えボタン */}
+              <div className="absolute top-3 right-14 flex gap-1 z-10">
+                <button 
+                  onClick={() => moveMaterial(index, 'up')} 
+                  disabled={index === 0} 
+                  className="p-2 text-gray-600 bg-gray-100 rounded-full hover:bg-gray-200 disabled:opacity-30 transition-colors shadow-sm"
+                  title="上へ移動"
+                >
+                  <ArrowUp className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => moveMaterial(index, 'down')} 
+                  disabled={index === materials.length - 1} 
+                  className="p-2 text-gray-600 bg-gray-100 rounded-full hover:bg-gray-200 disabled:opacity-30 transition-colors shadow-sm"
+                  title="下へ移動"
+                >
+                  <ArrowDown className="w-4 h-4" />
+                </button>
+              </div>
+
               <button 
                 onClick={() => removeMaterial(material.id)} 
                 className="absolute top-3 right-3 p-2 text-red-500 bg-red-50 rounded-full hover:bg-red-100 z-10 transition-colors shadow-sm"
+                title="削除"
               >
                 <Trash2 className="w-5 h-5" />
               </button>
 
-              <div className="flex flex-col sm:flex-row gap-5 mt-8">
+              <div className="flex flex-col sm:flex-row gap-5 mt-10">
                 {/* 写真エリア */}
                 <div className="w-full sm:w-[40%] flex flex-col gap-2">
                   <div className="aspect-square bg-gray-100 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center relative overflow-hidden group">
@@ -133,7 +170,6 @@ export default function MaterialPage() {
                           style={{ transform: `rotate(${material.rotation || 0}deg)` }}
                           crossOrigin="anonymous"
                         />
-                        {/* ★ 回転ボタンをiPadでも常に表示するように修正！ */}
                         <div className="absolute bottom-2 right-2 flex gap-1 bg-black/60 p-1.5 rounded-lg backdrop-blur-sm shadow-lg z-20">
                           <button onClick={() => rotateImage(material.id, material.rotation || 0, -90)} className="p-1.5 text-white hover:bg-white/30 rounded"><RotateCcw className="w-5 h-5" /></button>
                           <button onClick={() => rotateImage(material.id, material.rotation || 0, 90)} className="p-1.5 text-white hover:bg-white/30 rounded"><RotateCw className="w-5 h-5" /></button>
@@ -153,7 +189,6 @@ export default function MaterialPage() {
                       </label>
                     )}
                   </div>
-                  {/* 画像変更用ボタン */}
                   {material.image && (
                     <label className="text-center w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm rounded-lg cursor-pointer transition-colors shadow-sm">
                       写真を変更
