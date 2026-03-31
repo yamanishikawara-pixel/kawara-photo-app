@@ -380,7 +380,6 @@ export default function PdfExportPage() {
                 {phone && <div className="text-[14px] font-bold text-gray-800">TEL: {phone}</div>}
               </div>
             )}
-            {/* ★ ページ番号のクラス修正 */}
             <div className="absolute bottom-[10mm] print:bottom-[2mm] right-[15mm] print:right-[8mm] text-[16px] font-bold text-black">- 1 / {totalPages} -</div>
           </div>
         </div>
@@ -511,7 +510,6 @@ export default function PdfExportPage() {
                   </div>
                 )}
               </div>
-              {/* ★ ページ番号のクラス修正 */}
               <div className="absolute bottom-[10mm] print:bottom-[2mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapIndex} / {totalPages} -</div>
             </div>
           </div>
@@ -524,8 +522,9 @@ export default function PdfExportPage() {
               <div className="flex-1 w-full h-full flex flex-col justify-between gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black print:gap-2">
                 {chunk.map((p, i) => {
                   const isRotated = (Number(p.rotation) || 0) % 180 !== 0;
-                  const maxImgWidth = isRotated ? (isPrinting ? '70mm' : '78mm') : '100%';
-                  const maxImgHeight = isRotated ? (isPrinting ? '110mm' : '120mm') : (isPrinting ? '70mm' : '78mm');
+                  // ★ 写真の最大サイズを限界まで引き上げ（枠内で見切れない最大サイズ）
+                  const maxImgWidth = isRotated ? (isPrinting ? '73mm' : '80mm') : '100%';
+                  const maxImgHeight = isRotated ? (isPrinting ? '115mm' : '125mm') : (isPrinting ? '73mm' : '80mm');
 
                   return (
                     <div key={i} className="flex-1 flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black">
@@ -620,7 +619,6 @@ export default function PdfExportPage() {
                   );
                 })}
               </div>
-              {/* ★ ページ番号のクラス修正 */}
               <div className="absolute bottom-[10mm] print:bottom-[2mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapCount + pageIndex} / {totalPages} -</div>
             </div>
           </div>
@@ -634,8 +632,9 @@ export default function PdfExportPage() {
               <div className="flex-1 w-full h-full flex flex-col justify-between gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black print:gap-2">
                 {chunk.map((m, i) => {
                   const isRotated = (Number(m.rotation) || 0) % 180 !== 0;
-                  const maxImgWidth = isRotated ? (isPrinting ? '70mm' : '78mm') : '100%';
-                  const maxImgHeight = isRotated ? (isPrinting ? '110mm' : '120mm') : (isPrinting ? '70mm' : '78mm');
+                  // ★ 写真の最大サイズを限界まで引き上げ（枠内で見切れない最大サイズ）
+                  const maxImgWidth = isRotated ? (isPrinting ? '73mm' : '80mm') : '100%';
+                  const maxImgHeight = isRotated ? (isPrinting ? '115mm' : '125mm') : (isPrinting ? '73mm' : '80mm');
 
                   return (
                     <div key={i} className="flex-1 flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black">
@@ -670,7 +669,6 @@ export default function PdfExportPage() {
                   );
                 })}
               </div>
-              {/* ★ ページ番号のクラス修正 */}
               <div className="absolute bottom-[10mm] print:bottom-[2mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapCount + photoPages.length + pageIndex} / {totalPages} -</div>
             </div>
           </div>
