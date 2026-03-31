@@ -287,42 +287,31 @@ export default function PdfExportPage() {
 
           /* ━━━ ページ単位の制御 ━━━ */
           .pdf-page-wrapper { 
-            /* ブロック要素として通常フローに参加させる */
             position: relative !important;
             display: block !important;
             width: 210mm !important; 
-            height: 297mm !important; 
+            height: 296mm !important; /* 297mmから1ミリ削る */
             margin: 0 !important; 
             padding: 0 !important;
             overflow: hidden !important;
             box-shadow: none !important;
-            /* transform解除：標準 → -webkit- の順（Safari 16以前はprefixed版を優先する） */
             transform: none !important; 
             -webkit-transform: none !important;
-            /* ページ分割：CSS3 → CSS2.1 → -webkit- の3段構えフォールバック */
-            break-after: page !important;
-            page-break-after: always !important; 
-            -webkit-page-break-after: always !important;
+            
+            /* ▼ 悪さをしている強制改ページ命令をすべて削除 ▼ */
+            /* break-after, page-break-after 系統は書かない */
+            
             break-inside: avoid !important;
             page-break-inside: avoid !important;
             -webkit-page-break-inside: avoid !important;
           }
-          .pdf-page-wrapper:last-child {
-            break-after: auto !important;
-            page-break-after: auto !important;
-            -webkit-page-break-after: auto !important;
-          }
 
           .pdf-page { 
-            /* absoluteからrelativeへの変更が最も重要な修正。
-               Safari印刷エンジンはabsolute要素をページフロー計算に含めないため、
-               全ページが1ページ目に重なる。relativeにすることで正常にページ送りされる。
-               この挙動はCSS仕様に準拠しており（absoluteはフロー外）、ハックではない。 */
             position: relative !important;
             top: auto !important;
             left: auto !important;
             width: 210mm !important; 
-            height: 297mm !important; 
+            height: 296mm !important; /* 297mmから1ミリ削る */
             padding: 15mm !important; 
             box-sizing: border-box !important;
             overflow: hidden !important;
