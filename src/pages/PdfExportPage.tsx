@@ -289,15 +289,8 @@ export default function PdfExportPage() {
             box-shadow: none !important;
             transform: none !important;
             -webkit-transform: none !important;
-            break-after: page !important;
-            page-break-after: always !important;
             break-inside: avoid !important;
             page-break-inside: avoid !important;
-          }
-
-          .pdf-page-wrapper:last-child {
-            break-after: auto !important;
-            page-break-after: auto !important;
           }
 
           .pdf-page {
