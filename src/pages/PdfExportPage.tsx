@@ -68,7 +68,7 @@ export default function PdfExportPage() {
   const [sessionId] = useState(() => Date.now().toString());
   const [isPrinting, setIsPrinting] = useState(false);
   const [printProgress, setPrintProgress] = useState('');
-  
+
   const [rotateMap, setRotateMap] = useState(false);
 
   useEffect(() => {
@@ -151,7 +151,7 @@ export default function PdfExportPage() {
         const ctx = canvas.getContext('2d');
         if (!ctx) { resolve(img.src); return; }
         
-        // JPEG変換時に透過PNGの透明部分が黒くなるのを防止（背景白塗り）
+        // JPEG変換時に透過PNGの透明部分が黒くなるのを防止
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
@@ -174,7 +174,7 @@ export default function PdfExportPage() {
     if (!project) return;
     setIsPrinting(true);
     setPrintProgress('準備中...');
-    
+
     setTimeout(async () => {
       try {
         const images = Array.from(document.querySelectorAll('.pdf-page img'));
@@ -248,18 +248,17 @@ export default function PdfExportPage() {
   }
 
   const totalPages = 1 + mapCount + photoPages.length + materialPages.length;
-  
+
   const showLegendTable = project.showLegendTable !== false;
-  
+
   return (
     <div className={`min-h-screen font-sans pb-12 overflow-x-hidden w-full relative ${isPrinting ? 'bg-white p-0 block' : 'bg-gray-200 p-4 sm:p-6 flex flex-col items-center'}`}>
-      
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap');
         .pdf-container-wrapper * { font-family: ${JP_FONT} !important; }
         
         @media print {
-          /* ━━━ 基本：CSS標準仕様に準拠したページ設定 ━━━ */
+          /* ━━━ 基本 ━━━ */
           @page { size: A4 portrait; margin: 0; }
           html, body { 
             -webkit-print-color-adjust: exact !important; 
@@ -268,16 +267,11 @@ export default function PdfExportPage() {
             margin: 0 !important; 
             padding: 0 !important;
             width: 100% !important;
-            /* visible にしないとSafari/Chromeが2ページ目以降を切り捨てるケースがある */
             overflow: visible !important;
           }
           .no-print { display: none !important; }
 
-          /* ━━━ レイアウトフロー正常化 ━━━
-             画面表示ではflex+scaleで縮小プレビューを実現しているが、
-             印刷時はこれらを全て解除して通常のブロックフローに戻す。
-             これはハックではなく「印刷用にレイアウトモードを切り替える」正攻法。
-             将来のOS更新で壊れるリスクは極めて低い。 */
+          /* ━━━ コンテナ ━━━ */
           .pdf-container-wrapper {
             display: block !important;
             width: 100% !important;
@@ -285,12 +279,15 @@ export default function PdfExportPage() {
             margin: 0 !important;
           }
 
-          /* ━━━ ページ単位の制御 ━━━ */
+          /* ━━━ ページラッパー ━━━ */
           .pdf-page-wrapper { 
             position: relative !important;
             display: block !important;
             width: 210mm !important; 
-            height: 296mm !important; /* 297mmから1ミリ削る */
+            /* ★ 核心修正①: wrapper は高さ指定しない。子に合わせて自然にサイズ決定。
+               固定 297mm だと iPad Safari の印刷可能領域をわずかに超え、
+               1論理ページが2物理ページに分裂する。 */
+            height: auto !important;
             margin: 0 !important; 
             padding: 0 !important;
             overflow: hidden !important;
@@ -298,12 +295,30 @@ export default function PdfExportPage() {
             transform: none !important; 
             -webkit-transform: none !important;
             
-            /* ▼ 悪さをしている強制改ページ命令をすべて削除 ▼ */
-            /* break-after, page-break-after 系統は書かない */
+            /* ★ 核心修正②: Tailwindの print:break-after-page を明示的に無効化。
+               「書かない」だけではTailwindクラスが勝ってしまう。 */
+            break-after: auto !important;
+            page-break-after: auto !important; 
+            -webkit-page-break-after: auto !important;
+
+            /* ページ前改行方式: 各wrapperの「前」で改ページする。
+               break-after方式だと最後のページの後に空白ページが生まれるが、
+               break-before方式ならその問題が起きない。 */
+            break-before: page !important;
+            page-break-before: always !important;
+            -webkit-page-break-before: always !important;
             
             break-inside: avoid !important;
             page-break-inside: avoid !important;
             -webkit-page-break-inside: avoid !important;
+          }
+          
+          /* ★ 核心修正③: 最初のページだけ break-before を解除。
+             これがないと1ページ目の前に空白ページが挿入される。 */
+          .pdf-container-wrapper > .pdf-page-wrapper:first-child {
+            break-before: auto !important;
+            page-break-before: auto !important;
+            -webkit-page-break-before: auto !important;
           }
 
           .pdf-page { 
@@ -311,7 +326,7 @@ export default function PdfExportPage() {
             top: auto !important;
             left: auto !important;
             width: 210mm !important; 
-            height: 296mm !important; /* 297mmから1ミリ削る */
+            height: 297mm !important; 
             padding: 15mm !important; 
             box-sizing: border-box !important;
             overflow: hidden !important;
@@ -321,17 +336,10 @@ export default function PdfExportPage() {
             -webkit-transform-origin: unset !important;
           }
 
-          /* ━━━ 画像のはみ出し防止 ━━━
-             ページ内の画像がコンテナを超えないようにする標準的な制約。
-             印刷時は画面プレビューと異なるビューポートになるため必要。 */
           .pdf-page img {
             max-width: 100% !important;
           }
 
-          /* ━━━ ルートラッパーのリセット ━━━
-             :has() で pdf-container-wrapper の親を構造的に特定。
-             Tailwindのクラス名に依存しないため、将来のTW更新にも耐える。
-             :has() は Safari 15.4+, Chrome 105+, Firefox 121+ で対応済み。 */
           :has(> .pdf-container-wrapper) {
             min-height: 0 !important;
             padding: 0 !important;
