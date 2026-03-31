@@ -252,7 +252,7 @@ export default function PdfExportPage() {
   const showLegendTable = project.showLegendTable !== false;
   
   return (
-    <div className={`min-h-screen font-sans pb-12 overflow-x-hidden w-full relative ${isPrinting ? 'bg-white p-0 block' : 'bg-gray-200 p-4 sm:p-6 flex flex-col items-center'}`}>
+    <div className={`min-h-screen font-sans overflow-x-hidden w-full relative ${isPrinting ? 'bg-white p-0 block' : 'pb-12 bg-gray-200 p-4 sm:p-6 flex flex-col items-center'}`}>
       
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap');
@@ -282,9 +282,6 @@ export default function PdfExportPage() {
             position: relative !important;
             display: block !important;
             width: 210mm !important; 
-            /* wrapper自体は高さを持たない。子の.pdf-pageが297mmなので
-               wrapperも自然に297mmになり、A4ちょうど1ページに収まる。
-               wrapperに固定高さを指定すると微妙な誤差で2ページに分裂する。 */
             height: auto !important;
             margin: 0 !important; 
             padding: 0 !important;
@@ -292,9 +289,6 @@ export default function PdfExportPage() {
             box-shadow: none !important;
             transform: none !important; 
             -webkit-transform: none !important;
-            /* break系は一切指定しない。
-               297mmブロックが隙間なく並ぶだけで、ブラウザが自動的に
-               1ブロック=1ページとして処理する。 */
           }
 
           .pdf-page { 
