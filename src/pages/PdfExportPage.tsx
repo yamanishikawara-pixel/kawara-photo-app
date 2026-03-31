@@ -259,7 +259,6 @@ export default function PdfExportPage() {
         .pdf-container-wrapper * { font-family: ${JP_FONT} !important; }
         
         @media print {
-          /* ━━━ 基本：CSS標準仕様に準拠したページ設定 ━━━ */
           @page { size: A4 portrait; margin: 0; }
           html, body { 
             -webkit-print-color-adjust: exact !important; 
@@ -268,16 +267,10 @@ export default function PdfExportPage() {
             margin: 0 !important; 
             padding: 0 !important;
             width: 100% !important;
-            /* visible にしないとSafari/Chromeが2ページ目以降を切り捨てるケースがある */
             overflow: visible !important;
           }
           .no-print { display: none !important; }
 
-          /* ━━━ レイアウトフロー正常化 ━━━
-             画面表示ではflex+scaleで縮小プレビューを実現しているが、
-             印刷時はこれらを全て解除して通常のブロックフローに戻す。
-             これはハックではなく「印刷用にレイアウトモードを切り替える」正攻法。
-             将来のOS更新で壊れるリスクは極めて低い。 */
           .pdf-container-wrapper {
             display: block !important;
             width: 100% !important;
@@ -285,25 +278,23 @@ export default function PdfExportPage() {
             margin: 0 !important;
           }
 
-          /* ━━━ ページ単位の制御 ━━━ */
           .pdf-page-wrapper { 
             position: relative !important;
             display: block !important;
             width: 210mm !important; 
-            height: 296mm !important; /* 297mmから1ミリ削る */
+            /* wrapper自体は高さを持たない。子の.pdf-pageが297mmなので
+               wrapperも自然に297mmになり、A4ちょうど1ページに収まる。
+               wrapperに固定高さを指定すると微妙な誤差で2ページに分裂する。 */
+            height: auto !important;
             margin: 0 !important; 
             padding: 0 !important;
             overflow: hidden !important;
             box-shadow: none !important;
             transform: none !important; 
             -webkit-transform: none !important;
-            
-            /* ▼ 悪さをしている強制改ページ命令をすべて削除 ▼ */
-            /* break-after, page-break-after 系統は書かない */
-            
-            break-inside: avoid !important;
-            page-break-inside: avoid !important;
-            -webkit-page-break-inside: avoid !important;
+            /* break系は一切指定しない。
+               297mmブロックが隙間なく並ぶだけで、ブラウザが自動的に
+               1ブロック=1ページとして処理する。 */
           }
 
           .pdf-page { 
@@ -311,7 +302,7 @@ export default function PdfExportPage() {
             top: auto !important;
             left: auto !important;
             width: 210mm !important; 
-            height: 296mm !important; /* 297mmから1ミリ削る */
+            height: 297mm !important; 
             padding: 15mm !important; 
             box-sizing: border-box !important;
             overflow: hidden !important;
@@ -321,17 +312,10 @@ export default function PdfExportPage() {
             -webkit-transform-origin: unset !important;
           }
 
-          /* ━━━ 画像のはみ出し防止 ━━━
-             ページ内の画像がコンテナを超えないようにする標準的な制約。
-             印刷時は画面プレビューと異なるビューポートになるため必要。 */
           .pdf-page img {
             max-width: 100% !important;
           }
 
-          /* ━━━ ルートラッパーのリセット ━━━
-             :has() で pdf-container-wrapper の親を構造的に特定。
-             Tailwindのクラス名に依存しないため、将来のTW更新にも耐える。
-             :has() は Safari 15.4+, Chrome 105+, Firefox 121+ で対応済み。 */
           :has(> .pdf-container-wrapper) {
             min-height: 0 !important;
             padding: 0 !important;
