@@ -135,7 +135,6 @@ export default function PdfExportPage() {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
-        // iPadメモリ対策：長辺を800pxに縮小（40枚処理しても落ちないための工夫）
         const MAX_PRINT_PX = 800; 
         let { width, height } = img;
         if (width > MAX_PRINT_PX || height > MAX_PRINT_PX) {
@@ -179,7 +178,6 @@ export default function PdfExportPage() {
         });
         
         const total = needsConversion.length;
-        // iPadメモリ対策：2枚ずつ細かくバッチ処理する
         const BATCH_SIZE = 2; 
         
         for (let i = 0; i < total; i += BATCH_SIZE) {
@@ -520,23 +518,27 @@ export default function PdfExportPage() {
               <div className="flex-1 w-full h-full flex flex-col justify-between gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black print:gap-2">
                 {chunk.map((p, i) => {
                   const isRotated = (Number(p.rotation) || 0) % 180 !== 0;
+                  const maxImgWidth = isRotated ? (isPrinting ? '70mm' : '78mm') : '100%';
+                  const maxImgHeight = isRotated ? (isPrinting ? '110mm' : '120mm') : '100%';
 
                   return (
                     <div key={i} className="flex-1 flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black">
                       <div className="w-[60%] h-full flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {p.image ? (
                           <div className="relative w-full h-full overflow-hidden flex items-center justify-center">
-                            {/* ★ 写真を我々のアプリの仕様（枠目一杯）に復元！ */}
+                            {/* ★ 写真ページ：通常は枠目一杯、縦写真(回転)は拡大せずcontain */}
                             <img 
                               src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} 
                               data-original-src={p.image} 
                               crossOrigin="anonymous" 
                               style={{ 
                                 display: 'block',
-                                width: '100%',
-                                height: '100%',
-                                objectFit: 'cover',
-                                transform: `rotate(${Number(p.rotation) || 0}deg) scale(${isRotated ? 1.35 : 1})` 
+                                width: isRotated ? 'auto' : '100%',
+                                height: isRotated ? 'auto' : '100%',
+                                maxWidth: maxImgWidth,
+                                maxHeight: maxImgHeight,
+                                objectFit: isRotated ? 'contain' : 'cover',
+                                transform: `rotate(${Number(p.rotation) || 0}deg)` 
                               }}
                               alt="" 
                             />
@@ -626,26 +628,26 @@ export default function PdfExportPage() {
               <div className="flex-1 w-full h-full flex flex-col justify-between gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black print:gap-2">
                 {chunk.map((m, i) => {
                   const isRotated = (Number(m.rotation) || 0) % 180 !== 0;
-                  // 材料ページは安全第一のcontainサイズのまま
                   const maxImgWidth = isRotated ? (isPrinting ? '70mm' : '78mm') : '100%';
-                  const maxImgHeight = isRotated ? (isPrinting ? '110mm' : '120mm') : (isPrinting ? '70mm' : '78mm');
+                  const maxImgHeight = isRotated ? (isPrinting ? '110mm' : '120mm') : '100%';
 
                   return (
                     <div key={i} className="flex-1 flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black">
                       <div className="w-[60%] h-full flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {m.image ? (
-                          <div className="relative" style={{ display: 'inline-block' }}>
+                          <div className="relative w-full h-full overflow-hidden flex items-center justify-center">
+                            {/* ★ 材料ページ：写真ページと全く同じルール（縦写真以外はcover）に統一！ */}
                             <img 
                               src={proxyUrl(m.image, `material_${m.id}_${sessionId}`)} 
                               data-original-src={m.image} 
                               crossOrigin="anonymous" 
                               style={{ 
                                 display: 'block',
-                                maxWidth: maxImgWidth, 
+                                width: isRotated ? 'auto' : '100%',
+                                height: isRotated ? 'auto' : '100%',
+                                maxWidth: maxImgWidth,
                                 maxHeight: maxImgHeight,
-                                width: 'auto',
-                                height: 'auto',
-                                objectFit: 'contain',
+                                objectFit: isRotated ? 'contain' : 'cover',
                                 transform: `rotate(${Number(m.rotation) || 0}deg)` 
                               }}
                               alt="" 
