@@ -135,7 +135,8 @@ export default function PdfExportPage() {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
-        const MAX_PRINT_PX = 1200; 
+        // iPadメモリ対策：長辺を800pxに縮小（40枚処理しても落ちないための工夫）
+        const MAX_PRINT_PX = 800; 
         let { width, height } = img;
         if (width > MAX_PRINT_PX || height > MAX_PRINT_PX) {
           const ratio = Math.min(MAX_PRINT_PX / width, MAX_PRINT_PX / height);
@@ -178,7 +179,8 @@ export default function PdfExportPage() {
         });
         
         const total = needsConversion.length;
-        const BATCH_SIZE = 3; 
+        // iPadメモリ対策：2枚ずつ細かくバッチ処理する
+        const BATCH_SIZE = 2; 
         
         for (let i = 0; i < total; i += BATCH_SIZE) {
           const batch = needsConversion.slice(i, i + BATCH_SIZE);
@@ -313,10 +315,6 @@ export default function PdfExportPage() {
             -webkit-transform: none !important;
             transform-origin: unset !important;
             -webkit-transform-origin: unset !important;
-          }
-
-          .pdf-page img {
-            max-width: 100% !important;
           }
 
           :has(> .pdf-container-wrapper) {
@@ -522,27 +520,23 @@ export default function PdfExportPage() {
               <div className="flex-1 w-full h-full flex flex-col justify-between gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black print:gap-2">
                 {chunk.map((p, i) => {
                   const isRotated = (Number(p.rotation) || 0) % 180 !== 0;
-                  // ★ 写真の最大サイズを限界まで引き上げ（枠内で見切れない最大サイズ）
-                  const maxImgWidth = isRotated ? (isPrinting ? '73mm' : '80mm') : '100%';
-                  const maxImgHeight = isRotated ? (isPrinting ? '115mm' : '125mm') : (isPrinting ? '73mm' : '80mm');
 
                   return (
                     <div key={i} className="flex-1 flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black">
                       <div className="w-[60%] h-full flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {p.image ? (
-                          <div className="relative" style={{ display: 'inline-block' }}>
+                          <div className="relative w-full h-full overflow-hidden flex items-center justify-center">
+                            {/* ★ 写真を我々のアプリの仕様（枠目一杯）に復元！ */}
                             <img 
                               src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} 
                               data-original-src={p.image} 
                               crossOrigin="anonymous" 
                               style={{ 
                                 display: 'block',
-                                maxWidth: maxImgWidth, 
-                                maxHeight: maxImgHeight,
-                                width: 'auto',
-                                height: 'auto',
-                                objectFit: 'contain',
-                                transform: `rotate(${Number(p.rotation) || 0}deg)` 
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                transform: `rotate(${Number(p.rotation) || 0}deg) scale(${isRotated ? 1.35 : 1})` 
                               }}
                               alt="" 
                             />
@@ -632,9 +626,9 @@ export default function PdfExportPage() {
               <div className="flex-1 w-full h-full flex flex-col justify-between gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black print:gap-2">
                 {chunk.map((m, i) => {
                   const isRotated = (Number(m.rotation) || 0) % 180 !== 0;
-                  // ★ 写真の最大サイズを限界まで引き上げ（枠内で見切れない最大サイズ）
-                  const maxImgWidth = isRotated ? (isPrinting ? '73mm' : '80mm') : '100%';
-                  const maxImgHeight = isRotated ? (isPrinting ? '115mm' : '125mm') : (isPrinting ? '73mm' : '80mm');
+                  // 材料ページは安全第一のcontainサイズのまま
+                  const maxImgWidth = isRotated ? (isPrinting ? '70mm' : '78mm') : '100%';
+                  const maxImgHeight = isRotated ? (isPrinting ? '110mm' : '120mm') : (isPrinting ? '70mm' : '78mm');
 
                   return (
                     <div key={i} className="flex-1 flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black">
