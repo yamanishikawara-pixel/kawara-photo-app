@@ -526,7 +526,6 @@ export default function PdfExportPage() {
                       <div className="w-[60%] h-full flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {p.image ? (
                           <div className="relative w-full h-full overflow-hidden flex items-center justify-center">
-                            {/* ★ 写真を我々のアプリの仕様（枠目一杯）に復元！ */}
                             <img 
                               src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)} 
                               data-original-src={p.image} 
@@ -626,27 +625,23 @@ export default function PdfExportPage() {
               <div className="flex-1 w-full h-full flex flex-col justify-between gap-2 p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black print:gap-2">
                 {chunk.map((m, i) => {
                   const isRotated = (Number(m.rotation) || 0) % 180 !== 0;
-                  // 材料ページは安全第一のcontainサイズのまま
-                  const maxImgWidth = isRotated ? (isPrinting ? '70mm' : '78mm') : '100%';
-                  const maxImgHeight = isRotated ? (isPrinting ? '110mm' : '120mm') : (isPrinting ? '70mm' : '78mm');
 
                   return (
                     <div key={i} className="flex-1 flex gap-2 p-1.5 rounded border border-gray-500 bg-white min-h-0 shrink-0 print:border-black">
                       <div className="w-[60%] h-full flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {m.image ? (
-                          <div className="relative" style={{ display: 'inline-block' }}>
+                          <div className="relative w-full h-full overflow-hidden flex items-center justify-center">
+                            {/* ★ 材料ページも写真ページと全く同じ「枠目一杯＆回転ズーム」に統一！ */}
                             <img 
                               src={proxyUrl(m.image, `material_${m.id}_${sessionId}`)} 
                               data-original-src={m.image} 
                               crossOrigin="anonymous" 
                               style={{ 
                                 display: 'block',
-                                maxWidth: maxImgWidth, 
-                                maxHeight: maxImgHeight,
-                                width: 'auto',
-                                height: 'auto',
-                                objectFit: 'contain',
-                                transform: `rotate(${Number(m.rotation) || 0}deg)` 
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                transform: `rotate(${Number(m.rotation) || 0}deg) scale(${isRotated ? 1.35 : 1})` 
                               }}
                               alt="" 
                             />
