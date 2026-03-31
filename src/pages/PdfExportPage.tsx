@@ -278,36 +278,56 @@ export default function PdfExportPage() {
             margin: 0 !important;
           }
 
-          .pdf-page-wrapper {
+          /* ━━━ ページラッパー ━━━ */
+          .pdf-page-wrapper { 
             position: relative !important;
             display: block !important;
-            width: 210mm !important;
-            height: 297mm !important;
-            margin: 0 !important;
+            /* iPadの物理余白を避けるため幅も2mm削る */
+            width: 208mm !important; 
+            height: auto !important;
+            /* 削った分を中央寄せ */
+            margin: 0 auto !important; 
             padding: 0 !important;
             overflow: hidden !important;
             box-shadow: none !important;
-            transform: none !important;
+            transform: none !important; 
             -webkit-transform: none !important;
+            
+            break-after: auto !important;
+            page-break-after: auto !important; 
+            -webkit-page-break-after: auto !important;
+
+            break-before: page !important;
+            page-break-before: always !important;
+            -webkit-page-break-before: always !important;
+            
             break-inside: avoid !important;
             page-break-inside: avoid !important;
+            -webkit-page-break-inside: avoid !important;
+          }
+          
+          .pdf-container-wrapper > .pdf-page-wrapper:first-child {
+            break-before: auto !important;
+            page-break-before: auto !important;
+            -webkit-page-break-before: auto !important;
           }
 
-          .pdf-page {
+          .pdf-page { 
             position: relative !important;
             top: auto !important;
             left: auto !important;
-            width: 210mm !important;
-            height: 297mm !important;
-            padding: 15mm !important;
+            /* ★ 核心修正④: 高さ・幅を数ミリ削り、絶対にはみ出させない */
+            width: 208mm !important; 
+            height: 294mm !important; 
+            /* 箱が小さくなった分、中のコンテンツが詰まらないようPaddingも1mm削る */
+            padding: 14mm !important; 
             box-sizing: border-box !important;
             overflow: hidden !important;
-            transform: none !important;
+            transform: none !important; 
             -webkit-transform: none !important;
             transform-origin: unset !important;
             -webkit-transform-origin: unset !important;
           }
-
           .pdf-page img {
             max-width: 100% !important;
           }
