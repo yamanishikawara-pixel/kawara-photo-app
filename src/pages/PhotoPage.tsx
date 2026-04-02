@@ -50,7 +50,6 @@ const compressPhotoWithQuality = async (file: File) => {
   }
 };
 
-// ★ バグ修正：React.memo で包んで再描画パフォーマンスを改善！
 const DimensionLineMarker = React.memo(function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChange, onUpdate }: { line: DimensionLine; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; onUpdate: (props: Partial<DimensionLine>) => void; }) {
   const inputRef = useRef<HTMLInputElement>(null);
   
@@ -138,18 +137,18 @@ const DimensionLineMarker = React.memo(function DimensionLineMarker({ line, isSe
       </svg>
       
       {isSelected && !isDragging && (
-        <div style={{ left: `${safePopupX}%`, top: `${safePopupY}%` }} className="absolute z-30 translate-x-[-50%] translate-y-[-50%] flex flex-col items-center gap-4 bg-white p-6 rounded-2xl shadow-3xl border-2 border-gray-100 min-w-[280px]" onClick={e => e.stopPropagation()}>
+        <div style={{ left: `${safePopupX}%`, top: `${safePopupY}%` }} className="absolute z-30 translate-x-[-50%] translate-y-[-50%] flex flex-col items-center gap-4 bg-white p-4 sm:p-6 rounded-2xl shadow-3xl border-2 border-gray-100 min-w-[280px] w-[90%] max-w-[320px] sm:w-auto" onClick={e => e.stopPropagation()}>
           <div className="flex w-full gap-3 items-center justify-between border-b-2 border-gray-100 pb-3">
-             <h4 className="text-xl font-black text-gray-900 flex items-center gap-2"><CaseUpper className="w-6 h-6 text-blue-500"/> 部位と寸法を入力</h4>
-             <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-3 text-red-500 bg-red-50 rounded-xl hover:bg-red-100"><Trash2 className="w-6 h-6" /></button>
+             <h4 className="text-lg sm:text-xl font-black text-gray-900 flex items-center gap-2"><CaseUpper className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500"/> 部位と寸法を入力</h4>
+             <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-2 sm:p-3 text-red-500 bg-red-50 rounded-xl hover:bg-red-100"><Trash2 className="w-5 h-5 sm:w-6 sm:h-6" /></button>
           </div>
 
-          <div className="flex flex-wrap gap-2.5 w-full">
+          <div className="flex flex-wrap gap-2 sm:gap-2.5 w-full">
             {DEFAULT_ROOF_PART_NAMES.map(name => (
               <button 
                 key={name}
                 onClick={() => addPartName(name)}
-                className="text-base font-black text-blue-700 bg-blue-50 border-2 border-blue-100 px-5 py-3 rounded-2xl hover:bg-blue-100 hover:border-blue-200 active:scale-95 shadow-sm transition-all"
+                className="text-sm sm:text-base font-black text-blue-700 bg-blue-50 border-2 border-blue-100 px-3 py-2 sm:px-5 sm:py-3 rounded-xl sm:rounded-2xl hover:bg-blue-100 active:scale-95 shadow-sm transition-all"
               >
                 ＋{name}
               </button>
@@ -162,11 +161,10 @@ const DimensionLineMarker = React.memo(function DimensionLineMarker({ line, isSe
               type="text"
               value={line.text}
               onChange={(e) => onTextChange(e.target.value)}
-              className="w-full bg-gray-50 border-2 border-gray-100 p-4 text-xl font-bold rounded-xl outline-none focus:border-blue-400 focus:bg-white text-center shadow-inner"
-              placeholder="部位 〇〇m (例: 棟 5.5m)"
+              className="w-full bg-gray-50 border-2 border-gray-100 p-3 sm:p-4 text-lg sm:text-xl font-bold rounded-xl outline-none focus:border-blue-400 focus:bg-white text-center shadow-inner"
+              placeholder="部位 〇〇m"
             />
           </div>
-          <p className="text-xs text-blue-500 font-bold tracking-wider -mt-1">端の青い丸をドラッグで位置調整</p>
         </div>
       )}
 
@@ -202,7 +200,7 @@ const DimensionLineMarker = React.memo(function DimensionLineMarker({ line, isSe
             backgroundColor: 'rgba(0, 0, 0, 0.4)', 
             backdropFilter: 'blur(2px)'
           }}
-          className="absolute z-20 translate-x-[-50%] translate-y-[-50%] font-bold text-xl px-2.5 py-1 rounded pointer-events-none whitespace-nowrap border border-white/10 shadow-sm"
+          className="absolute z-20 translate-x-[-50%] translate-y-[-50%] font-bold text-sm sm:text-xl px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded pointer-events-none whitespace-nowrap border border-white/10 shadow-sm"
         >
           {line.text}
         </div>
@@ -236,9 +234,9 @@ function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChan
       
       {isSelected && !dragging && (
         <div onClick={(e) => e.stopPropagation()} style={{ left: `${position.x}%`, top: `${position.y + size/2 + 8}%`, transform: 'translateX(-50%)' }} className="absolute z-[1000] flex bg-white rounded-xl shadow-2xl border-2 border-gray-200 overflow-hidden">
-          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.min(80, Math.round(size + 5)))}} className="px-5 py-3 text-2xl font-bold hover:bg-gray-100 text-gray-700 border-r active:bg-gray-200">＋</button>
-          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.max(5, Math.round(size - 5)))}} className="px-5 py-3 text-2xl font-bold hover:bg-gray-100 text-gray-700 border-r active:bg-gray-200">－</button>
-          <button onClick={(e) => {e.stopPropagation(); onRemove()}} className="px-5 py-3 text-red-500 hover:bg-red-50 active:bg-red-100"><Trash2 className="w-6 h-6"/></button>
+          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.min(80, Math.round(size + 5)))}} className="px-4 py-2 sm:px-5 sm:py-3 text-xl sm:text-2xl font-bold hover:bg-gray-100 text-gray-700 border-r active:bg-gray-200">＋</button>
+          <button onClick={(e) => {e.stopPropagation(); onSizeChange(Math.max(5, Math.round(size - 5)))}} className="px-4 py-2 sm:px-5 sm:py-3 text-xl sm:text-2xl font-bold hover:bg-gray-100 text-gray-700 border-r active:bg-gray-200">－</button>
+          <button onClick={(e) => {e.stopPropagation(); onRemove()}} className="px-4 py-2 sm:px-5 sm:py-3 text-red-500 hover:bg-red-50 active:bg-red-100"><Trash2 className="w-5 h-5 sm:w-6 sm:h-6"/></button>
         </div>
       )}
     </>
@@ -248,21 +246,21 @@ function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChan
 function PinSelectModal({ isOpen, onClose, pins, onSelect }: { isOpen: boolean; onClose: () => void; pins: MapPinT[] | undefined; onSelect: (label: string) => void; }) {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-black/60 z-[2000] flex items-center justify-center p-6 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white rounded-[2rem] w-full max-w-sm p-8 shadow-2xl space-y-6" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 z-[2000] flex items-center justify-center p-4 sm:p-6 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-[2rem] w-full max-w-sm p-6 sm:p-8 shadow-2xl space-y-6" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center pb-2 border-b">
-          <h3 className="text-xl font-black text-gray-900 flex items-center gap-3"><MapPin className="text-red-500 w-7 h-7"/> 位置図の場所を選択</h3>
-          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"><X className="w-6 h-6"/></button>
+          <h3 className="text-lg sm:text-xl font-black text-gray-900 flex items-center gap-2 sm:gap-3"><MapPin className="text-red-500 w-6 h-6 sm:w-7 sm:h-7"/> 位置図の場所を選択</h3>
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"><X className="w-5 h-5 sm:w-6 sm:h-6"/></button>
         </div>
         {pins && pins.length > 0 ? (
-          <div className="grid grid-cols-3 gap-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+          <div className="grid grid-cols-3 gap-3 sm:gap-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
             {pins.map((pin) => (
-              <button key={pin.id} onClick={() => { onSelect(pin.label); onClose(); }} className="bg-gray-50 text-gray-800 border-2 border-gray-200 font-black py-4 text-center rounded-2xl text-xl shadow-sm hover:border-red-400 hover:bg-red-50 active:scale-95">{pin.label}</button>
+              <button key={pin.id} onClick={() => { onSelect(pin.label); onClose(); }} className="bg-gray-50 text-gray-800 border-2 border-gray-200 font-black py-3 sm:py-4 text-center rounded-xl sm:rounded-2xl text-lg sm:text-xl shadow-sm hover:border-red-400 hover:bg-red-50 active:scale-95">{pin.label}</button>
             ))}
-            <button onClick={() => { onSelect(""); onClose(); }} className="col-span-3 bg-gray-100 text-gray-500 font-bold py-4 rounded-2xl mt-2 hover:bg-gray-200 transition-colors">選択を解除</button>
+            <button onClick={() => { onSelect(""); onClose(); }} className="col-span-3 bg-gray-100 text-gray-500 font-bold py-3 sm:py-4 rounded-xl sm:rounded-2xl mt-2 hover:bg-gray-200 transition-colors">選択を解除</button>
           </div>
         ) : (
-          <div className="text-center py-12 px-4 bg-gray-50 rounded-3xl border-4 border-dashed border-gray-200"><p className="text-gray-400 font-bold text-lg leading-relaxed">先に位置図画面で<br/><span className="text-red-400">マーカー（符号）</span>を<br/>打ってください</p></div>
+          <div className="text-center py-12 px-4 bg-gray-50 rounded-3xl border-4 border-dashed border-gray-200"><p className="text-gray-400 font-bold text-base sm:text-lg leading-relaxed">先に位置図画面で<br/><span className="text-red-400">マーカー（符号）</span>を<br/>打ってください</p></div>
         )}
       </div>
     </div>
@@ -307,13 +305,11 @@ export default function PhotoPage() {
   const [processOptions, setProcessOptions] = useState<string[]>(DEFAULT_PROCESS_OPTIONS);
   const [descTemplates, setDescTemplates] = useState<{label: string, text: string}[]>(DEFAULT_DESC_TEMPLATES);
 
-  // ★ 新機能：一括操作用の状態管理
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<number[]>([]);
   const [batchDate, setBatchDate] = useState("");
 
   useEffect(() => {
-    // ★ バグ修正：URLパラメータがない場合は即座にリターン（クラッシュ防止）
     if (!id) return;
     getDoc(doc(db, "projects", id)).then(d => d.exists() && setProject(d.data() as Project));
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -346,7 +342,6 @@ export default function PhotoPage() {
     }
   };
 
-  // ★ 新機能：写真の一括削除
   const toggleSelectPhoto = (photoId: number) => {
     setSelectedPhotoIds(prev => prev.includes(photoId) ? prev.filter(pId => pId !== photoId) : [...prev, photoId]);
   };
@@ -363,7 +358,6 @@ export default function PhotoPage() {
     }
   };
 
-  // ★ 新機能：撮影日の一括セット
   const applyBatchDate = async () => {
     if (!project || !id || !batchDate) return;
     if (window.confirm(`すべての写真の撮影日を ${batchDate.replace(/-/g, '/')} に統一しますか？`)) {
@@ -378,20 +372,18 @@ export default function PhotoPage() {
 
   const addPhotoSlot = async () => {
     if (!project || !id) return;
-    // ★ バグ修正：dimensionLines: [] を新規追加時にも確実に含める
     const newPhotos: Photo[] = [...project.photos, { id: Date.now(), image: null, photoNumber: String(project.photos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], dimensionLines: [], rotation: 0 }];
     setProject({ ...project, photos: newPhotos });
     await updateDoc(doc(db, "projects", id), { photos: newPhotos });
   };
 
-  // ★ 新機能：同じ枠（文字・工程・ピン）を複製
   const duplicatePhotoSlot = async (index: number) => {
     if (!project || !id) return;
     const source = project.photos[index];
     const newPhoto: Photo = {
       id: Date.now(),
-      image: null, // 画像と赤丸は空にする
-      photoNumber: '', // 後で再採番
+      image: null, 
+      photoNumber: '', 
       shootingDate: source.shootingDate,
       locationMap: source.locationMap,
       process: source.process,
@@ -401,7 +393,6 @@ export default function PhotoPage() {
       rotation: 0
     };
     const newPhotos = [...project.photos];
-    // コピー元のすぐ後ろに挿入
     newPhotos.splice(index + 1, 0, newPhoto);
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
     setProject({ ...project, photos: renumbered });
@@ -541,176 +532,199 @@ export default function PhotoPage() {
   if (!project) return <div className="p-10 text-center font-bold text-gray-500">読み込み中...</div>;
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] p-6 font-sans pb-40 select-none overflow-x-hidden" onClick={() => { setSelectedCircleId(null); setSelectedDimensionLineId(null); }}>
-      <div className="max-w-2xl mx-auto pb-12">
-        <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-3 text-blue-600 mb-8 font-black text-xl px-4 py-2 hover:bg-blue-50 rounded-2xl transition-all active:scale-95"><ArrowLeft strokeWidth={4} /> 戻る</button>
-        <h1 className="text-4xl font-black mb-10 text-gray-900 tracking-tighter">工事写真の登録と赤丸・寸法記入</h1>
+    <div className="min-h-screen bg-[#f8fafc] p-4 sm:p-6 font-sans pb-40 select-none overflow-x-hidden" onClick={() => { setSelectedCircleId(null); setSelectedDimensionLineId(null); }}>
+      
+      {/* ★ 全体の幅を max-w-7xl に拡張（iPad/Macで広々使えるように） */}
+      <div className="max-w-7xl mx-auto pb-12">
+        
+        {/* 上部コントロールエリア（ここは広がりすぎないように max-w-3xl に制限） */}
+        <div className="max-w-3xl mx-auto">
+          <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-3 text-blue-600 mb-6 sm:mb-8 font-black text-lg sm:text-xl px-2 sm:px-4 py-2 hover:bg-blue-50 rounded-2xl transition-all active:scale-95"><ArrowLeft strokeWidth={4} /> 戻る</button>
+          <h1 className="text-2xl sm:text-4xl font-black mb-8 sm:mb-10 text-gray-900 tracking-tighter">工事写真の登録と赤丸・寸法記入</h1>
 
-        <div className="bg-white p-6 rounded-[2.5rem] border-2 border-gray-100 shadow-sm mb-6 flex flex-col gap-6">
-          <label className="flex items-center justify-center gap-4 w-full bg-blue-600 text-white font-black py-6 text-2xl rounded-3xl cursor-pointer shadow-[0_15px_40px_rgba(37,99,235,0.4)] hover:bg-blue-700 transition-all active:scale-95">
-            <UploadCloud className="w-8 h-8" />
-            {bulkUploading ? `アップロード中... (${bulkProgress}枚)` : "複数写真を一括追加する"}
-            <input type="file" multiple accept="image/*" className="hidden" onChange={handleBulkUpload} disabled={bulkUploading} />
-          </label>
+          <div className="bg-white p-4 sm:p-6 rounded-[2rem] sm:rounded-[2.5rem] border-2 border-gray-100 shadow-sm mb-6 flex flex-col gap-4 sm:gap-6">
+            <label className="flex items-center justify-center gap-3 sm:gap-4 w-full bg-blue-600 text-white font-black py-4 sm:py-6 text-lg sm:text-2xl rounded-2xl sm:rounded-3xl cursor-pointer shadow-[0_15px_40px_rgba(37,99,235,0.4)] hover:bg-blue-700 transition-all active:scale-95">
+              <UploadCloud className="w-6 h-6 sm:w-8 sm:h-8" />
+              {bulkUploading ? `アップロード中... (${bulkProgress}枚)` : "複数写真を一括追加する"}
+              <input type="file" multiple accept="image/*" className="hidden" onChange={handleBulkUpload} disabled={bulkUploading} />
+            </label>
 
-          <div className="grid grid-cols-2 gap-4 border-2 border-gray-100 rounded-3xl p-3 bg-gray-50">
-            <button onClick={() => { setEditingMode('circle'); setDrawingStartPoint(null); }} className={`flex items-center gap-3 justify-center py-5 rounded-2xl font-black text-xl transition-all ${editingMode === 'circle' ? 'bg-red-500 text-white shadow-lg' : 'text-gray-600 hover:bg-gray-100'}`}>
-              <Edit2 className="w-7 h-7" /> 赤丸を追加
-            </button>
-            <button onClick={() => setEditingMode('dimension')} className={`flex items-center gap-3 justify-center py-5 rounded-2xl font-black text-xl transition-all ${editingMode === 'dimension' ? 'bg-gray-900 text-white shadow-lg' : 'text-gray-600 hover:bg-gray-100'}`}>
-              <Ruler className="w-7 h-7" /> 寸法記入
-            </button>
-          </div>
-          {editingMode === 'dimension' && (
-            <div className="flex items-center gap-3 p-4 bg-gray-100 rounded-2xl border border-gray-200">
-               <Paintbrush className="w-6 h-6 text-gray-500"/>
-               <span className="font-bold text-gray-600 mr-2">寸法線の色：</span>
-              {COLOR_PALETTE.map(color => (
-                <button
-                  key={color.name}
-                  onClick={() => setActiveColor(color.value)}
-                  className={`w-10 h-10 rounded-full border-4 transition-all ${activeColor === color.value ? 'border-gray-900 scale-110 shadow-lg' : 'border-white hover:scale-105'}`}
-                  style={{ backgroundColor: color.value }}
-                />
-              ))}
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 border-2 border-gray-100 rounded-2xl sm:rounded-3xl p-2 sm:p-3 bg-gray-50">
+              <button onClick={() => { setEditingMode('circle'); setDrawingStartPoint(null); }} className={`flex items-center gap-2 sm:gap-3 justify-center py-3 sm:py-5 rounded-xl sm:rounded-2xl font-black text-sm sm:text-xl transition-all ${editingMode === 'circle' ? 'bg-red-500 text-white shadow-lg' : 'text-gray-600 hover:bg-gray-100'}`}>
+                <Edit2 className="w-5 h-5 sm:w-7 sm:h-7" /> 赤丸を追加
+              </button>
+              <button onClick={() => setEditingMode('dimension')} className={`flex items-center gap-2 sm:gap-3 justify-center py-3 sm:py-5 rounded-xl sm:rounded-2xl font-black text-sm sm:text-xl transition-all ${editingMode === 'dimension' ? 'bg-gray-900 text-white shadow-lg' : 'text-gray-600 hover:bg-gray-100'}`}>
+                <Ruler className="w-5 h-5 sm:w-7 sm:h-7" /> 寸法記入
+              </button>
             </div>
-          )}
-        </div>
-
-        {/* ★ 新機能：一括操作メニューバー */}
-        <div className="flex flex-col sm:flex-row gap-4 bg-white p-5 rounded-[2rem] border-2 border-gray-100 shadow-sm mb-12">
-          {/* 撮影日の一括設定 */}
-          <div className="flex items-center gap-3 flex-1">
-            <Calendar className="w-6 h-6 text-blue-500 shrink-0"/>
-            <input 
-              type="date" 
-              value={batchDate} 
-              onChange={e => setBatchDate(e.target.value)} 
-              className="p-3 border-2 border-gray-200 rounded-xl font-bold text-gray-700 flex-1 outline-none focus:border-blue-400" 
-            />
-            <button onClick={applyBatchDate} disabled={!batchDate} className="bg-blue-100 text-blue-700 font-bold px-5 py-3 rounded-xl disabled:opacity-50 hover:bg-blue-200 active:scale-95 shrink-0">全写真に適用</button>
+            {editingMode === 'dimension' && (
+              <div className="flex items-center gap-3 p-3 sm:p-4 bg-gray-100 rounded-xl sm:rounded-2xl border border-gray-200">
+                 <Paintbrush className="w-5 h-5 sm:w-6 sm:h-6 text-gray-500"/>
+                 <span className="font-bold text-sm sm:text-base text-gray-600 mr-1 sm:mr-2">寸法線の色：</span>
+                {COLOR_PALETTE.map(color => (
+                  <button
+                    key={color.name}
+                    onClick={() => setActiveColor(color.value)}
+                    className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full border-4 transition-all ${activeColor === color.value ? 'border-gray-900 scale-110 shadow-lg' : 'border-white hover:scale-105'}`}
+                    style={{ backgroundColor: color.value }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-          
-          {/* 一括削除モード切替 */}
-          <div className="flex items-center justify-end sm:border-l-2 sm:border-gray-100 sm:pl-4">
-             {isSelectMode ? (
-               <div className="flex items-center gap-2">
-                 <button onClick={() => {setIsSelectMode(false); setSelectedPhotoIds([]);}} className="bg-gray-100 text-gray-700 font-bold px-4 py-3 rounded-xl hover:bg-gray-200">取消</button>
-                 <button onClick={deleteSelectedPhotos} disabled={selectedPhotoIds.length === 0} className="bg-red-500 text-white font-bold px-5 py-3 rounded-xl disabled:opacity-50 shadow-md flex items-center gap-2 active:scale-95">
-                   <Trash2 className="w-5 h-5"/> {selectedPhotoIds.length}件削除
+
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 bg-white p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border-2 border-gray-100 shadow-sm mb-12">
+            <div className="flex items-center gap-2 sm:gap-3 flex-1">
+              <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500 shrink-0"/>
+              <input 
+                type="date" 
+                value={batchDate} 
+                onChange={e => setBatchDate(e.target.value)} 
+                className="p-2 sm:p-3 border-2 border-gray-200 rounded-lg sm:rounded-xl font-bold text-sm sm:text-base text-gray-700 flex-1 outline-none focus:border-blue-400" 
+              />
+              <button onClick={applyBatchDate} disabled={!batchDate} className="bg-blue-100 text-blue-700 font-bold px-3 py-2 sm:px-5 sm:py-3 rounded-lg sm:rounded-xl text-sm sm:text-base disabled:opacity-50 hover:bg-blue-200 active:scale-95 shrink-0">全写真に適用</button>
+            </div>
+            
+            <div className="flex items-center justify-end sm:border-l-2 sm:border-gray-100 sm:pl-4 mt-2 sm:mt-0 pt-2 sm:pt-0 border-t-2 border-gray-100 sm:border-t-0">
+               {isSelectMode ? (
+                 <div className="flex items-center gap-2">
+                   <button onClick={() => {setIsSelectMode(false); setSelectedPhotoIds([]);}} className="bg-gray-100 text-gray-700 font-bold px-3 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl text-sm sm:text-base hover:bg-gray-200">取消</button>
+                   <button onClick={deleteSelectedPhotos} disabled={selectedPhotoIds.length === 0} className="bg-red-500 text-white font-bold px-3 py-2 sm:px-5 sm:py-3 rounded-lg sm:rounded-xl text-sm sm:text-base disabled:opacity-50 shadow-md flex items-center gap-1 sm:gap-2 active:scale-95">
+                     <Trash2 className="w-4 h-4 sm:w-5 sm:h-5"/> {selectedPhotoIds.length}件削除
+                   </button>
+                 </div>
+               ) : (
+                 <button onClick={() => setIsSelectMode(true)} className="bg-gray-50 text-gray-700 font-bold px-3 py-2 sm:px-5 sm:py-3 rounded-lg sm:rounded-xl text-sm sm:text-base border-2 border-gray-200 flex items-center gap-1 sm:gap-2 hover:bg-gray-100 transition-colors">
+                   <CheckSquare className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500"/> 複数選択して削除
                  </button>
-               </div>
-             ) : (
-               <button onClick={() => setIsSelectMode(true)} className="bg-gray-50 text-gray-700 font-bold px-5 py-3 rounded-xl border-2 border-gray-200 flex items-center gap-2 hover:bg-gray-100 transition-colors">
-                 <CheckSquare className="w-5 h-5 text-gray-500"/> 複数選択して削除
-               </button>
-             )}
+               )}
+            </div>
           </div>
         </div>
 
-        <div className="space-y-16 mt-4">
+        {/* 写真カードのリスト（ここから下が2カラムレイアウトに対応） */}
+        <div className="space-y-12 sm:space-y-16 mt-4">
           {project.photos.map((photo, index: number) => {
             const isRotated90 = Number(photo.rotation || 0) % 180 !== 0;
-            const containerClassName = `w-full ${photo.image && isRotated90 ? 'min-h-[70vh]' : 'min-h-[22rem]'} mt-12 bg-[#f1f5f9] rounded-[2.5rem] flex items-center justify-center overflow-hidden border-4 border-dashed border-gray-200 relative mb-10 group transition-all hover:border-blue-400`;
+            // 縦写真の時はコンテナを少し高くする
+            const containerClassName = `w-full ${photo.image && isRotated90 ? 'min-h-[50vh] sm:min-h-[60vh]' : 'min-h-[16rem] sm:min-h-[22rem]'} bg-[#f1f5f9] rounded-[1.5rem] sm:rounded-[2.5rem] flex items-center justify-center overflow-hidden border-4 border-dashed border-gray-200 relative group transition-all hover:border-blue-400`;
 
             return (
-              <div key={photo.id} className="bg-white p-8 rounded-[3rem] border-2 border-gray-100 shadow-2xl relative animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* ★ 新機能：一括削除モード時のチェックボックス */}
+              <div key={photo.id} className="bg-white p-4 sm:p-8 rounded-[2rem] sm:rounded-[3rem] border-2 border-gray-100 shadow-xl relative animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {/* 一括削除モード時のチェックボックス */}
                 {isSelectMode && (
                   <div 
                     onClick={() => toggleSelectPhoto(photo.id)} 
-                    className={`absolute inset-0 z-50 rounded-[3rem] border-8 cursor-pointer transition-all flex items-center justify-center bg-black/5 ${selectedPhotoIds.includes(photo.id) ? 'border-red-500 bg-red-500/10' : 'border-transparent hover:bg-black/10'}`}
+                    className={`absolute inset-0 z-50 rounded-[2rem] sm:rounded-[3rem] border-4 sm:border-8 cursor-pointer transition-all flex items-center justify-center bg-black/5 ${selectedPhotoIds.includes(photo.id) ? 'border-red-500 bg-red-500/10' : 'border-transparent hover:bg-black/10'}`}
                   >
-                    <div className={`w-16 h-16 rounded-full border-4 flex items-center justify-center ${selectedPhotoIds.includes(photo.id) ? 'bg-red-500 border-red-500 text-white' : 'bg-white border-gray-300'}`}>
-                      <CheckSquare className="w-8 h-8" />
+                    <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-full border-4 flex items-center justify-center ${selectedPhotoIds.includes(photo.id) ? 'bg-red-500 border-red-500 text-white' : 'bg-white border-gray-300'}`}>
+                      <CheckSquare className="w-6 h-6 sm:w-8 sm:h-8" />
                     </div>
                   </div>
                 )}
 
-                <div className="absolute top-8 right-8 flex gap-4 z-10">
-                  <button onClick={() => movePhoto(index, 'up')} className="bg-white/90 backdrop-blur p-4 rounded-2xl shadow-lg border-2 border-gray-100 text-gray-700 hover:bg-white active:scale-90 transition-all"><ArrowUp className="w-7 h-7" /></button>
-                  <button onClick={() => movePhoto(index, 'down')} className="bg-white/90 backdrop-blur p-4 rounded-2xl shadow-lg border-2 border-gray-100 text-gray-700 hover:bg-white active:scale-90 transition-all"><ArrowDown className="w-7 h-7" /></button>
+                {/* 順番入れ替えボタン（右上に配置） */}
+                <div className="absolute top-4 right-4 sm:top-8 sm:right-8 flex gap-2 sm:gap-4 z-10">
+                  <button onClick={() => movePhoto(index, 'up')} className="bg-white/90 backdrop-blur p-2 sm:p-4 rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 text-gray-700 hover:bg-gray-50 active:scale-90 transition-all"><ArrowUp className="w-5 h-5 sm:w-7 sm:h-7" /></button>
+                  <button onClick={() => movePhoto(index, 'down')} className="bg-white/90 backdrop-blur p-2 sm:p-4 rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 text-gray-700 hover:bg-gray-50 active:scale-90 transition-all"><ArrowDown className="w-5 h-5 sm:w-7 sm:h-7" /></button>
                 </div>
 
-                <div className={containerClassName}>
-                  {loadingId === photo.id ? (
-                    <div className="flex flex-col items-center gap-6"><div className="w-14 h-14 border-6 border-blue-500 border-t-transparent rounded-full animate-spin"></div><span className="text-2xl font-black text-blue-600 tracking-widest">保存中...</span></div>
-                  ) : photo.image ? (
-                    <div className="relative inline-block cursor-crosshair" onClick={(e) => handlePhotoClick(e, photo.id)}>
-                      <img src={proxyUrl(photo.image, photo.id)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[70vh] pointer-events-none rounded-2xl shadow-2xl transition-transform duration-500" style={{ transform: `rotate(${Number(photo.rotation || 0)}deg)` }} alt="" />
+                {/* ★ 魔法の2カラムレイアウト：スマホは flex-col(縦)、PCは lg:flex-row(横) */}
+                <div className="flex flex-col lg:flex-row gap-6 sm:gap-8 pt-12 sm:pt-4">
+                  
+                  {/* 左カラム：写真と操作ボタン */}
+                  <div className="w-full lg:w-[55%] flex flex-col gap-4 sm:gap-6">
+                    <div className="flex justify-between items-center pb-4 border-b-2 sm:border-b-4 border-gray-50 flex-wrap gap-4">
+                      <div className="font-black text-gray-900 text-xl sm:text-3xl flex items-center gap-2 sm:gap-4">
+                        <span className="bg-gray-900 text-white w-8 h-8 sm:w-12 sm:h-12 flex items-center justify-center rounded-lg sm:rounded-2xl text-sm sm:text-xl">{index + 1}</span> 写真
+                      </div>
                       
-                      {(photo.circles || []).map((circle) => (
-                        <PhotoCircleMarker key={circle.id} circle={circle} isSelected={selectedCircleId === circle.id} onSelect={() => setSelectedCircleId(circle.id)} onDragEnd={(x, y) => updateCircle(photo.id, circle.id, { x, y })} onSizeChange={(size) => updateCircle(photo.id, circle.id, { size })} onRemove={() => removeCircle(photo.id, circle.id)} />
-                      ))}
-                      
-                      {(photo.dimensionLines || []).map((line) => (
-                        <DimensionLineMarker 
-                          key={line.id} 
-                          line={line} 
-                          isSelected={selectedDimensionLineId === line.id} 
-                          onSelect={() => setSelectedDimensionLineId(line.id)} 
-                          onRemove={() => removeDimensionLine(photo.id, line.id)} 
-                          onTextChange={(text) => updateDimensionLine(photo.id, line.id, {text})} 
-                          onUpdate={(newProps) => updateDimensionLine(photo.id, line.id, newProps)}
-                        />
-                      ))}
-
-                      {drawingStartPoint && editingMode === 'dimension' && (
-                        <div
-                          style={{ left: `${drawingStartPoint.x}%`, top: `${drawingStartPoint.y}%`, backgroundColor: activeColor }}
-                          className="absolute w-4 h-4 rounded-full border-2 border-white shadow-xl pointer-events-none z-20"
-                        />
-                      )}
-
-                      <div className="absolute top-6 left-6 bg-black/70 backdrop-blur text-white text-xs px-6 py-3 rounded-full font-black pointer-events-none shadow-2xl border-2 border-white/20 z-10 flex items-center gap-2">
-                        {editingMode === 'circle' ? <><Edit2 className="w-4 h-4 text-red-400"/> タップで赤丸を追加</> : !drawingStartPoint ? <><Ruler className="w-4 h-4 text-blue-400"/> 始点をタップ</> : <><Ruler className="w-4 h-4 text-yellow-400"/> 終点をタップ</>}
+                      {/* 写真に対するアクションボタン群 */}
+                      <div className="flex gap-2 sm:gap-3 flex-wrap">
+                        <button type="button" onClick={() => duplicatePhotoSlot(index)} className="p-2 sm:p-3 text-blue-600 bg-blue-50 rounded-xl sm:rounded-[1.5rem] border-2 border-blue-100 font-bold hover:bg-blue-100 active:scale-95 flex items-center gap-1 sm:gap-2 transition-colors text-xs sm:text-base"><Copy className="w-4 h-4 sm:w-6 sm:h-6"/> 複製</button>
+                        <button type="button" onClick={() => updatePhoto(photo.id, 'rotation', ((Number(photo.rotation || 0)) + 90) % 360)} className="p-2 sm:p-3 text-gray-700 bg-gray-100 rounded-xl sm:rounded-[1.5rem] border-2 border-gray-200 font-bold hover:bg-gray-200 active:scale-95 flex items-center gap-1 sm:gap-2 text-xs sm:text-base">↻ 回転</button>
+                        <button onClick={() => deletePhotoSlot(photo.id)} className="p-2 sm:p-3 text-red-500 bg-red-50 rounded-xl sm:rounded-[1.5rem] border-2 border-red-100 hover:bg-red-100 active:scale-95"><Trash2 className="w-4 h-4 sm:w-6 sm:h-6"/></button>
+                        <label className="bg-blue-100 text-blue-800 font-black py-2 px-4 sm:py-3 sm:px-6 rounded-xl sm:rounded-[1.5rem] cursor-pointer shadow-sm border-2 border-blue-200 hover:bg-blue-200 active:scale-95 text-xs sm:text-base flex items-center">
+                          {photo.image ? '変更' : '選択'} <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadPhoto(e, index)} />
+                        </label>
                       </div>
                     </div>
-                  ) : (
-                    <div className="text-center text-gray-300 py-16"><Camera className="w-24 h-24 mx-auto mb-6 opacity-20" /><span className="text-2xl font-black block">画像を選択してください</span></div>
-                  )}
-                </div>
 
-                <div className="flex justify-between items-center mb-8 pb-8 border-b-4 border-gray-50 flex-wrap gap-4">
-                  <div className="font-black text-gray-900 text-3xl flex items-center gap-4"><span className="bg-gray-900 text-white w-12 h-12 flex items-center justify-center rounded-2xl text-xl">{index + 1}</span> 写真</div>
-                  <div className="flex gap-3 flex-wrap">
-                    {/* ★ 新機能：写真の複製ボタン */}
-                    <button type="button" onClick={() => duplicatePhotoSlot(index)} className="p-4 text-blue-600 bg-blue-50 rounded-[1.5rem] border-2 border-blue-100 font-bold hover:bg-blue-100 active:scale-95 flex items-center gap-2 transition-colors"><Copy className="w-6 h-6"/> 複製</button>
-                    
-                    <button type="button" onClick={() => updatePhoto(photo.id, 'rotation', ((Number(photo.rotation || 0)) + 90) % 360)} className="p-4 text-gray-700 bg-gray-100 rounded-[1.5rem] border-2 border-gray-200 font-bold hover:bg-gray-200 active:scale-95 flex items-center gap-2">↻ 回転</button>
-                    <button onClick={() => deletePhotoSlot(photo.id)} className="p-4 text-red-500 bg-red-50 rounded-[1.5rem] border-2 border-red-100 hover:bg-red-100 active:scale-95"><Trash2 className="w-7 h-7"/></button>
-                    <label className="bg-blue-100 text-blue-800 font-black py-4 px-8 rounded-[1.5rem] cursor-pointer shadow-md border-2 border-blue-200 hover:bg-blue-200 active:scale-95 text-lg">
-                      {photo.image ? '変更' : '選択'} <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadPhoto(e, index)} />
-                    </label>
-                  </div>
-                </div>
+                    <div className={containerClassName}>
+                      {loadingId === photo.id ? (
+                        <div className="flex flex-col items-center gap-4 sm:gap-6"><div className="w-10 h-10 sm:w-14 sm:h-14 border-4 sm:border-6 border-blue-500 border-t-transparent rounded-full animate-spin"></div><span className="text-lg sm:text-2xl font-black text-blue-600 tracking-widest">保存中...</span></div>
+                      ) : photo.image ? (
+                        <div className="relative inline-block cursor-crosshair w-full h-full flex items-center justify-center" onClick={(e) => handlePhotoClick(e, photo.id)}>
+                          {/* スマホとPCで写真の最大高さを調整 */}
+                          <img src={proxyUrl(photo.image, photo.id)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[50vh] sm:max-h-[60vh] lg:max-h-[70vh] pointer-events-none rounded-xl sm:rounded-2xl shadow-xl sm:shadow-2xl transition-transform duration-500 object-contain" style={{ transform: `rotate(${Number(photo.rotation || 0)}deg)` }} alt="" />
+                          
+                          {(photo.circles || []).map((circle) => (
+                            <PhotoCircleMarker key={circle.id} circle={circle} isSelected={selectedCircleId === circle.id} onSelect={() => setSelectedCircleId(circle.id)} onDragEnd={(x, y) => updateCircle(photo.id, circle.id, { x, y })} onSizeChange={(size) => updateCircle(photo.id, circle.id, { size })} onRemove={() => removeCircle(photo.id, circle.id)} />
+                          ))}
+                          
+                          {(photo.dimensionLines || []).map((line) => (
+                            <DimensionLineMarker 
+                              key={line.id} 
+                              line={line} 
+                              isSelected={selectedDimensionLineId === line.id} 
+                              onSelect={() => setSelectedDimensionLineId(line.id)} 
+                              onRemove={() => removeDimensionLine(photo.id, line.id)} 
+                              onTextChange={(text) => updateDimensionLine(photo.id, line.id, {text})} 
+                              onUpdate={(newProps) => updateDimensionLine(photo.id, line.id, newProps)}
+                            />
+                          ))}
 
-                <div className="space-y-8">
-                  <div className="flex items-center gap-6 bg-gray-50 p-6 rounded-[2rem] border-2 border-gray-100">
-                    <div className="font-black text-gray-500 whitespace-nowrap text-xl">撮影日:</div>
-                    <input type="date" className="w-full bg-transparent text-2xl font-bold outline-none focus:text-blue-600 transition-colors" value={formatToYMD(photo.shootingDate)} onChange={(e) => updatePhoto(photo.id, "shootingDate", formatToYMDSlash(e.target.value))} />
-                  </div>
+                          {drawingStartPoint && editingMode === 'dimension' && (
+                            <div
+                              style={{ left: `${drawingStartPoint.x}%`, top: `${drawingStartPoint.y}%`, backgroundColor: activeColor }}
+                              className="absolute w-3 h-3 sm:w-4 sm:h-4 rounded-full border-2 border-white shadow-xl pointer-events-none z-20"
+                            />
+                          )}
 
-                  <button onClick={() => { setCurrentPhotoId(photo.id); setModalOpen(true); }} className={`w-full p-8 text-2xl border-4 rounded-[2rem] text-left flex justify-between items-center transition-all ${photo.locationMap ? 'text-red-700 font-black border-red-200 bg-red-50 shadow-lg shadow-red-100' : 'text-gray-400 font-bold border-gray-200 bg-white hover:border-gray-400'}`}>
-                    {photo.locationMap || '▼ 場所を選択（符号と連動）'} <MapPin className={`w-10 h-10 ${photo.locationMap ? 'text-red-500' : 'text-gray-300'}`} />
-                  </button>
-
-                  <div className="space-y-3">
-                    <label className="text-sm font-black text-gray-400 pl-4 uppercase tracking-[0.2em]">工程 / PROCESS</label>
-                    <select className="w-full p-6 text-2xl font-black border-4 border-gray-100 rounded-[2rem] bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none" value={photo.process} onChange={(e) => updatePhoto(photo.id, "process", e.target.value)}>
-                      <option value="">-- 工程を選択 --</option>
-                      {processOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                    </select>
-                  </div>
-
-                  <div className="space-y-4">
-                    <label className="text-sm font-black text-gray-400 pl-4 uppercase tracking-[0.2em]">説明 / DESCRIPTION</label>
-                    <div className="flex flex-wrap gap-3 mb-2">
-                      {descTemplates.map((tmpl, i) => (
-                        <button key={i} type="button" onClick={() => updatePhoto(photo.id, "description", (photo.description || "") + tmpl.text)} className="text-base font-black text-blue-700 bg-blue-50 border-2 border-blue-100 px-6 py-3 rounded-2xl hover:bg-blue-100 active:scale-95 shadow-sm">＋{tmpl.label}</button>
-                      ))}
+                          <div className="absolute top-4 left-4 sm:top-6 sm:left-6 bg-black/70 backdrop-blur text-white text-[10px] sm:text-xs px-3 py-2 sm:px-6 sm:py-3 rounded-full font-black pointer-events-none shadow-2xl border border-white/20 z-10 flex items-center gap-1 sm:gap-2">
+                            {editingMode === 'circle' ? <><Edit2 className="w-3 h-3 sm:w-4 sm:h-4 text-red-400"/> タップで赤丸を追加</> : !drawingStartPoint ? <><Ruler className="w-3 h-3 sm:w-4 sm:h-4 text-blue-400"/> 始点をタップ</> : <><Ruler className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-400"/> 終点をタップ</>}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center text-gray-300 py-10 sm:py-16"><Camera className="w-16 h-16 sm:w-24 sm:h-24 mx-auto mb-4 sm:mb-6 opacity-20" /><span className="text-lg sm:text-2xl font-black block">画像を選択してください</span></div>
+                      )}
                     </div>
-                    <textarea rows={4} className="w-full p-8 text-2xl font-bold border-4 border-gray-100 rounded-[2.5rem] bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-inner" value={photo.description} onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} placeholder="現場状況の詳細を入力" />
+                  </div>
+
+                  {/* 右カラム：入力フォーム群 */}
+                  <div className="w-full lg:w-[45%] flex flex-col gap-4 sm:gap-8 justify-center lg:pl-4">
+                    
+                    {/* 日付 */}
+                    <div className="flex items-center gap-3 sm:gap-6 bg-gray-50 p-4 sm:p-6 rounded-xl sm:rounded-[2rem] border-2 border-gray-100">
+                      <div className="font-black text-gray-500 whitespace-nowrap text-sm sm:text-xl">撮影日:</div>
+                      <input type="date" className="w-full bg-transparent text-lg sm:text-2xl font-bold outline-none focus:text-blue-600 transition-colors" value={formatToYMD(photo.shootingDate)} onChange={(e) => updatePhoto(photo.id, "shootingDate", formatToYMDSlash(e.target.value))} />
+                    </div>
+
+                    {/* 場所選択（マップピン） */}
+                    <button onClick={() => { setCurrentPhotoId(photo.id); setModalOpen(true); }} className={`w-full p-4 sm:p-8 text-base sm:text-2xl border-2 sm:border-4 rounded-xl sm:rounded-[2rem] text-left flex justify-between items-center transition-all ${photo.locationMap ? 'text-red-700 font-black border-red-200 bg-red-50 shadow-md sm:shadow-lg shadow-red-100' : 'text-gray-400 font-bold border-gray-200 bg-white hover:border-gray-400'}`}>
+                      <span className="truncate">{photo.locationMap || '▼ 場所を選択（符号と連動）'}</span> <MapPin className={`w-6 h-6 sm:w-10 sm:h-10 shrink-0 ${photo.locationMap ? 'text-red-500' : 'text-gray-300'}`} />
+                    </button>
+
+                    {/* 工程プルダウン */}
+                    <div className="space-y-1 sm:space-y-3">
+                      <label className="text-[10px] sm:text-sm font-black text-gray-400 pl-2 sm:pl-4 uppercase tracking-[0.1em] sm:tracking-[0.2em]">工程 / PROCESS</label>
+                      <select className="w-full p-4 sm:p-6 text-lg sm:text-2xl font-black border-2 sm:border-4 border-gray-100 rounded-xl sm:rounded-[2rem] bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none" value={photo.process} onChange={(e) => updatePhoto(photo.id, "process", e.target.value)}>
+                        <option value="">-- 工程を選択 --</option>
+                        {processOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                      </select>
+                    </div>
+
+                    {/* 説明文テキストエリア＆定型文 */}
+                    <div className="space-y-2 sm:space-y-4 flex-1 flex flex-col">
+                      <label className="text-[10px] sm:text-sm font-black text-gray-400 pl-2 sm:pl-4 uppercase tracking-[0.1em] sm:tracking-[0.2em]">説明 / DESCRIPTION</label>
+                      <div className="flex flex-wrap gap-2 sm:gap-3 mb-1 sm:mb-2">
+                        {descTemplates.map((tmpl, i) => (
+                          <button key={i} type="button" onClick={() => updatePhoto(photo.id, "description", (photo.description || "") + tmpl.text)} className="text-xs sm:text-base font-black text-blue-700 bg-blue-50 border border-blue-100 px-3 py-2 sm:px-6 sm:py-3 rounded-lg sm:rounded-2xl hover:bg-blue-100 active:scale-95 shadow-sm">＋{tmpl.label}</button>
+                        ))}
+                      </div>
+                      <textarea rows={4} className="w-full flex-1 p-4 sm:p-8 text-base sm:text-2xl font-bold border-2 sm:border-4 border-gray-100 rounded-xl sm:rounded-[2.5rem] bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none shadow-inner resize-y min-h-[120px]" value={photo.description} onChange={(e) => updatePhoto(photo.id, "description", e.target.value)} placeholder="現場状況の詳細を入力" />
+                    </div>
+
                   </div>
                 </div>
               </div>
@@ -718,7 +732,7 @@ export default function PhotoPage() {
           })}
         </div>
 
-        <button onClick={addPhotoSlot} className="w-full mt-24 bg-gray-900 text-white font-black py-8 text-3xl rounded-[3rem] shadow-[0_20px_60px_rgba(0,0,0,0.3)] flex items-center justify-center gap-6 hover:bg-black transition-all active:scale-95 mb-20"><Plus className="w-10 h-10" strokeWidth={4} /> 写真枠を追加する</button>
+        <button onClick={addPhotoSlot} className="w-full mt-12 sm:mt-24 bg-gray-900 text-white font-black py-5 sm:py-8 text-xl sm:text-3xl rounded-2xl sm:rounded-[3rem] shadow-[0_10px_30px_rgba(0,0,0,0.2)] sm:shadow-[0_20px_60px_rgba(0,0,0,0.3)] flex items-center justify-center gap-3 sm:gap-6 hover:bg-black transition-all active:scale-95 mb-10 sm:mb-20"><Plus className="w-6 h-6 sm:w-10 sm:h-10" strokeWidth={4} /> 写真枠を追加する</button>
 
       </div>
       <PinSelectModal isOpen={modalOpen} onClose={() => setModalOpen(false)} pins={project?.mapPins} onSelect={(label) => currentPhotoId && updatePhoto(currentPhotoId, "locationMap", label)} />

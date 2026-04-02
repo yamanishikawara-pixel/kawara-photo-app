@@ -64,7 +64,6 @@ export function ProjectListPage() {
       const user = auth.currentUser;
       if (!user) throw new Error("Not logged in");
 
-      // ★ バグ修正：設定画面で保存した会社名を取得し、新規現場のデフォルトに設定
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       const savedCompanyName = userDoc.exists() ? userDoc.data().companyName : '';
 
@@ -73,12 +72,12 @@ export function ProjectListPage() {
         projectName: '新規現場',
         projectLocation: '',
         constructionPeriod: '',
-        contractorName: savedCompanyName || '', // ★ ここでセット
+        contractorName: savedCompanyName || '', 
         creationDate: new Date().toLocaleDateString('ja-JP'),
         photos: [
           { id: Date.now(), image: null, photoNumber: '1', shootingDate: '', locationMap: '', process: '', description: '', circles: [], dimensionLines: [] },
         ],
-        materials: [], // ★ バグ修正：materials配列が欠落していたのを追加
+        materials: [], 
         mapUrls: [],
         mapRows: [{ id: 1, symbol: '', part: '本棟', relatedPhotoNumber: '' }],
         mapPins: [],
@@ -115,9 +114,11 @@ export function ProjectListPage() {
   if (loading || isDeleting) return <LoadingSpinner />;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 font-sans">
-      <div className="max-w-md mx-auto space-y-6 pb-12">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 font-sans">
+      {/* ★ スマホでは max-w-md、iPad/PCでは max-w-6xl に広がる */}
+      <div className="max-w-md md:max-w-6xl mx-auto space-y-6 pb-12">
         {error && <ErrorMessage message={error} onDismiss={() => setError(null)} />}
+        
         <div className="flex items-center gap-4 shrink-0">
              <button onClick={() => navigate('/settings')} className="text-gray-400 hover:text-blue-600 flex items-center gap-1 text-sm font-bold transition-colors">
                <Settings className="w-5 h-5" /> 設定
@@ -128,23 +129,25 @@ export function ProjectListPage() {
         </div>
 
         <div className="flex justify-between items-center mb-4 border-b border-gray-200 pb-4">
-          <h1 className="text-3xl font-bold text-gray-900">現場一覧</h1>
-          <button type="button" onClick={addProject} className="flex items-center gap-2 bg-blue-500 text-white px-5 py-3 rounded-xl font-bold text-base shadow-sm hover:bg-blue-600 transition-colors">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">現場一覧</h1>
+          <button type="button" onClick={addProject} className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 sm:px-5 sm:py-3 rounded-xl font-bold text-sm sm:text-base shadow-sm hover:bg-blue-600 transition-colors">
             <Plus className="w-5 h-5" /> 新規現場
           </button>
         </div>
 
-        <div className="space-y-4">
+        {/* ★ ここが魔法のグリッド！スマホは1列、iPadは2列、PCは3列 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
           {projects.map((p) => (
-            <div key={p.id} className="relative flex items-center p-5 rounded-2xl border bg-white border-black/5 shadow-sm hover:border-blue-300 transition-all cursor-pointer group" onClick={() => navigate(`/project/${p.id}`)}>
-              <div className="flex-1">
-                <div className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{p.projectName || '未入力の現場'}</div>
-                <div className="text-xs text-gray-500 mt-2">{p.projectLocation || '場所未登録'}</div>
+            <div key={p.id} className="relative flex items-center p-5 rounded-2xl border bg-white border-black/5 shadow-sm hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group min-h-[100px]" onClick={() => navigate(`/project/${p.id}`)}>
+              <div className="flex-1 pr-10">
+                <div className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors break-words line-clamp-2">{p.projectName || '未入力の現場'}</div>
+                <div className="text-xs text-gray-500 mt-2 line-clamp-1">{p.projectLocation || '場所未登録'}</div>
               </div>
-              <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete({ id: p.id }); }} className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"><Trash2 className="w-6 h-6" /></button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete({ id: p.id }); }} className="absolute right-4 p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"><Trash2 className="w-6 h-6" /></button>
             </div>
           ))}
         </div>
+        
       </div>
       <ConfirmModal isOpen={!!confirmDelete} title="現場の完全削除" message="この現場データと、アップロードされたすべての写真を完全に削除します。よろしいですか？" confirmLabel="完全に削除する" onConfirm={() => confirmDelete && deleteProject(confirmDelete.id)} onCancel={() => setConfirmDelete(null)} />
     </div>
