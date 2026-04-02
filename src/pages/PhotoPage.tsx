@@ -50,7 +50,7 @@ const compressPhotoWithQuality = async (file: File) => {
   }
 };
 
-const DimensionLineMarker = React.memo(function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChange, onUpdate }: { line: DimensionLine; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; onUpdate: (props: Partial<DimensionLine>) => void; }) {
+const DimensionLineMarker = React.memo(function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChange, onUpdate, onDeselect }: { line: DimensionLine; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; onUpdate: (props: Partial<DimensionLine>) => void; onDeselect: () => void; }) {
   const inputRef = useRef<HTMLInputElement>(null);
   
   const [localStart, setLocalStart] = useState(line.start);
@@ -155,15 +155,17 @@ const DimensionLineMarker = React.memo(function DimensionLineMarker({ line, isSe
             ))}
           </div>
 
-          <div className="flex w-full gap-3">
+          <div className="flex w-full gap-2">
             <input
               ref={inputRef}
               type="text"
               value={line.text}
               onChange={(e) => onTextChange(e.target.value)}
-              className="w-full bg-gray-50 border-2 border-gray-100 p-3 sm:p-4 text-lg sm:text-xl font-bold rounded-xl outline-none focus:border-blue-400 focus:bg-white text-center shadow-inner"
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onDeselect(); } }}
+              className="flex-1 bg-gray-50 border-2 border-gray-100 p-3 sm:p-4 text-lg sm:text-xl font-bold rounded-xl outline-none focus:border-blue-400 focus:bg-white text-center shadow-inner"
               placeholder="部位 〇〇m"
             />
+            <button type="button" onClick={(e) => { e.stopPropagation(); onDeselect(); }} className="px-4 py-3 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black rounded-xl shadow transition-all whitespace-nowrap">✓ 完了</button>
           </div>
         </div>
       )}
@@ -569,6 +571,9 @@ export default function PhotoPage() {
                     style={{ backgroundColor: color.value }}
                   />
                 ))}
+                <label className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full border-4 transition-all cursor-pointer overflow-hidden flex items-center justify-center hover:scale-105 ${!COLOR_PALETTE.some(c => c.value === activeColor) ? 'border-gray-900 scale-110 shadow-lg' : 'border-white'}`} style={{ background: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)' }} title="自由色">
+                  <input type="color" value={activeColor} onChange={(e) => setActiveColor(e.target.value)} className="opacity-0 absolute w-px h-px" />
+                </label>
               </div>
             )}
           </div>
@@ -668,9 +673,10 @@ export default function PhotoPage() {
                               line={line} 
                               isSelected={selectedDimensionLineId === line.id} 
                               onSelect={() => setSelectedDimensionLineId(line.id)} 
-                              onRemove={() => removeDimensionLine(photo.id, line.id)} 
-                              onTextChange={(text) => updateDimensionLine(photo.id, line.id, {text})} 
+                              onRemove={() => removeDimensionLine(photo.id, line.id)}
+                              onTextChange={(text) => updateDimensionLine(photo.id, line.id, {text})}
                               onUpdate={(newProps) => updateDimensionLine(photo.id, line.id, newProps)}
+                              onDeselect={() => setSelectedDimensionLineId(null)}
                             />
                           ))}
 

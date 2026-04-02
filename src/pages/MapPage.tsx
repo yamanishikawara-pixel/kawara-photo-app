@@ -159,7 +159,7 @@ const WhiteoutMarker = React.memo(({ box, rotation, isSelected, onDragEnd, onCli
   );
 });
 
-const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, onRemove, onTextChange, onUpdate }: { line: DimensionLine; rotation: number; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; onUpdate: (props: Partial<DimensionLine>) => void; }) => {
+const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, onRemove, onTextChange, onUpdate, onDeselect }: { line: DimensionLine; rotation: number; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; onUpdate: (props: Partial<DimensionLine>) => void; onDeselect: () => void; }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [localStart, setLocalStart] = useState(line.start);
   const [localEnd, setLocalEnd] = useState(line.end);
@@ -271,7 +271,10 @@ const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, 
               <button key={name} onClick={() => addPartName(name)} className="text-sm font-black text-blue-700 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-all">＋{name}</button>
             ))}
           </div>
-          <input ref={inputRef} type="text" value={line.text} onChange={(e) => onTextChange(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-100 p-3 text-lg font-bold rounded-xl outline-none focus:border-blue-400 focus:bg-white text-center shadow-inner placeholder:font-normal" placeholder="例: 軒先 5.5m (空欄も可)" />
+          <div className="flex gap-2 w-full">
+            <input ref={inputRef} type="text" value={line.text} onChange={(e) => onTextChange(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onDeselect(); } }} className="flex-1 bg-gray-50 border-2 border-gray-100 p-3 text-lg font-bold rounded-xl outline-none focus:border-blue-400 focus:bg-white text-center shadow-inner placeholder:font-normal" placeholder="例: 軒先 5.5m (空欄も可)" />
+            <button type="button" onClick={(e) => { e.stopPropagation(); onDeselect(); }} className="px-4 py-3 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black rounded-xl shadow transition-all whitespace-nowrap">✓ 完了</button>
+          </div>
         </div>
       )}
 
@@ -768,6 +771,9 @@ export default function MapPage() {
                 {COLOR_PALETTE.map(color => (
                   <button key={color.name} onClick={() => setActiveColor(color.value)} className={`w-10 h-10 rounded-full border-4 transition-all ${activeColor === color.value ? 'border-gray-900 scale-110 shadow-lg' : 'border-white hover:scale-105'}`} style={{ backgroundColor: color.value }} />
                 ))}
+                <label className={`w-10 h-10 rounded-full border-4 transition-all cursor-pointer overflow-hidden flex items-center justify-center hover:scale-105 ${!COLOR_PALETTE.some(c => c.value === activeColor) ? 'border-gray-900 scale-110 shadow-lg' : 'border-white'}`} style={{ background: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)' }} title="自由色">
+                  <input type="color" value={activeColor} onChange={(e) => setActiveColor(e.target.value)} className="opacity-0 absolute w-px h-px" />
+                </label>
               </div>
             )}
             
@@ -838,8 +844,9 @@ export default function MapPage() {
                     {currentMapDimensionLines.map((line) => (
                       <DimensionLineMarker 
                         key={line.id} line={line} rotation={currentRotation} isSelected={selectedDimensionLineId === line.id} 
-                        onSelect={() => setSelectedDimensionLineId(line.id)} onRemove={() => removeDimensionLine(line.id)} 
+                        onSelect={() => setSelectedDimensionLineId(line.id)} onRemove={() => removeDimensionLine(line.id)}
                         onTextChange={(text) => updateDimensionLine(line.id, {text})} onUpdate={(newProps) => updateDimensionLine(line.id, newProps)}
+                        onDeselect={() => setSelectedDimensionLineId(null)}
                       />
                     ))}
 
