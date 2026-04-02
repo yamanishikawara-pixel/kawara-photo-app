@@ -316,7 +316,7 @@ const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, 
   );
 });
 
-const MapMarker = React.memo(({ pin, rotation, isSelected, onDragEnd, onClick, onSizeChange, onRemove }: { pin: MapPinT; rotation: number; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; onSizeChange: (newSize: number) => void; onRemove: () => void; }) => {
+const MapMarker = React.memo(({ pin, rotation, isSelected, onDragEnd, onClick }: { pin: MapPinT; rotation: number; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; }) => {
   const { position, onPointerDown, onPointerMove, onPointerUp, dragging, containerRef, handleClick } = useRotatedDraggable(pin.x, pin.y, rotation, onDragEnd);
   const currentSize = pin.size || 1; 
 
@@ -341,13 +341,6 @@ const MapMarker = React.memo(({ pin, rotation, isSelected, onDragEnd, onClick, o
         </div>
       </div>
 
-      {isSelected && !dragging && (
-        <div style={{ left: `${position.x}%`, top: `${position.y + 10 * currentSize}%`, transform: `translateX(-50%) rotate(${-rotation}deg)` }} className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden" onPointerDown={(e) => e.stopPropagation()}>
-          <button onClick={() => onSizeChange(Math.min(3, Math.round((currentSize + 0.1) * 10) / 10))} className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700 border-r">＋</button>
-          <button onClick={() => onSizeChange(Math.max(0.3, Math.round((currentSize - 0.1) * 10) / 10))} className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700 border-r">ー</button>
-          <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="px-4 py-2 text-red-500 hover:bg-red-50 active:bg-red-100"><Trash2 className="w-5 h-5"/></button>
-        </div>
-      )}
     </>
   );
 });
@@ -860,18 +853,25 @@ export default function MapPage() {
                         pin={pin} 
                         rotation={currentRotation}
                         isSelected={selectedPinId === pin.id} 
-                        onDragEnd={(x, y) => updateMapMarker(pin.id, { x, y })} 
-                        onClick={() => setSelectedPinId(pin.id)} 
-                        onSizeChange={(size) => updateMapMarker(pin.id, { size })} 
-                        onRemove={() => removeMapMarker(pin.id)} 
+                        onDragEnd={(x, y) => updateMapMarker(pin.id, { x, y })}
+                        onClick={() => setSelectedPinId(pin.id)}
                       />
                     ))}
                   </div>
 
-                  <div className={`absolute top-4 left-4 lg:top-6 lg:left-6 bg-black/80 backdrop-blur text-white text-xs lg:text-sm px-4 lg:px-6 py-2 lg:py-3 rounded-full font-black pointer-events-none shadow-2xl border-2 border-white/20 z-10 flex items-center gap-2 transition-opacity duration-200 ${isDraggingWhiteout ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                  <div className={`absolute top-4 left-4 lg:top-6 lg:left-6 bg-black/80 backdrop-blur text-white text-xs lg:text-sm px-4 lg:px-6 py-2 lg:py-3 rounded-full font-black shadow-2xl border-2 border-white/20 z-10 flex items-center gap-2 transition-opacity duration-200 ${isDraggingWhiteout ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                     {editingMode === 'pin' && <><LayoutGrid className="w-4 h-4 text-red-400"/> タップでピンを追加</>}
                     {editingMode === 'dimension' && !drawingStartPoint && <><Ruler className="w-4 h-4 text-blue-400"/> 線の始点をタップ</>}
-                    {editingMode === 'dimension' && drawingStartPoint && <><Ruler className="w-4 h-4 text-yellow-400"/> 線の終点をタップ</>}
+                    {editingMode === 'dimension' && drawingStartPoint && (
+                      <>
+                        <Ruler className="w-4 h-4 text-yellow-400"/> 線の終点をタップ
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setDrawingStartPoint(null); }}
+                          className="ml-2 px-3 py-1 bg-white/20 hover:bg-white/30 rounded-full text-white font-black text-xs border border-white/30 transition-colors"
+                        >✕ 取消</button>
+                      </>
+                    )}
                     {editingMode === 'whiteout' && <><Eraser className="w-4 h-4 text-yellow-400"/> 隠したい文字の上をドラッグ</>}
                   </div>
                 </>
@@ -884,6 +884,25 @@ export default function MapPage() {
                 </label>
               )}
             </div>
+
+            {/* 選択中ピンのコントロールパネル（マップ外に固定表示） */}
+            {selectedPinId !== null && (() => {
+              const pin = currentMapPins.find(p => p.id === selectedPinId);
+              if (!pin) return null;
+              const currentSize = pin.size || 1;
+              return (
+                <div className="mt-4 flex items-center justify-center gap-3 p-3 bg-gray-50 border-2 border-red-100 rounded-2xl">
+                  <span className="text-sm font-bold text-gray-500">サイズ</span>
+                  <button type="button" onClick={() => updateMapMarker(selectedPinId, { size: Math.max(0.3, Math.round((currentSize - 0.1) * 10) / 10) })} className="w-10 h-10 flex items-center justify-center text-xl font-bold bg-white border-2 border-gray-200 rounded-xl hover:bg-gray-100 active:scale-95 shadow-sm">ー</button>
+                  <span className="w-12 text-center font-black text-gray-700">{currentSize.toFixed(1)}x</span>
+                  <button type="button" onClick={() => updateMapMarker(selectedPinId, { size: Math.min(3, Math.round((currentSize + 0.1) * 10) / 10) })} className="w-10 h-10 flex items-center justify-center text-xl font-bold bg-white border-2 border-gray-200 rounded-xl hover:bg-gray-100 active:scale-95 shadow-sm">＋</button>
+                  <div className="w-px h-8 bg-gray-200 mx-1" />
+                  <button type="button" onClick={() => { removeMapMarker(selectedPinId); setSelectedPinId(null); }} className="flex items-center gap-1.5 px-4 py-2 bg-red-50 border-2 border-red-200 text-red-600 font-bold rounded-xl hover:bg-red-100 active:scale-95 text-sm">
+                    <Trash2 className="w-4 h-4" /> 削除
+                  </button>
+                </div>
+              );
+            })()}
           </div>
 
           {showLegendTable && (
