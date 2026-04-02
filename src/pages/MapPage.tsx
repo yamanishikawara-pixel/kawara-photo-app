@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, MapPin, CaseUpper, FileText, LayoutGrid, Ruler, Paintbrush, Save, UploadCloud } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, MapPin, CaseUpper, FileText, LayoutGrid, Ruler, Paintbrush, Save, UploadCloud, RotateCcw, RotateCw } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../firebase';
@@ -217,6 +217,7 @@ export default function MapPage() {
   const [mapPins, setMapPins] = useState<MapPinT[]>([]);
   const [mapRows, setMapRows] = useState<MapRow[]>([]);
   const [mapDimensionLines, setMapDimensionLines] = useState<DimensionLine[]>([]);
+  const [mapRotations, setMapRotations] = useState<number[]>([]);
   
   const [selectedPinId, setSelectedPinId] = useState<number | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
@@ -247,7 +248,8 @@ export default function MapPage() {
           setMapPins(data.mapPins || []);
           setMapRows(data.mapRows || []);
           setMapDimensionLines(data.mapDimensionLines || []);
-          setShowLegendTable(data.showLegendTable !== false); 
+          setShowLegendTable(data.showLegendTable !== false);
+          setMapRotations(data.mapRotations || []);
         } else { setError('プロジェクトが見つかりません。'); }
       } catch { setError('データの読み込みに失敗しました。'); } finally { setLoading(false); }
     };
@@ -330,6 +332,16 @@ export default function MapPage() {
     }
   };
 
+  const rotateCurrentMap = useCallback(async (delta: number) => {
+    if (!id) return;
+    const newRotations = [...mapRotations];
+    newRotations[currentMapIndex] = ((newRotations[currentMapIndex] || 0) + delta + 360) % 360;
+    setMapRotations(newRotations);
+    try {
+      await updateDoc(doc(db, 'projects', id), { mapRotations: newRotations });
+    } catch { setError('保存に失敗しました。'); }
+  }, [id, mapRotations, currentMapIndex]);
+
   const deleteMapPhoto = useCallback(async (mapIndex: number) => {
     if (!project || !id) return;
     if (!window.confirm('この位置図を削除しますか？ピンや凡例データも削除されます。')) return;
@@ -340,6 +352,7 @@ export default function MapPage() {
     }
 
     const newMapUrls = (project.mapUrls || []).filter((_, i) => i !== mapIndex);
+    const newRotations = mapRotations.filter((_, i) => i !== mapIndex);
     const reindex = (idx: number) => idx > mapIndex ? idx - 1 : idx;
     const newPins = mapPins.filter(p => (p.mapIndex || 0) !== mapIndex).map(p => ({ ...p, mapIndex: reindex(p.mapIndex || 0) }));
     const newRows = mapRows.filter(r => (r.mapIndex || 0) !== mapIndex).map(r => ({ ...r, mapIndex: reindex(r.mapIndex || 0) }));
@@ -348,16 +361,17 @@ export default function MapPage() {
     setMapPins(newPins);
     setMapRows(newRows);
     setMapDimensionLines(newDimLines);
+    setMapRotations(newRotations);
     setProject({ ...project, mapUrls: newMapUrls });
-    
+
     const nextIndex = currentMapIndex >= newMapUrls.length ? Math.max(0, newMapUrls.length - 1) : currentMapIndex;
     setCurrentMapIndex(nextIndex);
 
     setIsSaving(true);
     try {
-      await updateDoc(doc(db, 'projects', id), { mapUrls: newMapUrls, mapPins: newPins, mapRows: newRows, mapDimensionLines: newDimLines });
+      await updateDoc(doc(db, 'projects', id), { mapUrls: newMapUrls, mapRotations: newRotations, mapPins: newPins, mapRows: newRows, mapDimensionLines: newDimLines });
     } catch { setError('削除に失敗しました。'); } finally { setIsSaving(false); }
-  }, [project, id, mapPins, mapRows, mapDimensionLines, currentMapIndex]);
+  }, [project, id, mapPins, mapRows, mapDimensionLines, mapRotations, currentMapIndex]);
 
   const handleMapPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
@@ -518,11 +532,21 @@ export default function MapPage() {
             <div className="w-full min-h-[400px] mt-2 bg-[#f1f5f9] rounded-3xl flex items-center justify-center overflow-hidden border-4 border-dashed border-gray-200 relative">
               {currentMapUrl ? (
                 <div className="relative inline-block pointer-events-auto shadow-md">
-                  <label className="absolute top-3 right-3 z-30 flex items-center gap-1.5 px-3 py-1.5 bg-white/90 hover:bg-white text-gray-700 text-xs font-bold rounded-xl shadow cursor-pointer border border-gray-200 transition-all" title="この図面を差し替え">
-                    <UploadCloud className="w-4 h-4" /> 差し替え
-                    <input ref={replaceInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => uploadMapImage(e, 'replace')} disabled={isSaving} />
-                  </label>
-                  <img src={proxyUrl(currentMapUrl, `map_${currentMapIndex}_${sessionId}`)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full pointer-events-none" style={{ maxHeight: '70vh' }} alt="" />
+                  <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5">
+                    <button onClick={() => rotateCurrentMap(-90)} className="p-2 bg-white/90 hover:bg-white text-gray-700 rounded-xl shadow border border-gray-200 transition-all" title="左に90°回転"><RotateCcw className="w-4 h-4" /></button>
+                    <button onClick={() => rotateCurrentMap(90)} className="p-2 bg-white/90 hover:bg-white text-gray-700 rounded-xl shadow border border-gray-200 transition-all" title="右に90°回転"><RotateCw className="w-4 h-4" /></button>
+                    <label className="flex items-center gap-1.5 px-3 py-2 bg-white/90 hover:bg-white text-gray-700 text-xs font-bold rounded-xl shadow cursor-pointer border border-gray-200 transition-all" title="この図面を差し替え">
+                      <UploadCloud className="w-4 h-4" /> 差し替え
+                      <input ref={replaceInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => uploadMapImage(e, 'replace')} disabled={isSaving} />
+                    </label>
+                  </div>
+                  <img
+                    src={proxyUrl(currentMapUrl, `map_${currentMapIndex}_${sessionId}`)}
+                    crossOrigin="anonymous"
+                    className="block w-auto h-auto max-w-full pointer-events-none"
+                    style={{ maxHeight: '70vh', transform: `rotate(${mapRotations[currentMapIndex] || 0}deg)` }}
+                    alt=""
+                  />
                   
                   <div 
                     className="absolute inset-0 z-0 cursor-crosshair touch-none"

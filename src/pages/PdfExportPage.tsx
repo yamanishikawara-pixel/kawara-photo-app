@@ -412,18 +412,20 @@ export default function PdfExportPage() {
                         <img 
                           src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)} 
                           data-original-src={u} 
-                          crossOrigin="anonymous" 
-                          className="block w-auto h-auto" 
+                          crossOrigin="anonymous"
+                          className="block w-auto h-auto"
                           style={(!showLegendTable && rotateMap) ? {
                             maxWidth: '100%',
                             maxHeight: '100%',
-                            objectFit: 'contain'
-                          } : { 
+                            objectFit: 'contain',
+                            transform: `rotate(${(project.mapRotations?.[mapIndex] || 0)}deg)`,
+                          } : {
                             maxWidth: '100%',
                             maxHeight: showLegendTable ? (isPrinting ? '130mm' : '150mm') : (isPrinting ? '230mm' : '265mm'),
-                            objectFit: 'contain'
-                          }} 
-                          alt="" 
+                            objectFit: 'contain',
+                            transform: `rotate(${(project.mapRotations?.[mapIndex] || 0)}deg)`,
+                          }}
+                          alt=""
                         />
                         
                         {(project.mapPins ?? []).filter(p => p.mapIndex === mapIndex).map(pin => (
