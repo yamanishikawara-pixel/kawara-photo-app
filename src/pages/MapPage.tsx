@@ -5,7 +5,8 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import type { MapPin as MapPinT, MapRow, Project, DimensionLine } from '../types';
-import { useDraggablePin, proxyUrl } from '../shared/utils';
+// ★修正：不要になった useDraggablePin を削除しました
+import { proxyUrl } from '../shared/utils';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 
@@ -31,21 +32,86 @@ export interface WhiteoutBox {
   mapIndex?: number;
 }
 
-const WhiteoutMarker = React.memo(({ box, isSelected, onDragEnd, onClick, onSizeChange, onRemove }: { box: WhiteoutBox; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; onSizeChange: (updates: Partial<WhiteoutBox>) => void; onRemove: () => void; }) => {
-  const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(box.x, box.y, onDragEnd);
+// ★修正：HTMLElement から Element に変更し、TypeScriptのエラーを解消
+const getLocalPoint = (e: React.PointerEvent<Element>, angle: number) => {
+  const target = e.currentTarget;
+  const rect = target.getBoundingClientRect();
+  let localX = 0, localY = 0;
+  let w = rect.width, h = rect.height;
+  const normAngle = ((angle % 360) + 360) % 360;
+  
+  if (normAngle === 0) { localX = e.clientX - rect.left; localY = e.clientY - rect.top; }
+  else if (normAngle === 90) { localX = e.clientY - rect.top; localY = rect.right - e.clientX; w = rect.height; h = rect.width; }
+  else if (normAngle === 180) { localX = rect.right - e.clientX; localY = rect.bottom - e.clientY; }
+  else if (normAngle === 270) { localX = rect.bottom - e.clientY; localY = e.clientX - rect.left; w = rect.height; h = rect.width; }
+  
+  return { x: Math.max(0, Math.min(100, (localX / w) * 100)), y: Math.max(0, Math.min(100, (localY / h) * 100)) };
+};
+
+const useRotatedDraggable = (initialX: number, initialY: number, rotation: number, onDragEnd: (x: number, y: number) => void) => {
+  const [position, setPosition] = useState({ x: initialX, y: initialY });
+  const [dragging, setDragging] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const startPosRef = useRef({ x: 0, y: 0, clientX: 0, clientY: 0 });
+
+  useEffect(() => { if (!dragging) setPosition({ x: initialX, y: initialY }); }, [initialX, initialY, dragging]);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDragging(true);
+    startPosRef.current = { x: position.x, y: position.y, clientX: e.clientX, clientY: e.clientY };
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragging || !containerRef.current) return;
+    const parent = containerRef.current.closest('.map-content-wrapper') as HTMLDivElement;
+    if (!parent) return;
+    const rect = parent.getBoundingClientRect();
+    
+    let dx = e.clientX - startPosRef.current.clientX;
+    let dy = e.clientY - startPosRef.current.clientY;
+    const normAngle = ((rotation % 360) + 360) % 360;
+    let localDx = 0, localDy = 0;
+    let w = rect.width, h = rect.height;
+
+    if (normAngle === 0) { localDx = dx; localDy = dy; }
+    else if (normAngle === 90) { localDx = dy; localDy = -dx; w = rect.height; h = rect.width; }
+    else if (normAngle === 180) { localDx = -dx; localDy = -dy; }
+    else if (normAngle === 270) { localDx = -dy; localDy = dx; w = rect.height; h = rect.width; }
+
+    let newX = startPosRef.current.x + (localDx / w) * 100;
+    let newY = startPosRef.current.y + (localDy / h) * 100;
+    setPosition({ x: Math.max(0, Math.min(100, newX)), y: Math.max(0, Math.min(100, newY)) });
+  };
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    if (!dragging) return;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    setDragging(false);
+    onDragEnd(position.x, position.y);
+  };
+
+  return { position, dragging, onPointerDown, onPointerMove, onPointerUp, containerRef };
+};
+
+const WhiteoutMarker = React.memo(({ box, rotation, isSelected, onDragEnd, onClick, onSizeChange, onRemove }: { box: WhiteoutBox; rotation: number; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; onSizeChange: (updates: Partial<WhiteoutBox>) => void; onRemove: () => void; }) => {
+  const { position, onPointerDown, onPointerMove, onPointerUp, dragging, containerRef } = useRotatedDraggable(box.x, box.y, rotation, onDragEnd);
   
   return (
     <>
       <div
         ref={containerRef}
-        onPointerDown={(e) => { e.stopPropagation(); onMouseDown(e as any); }}
-        onTouchStart={(e) => { e.stopPropagation(); onTouchStart(e); }}
+        onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e); }}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
         onClick={(e) => { e.stopPropagation(); if (!dragging) onClick(); }}
         style={{ left: `${position.x}%`, top: `${position.y}%`, width: `${box.width}%`, height: `${box.height}%`, transform: `translate(-50%, -50%)`, touchAction: 'none', zIndex: isSelected ? 100 : (dragging ? 30 : 5) }}
         className={`absolute bg-white cursor-pointer transition-all duration-75 ${dragging ? 'opacity-80 shadow-md' : ''} ${isSelected && !dragging ? 'ring-2 ring-blue-500 shadow-lg' : ''}`}
       />
       {isSelected && !dragging && (
-        <div style={{ left: `${position.x}%`, top: `${position.y + box.height/2 + 5}%`, transform: 'translateX(-50%)' }} className="absolute z-40 flex flex-col gap-3 bg-white rounded-xl shadow-2xl border-2 border-gray-200 p-4 min-w-[200px]" onPointerDown={(e) => e.stopPropagation()}>
+        <div style={{ left: `${position.x}%`, top: `${position.y + box.height/2 + 5}%`, transform: `translateX(-50%) rotate(${-rotation}deg)` }} className="absolute z-40 flex flex-col gap-3 bg-white rounded-xl shadow-2xl border-2 border-gray-200 p-4 min-w-[200px]" onPointerDown={(e) => e.stopPropagation()}>
           <h4 className="text-sm font-black text-gray-700 text-center border-b pb-2">白塗り（文字隠し）</h4>
            <div className="flex items-center justify-between gap-4">
              <span className="text-xs font-bold text-gray-500">横幅</span>
@@ -68,46 +134,37 @@ const WhiteoutMarker = React.memo(({ box, isSelected, onDragEnd, onClick, onSize
   );
 });
 
-const DimensionLineMarker = React.memo(({ line, isSelected, onSelect, onRemove, onTextChange, onUpdate }: { line: DimensionLine; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; onUpdate: (props: Partial<DimensionLine>) => void; }) => {
+const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, onRemove, onTextChange, onUpdate }: { line: DimensionLine; rotation: number; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; onUpdate: (props: Partial<DimensionLine>) => void; }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [localStart, setLocalStart] = useState(line.start);
   const [localEnd, setLocalEnd] = useState(line.end);
   const [isDragging, setIsDragging] = useState<'start' | 'end' | null>(null);
 
   useEffect(() => {
-    if (!isDragging) {
-      setLocalStart(line.start);
-      setLocalEnd(line.end);
-    }
+    if (!isDragging) { setLocalStart(line.start); setLocalEnd(line.end); }
   }, [line.start, line.end, isDragging]);
 
   useEffect(() => {
-    if (isSelected && inputRef.current && !isDragging && !line.text) {
-      inputRef.current.focus();
-    }
+    if (isSelected && inputRef.current && !isDragging && !line.text) inputRef.current.focus();
   }, [isSelected, isDragging, line.text]);
 
   const startDrag = (e: React.PointerEvent, type: 'start' | 'end') => {
-    e.stopPropagation();
-    setIsDragging(type);
-    const el = e.currentTarget as Element;
-    el.setPointerCapture(e.pointerId); 
+    e.stopPropagation(); setIsDragging(type);
+    (e.currentTarget as Element).setPointerCapture(e.pointerId); 
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDragging) return;
-    const rect = (e.currentTarget as Element).closest('.relative.inline-block')?.getBoundingClientRect();
-    if (!rect) return;
-    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
-    if (isDragging === 'start') setLocalStart({ x, y });
-    else setLocalEnd({ x, y });
+    const parent = (e.currentTarget as Element).closest('.map-content-wrapper') as HTMLElement;
+    if (!parent) return;
+    const point = getLocalPoint(e, rotation);
+    if (isDragging === 'start') setLocalStart(point);
+    else setLocalEnd(point);
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
     if (!isDragging) return;
-    const el = e.currentTarget as Element;
-    el.releasePointerCapture(e.pointerId);
+    (e.currentTarget as Element).releasePointerCapture(e.pointerId);
     onUpdate({ start: localStart, end: localEnd }); 
     setIsDragging(null);
   };
@@ -149,7 +206,7 @@ const DimensionLineMarker = React.memo(({ line, isSelected, onSelect, onRemove, 
       </svg>
       
       {isSelected && !isDragging && (
-        <div style={{ left: `${safePopupX}%`, top: `calc(${midPoint.y}% ${offsetY})` }} className="absolute z-30 translate-x-[-50%] translate-y-[-50%] flex flex-col items-center gap-3 bg-white p-5 rounded-2xl shadow-3xl border-2 border-gray-100 min-w-[300px]" onPointerDown={e => e.stopPropagation()}>
+        <div style={{ left: `${safePopupX}%`, top: `calc(${midPoint.y}% ${offsetY})`, transform: `translate(-50%, -50%) rotate(${-rotation}deg)` }} className="absolute z-30 flex flex-col items-center gap-3 bg-white p-5 rounded-2xl shadow-3xl border-2 border-gray-100 min-w-[300px]" onPointerDown={e => e.stopPropagation()}>
           <div className="flex w-full gap-2 items-center justify-between border-b border-gray-100 pb-2">
              <h4 className="text-base font-black text-gray-900 flex items-center gap-1"><CaseUpper className="w-4 h-4 text-blue-500"/> 文字と線</h4>
              <div className="flex items-center gap-1">
@@ -198,9 +255,10 @@ const DimensionLineMarker = React.memo(({ line, isSelected, onSelect, onRemove, 
             color: color, 
             backgroundColor: 'rgba(0, 0, 0, 0.5)', 
             backdropFilter: 'blur(2px)',
-            fontSize: `${14 + (thickness - 2) * 4}px` 
+            fontSize: `${14 + (thickness - 2) * 4}px`,
+            transform: `translate(-50%, -50%)`
           }}
-          className={`absolute translate-x-[-50%] translate-y-[-50%] font-bold px-2 py-0.5 rounded pointer-events-none whitespace-nowrap border border-white/20 shadow-sm ${isSelected ? 'z-40' : 'z-20'}`}
+          className={`absolute font-bold px-2 py-0.5 rounded pointer-events-none whitespace-nowrap border border-white/20 shadow-sm ${isSelected ? 'z-40' : 'z-20'}`}
         >
           {line.text}
         </div>
@@ -209,29 +267,33 @@ const DimensionLineMarker = React.memo(({ line, isSelected, onSelect, onRemove, 
   );
 });
 
-const MapMarker = React.memo(({ pin, isSelected, onDragEnd, onClick, onSizeChange, onRemove }: { pin: MapPinT; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; onSizeChange: (newSize: number) => void; onRemove: () => void; }) => {
-  const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(pin.x, pin.y, onDragEnd);
+const MapMarker = React.memo(({ pin, rotation, isSelected, onDragEnd, onClick, onSizeChange, onRemove }: { pin: MapPinT; rotation: number; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; onSizeChange: (newSize: number) => void; onRemove: () => void; }) => {
+  const { position, onPointerDown, onPointerMove, onPointerUp, dragging, containerRef } = useRotatedDraggable(pin.x, pin.y, rotation, onDragEnd);
   const currentSize = pin.size || 1; 
 
   return (
     <>
       <div
         ref={containerRef}
-        onPointerDown={(e) => { e.stopPropagation(); onMouseDown(e as any); }}
-        onTouchStart={(e) => { e.stopPropagation(); onTouchStart(e); }}
+        onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e); }}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
         onClick={(e) => { e.stopPropagation(); if (!dragging) onClick(); }}
         style={{ left: `${position.x}%`, top: `${position.y}%`, transform: `translate(-50%, -50%) scale(${currentSize})`, touchAction: 'none', zIndex: isSelected ? 100 : (dragging ? 30 : 10) }}
         className={`absolute flex items-center justify-center cursor-pointer transition-all duration-75 ${dragging ? 'opacity-80' : ''} ${isSelected && !dragging ? 'ring-4 ring-red-500 ring-offset-2 ring-offset-white/50 rounded-full' : ''}`}
       >
-        {pin.type === 'arrow' ? (
-          <div className="flex items-center gap-1 drop-shadow-md bg-white/70 px-2 py-0.5 rounded-lg border border-red-200"><span className="text-red-600 font-black text-2xl leading-none" style={{ transform: `rotate(${pin.rotation || 0}deg)` }}>➡</span><span className="text-red-600 font-bold text-xl">{pin.label}</span></div>
-        ) : (
-          <div className="relative flex items-center justify-center"><div className="w-14 h-14 rounded-full border-[4px] border-red-600 shadow-sm bg-red-600/10"></div><span className="absolute text-red-600 font-black text-xl drop-shadow-md bg-white/50 px-1 rounded">{pin.label}</span></div>
-        )}
+        <div>
+          {pin.type === 'arrow' ? (
+            <div className="flex items-center gap-1 drop-shadow-md bg-white/70 px-2 py-0.5 rounded-lg border border-red-200"><span className="text-red-600 font-black text-2xl leading-none" style={{ transform: `rotate(${pin.rotation || 0}deg)` }}>➡</span><span className="text-red-600 font-bold text-xl">{pin.label}</span></div>
+          ) : (
+            <div className="relative flex items-center justify-center"><div className="w-14 h-14 rounded-full border-[4px] border-red-600 shadow-sm bg-red-600/10"></div><span className="absolute text-red-600 font-black text-xl drop-shadow-md bg-white/50 px-1 rounded">{pin.label}</span></div>
+          )}
+        </div>
       </div>
 
       {isSelected && !dragging && (
-        <div style={{ left: `${position.x}%`, top: `${position.y + 10 * currentSize}%`, transform: 'translateX(-50%)' }} className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden" onPointerDown={(e) => e.stopPropagation()}>
+        <div style={{ left: `${position.x}%`, top: `${position.y + 10 * currentSize}%`, transform: `translateX(-50%) rotate(${-rotation}deg)` }} className="absolute z-40 flex bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden" onPointerDown={(e) => e.stopPropagation()}>
           <button onClick={() => onSizeChange(Math.min(3, Math.round((currentSize + 0.1) * 10) / 10))} className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700 border-r">＋</button>
           <button onClick={() => onSizeChange(Math.max(0.3, Math.round((currentSize - 0.1) * 10) / 10))} className="px-4 py-2 text-xl font-bold hover:bg-gray-100 text-gray-700 border-r">ー</button>
           <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="px-4 py-2 text-red-500 hover:bg-red-50 active:bg-red-100"><Trash2 className="w-5 h-5"/></button>
@@ -284,7 +346,6 @@ export default function MapPage() {
   const [activeColor, setActiveColor] = useState<string>(COLOR_PALETTE[0].value); 
   const [showLegendTable, setShowLegendTable] = useState(true);
 
-  // ★ 新機能：白塗りシールをドラッグで作成するためのステート
   const [whiteoutStart, setWhiteoutStart] = useState<{ x: number; y: number } | null>(null);
   const [whiteoutCurrent, setWhiteoutCurrent] = useState<{ x: number; y: number } | null>(null);
   const isDraggingWhiteout = whiteoutStart !== null;
@@ -434,9 +495,9 @@ export default function MapPage() {
 
   const handleMapPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    const rotation = mapRotations[currentMapIndex] || 0;
+    const point = getLocalPoint(e, rotation);
+    const { x, y } = point;
 
     if (editingMode === 'pin') {
       if (selectedPinId !== null) { setSelectedPinId(null); return; }
@@ -465,31 +526,26 @@ export default function MapPage() {
       }
     } else if (editingMode === 'whiteout') {
       if (selectedWhiteoutId !== null) { setSelectedWhiteoutId(null); return; }
-      // ★ 新機能：ドラッグの開始位置を記録
       e.currentTarget.setPointerCapture(e.pointerId);
       setWhiteoutStart({ x, y });
       setWhiteoutCurrent({ x, y });
     }
-  }, [editingMode, selectedPinId, selectedDimensionLineId, selectedWhiteoutId, mapPins, mapRows, mapDimensionLines, whiteoutBoxes, currentMapIndex, drawingStartPoint, activeColor, showLegendTable, saveProjectMapData]);
+  }, [editingMode, selectedPinId, selectedDimensionLineId, selectedWhiteoutId, mapPins, mapRows, mapDimensionLines, whiteoutBoxes, currentMapIndex, drawingStartPoint, activeColor, showLegendTable, mapRotations, saveProjectMapData]);
 
-  // ★ 新機能：ドラッグ中にプレビュー四角形を広げる
   const handleMapPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (editingMode === 'whiteout' && whiteoutStart) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-      const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
-      setWhiteoutCurrent({ x, y });
+      const rotation = mapRotations[currentMapIndex] || 0;
+      const point = getLocalPoint(e, rotation);
+      setWhiteoutCurrent(point);
     }
-  }, [editingMode, whiteoutStart]);
+  }, [editingMode, whiteoutStart, mapRotations, currentMapIndex]);
 
-  // ★ 新機能：ドラッグ終了時に白塗りシールを確定させる
   const handleMapPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (editingMode === 'whiteout' && whiteoutStart && whiteoutCurrent) {
       e.currentTarget.releasePointerCapture(e.pointerId);
       const width = Math.abs(whiteoutStart.x - whiteoutCurrent.x);
       const height = Math.abs(whiteoutStart.y - whiteoutCurrent.y);
 
-      // 小さすぎる誤クリックは無視する
       if (width > 0.5 && height > 0.5) {
         const centerX = Math.min(whiteoutStart.x, whiteoutCurrent.x) + width / 2;
         const centerY = Math.min(whiteoutStart.y, whiteoutCurrent.y) + height / 2;
@@ -579,6 +635,8 @@ export default function MapPage() {
   if (loading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={error} />;
 
+  const currentRotation = mapRotations[currentMapIndex] || 0;
+
   return (
     <div className="min-h-screen bg-[#f8fafc] p-4 lg:p-6 font-sans pb-40 select-none overflow-x-hidden" onPointerDown={() => { setSelectedPinId(null); setSelectedRowId(null); setSelectedDimensionLineId(null); setSelectedWhiteoutId(null); }}>
       <div className="max-w-7xl mx-auto pb-12">
@@ -647,9 +705,7 @@ export default function MapPage() {
 
             <div className="w-full min-h-[400px] mt-2 bg-[#f1f5f9] rounded-3xl flex items-center justify-center overflow-hidden border-4 border-dashed border-gray-200 relative">
               {currentMapUrl ? (
-                <div className="relative inline-block pointer-events-auto shadow-md">
-                  
-                  {/* ★ ドラッグ中はボタン類をフワッと透明にして隠す！ */}
+                <>
                   <div className={`absolute top-3 right-3 z-30 flex items-center gap-1.5 transition-opacity duration-200 ${isDraggingWhiteout ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                     <button onClick={() => rotateCurrentMap(-90)} className="p-2 bg-white/90 hover:bg-white text-gray-700 rounded-xl shadow border border-gray-200 transition-all" title="左に90°回転"><RotateCcw className="w-4 h-4" /></button>
                     <button onClick={() => rotateCurrentMap(90)} className="p-2 bg-white/90 hover:bg-white text-gray-700 rounded-xl shadow border border-gray-200 transition-all" title="右に90°回転"><RotateCw className="w-4 h-4" /></button>
@@ -658,80 +714,85 @@ export default function MapPage() {
                       <input ref={replaceInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => uploadMapImage(e, 'replace')} disabled={isSaving} />
                     </label>
                   </div>
-                  
-                  <img
-                    src={proxyUrl(currentMapUrl, `map_${currentMapIndex}_${sessionId}`)}
-                    crossOrigin="anonymous"
-                    className="block w-auto h-auto max-w-full pointer-events-none"
-                    style={{ maxHeight: '70vh', transform: `rotate(${mapRotations[currentMapIndex] || 0}deg)` }}
-                    alt=""
-                  />
-                  
-                  <div 
-                    className="absolute inset-0 z-0 cursor-crosshair touch-none"
-                    onPointerDown={handleMapPointerDown}
-                    onPointerMove={handleMapPointerMove}
-                    onPointerUp={handleMapPointerUp}
-                    onPointerCancel={handleMapPointerUp}
-                  />
 
-                  {/* ★ ドラッグ中に表示される半透明の青い「プレビュー枠」 */}
-                  {isDraggingWhiteout && whiteoutCurrent && (
-                    <div
-                      className="absolute bg-blue-500/30 border-2 border-blue-500 pointer-events-none z-50"
-                      style={{
-                        left: `${Math.min(whiteoutStart.x, whiteoutCurrent.x)}%`,
-                        top: `${Math.min(whiteoutStart.y, whiteoutCurrent.y)}%`,
-                        width: `${Math.abs(whiteoutStart.x - whiteoutCurrent.x)}%`,
-                        height: `${Math.abs(whiteoutStart.y - whiteoutCurrent.y)}%`,
-                      }}
+                  <div
+                    className="map-content-wrapper relative inline-block shadow-md transition-transform duration-300"
+                    style={{ transform: `rotate(${currentRotation}deg)` }}
+                  >
+                    <img
+                      src={proxyUrl(currentMapUrl, `map_${currentMapIndex}_${sessionId}`)}
+                      crossOrigin="anonymous"
+                      className="block w-auto h-auto max-w-full pointer-events-none"
+                      style={{ maxHeight: '70vh' }}
+                      alt=""
                     />
-                  )}
-
-                  {currentWhiteoutBoxes.map(box => (
-                    <WhiteoutMarker
-                      key={box.id}
-                      box={box}
-                      isSelected={selectedWhiteoutId === box.id}
-                      onDragEnd={(x, y) => updateWhiteout(box.id, { x, y })}
-                      onClick={() => setSelectedWhiteoutId(box.id)}
-                      onSizeChange={(updates) => updateWhiteout(box.id, updates)}
-                      onRemove={() => removeWhiteout(box.id)}
+                    
+                    <div 
+                      className="absolute inset-0 z-0 cursor-crosshair touch-none"
+                      onPointerDown={handleMapPointerDown}
+                      onPointerMove={handleMapPointerMove}
+                      onPointerUp={handleMapPointerUp}
+                      onPointerCancel={handleMapPointerUp}
                     />
-                  ))}
-                  
-                  {currentMapDimensionLines.map((line) => (
-                    <DimensionLineMarker 
-                      key={line.id} line={line} isSelected={selectedDimensionLineId === line.id} 
-                      onSelect={() => setSelectedDimensionLineId(line.id)} onRemove={() => removeDimensionLine(line.id)} 
-                      onTextChange={(text) => updateDimensionLine(line.id, {text})} onUpdate={(newProps) => updateDimensionLine(line.id, newProps)}
-                    />
-                  ))}
 
-                  {drawingStartPoint && editingMode === 'dimension' && (
-                    <div style={{ left: `${drawingStartPoint.x}%`, top: `${drawingStartPoint.y}%`, backgroundColor: activeColor }} className="absolute w-4 h-4 rounded-full border-2 border-white shadow-xl pointer-events-none z-20 transform -translate-x-1/2 -translate-y-1/2" />
-                  )}
+                    {isDraggingWhiteout && whiteoutCurrent && (
+                      <div
+                        className="absolute bg-blue-500/30 border-2 border-blue-500 pointer-events-none z-50"
+                        style={{
+                          left: `${Math.min(whiteoutStart.x, whiteoutCurrent.x)}%`,
+                          top: `${Math.min(whiteoutStart.y, whiteoutCurrent.y)}%`,
+                          width: `${Math.abs(whiteoutStart.x - whiteoutCurrent.x)}%`,
+                          height: `${Math.abs(whiteoutStart.y - whiteoutCurrent.y)}%`,
+                        }}
+                      />
+                    )}
 
-                  {/* ★ こちらもドラッグ中はフワッと消えます */}
+                    {currentWhiteoutBoxes.map(box => (
+                      <WhiteoutMarker
+                        key={box.id}
+                        box={box}
+                        rotation={currentRotation}
+                        isSelected={selectedWhiteoutId === box.id}
+                        onDragEnd={(x, y) => updateWhiteout(box.id, { x, y })}
+                        onClick={() => setSelectedWhiteoutId(box.id)}
+                        onSizeChange={(updates) => updateWhiteout(box.id, updates)}
+                        onRemove={() => removeWhiteout(box.id)}
+                      />
+                    ))}
+                    
+                    {currentMapDimensionLines.map((line) => (
+                      <DimensionLineMarker 
+                        key={line.id} line={line} rotation={currentRotation} isSelected={selectedDimensionLineId === line.id} 
+                        onSelect={() => setSelectedDimensionLineId(line.id)} onRemove={() => removeDimensionLine(line.id)} 
+                        onTextChange={(text) => updateDimensionLine(line.id, {text})} onUpdate={(newProps) => updateDimensionLine(line.id, newProps)}
+                      />
+                    ))}
+
+                    {drawingStartPoint && editingMode === 'dimension' && (
+                      <div style={{ left: `${drawingStartPoint.x}%`, top: `${drawingStartPoint.y}%`, backgroundColor: activeColor }} className="absolute w-4 h-4 rounded-full border-2 border-white shadow-xl pointer-events-none z-20 transform -translate-x-1/2 -translate-y-1/2" />
+                    )}
+
+                    {currentMapPins.map(pin => (
+                      <MapMarker 
+                        key={pin.id} 
+                        pin={pin} 
+                        rotation={currentRotation}
+                        isSelected={selectedPinId === pin.id} 
+                        onDragEnd={(x, y) => updateMapMarker(pin.id, { x, y })} 
+                        onClick={() => setSelectedPinId(pin.id)} 
+                        onSizeChange={(size) => updateMapMarker(pin.id, { size })} 
+                        onRemove={() => removeMapMarker(pin.id)} 
+                      />
+                    ))}
+                  </div>
+
                   <div className={`absolute top-4 left-4 lg:top-6 lg:left-6 bg-black/80 backdrop-blur text-white text-xs lg:text-sm px-4 lg:px-6 py-2 lg:py-3 rounded-full font-black pointer-events-none shadow-2xl border-2 border-white/20 z-10 flex items-center gap-2 transition-opacity duration-200 ${isDraggingWhiteout ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                     {editingMode === 'pin' && <><LayoutGrid className="w-4 h-4 text-red-400"/> タップでピンを追加</>}
                     {editingMode === 'dimension' && !drawingStartPoint && <><Ruler className="w-4 h-4 text-blue-400"/> 線の始点をタップ</>}
                     {editingMode === 'dimension' && drawingStartPoint && <><Ruler className="w-4 h-4 text-yellow-400"/> 線の終点をタップ</>}
                     {editingMode === 'whiteout' && <><Eraser className="w-4 h-4 text-yellow-400"/> 隠したい文字の上をドラッグ</>}
                   </div>
-
-                  {currentMapPins.map(pin => (
-                    <MapMarker 
-                      key={pin.id} 
-                      pin={pin} 
-                      isSelected={selectedPinId === pin.id} 
-                      onDragEnd={(x, y) => updateMapMarker(pin.id, { x, y })} 
-                      onClick={() => setSelectedPinId(pin.id)} 
-                      onSizeChange={(size) => updateMapMarker(pin.id, { size })} 
-                      onRemove={() => removeMapMarker(pin.id)} 
-                    />
-                  ))}
-                </div>
+                </>
               ) : (
                 <label className="flex flex-col items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors w-full h-full py-24 group">
                   <UploadCloud className="w-20 h-20 mb-4 text-blue-400 group-hover:scale-110 transition-transform" />
