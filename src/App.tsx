@@ -14,6 +14,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const ProjectListPage = lazy(() => import('./pages/ProjectListPage').then(module => ({ default: module.ProjectListPage })));
 const HomePage = lazy(() => import('./pages/HomePage').then(module => ({ default: module.HomePage })));
 const CoverPage = lazy(() => import('./pages/CoverPage').then(module => ({ default: module.CoverPage })));
+const ShareViewPage = lazy(() => import('./pages/ShareViewPage'));
 
 
 
@@ -71,6 +72,7 @@ export default function App() {
           <Route path="/project/:id/photo" element={<ProtectedRoute user={user}><PhotoPage /></ProtectedRoute>} />
           <Route path="/project/:id/map" element={<ProtectedRoute user={user}><MapPage /></ProtectedRoute>} />
           <Route path="/project/:id/pdf" element={<ProtectedRoute user={user}><PdfExportPage /></ProtectedRoute>} />
+          <Route path="/share/:id/:token" element={<ShareViewPage />} />
         </Routes>
       </Suspense>
     </BrowserRouter>

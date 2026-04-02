@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Download, Printer, RotateCw } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import JSZip from 'jszip';
@@ -374,6 +375,12 @@ export default function PdfExportPage() {
                 {companyName && <div className="text-[18px] font-bold mb-1 text-black">{companyName}</div>}
                 {address && <div className="text-[14px] font-bold text-gray-800">{address}</div>}
                 {phone && <div className="text-[14px] font-bold text-gray-800">TEL: {phone}</div>}
+              </div>
+            )}
+            {project.shareToken && (
+              <div className="absolute bottom-[18mm] print:bottom-[12mm] left-[15mm] print:left-[8mm] flex flex-col items-center gap-1">
+                <QRCodeSVG value={`${window.location.origin}/share/${id}/${project.shareToken}`} size={60} level="M" />
+                <span className="text-[9px] text-gray-500">スマホで閲覧</span>
               </div>
             )}
             <div className="absolute bottom-[10mm] print:bottom-[2mm] right-[15mm] print:right-[8mm] text-[16px] font-bold text-black">- 1 / {totalPages} -</div>

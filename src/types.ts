@@ -91,5 +91,6 @@ export interface Project {
   mapDimensionLines?: DimensionLine[];
   showLegendTable?: boolean;
   mapRotations?: number[];
+  shareToken?: string;
 }
 
