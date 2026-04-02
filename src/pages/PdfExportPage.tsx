@@ -395,34 +395,33 @@ export default function PdfExportPage() {
                 <div className={`flex-1 relative flex items-center justify-center overflow-visible bg-gray-50 print:bg-white ${showLegendTable ? 'p-2 border border-gray-400 print:border-gray-500' : 'p-0'}`}>
                   {u ? (
                     <div className="flex items-center justify-center w-full h-full relative">
-                      
-                      <div 
-                        className="relative flex items-center justify-center" 
-                        style={(!showLegendTable && rotateMap) ? {
-                          width: '265mm',
-                          height: '178mm',
-                          transform: 'rotate(90deg)',
+
+                      <div
+                        style={{
+                          display: 'inline-block',
+                          position: 'relative',
+                          transform: (!showLegendTable && rotateMap) ? 'rotate(90deg)' : 'none',
                           transformOrigin: 'center center',
-                          position: 'absolute'
-                        } : {
-                          maxWidth: '100%',
-                          maxHeight: '100%'
+                          flexShrink: 0,
                         }}
                       >
-                        <img 
-                          src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)} 
-                          data-original-src={u} 
+                        <img
+                          src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)}
+                          data-original-src={u}
                           crossOrigin="anonymous"
-                          className="block w-auto h-auto"
                           style={(!showLegendTable && rotateMap) ? {
-                            maxWidth: '100%',
-                            maxHeight: '100%',
-                            objectFit: 'contain',
+                            display: 'block',
+                            width: 'auto',
+                            height: 'auto',
+                            maxWidth: '175mm',
+                            maxHeight: '255mm',
                             transform: `rotate(${(project.mapRotations?.[mapIndex] || 0)}deg)`,
                           } : {
+                            display: 'block',
+                            width: 'auto',
+                            height: 'auto',
                             maxWidth: '100%',
                             maxHeight: showLegendTable ? (isPrinting ? '130mm' : '150mm') : (isPrinting ? '230mm' : '265mm'),
-                            objectFit: 'contain',
                             transform: `rotate(${(project.mapRotations?.[mapIndex] || 0)}deg)`,
                           }}
                           alt=""
