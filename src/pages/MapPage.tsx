@@ -5,7 +5,6 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import type { MapPin as MapPinT, MapRow, Project, DimensionLine } from '../types';
-// ★修正：不要になった useDraggablePin を削除しました
 import { proxyUrl } from '../shared/utils';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
@@ -32,7 +31,6 @@ export interface WhiteoutBox {
   mapIndex?: number;
 }
 
-// ★修正：HTMLElement から Element に変更し、TypeScriptのエラーを解消
 const getLocalPoint = (e: React.PointerEvent<Element>, angle: number) => {
   const target = e.currentTarget;
   const rect = target.getBoundingClientRect();
@@ -48,29 +46,45 @@ const getLocalPoint = (e: React.PointerEvent<Element>, angle: number) => {
   return { x: Math.max(0, Math.min(100, (localX / w) * 100)), y: Math.max(0, Math.min(100, (localY / h) * 100)) };
 };
 
+// ★ 改善：ドラッグ開始に「遊び（5px）」を設けて誤爆を防ぐ賢いフック
 const useRotatedDraggable = (initialX: number, initialY: number, rotation: number, onDragEnd: (x: number, y: number) => void) => {
   const [position, setPosition] = useState({ x: initialX, y: initialY });
   const [dragging, setDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const startPosRef = useRef({ x: 0, y: 0, clientX: 0, clientY: 0 });
+  const pointerDownRef = useRef(false);
+  const isMovedRef = useRef(false);
 
   useEffect(() => { if (!dragging) setPosition({ x: initialX, y: initialY }); }, [initialX, initialY, dragging]);
 
   const onPointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
-    setDragging(true);
+    pointerDownRef.current = true;
+    isMovedRef.current = false;
     startPosRef.current = { x: position.x, y: position.y, clientX: e.clientX, clientY: e.clientY };
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!dragging || !containerRef.current) return;
+    if (!pointerDownRef.current || !containerRef.current) return;
+    
+    let dx = e.clientX - startPosRef.current.clientX;
+    let dy = e.clientY - startPosRef.current.clientY;
+
+    // ★ 5ピクセル以上動かさないとドラッグと判定しない（指のブレを吸収）
+    if (!isMovedRef.current) {
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+        isMovedRef.current = true;
+        setDragging(true);
+      } else {
+        return;
+      }
+    }
+
     const parent = containerRef.current.closest('.map-content-wrapper') as HTMLDivElement;
     if (!parent) return;
     const rect = parent.getBoundingClientRect();
     
-    let dx = e.clientX - startPosRef.current.clientX;
-    let dy = e.clientY - startPosRef.current.clientY;
     const normAngle = ((rotation % 360) + 360) % 360;
     let localDx = 0, localDy = 0;
     let w = rect.width, h = rect.height;
@@ -86,27 +100,38 @@ const useRotatedDraggable = (initialX: number, initialY: number, rotation: numbe
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
-    if (!dragging) return;
+    if (!pointerDownRef.current) return;
+    pointerDownRef.current = false;
     e.currentTarget.releasePointerCapture(e.pointerId);
-    setDragging(false);
-    onDragEnd(position.x, position.y);
+    if (isMovedRef.current) {
+      setDragging(false);
+      onDragEnd(position.x, position.y);
+    }
   };
 
-  return { position, dragging, onPointerDown, onPointerMove, onPointerUp, containerRef };
+  const handleClick = (e: React.MouseEvent | React.PointerEvent, onClickCallback: () => void) => {
+    e.stopPropagation();
+    // 動かしていなければクリック（選択）として扱う
+    if (!isMovedRef.current) {
+      onClickCallback();
+    }
+  };
+
+  return { position, dragging, onPointerDown, onPointerMove, onPointerUp, containerRef, handleClick };
 };
 
 const WhiteoutMarker = React.memo(({ box, rotation, isSelected, onDragEnd, onClick, onSizeChange, onRemove }: { box: WhiteoutBox; rotation: number; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; onSizeChange: (updates: Partial<WhiteoutBox>) => void; onRemove: () => void; }) => {
-  const { position, onPointerDown, onPointerMove, onPointerUp, dragging, containerRef } = useRotatedDraggable(box.x, box.y, rotation, onDragEnd);
+  const { position, onPointerDown, onPointerMove, onPointerUp, dragging, containerRef, handleClick } = useRotatedDraggable(box.x, box.y, rotation, onDragEnd);
   
   return (
     <>
       <div
         ref={containerRef}
-        onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e); }}
+        onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        onClick={(e) => { e.stopPropagation(); if (!dragging) onClick(); }}
+        onClick={(e) => handleClick(e, onClick)}
         style={{ left: `${position.x}%`, top: `${position.y}%`, width: `${box.width}%`, height: `${box.height}%`, transform: `translate(-50%, -50%)`, touchAction: 'none', zIndex: isSelected ? 100 : (dragging ? 30 : 5) }}
         className={`absolute bg-white cursor-pointer transition-all duration-75 ${dragging ? 'opacity-80 shadow-md' : ''} ${isSelected && !dragging ? 'ring-2 ring-blue-500 shadow-lg' : ''}`}
       />
@@ -139,6 +164,7 @@ const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, 
   const [localStart, setLocalStart] = useState(line.start);
   const [localEnd, setLocalEnd] = useState(line.end);
   const [isDragging, setIsDragging] = useState<'start' | 'end' | null>(null);
+  const dragStartPos = useRef({ clientX: 0, clientY: 0, started: false });
 
   useEffect(() => {
     if (!isDragging) { setLocalStart(line.start); setLocalEnd(line.end); }
@@ -149,12 +175,29 @@ const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, 
   }, [isSelected, isDragging, line.text]);
 
   const startDrag = (e: React.PointerEvent, type: 'start' | 'end') => {
-    e.stopPropagation(); setIsDragging(type);
+    e.stopPropagation(); 
     (e.currentTarget as Element).setPointerCapture(e.pointerId); 
+    dragStartPos.current = { clientX: e.clientX, clientY: e.clientY, started: false };
+    // ここではまだ isDragging にしない（遊びを持たせる）
+    // 一時的に情報を保持するためのトリックとして isDragging に type を入れるが、実際の移動計算にロックをかける
+    setIsDragging(type);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDragging) return;
+    
+    let dx = e.clientX - dragStartPos.current.clientX;
+    let dy = e.clientY - dragStartPos.current.clientY;
+    
+    // 5px以上動いたらドラッグ開始とみなす
+    if (!dragStartPos.current.started) {
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+        dragStartPos.current.started = true;
+      } else {
+        return;
+      }
+    }
+
     const parent = (e.currentTarget as Element).closest('.map-content-wrapper') as HTMLElement;
     if (!parent) return;
     const point = getLocalPoint(e, rotation);
@@ -165,7 +208,13 @@ const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, 
   const handlePointerUp = (e: React.PointerEvent) => {
     if (!isDragging) return;
     (e.currentTarget as Element).releasePointerCapture(e.pointerId);
-    onUpdate({ start: localStart, end: localEnd }); 
+    if (dragStartPos.current.started) {
+      onUpdate({ start: localStart, end: localEnd }); 
+    } else {
+      // 遊びの範囲内なら動かさずに戻す
+      setLocalStart(line.start);
+      setLocalEnd(line.end);
+    }
     setIsDragging(null);
   };
 
@@ -268,18 +317,18 @@ const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, 
 });
 
 const MapMarker = React.memo(({ pin, rotation, isSelected, onDragEnd, onClick, onSizeChange, onRemove }: { pin: MapPinT; rotation: number; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; onSizeChange: (newSize: number) => void; onRemove: () => void; }) => {
-  const { position, onPointerDown, onPointerMove, onPointerUp, dragging, containerRef } = useRotatedDraggable(pin.x, pin.y, rotation, onDragEnd);
+  const { position, onPointerDown, onPointerMove, onPointerUp, dragging, containerRef, handleClick } = useRotatedDraggable(pin.x, pin.y, rotation, onDragEnd);
   const currentSize = pin.size || 1; 
 
   return (
     <>
       <div
         ref={containerRef}
-        onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e); }}
+        onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        onClick={(e) => { e.stopPropagation(); if (!dragging) onClick(); }}
+        onClick={(e) => handleClick(e, onClick)}
         style={{ left: `${position.x}%`, top: `${position.y}%`, transform: `translate(-50%, -50%) scale(${currentSize})`, touchAction: 'none', zIndex: isSelected ? 100 : (dragging ? 30 : 10) }}
         className={`absolute flex items-center justify-center cursor-pointer transition-all duration-75 ${dragging ? 'opacity-80' : ''} ${isSelected && !dragging ? 'ring-4 ring-red-500 ring-offset-2 ring-offset-white/50 rounded-full' : ''}`}
       >
@@ -349,6 +398,9 @@ export default function MapPage() {
   const [whiteoutStart, setWhiteoutStart] = useState<{ x: number; y: number } | null>(null);
   const [whiteoutCurrent, setWhiteoutCurrent] = useState<{ x: number; y: number } | null>(null);
   const isDraggingWhiteout = whiteoutStart !== null;
+
+  // ★ 追加：タップ判定用のステート
+  const [pendingActionInfo, setPendingActionInfo] = useState<{ clientX: number, clientY: number, localX: number, localY: number, time: number } | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -493,44 +545,35 @@ export default function MapPage() {
     } catch { setError('削除に失敗しました。'); } finally { setIsSaving(false); }
   }, [project, id, mapPins, mapRows, mapDimensionLines, whiteoutBoxes, mapRotations, currentMapIndex]);
 
+
+  // ★ 改善：キャンバスを押した瞬間（まだタップかスワイプかわからない状態）
   const handleMapPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    e.stopPropagation();
+    // 既存の選択をすべて解除（メニューを閉じる）
+    if (selectedPinId !== null) setSelectedPinId(null);
+    if (selectedRowId !== null) setSelectedRowId(null);
+    if (selectedDimensionLineId !== null) setSelectedDimensionLineId(null);
+    if (selectedWhiteoutId !== null) setSelectedWhiteoutId(null);
+
     const rotation = mapRotations[currentMapIndex] || 0;
     const point = getLocalPoint(e, rotation);
-    const { x, y } = point;
 
-    if (editingMode === 'pin') {
-      if (selectedPinId !== null) { setSelectedPinId(null); return; }
-      const newLabel = String(mapPins.filter(p => p.type === 'circle').length + 1);
-      const newPins: MapPinT[] = [...mapPins, { id: Date.now(), x, y, label: newLabel, type: 'circle', size: 1, rotation: 0, mapIndex: currentMapIndex }];
-      setMapPins(newPins);
-      setSelectedPinId(null);
-      const newRows: MapRow[] = [...mapRows, { id: Date.now(), symbol: newLabel, part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }];
-      setMapRows(newRows);
-      saveProjectMapData(newPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable);
-
-    } else if (editingMode === 'dimension') {
-      if (selectedDimensionLineId !== null) { setSelectedDimensionLineId(null); return; }
-      
-      if (!drawingStartPoint) {
-        setDrawingStartPoint({ x, y }); 
-      } else {
-        const newLineId = Date.now();
-        const newDimLines: DimensionLine[] = [...mapDimensionLines, {
-          id: newLineId, start: drawingStartPoint, end: { x, y }, text: "", size: 2, color: activeColor, mapIndex: currentMapIndex
-        }];
-        setMapDimensionLines(newDimLines);
-        saveProjectMapData(mapPins, mapRows, newDimLines, whiteoutBoxes, showLegendTable);
-        setDrawingStartPoint(null); 
-        setSelectedDimensionLineId(newLineId); 
-      }
-    } else if (editingMode === 'whiteout') {
-      if (selectedWhiteoutId !== null) { setSelectedWhiteoutId(null); return; }
+    if (editingMode === 'whiteout') {
+      // 文字消しはドラッグで範囲指定なので即座に記録
       e.currentTarget.setPointerCapture(e.pointerId);
-      setWhiteoutStart({ x, y });
-      setWhiteoutCurrent({ x, y });
+      setWhiteoutStart({ x: point.x, y: point.y });
+      setWhiteoutCurrent({ x: point.x, y: point.y });
+      return;
     }
-  }, [editingMode, selectedPinId, selectedDimensionLineId, selectedWhiteoutId, mapPins, mapRows, mapDimensionLines, whiteoutBoxes, currentMapIndex, drawingStartPoint, activeColor, showLegendTable, mapRotations, saveProjectMapData]);
+
+    // ピンや寸法の場合は、後でタップ判定するために情報を保持
+    setPendingActionInfo({
+      clientX: e.clientX,
+      clientY: e.clientY,
+      localX: point.x,
+      localY: point.y,
+      time: Date.now()
+    });
+  }, [editingMode, selectedPinId, selectedRowId, selectedDimensionLineId, selectedWhiteoutId, mapRotations, currentMapIndex]);
 
   const handleMapPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (editingMode === 'whiteout' && whiteoutStart) {
@@ -540,6 +583,7 @@ export default function MapPage() {
     }
   }, [editingMode, whiteoutStart, mapRotations, currentMapIndex]);
 
+  // ★ 改善：キャンバスから指を離した瞬間（スワイプなら無視、タップなら追加）
   const handleMapPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (editingMode === 'whiteout' && whiteoutStart && whiteoutCurrent) {
       e.currentTarget.releasePointerCapture(e.pointerId);
@@ -549,7 +593,6 @@ export default function MapPage() {
       if (width > 0.5 && height > 0.5) {
         const centerX = Math.min(whiteoutStart.x, whiteoutCurrent.x) + width / 2;
         const centerY = Math.min(whiteoutStart.y, whiteoutCurrent.y) + height / 2;
-
         const newBox: WhiteoutBox = { id: Date.now(), x: centerX, y: centerY, width, height, mapIndex: currentMapIndex };
         const newBoxes = [...whiteoutBoxes, newBox];
         setWhiteoutBoxes(newBoxes);
@@ -558,8 +601,47 @@ export default function MapPage() {
       }
       setWhiteoutStart(null);
       setWhiteoutCurrent(null);
+      return;
     }
-  }, [editingMode, whiteoutStart, whiteoutCurrent, whiteoutBoxes, currentMapIndex, mapPins, mapRows, mapDimensionLines, showLegendTable, saveProjectMapData]);
+
+    // ★ ピン・寸法の「タップ」判定ロジック
+    if (pendingActionInfo) {
+      const dx = e.clientX - pendingActionInfo.clientX;
+      const dy = e.clientY - pendingActionInfo.clientY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const timeElapsed = Date.now() - pendingActionInfo.time;
+
+      // 10ピクセル未満、かつ500ms以内の離上なら「タップ」とみなして処理を実行
+      if (distance < 10 && timeElapsed < 500) {
+        const { localX: x, localY: y } = pendingActionInfo;
+
+        if (editingMode === 'pin') {
+          const newLabel = String(mapPins.filter(p => p.type === 'circle').length + 1);
+          const newPins: MapPinT[] = [...mapPins, { id: Date.now(), x, y, label: newLabel, type: 'circle', size: 1, rotation: 0, mapIndex: currentMapIndex }];
+          setMapPins(newPins);
+          const newRows: MapRow[] = [...mapRows, { id: Date.now(), symbol: newLabel, part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }];
+          setMapRows(newRows);
+          saveProjectMapData(newPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable);
+
+        } else if (editingMode === 'dimension') {
+          if (!drawingStartPoint) {
+            setDrawingStartPoint({ x, y }); 
+          } else {
+            const newLineId = Date.now();
+            const newDimLines: DimensionLine[] = [...mapDimensionLines, {
+              id: newLineId, start: drawingStartPoint, end: { x, y }, text: "", size: 2, color: activeColor, mapIndex: currentMapIndex
+            }];
+            setMapDimensionLines(newDimLines);
+            saveProjectMapData(mapPins, mapRows, newDimLines, whiteoutBoxes, showLegendTable);
+            setDrawingStartPoint(null); 
+            setSelectedDimensionLineId(newLineId); 
+          }
+        }
+      }
+      setPendingActionInfo(null);
+    }
+  }, [editingMode, whiteoutStart, whiteoutCurrent, pendingActionInfo, mapPins, mapRows, mapDimensionLines, whiteoutBoxes, currentMapIndex, drawingStartPoint, activeColor, showLegendTable, saveProjectMapData]);
+
 
   const updateDimensionLine = useCallback((lineId: number, newProps: Partial<DimensionLine>) => {
     setMapDimensionLines(prev => {
@@ -638,7 +720,7 @@ export default function MapPage() {
   const currentRotation = mapRotations[currentMapIndex] || 0;
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] p-4 lg:p-6 font-sans pb-40 select-none overflow-x-hidden" onPointerDown={() => { setSelectedPinId(null); setSelectedRowId(null); setSelectedDimensionLineId(null); setSelectedWhiteoutId(null); }}>
+    <div className="min-h-screen bg-[#f8fafc] p-4 lg:p-6 font-sans pb-40 select-none overflow-x-hidden">
       <div className="max-w-7xl mx-auto pb-12">
         <div className="flex flex-col xl:flex-row justify-between xl:items-center mb-8 gap-6 no-print">
           <div className="flex items-center gap-4">
