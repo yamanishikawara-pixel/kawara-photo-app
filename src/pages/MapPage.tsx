@@ -9,6 +9,11 @@ import { useDraggablePin, proxyUrl } from '../shared/utils';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 
+// ★ PDFを画像に変換するためのライブラリをインポート
+import * as pdfjsLib from 'pdfjs-dist';
+// ワーカーの設定（CDN経由で読み込むことでビルドエラーを回避）
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
 const DEFAULT_MAP_PART_NAMES = ['軒先', '袖', 'ケラバ', '谷', '棟', '隅棟', '平'];
 
 const COLOR_PALETTE = [
@@ -260,14 +265,49 @@ export default function MapPage() {
     } catch { setError('保存に失敗しました。'); } finally { setIsSaving(false); }
   }, [id]);
 
-  // ★復活：アップロード機能
   const uploadMapImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!project || !id || !e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
     setIsSaving(true);
+
     try {
-      const storageRef = ref(storage, `maps/${id}/${Date.now()}_${file.name}`);
-      await uploadBytes(storageRef, file);
+      let fileToUpload = file;
+
+      if (file.type === 'application/pdf') {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          const page = await pdf.getPage(1); 
+
+          const viewport = page.getViewport({ scale: 2.0 });
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          if (!ctx) throw new Error('Canvas context not found');
+
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+
+          // ★ バグ修正：TypeScriptの型エラーを回避するための魔法の記述（any）を追加
+          const renderContext: any = {
+            canvasContext: ctx,
+            viewport: viewport
+          };
+          await page.render(renderContext).promise;
+
+          const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+          if (!blob) throw new Error('Blob conversion failed');
+
+          fileToUpload = new File([blob], file.name.replace(/\.pdf$/i, '.jpg'), { type: 'image/jpeg' });
+        } catch (pdfError) {
+          console.error("PDFの画像変換に失敗しました:", pdfError);
+          alert('PDFの読み取りに失敗しました。パスワード保護されているか、特殊な形式の可能性があります。');
+          setIsSaving(false);
+          return;
+        }
+      }
+
+      const storageRef = ref(storage, `maps/${id}/${Date.now()}_${fileToUpload.name}`);
+      await uploadBytes(storageRef, fileToUpload);
       const url = await getDownloadURL(storageRef);
 
       const newMapUrls = [...(project.mapUrls || [])];
@@ -276,7 +316,7 @@ export default function MapPage() {
       setProject(prev => prev ? { ...prev, mapUrls: newMapUrls } : null);
       await updateDoc(doc(db, 'projects', id), { mapUrls: newMapUrls });
     } catch (error) {
-      alert('図面のアップロードに失敗しました。');
+      alert('図面のアップロードに失敗しました。電波の良いところでお試しください。');
     } finally {
       setIsSaving(false);
     }
@@ -434,7 +474,7 @@ export default function MapPage() {
           </div>
         </div>
 
-        {/* ★ タブと追加ボタン */}
+        {/* タブと追加ボタン */}
         <div className="flex flex-wrap gap-2 mb-6 no-print p-2 bg-gray-100 rounded-2xl w-fit items-center">
           {project?.mapUrls?.map((_, idx) => (
             <div key={idx} className="flex items-center gap-1">
@@ -442,7 +482,6 @@ export default function MapPage() {
               <button onClick={() => deleteMapPhoto(idx)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-lg transition-colors" title="この位置図を削除"><Trash2 className="w-4 h-4" /></button>
             </div>
           ))}
-          {/* 新しい図面を追加するタブ */}
           <button
             onClick={() => setCurrentMapIndex(totalMaps)}
             className={`px-4 py-3 rounded-xl text-lg font-black transition-all border-2 border-dashed ${currentMapIndex === totalMaps ? 'bg-white text-blue-600 border-blue-300 shadow-md' : 'text-gray-500 border-gray-300 hover:bg-white/50'}`}
@@ -503,12 +542,11 @@ export default function MapPage() {
                   ))}
                 </div>
               ) : (
-                /* ★ 復活：未登録時のアップロードボタン */
                 <label className="flex flex-col items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors w-full h-full py-24 group">
                   <UploadCloud className="w-20 h-20 mb-4 text-blue-400 group-hover:scale-110 transition-transform" />
                   <span className="text-2xl font-black text-blue-600 block mb-2">図面・位置図をアップロード</span>
-                  <span className="text-sm font-bold text-gray-500">ここをタップして画像を選択してください</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={uploadMapImage} disabled={isSaving} />
+                  <span className="text-sm font-bold text-gray-500">ここをタップして画像またはPDFを選択してください</span>
+                  <input type="file" accept="image/*,application/pdf" className="hidden" onChange={uploadMapImage} disabled={isSaving} />
                 </label>
               )}
             </div>
