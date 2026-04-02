@@ -654,7 +654,7 @@ export default function PhotoPage() {
                       {loadingId === photo.id ? (
                         <div className="flex flex-col items-center gap-4 sm:gap-6"><div className="w-10 h-10 sm:w-14 sm:h-14 border-4 sm:border-6 border-blue-500 border-t-transparent rounded-full animate-spin"></div><span className="text-lg sm:text-2xl font-black text-blue-600 tracking-widest">保存中...</span></div>
                       ) : photo.image ? (
-                        <div className="relative inline-block cursor-crosshair w-full h-full flex items-center justify-center" onClick={(e) => handlePhotoClick(e, photo.id)}>
+                        <div className="relative cursor-crosshair" style={{ display: 'inline-block', lineHeight: 0 }} onClick={(e) => handlePhotoClick(e, photo.id)}>
                           {/* スマホとPCで写真の最大高さを調整 */}
                           <img src={proxyUrl(photo.image, photo.id)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[50vh] sm:max-h-[60vh] lg:max-h-[70vh] pointer-events-none rounded-xl sm:rounded-2xl shadow-xl sm:shadow-2xl transition-transform duration-500 object-contain" style={{ transform: `rotate(${Number(photo.rotation || 0)}deg)` }} alt="" />
                           

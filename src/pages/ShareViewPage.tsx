@@ -191,7 +191,7 @@ export default function ShareViewPage() {
                           display: 'block',
                           width: 'auto',
                           height: 'auto',
-                          maxWidth: '100vw',
+                          maxWidth: '100%',
                           maxHeight: '80vh',
                           transform: `rotate(${photo.rotation ?? 0}deg)`,
                         }}
