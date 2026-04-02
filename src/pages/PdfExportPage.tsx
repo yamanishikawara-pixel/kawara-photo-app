@@ -5,7 +5,6 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-// ★ 修正：MapLine を復活させました
 import type { Circle, MapRow, MapLine, Photo, Project, Material } from '../types';
 import kawaraLogo from '../assets/kawara-logo.png';
 import { A4_HEIGHT_PX, A4_WIDTH_PX, getPreviewScale, proxyUrl } from '../shared/utils';
@@ -14,7 +13,6 @@ import { LoadingSpinner } from '../shared/LoadingSpinner';
 
 const JP_FONT = "'BIZ UDPGothic', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', Meiryo, sans-serif";
 
-// ★ 修正：safeStyleLine 関数を復活させました
 function safeStyleLine(val: string | number | undefined | null, defaultUnit: string): string {
   if (val == null || val === '') return `0${defaultUnit}`;
   if (typeof val === 'number') return `${val}${defaultUnit}`;
@@ -387,8 +385,9 @@ export default function PdfExportPage() {
           <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
             <div className={`pdf-page w-full h-full flex flex-col bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '15mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
               
-              <div className={`w-full h-full flex flex-col border-[3px] border-gray-800 print:border-black ${showLegendTable ? 'p-6 print:p-2' : 'p-1'}`}>
-                <h2 className={`text-2xl font-bold border-gray-800 print:border-black shrink-0 ${showLegendTable ? 'mb-4 pb-2 border-b-2 print:mb-2' : 'mb-2 pb-1 border-b-2'}`}>
+              {/* ★ 変更点：凡例表がない場合は、余計な黒枠を完全に消去してスッキリさせる！ */}
+              <div className={`w-full h-full flex flex-col ${showLegendTable ? 'border-[3px] border-gray-800 print:border-black p-6 print:p-2' : 'p-1'}`}>
+                <h2 className={`text-2xl font-bold text-gray-900 shrink-0 ${showLegendTable ? 'border-gray-800 print:border-black mb-4 pb-2 border-b-2 print:mb-2' : 'mb-2'}`}>
                   位置図 {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}
                 </h2>
                 
@@ -427,6 +426,11 @@ export default function PdfExportPage() {
                           alt=""
                         />
                         
+                        {/* ★ 新機能：白塗りシールをPDFに出力する */}
+                        {((project as any).whiteoutBoxes ?? []).filter((b: any) => b.mapIndex === mapIndex).map((box: any) => (
+                          <div key={box.id} className="absolute bg-white" style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%`, transform: 'translate(-50%, -50%)', zIndex: 5 }} />
+                        ))}
+
                         {(project.mapPins ?? []).filter(p => p.mapIndex === mapIndex).map(pin => (
                             <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: `translate(-50%, -50%) scale(${pin.size ?? 1})`, zIndex: 10 }} className="absolute">
                               {pin.type === 'arrow' ? (
