@@ -182,24 +182,29 @@ export default function ShareViewPage() {
             {activePhotos.map((photo: Photo & { circles?: Circle[] }) => (
               <div key={photo.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
                 {photo.image && (
-                  <div className="relative bg-black">
-                    <div style={{ display: 'inline-block', position: 'relative', width: '100%' }}>
+                  <div className="flex items-center justify-center bg-black">
+                    <div className="relative" style={{ display: 'inline-block' }}>
                       <img
                         src={photo.image}
                         alt=""
-                        className="w-full h-auto block"
-                        style={{ transform: `rotate(${photo.rotation ?? 0}deg)` }}
+                        style={{
+                          display: 'block',
+                          width: 'auto',
+                          height: 'auto',
+                          maxWidth: '100vw',
+                          maxHeight: '80vh',
+                          transform: `rotate(${photo.rotation ?? 0}deg)`,
+                        }}
                       />
                       {/* 赤丸 */}
                       {(photo.circles ?? []).map((c: Circle) => (
                         <div
                           key={c.id}
-                          className="absolute rounded-full border-[3px] border-red-600 pointer-events-none"
+                          className="absolute aspect-square rounded-full border-[3px] border-red-600 pointer-events-none"
                           style={{
                             left: `${c.x}%`,
                             top: `${c.y}%`,
-                            width: `${c.size * 2}%`,
-                            height: `${c.size * 2}%`,
+                            width: `${Number(c.size || 20)}%`,
                             transform: 'translate(-50%, -50%)',
                           }}
                         />
