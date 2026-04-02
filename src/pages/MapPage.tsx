@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, MapPin, CaseUpper, FileText, LayoutGrid, Ruler, Paintbrush, Save } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { ref, deleteObject } from 'firebase/storage';
+import { db, storage } from '../firebase';
 import type { MapPin as MapPinT, MapRow, Project, DimensionLine } from '../types';
 import { useDraggablePin, proxyUrl } from '../shared/utils';
 import { ErrorMessage } from '../shared/ErrorMessage';
@@ -263,6 +264,33 @@ export default function MapPage() {
     } catch { setError('保存に失敗しました。'); } finally { setIsSaving(false); }
   }, [id]);
 
+  const deleteMapPhoto = useCallback(async (mapIndex: number) => {
+    if (!project || !id) return;
+    if (!window.confirm('この位置図を削除しますか？ピンや凡例データも削除されます。')) return;
+
+    const urlToDelete = project.mapUrls?.[mapIndex];
+    if (urlToDelete) {
+      try { await deleteObject(ref(storage, urlToDelete)); } catch { /* Storage削除失敗は無視 */ }
+    }
+
+    const newMapUrls = (project.mapUrls || []).filter((_, i) => i !== mapIndex);
+    const reindex = (idx: number) => idx > mapIndex ? idx - 1 : idx;
+    const newPins = mapPins.filter(p => (p.mapIndex || 0) !== mapIndex).map(p => ({ ...p, mapIndex: reindex(p.mapIndex || 0) }));
+    const newRows = mapRows.filter(r => (r.mapIndex || 0) !== mapIndex).map(r => ({ ...r, mapIndex: reindex(r.mapIndex || 0) }));
+    const newDimLines = mapDimensionLines.filter(l => (l.mapIndex || 0) !== mapIndex).map(l => ({ ...l, mapIndex: reindex(l.mapIndex || 0) }));
+
+    setMapPins(newPins);
+    setMapRows(newRows);
+    setMapDimensionLines(newDimLines);
+    setProject({ ...project, mapUrls: newMapUrls });
+    if (currentMapIndex >= newMapUrls.length) setCurrentMapIndex(Math.max(0, newMapUrls.length - 1));
+
+    setIsSaving(true);
+    try {
+      await updateDoc(doc(db, 'projects', id), { mapUrls: newMapUrls, mapPins: newPins, mapRows: newRows, mapDimensionLines: newDimLines });
+    } catch { setError('削除に失敗しました。'); } finally { setIsSaving(false); }
+  }, [project, id, mapPins, mapRows, mapDimensionLines, currentMapIndex]);
+
   const handleMapPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
@@ -388,10 +416,13 @@ export default function MapPage() {
           </div>
         </div>
 
-        {totalMaps > 1 && (
+        {totalMaps > 0 && (
           <div className="flex flex-wrap gap-2 mb-6 no-print p-2 bg-gray-100 rounded-2xl w-fit">
             {project?.mapUrls?.map((_, idx) => (
-              <button key={idx} onClick={() => setCurrentMapIndex(idx)} className={`px-6 py-3 rounded-xl text-lg font-black transition-all ${currentMapIndex === idx ? 'bg-white text-blue-600 shadow-md' : 'text-gray-500 hover:bg-white/50'}`}>図面 {idx + 1}</button>
+              <div key={idx} className="flex items-center gap-1">
+                <button onClick={() => setCurrentMapIndex(idx)} className={`px-6 py-3 rounded-xl text-lg font-black transition-all ${currentMapIndex === idx ? 'bg-white text-blue-600 shadow-md' : 'text-gray-500 hover:bg-white/50'}`}>図面 {idx + 1}</button>
+                <button onClick={() => deleteMapPhoto(idx)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-lg transition-colors" title="この位置図を削除"><Trash2 className="w-4 h-4" /></button>
+              </div>
             ))}
           </div>
         )}
