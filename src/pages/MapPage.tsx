@@ -9,9 +9,9 @@ import { useDraggablePin, proxyUrl } from '../shared/utils';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 
-// ★ 妥協なし！PDF変換ライブラリを本気で導入
 import * as pdfjsLib from 'pdfjs-dist';
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 const DEFAULT_MAP_PART_NAMES = ['軒先', '袖', 'ケラバ', '谷', '棟', '隅棟', '平'];
 
@@ -225,6 +225,9 @@ export default function MapPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
+  const addInputRef = useRef<HTMLInputElement>(null);
+  const replaceInputRef = useRef<HTMLInputElement>(null);
   const [currentMapIndex, setCurrentMapIndex] = useState(0);
 
   const [editingMode, setEditingMode] = useState<'pin' | 'dimension'>('pin');
@@ -264,61 +267,66 @@ export default function MapPage() {
     } catch { setError('保存に失敗しました。'); } finally { setIsSaving(false); }
   }, [id]);
 
-  // ★ 復活＆完全版！PDFファイルを超高画質の画像（JPEG）に自動変換してアップロード！
-  const uploadMapImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const uploadMapImage = async (e: React.ChangeEvent<HTMLInputElement>, mode: 'add' | 'replace') => {
     if (!project || !id || !e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
+    e.target.value = '';
     setIsSaving(true);
 
     try {
-      let fileToUpload = file;
+      const imageFiles: File[] = [];
 
       if (file.type === 'application/pdf') {
-        try {
-          const arrayBuffer = await file.arrayBuffer();
-          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-          const page = await pdf.getPage(1); 
+        const arrayBuffer = await file.arrayBuffer();
+        setUploadProgress('PDFを読み込み中...');
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const numPages = pdf.numPages;
 
+        for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+          setUploadProgress(`PDFを変換中... (${pageNum}/${numPages}ページ)`);
+          const page = await pdf.getPage(pageNum);
           const viewport = page.getViewport({ scale: 2.0 });
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
           if (!ctx) throw new Error('Canvas context not found');
-
           canvas.width = viewport.width;
           canvas.height = viewport.height;
-
-          // ★ TypeScriptのエラー（赤い波線）を回避する魔法（any型によるキャスト）
-          const renderContext: any = {
-            canvasContext: ctx,
-            viewport: viewport
-          };
-          await page.render(renderContext).promise;
-
+          await page.render({ canvas, viewport }).promise;
           const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
-          if (!blob) throw new Error('Blob conversion failed');
+          if (!blob) throw new Error('Blob変換失敗');
+          canvas.width = 0; canvas.height = 0;
+          const baseName = file.name.replace(/\.pdf$/i, '');
+          imageFiles.push(new File([blob], `${baseName}_p${pageNum}.jpg`, { type: 'image/jpeg' }));
+        }
+      } else {
+        imageFiles.push(file);
+      }
 
-          fileToUpload = new File([blob], file.name.replace(/\.pdf$/i, '.jpg'), { type: 'image/jpeg' });
-        } catch (pdfError) {
-          console.error("PDFの画像変換に失敗しました:", pdfError);
-          alert('PDFの読み取りに失敗しました。パスワード保護されているか、特殊な形式の可能性があります。');
-          setIsSaving(false);
-          return;
+      const newMapUrls = [...(project.mapUrls || [])];
+      let insertAt = mode === 'replace' ? currentMapIndex : newMapUrls.length;
+
+      for (let i = 0; i < imageFiles.length; i++) {
+        setUploadProgress(`アップロード中... (${i + 1}/${imageFiles.length})`);
+        const f = imageFiles[i];
+        const storageRef = ref(storage, `maps/${id}/${Date.now()}_${f.name}`);
+        await uploadBytes(storageRef, f);
+        const url = await getDownloadURL(storageRef);
+        if (mode === 'replace' && i === 0) {
+          newMapUrls[insertAt] = url;
+        } else {
+          newMapUrls.splice(insertAt + (mode === 'replace' ? 1 : 0) + (i > 0 ? i : 0), 0, url);
         }
       }
 
-      const storageRef = ref(storage, `maps/${id}/${Date.now()}_${fileToUpload.name}`);
-      await uploadBytes(storageRef, fileToUpload);
-      const url = await getDownloadURL(storageRef);
-
-      const newMapUrls = [...(project.mapUrls || [])];
-      newMapUrls[currentMapIndex] = url;
-
       setProject(prev => prev ? { ...prev, mapUrls: newMapUrls } : null);
       await updateDoc(doc(db, 'projects', id), { mapUrls: newMapUrls });
-    } catch (error) {
-      alert('図面のアップロードに失敗しました。電波の良いところでお試しください。');
+      setCurrentMapIndex(insertAt);
+    } catch (err) {
+      console.error(err);
+      setError('図面のアップロードに失敗しました。');
     } finally {
       setIsSaving(false);
+      setUploadProgress('');
     }
   };
 
@@ -437,7 +445,6 @@ export default function MapPage() {
   const currentMapRows = useMemo(() => mapRows.filter(r => (r.mapIndex || 0) === currentMapIndex), [mapRows, currentMapIndex]);
 
   const currentMapUrl = project?.mapUrls?.[currentMapIndex];
-  const totalMaps = project?.mapUrls?.length || 0;
 
   if (loading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={error} />;
@@ -482,12 +489,10 @@ export default function MapPage() {
               <button onClick={() => deleteMapPhoto(idx)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-lg transition-colors" title="この位置図を削除"><Trash2 className="w-4 h-4" /></button>
             </div>
           ))}
-          <button
-            onClick={() => setCurrentMapIndex(totalMaps)}
-            className={`px-4 py-3 rounded-xl text-lg font-black transition-all border-2 border-dashed ${currentMapIndex === totalMaps ? 'bg-white text-blue-600 border-blue-300 shadow-md' : 'text-gray-500 border-gray-300 hover:bg-white/50'}`}
-          >
-            <Plus className="w-5 h-5 inline-block" /> 追加
-          </button>
+          <label className="flex items-center gap-2 px-4 py-3 rounded-xl text-lg font-black text-gray-500 border-2 border-dashed border-gray-300 hover:bg-white/50 cursor-pointer transition-all" title="図面を追加">
+            <Plus className="w-5 h-5" /> 追加
+            <input ref={addInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => uploadMapImage(e, 'add')} disabled={isSaving} />
+          </label>
         </div>
 
         <div className={`grid ${showLegendTable ? 'grid-cols-1 lg:grid-cols-12' : 'grid-cols-1'} gap-8 items-start`}>
@@ -503,9 +508,20 @@ export default function MapPage() {
               </div>
             )}
             
+            {uploadProgress && (
+              <div className="mt-2 mb-2 flex items-center gap-3 px-5 py-3 bg-blue-50 border border-blue-200 rounded-2xl text-blue-700 font-bold text-sm">
+                <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                {uploadProgress}
+              </div>
+            )}
+
             <div className="w-full min-h-[400px] mt-2 bg-[#f1f5f9] rounded-3xl flex items-center justify-center overflow-hidden border-4 border-dashed border-gray-200 relative">
               {currentMapUrl ? (
                 <div className="relative inline-block pointer-events-auto shadow-md">
+                  <label className="absolute top-3 right-3 z-30 flex items-center gap-1.5 px-3 py-1.5 bg-white/90 hover:bg-white text-gray-700 text-xs font-bold rounded-xl shadow cursor-pointer border border-gray-200 transition-all" title="この図面を差し替え">
+                    <UploadCloud className="w-4 h-4" /> 差し替え
+                    <input ref={replaceInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => uploadMapImage(e, 'replace')} disabled={isSaving} />
+                  </label>
                   <img src={proxyUrl(currentMapUrl, `map_${currentMapIndex}_${sessionId}`)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full pointer-events-none" style={{ maxHeight: '70vh' }} alt="" />
                   
                   <div 
@@ -546,7 +562,7 @@ export default function MapPage() {
                   <UploadCloud className="w-20 h-20 mb-4 text-blue-400 group-hover:scale-110 transition-transform" />
                   <span className="text-2xl font-black text-blue-600 block mb-2">図面・位置図をアップロード</span>
                   <span className="text-sm font-bold text-gray-500">ここをタップして画像またはPDFを選択してください</span>
-                  <input type="file" accept="image/*,application/pdf" className="hidden" onChange={uploadMapImage} disabled={isSaving} />
+                  <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => uploadMapImage(e, 'add')} disabled={isSaving} />
                 </label>
               )}
             </div>
