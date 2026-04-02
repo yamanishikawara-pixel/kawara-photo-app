@@ -264,8 +264,6 @@ export default function MapPage() {
   const [mapRows, setMapRows] = useState<MapRow[]>([]);
   const [mapDimensionLines, setMapDimensionLines] = useState<DimensionLine[]>([]);
   const [mapRotations, setMapRotations] = useState<number[]>([]);
-  
-  // ★ 新機能：白塗りシールのデータを管理するステート
   const [whiteoutBoxes, setWhiteoutBoxes] = useState<WhiteoutBox[]>([]);
   
   const [selectedPinId, setSelectedPinId] = useState<number | null>(null);
@@ -284,8 +282,12 @@ export default function MapPage() {
   const [editingMode, setEditingMode] = useState<'pin' | 'dimension' | 'whiteout'>('pin');
   const [drawingStartPoint, setDrawingStartPoint] = useState<{ x: number; y: number } | null>(null);
   const [activeColor, setActiveColor] = useState<string>(COLOR_PALETTE[0].value); 
-
   const [showLegendTable, setShowLegendTable] = useState(true);
+
+  // ★ 新機能：白塗りシールをドラッグで作成するためのステート
+  const [whiteoutStart, setWhiteoutStart] = useState<{ x: number; y: number } | null>(null);
+  const [whiteoutCurrent, setWhiteoutCurrent] = useState<{ x: number; y: number } | null>(null);
+  const isDraggingWhiteout = whiteoutStart !== null;
 
   useEffect(() => {
     if (!id) return;
@@ -300,7 +302,6 @@ export default function MapPage() {
           setMapDimensionLines(data.mapDimensionLines || []);
           setShowLegendTable(data.showLegendTable !== false);
           setMapRotations(data.mapRotations || []);
-          // 白塗りデータを読み込み
           setWhiteoutBoxes((data as any).whiteoutBoxes || []);
         } else { setError('プロジェクトが見つかりません。'); }
       } catch { setError('データの読み込みに失敗しました。'); } finally { setLoading(false); }
@@ -464,14 +465,45 @@ export default function MapPage() {
       }
     } else if (editingMode === 'whiteout') {
       if (selectedWhiteoutId !== null) { setSelectedWhiteoutId(null); return; }
-      // 新しい白塗りシールを配置
-      const newBox: WhiteoutBox = { id: Date.now(), x, y, width: 15, height: 5, mapIndex: currentMapIndex };
-      const newBoxes = [...whiteoutBoxes, newBox];
-      setWhiteoutBoxes(newBoxes);
-      saveProjectMapData(mapPins, mapRows, mapDimensionLines, newBoxes, showLegendTable);
-      setSelectedWhiteoutId(newBox.id);
+      // ★ 新機能：ドラッグの開始位置を記録
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setWhiteoutStart({ x, y });
+      setWhiteoutCurrent({ x, y });
     }
   }, [editingMode, selectedPinId, selectedDimensionLineId, selectedWhiteoutId, mapPins, mapRows, mapDimensionLines, whiteoutBoxes, currentMapIndex, drawingStartPoint, activeColor, showLegendTable, saveProjectMapData]);
+
+  // ★ 新機能：ドラッグ中にプレビュー四角形を広げる
+  const handleMapPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (editingMode === 'whiteout' && whiteoutStart) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+      const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+      setWhiteoutCurrent({ x, y });
+    }
+  }, [editingMode, whiteoutStart]);
+
+  // ★ 新機能：ドラッグ終了時に白塗りシールを確定させる
+  const handleMapPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (editingMode === 'whiteout' && whiteoutStart && whiteoutCurrent) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+      const width = Math.abs(whiteoutStart.x - whiteoutCurrent.x);
+      const height = Math.abs(whiteoutStart.y - whiteoutCurrent.y);
+
+      // 小さすぎる誤クリックは無視する
+      if (width > 0.5 && height > 0.5) {
+        const centerX = Math.min(whiteoutStart.x, whiteoutCurrent.x) + width / 2;
+        const centerY = Math.min(whiteoutStart.y, whiteoutCurrent.y) + height / 2;
+
+        const newBox: WhiteoutBox = { id: Date.now(), x: centerX, y: centerY, width, height, mapIndex: currentMapIndex };
+        const newBoxes = [...whiteoutBoxes, newBox];
+        setWhiteoutBoxes(newBoxes);
+        saveProjectMapData(mapPins, mapRows, mapDimensionLines, newBoxes, showLegendTable);
+        setSelectedWhiteoutId(newBox.id);
+      }
+      setWhiteoutStart(null);
+      setWhiteoutCurrent(null);
+    }
+  }, [editingMode, whiteoutStart, whiteoutCurrent, whiteoutBoxes, currentMapIndex, mapPins, mapRows, mapDimensionLines, showLegendTable, saveProjectMapData]);
 
   const updateDimensionLine = useCallback((lineId: number, newProps: Partial<DimensionLine>) => {
     setMapDimensionLines(prev => {
@@ -575,13 +607,11 @@ export default function MapPage() {
               <span className="font-bold text-gray-500 mr-1 w-full sm:w-auto">描画ツール:</span>
               <button onClick={() => { setEditingMode('pin'); setDrawingStartPoint(null); }} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 lg:px-6 py-3 rounded-xl font-black transition-all ${editingMode === 'pin' ? 'bg-red-500 text-white shadow-lg' : 'text-gray-600 bg-gray-50 hover:bg-gray-100'}`}><MapPin className="w-5 h-5"/> 番号ピン</button>
               <button onClick={() => { setEditingMode('dimension'); setDrawingStartPoint(null); }} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 lg:px-6 py-3 rounded-xl font-black transition-all ${editingMode === 'dimension' ? 'bg-gray-900 text-white shadow-lg' : 'text-gray-600 bg-gray-50 hover:bg-gray-100'}`}><Ruler className="w-5 h-5"/> 線・寸法</button>
-              {/* ★ 新機能：白塗りツールボタンを追加 */}
               <button onClick={() => { setEditingMode('whiteout'); setDrawingStartPoint(null); }} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 lg:px-6 py-3 rounded-xl font-black transition-all ${editingMode === 'whiteout' ? 'bg-yellow-400 text-gray-900 shadow-lg' : 'text-gray-600 bg-gray-50 hover:bg-gray-100'}`}><Eraser className="w-5 h-5"/> 文字消し</button>
             </div>
           </div>
         </div>
 
-        {/* タブと追加ボタン */}
         <div className="flex flex-wrap gap-2 mb-6 no-print p-2 bg-gray-100 rounded-2xl w-fit items-center">
           {project?.mapUrls?.map((_, idx) => (
             <div key={idx} className="flex items-center gap-1">
@@ -618,7 +648,9 @@ export default function MapPage() {
             <div className="w-full min-h-[400px] mt-2 bg-[#f1f5f9] rounded-3xl flex items-center justify-center overflow-hidden border-4 border-dashed border-gray-200 relative">
               {currentMapUrl ? (
                 <div className="relative inline-block pointer-events-auto shadow-md">
-                  <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5">
+                  
+                  {/* ★ ドラッグ中はボタン類をフワッと透明にして隠す！ */}
+                  <div className={`absolute top-3 right-3 z-30 flex items-center gap-1.5 transition-opacity duration-200 ${isDraggingWhiteout ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                     <button onClick={() => rotateCurrentMap(-90)} className="p-2 bg-white/90 hover:bg-white text-gray-700 rounded-xl shadow border border-gray-200 transition-all" title="左に90°回転"><RotateCcw className="w-4 h-4" /></button>
                     <button onClick={() => rotateCurrentMap(90)} className="p-2 bg-white/90 hover:bg-white text-gray-700 rounded-xl shadow border border-gray-200 transition-all" title="右に90°回転"><RotateCw className="w-4 h-4" /></button>
                     <label className="flex items-center gap-1.5 px-3 py-2 bg-white/90 hover:bg-white text-gray-700 text-xs font-bold rounded-xl shadow cursor-pointer border border-gray-200 transition-all" title="この図面を差し替え">
@@ -626,6 +658,7 @@ export default function MapPage() {
                       <input ref={replaceInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => uploadMapImage(e, 'replace')} disabled={isSaving} />
                     </label>
                   </div>
+                  
                   <img
                     src={proxyUrl(currentMapUrl, `map_${currentMapIndex}_${sessionId}`)}
                     crossOrigin="anonymous"
@@ -637,9 +670,24 @@ export default function MapPage() {
                   <div 
                     className="absolute inset-0 z-0 cursor-crosshair touch-none"
                     onPointerDown={handleMapPointerDown}
+                    onPointerMove={handleMapPointerMove}
+                    onPointerUp={handleMapPointerUp}
+                    onPointerCancel={handleMapPointerUp}
                   />
 
-                  {/* ★ 新機能：白塗りシールを描画 */}
+                  {/* ★ ドラッグ中に表示される半透明の青い「プレビュー枠」 */}
+                  {isDraggingWhiteout && whiteoutCurrent && (
+                    <div
+                      className="absolute bg-blue-500/30 border-2 border-blue-500 pointer-events-none z-50"
+                      style={{
+                        left: `${Math.min(whiteoutStart.x, whiteoutCurrent.x)}%`,
+                        top: `${Math.min(whiteoutStart.y, whiteoutCurrent.y)}%`,
+                        width: `${Math.abs(whiteoutStart.x - whiteoutCurrent.x)}%`,
+                        height: `${Math.abs(whiteoutStart.y - whiteoutCurrent.y)}%`,
+                      }}
+                    />
+                  )}
+
                   {currentWhiteoutBoxes.map(box => (
                     <WhiteoutMarker
                       key={box.id}
@@ -664,11 +712,12 @@ export default function MapPage() {
                     <div style={{ left: `${drawingStartPoint.x}%`, top: `${drawingStartPoint.y}%`, backgroundColor: activeColor }} className="absolute w-4 h-4 rounded-full border-2 border-white shadow-xl pointer-events-none z-20 transform -translate-x-1/2 -translate-y-1/2" />
                   )}
 
-                  <div className="absolute top-4 left-4 lg:top-6 lg:left-6 bg-black/80 backdrop-blur text-white text-xs lg:text-sm px-4 lg:px-6 py-2 lg:py-3 rounded-full font-black pointer-events-none shadow-2xl border-2 border-white/20 z-10 flex items-center gap-2">
+                  {/* ★ こちらもドラッグ中はフワッと消えます */}
+                  <div className={`absolute top-4 left-4 lg:top-6 lg:left-6 bg-black/80 backdrop-blur text-white text-xs lg:text-sm px-4 lg:px-6 py-2 lg:py-3 rounded-full font-black pointer-events-none shadow-2xl border-2 border-white/20 z-10 flex items-center gap-2 transition-opacity duration-200 ${isDraggingWhiteout ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                     {editingMode === 'pin' && <><LayoutGrid className="w-4 h-4 text-red-400"/> タップでピンを追加</>}
                     {editingMode === 'dimension' && !drawingStartPoint && <><Ruler className="w-4 h-4 text-blue-400"/> 線の始点をタップ</>}
                     {editingMode === 'dimension' && drawingStartPoint && <><Ruler className="w-4 h-4 text-yellow-400"/> 線の終点をタップ</>}
-                    {editingMode === 'whiteout' && <><Eraser className="w-4 h-4 text-yellow-400"/> 隠したい文字の上をタップ</>}
+                    {editingMode === 'whiteout' && <><Eraser className="w-4 h-4 text-yellow-400"/> 隠したい文字の上をドラッグ</>}
                   </div>
 
                   {currentMapPins.map(pin => (
