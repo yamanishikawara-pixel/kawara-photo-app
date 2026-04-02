@@ -9,6 +9,10 @@ import { useDraggablePin, proxyUrl } from '../shared/utils';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 
+// ★ 妥協なし！PDF変換ライブラリを本気で導入
+import * as pdfjsLib from 'pdfjs-dist';
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
 const DEFAULT_MAP_PART_NAMES = ['軒先', '袖', 'ケラバ', '谷', '棟', '隅棟', '平'];
 
 const COLOR_PALETTE = [
@@ -260,6 +264,7 @@ export default function MapPage() {
     } catch { setError('保存に失敗しました。'); } finally { setIsSaving(false); }
   }, [id]);
 
+  // ★ 復活＆完全版！PDFファイルを超高画質の画像（JPEG）に自動変換してアップロード！
   const uploadMapImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!project || !id || !e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
@@ -269,9 +274,36 @@ export default function MapPage() {
       let fileToUpload = file;
 
       if (file.type === 'application/pdf') {
-         alert('申し訳ありませんが、現在の環境ではPDFを直接編集することができません。\nお手数ですが、一度PDFを開いて「スクリーンショット（写真）」を撮っていただき、その画像をアップロードしてください。');
-         setIsSaving(false);
-         return;
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          const page = await pdf.getPage(1); 
+
+          const viewport = page.getViewport({ scale: 2.0 });
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          if (!ctx) throw new Error('Canvas context not found');
+
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+
+          // ★ TypeScriptのエラー（赤い波線）を回避する魔法（any型によるキャスト）
+          const renderContext: any = {
+            canvasContext: ctx,
+            viewport: viewport
+          };
+          await page.render(renderContext).promise;
+
+          const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+          if (!blob) throw new Error('Blob conversion failed');
+
+          fileToUpload = new File([blob], file.name.replace(/\.pdf$/i, '.jpg'), { type: 'image/jpeg' });
+        } catch (pdfError) {
+          console.error("PDFの画像変換に失敗しました:", pdfError);
+          alert('PDFの読み取りに失敗しました。パスワード保護されているか、特殊な形式の可能性があります。');
+          setIsSaving(false);
+          return;
+        }
       }
 
       const storageRef = ref(storage, `maps/${id}/${Date.now()}_${fileToUpload.name}`);
@@ -513,7 +545,7 @@ export default function MapPage() {
                 <label className="flex flex-col items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors w-full h-full py-24 group">
                   <UploadCloud className="w-20 h-20 mb-4 text-blue-400 group-hover:scale-110 transition-transform" />
                   <span className="text-2xl font-black text-blue-600 block mb-2">図面・位置図をアップロード</span>
-                  <span className="text-sm font-bold text-gray-500">ここをタップして画像またはPDFを選択してください<br/>※PDFの場合はスクリーンショットを撮ってアップロードしてください</span>
+                  <span className="text-sm font-bold text-gray-500">ここをタップして画像またはPDFを選択してください</span>
                   <input type="file" accept="image/*,application/pdf" className="hidden" onChange={uploadMapImage} disabled={isSaving} />
                 </label>
               )}
