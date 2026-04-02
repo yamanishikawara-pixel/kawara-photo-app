@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, MapPin, CaseUpper, FileText, LayoutGrid, Ruler, Paintbrush, Save } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, MapPin, CaseUpper, FileText, LayoutGrid, Ruler, Paintbrush, Save, UploadCloud } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { ref, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import type { MapPin as MapPinT, MapRow, Project, DimensionLine } from '../types';
 import { useDraggablePin, proxyUrl } from '../shared/utils';
@@ -18,7 +18,6 @@ const COLOR_PALETTE = [
   { name: "Red", value: "#ef4444" },
 ];
 
-// ★チューニング1：DimensionLineMarkerをReact.memoで囲み、無駄な再描画を防ぐ
 const DimensionLineMarker = React.memo(({ line, isSelected, onSelect, onRemove, onTextChange, onUpdate }: { line: DimensionLine; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; onUpdate: (props: Partial<DimensionLine>) => void; }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [localStart, setLocalStart] = useState(line.start);
@@ -160,7 +159,6 @@ const DimensionLineMarker = React.memo(({ line, isSelected, onSelect, onRemove, 
   );
 });
 
-// ★チューニング2：MapMarkerをReact.memoで囲む
 const MapMarker = React.memo(({ pin, isSelected, onDragEnd, onClick, onSizeChange, onRemove }: { pin: MapPinT; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; onSizeChange: (newSize: number) => void; onRemove: () => void; }) => {
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(pin.x, pin.y, onDragEnd);
   const currentSize = pin.size || 1; 
@@ -193,7 +191,6 @@ const MapMarker = React.memo(({ pin, isSelected, onDragEnd, onClick, onSizeChang
   );
 });
 
-// ★チューニング3：凡例表の行もReact.memoで囲む
 const LegendRow = React.memo(({ row, isSelected, onSelect, onChange, onRemove }: { row: MapRow; isSelected: boolean; onSelect: () => void; onChange: (updates: Partial<MapRow>) => void; onRemove: () => void; }) => {
   return (
     <div onPointerDown={onSelect} className={`grid grid-cols-12 text-base lg:text-lg border-b border-gray-100 last:border-b-0 cursor-pointer ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
@@ -250,7 +247,6 @@ export default function MapPage() {
     fetchData();
   }, [id]);
 
-  // ★チューニング4：保存関数をuseCallbackでメモ化
   const saveProjectMapData = useCallback(async (newPins: MapPinT[], newRows: MapRow[], newDimLines: DimensionLine[], newTableShow: boolean) => {
     if (!id) return;
     setIsSaving(true);
@@ -263,6 +259,28 @@ export default function MapPage() {
       });
     } catch { setError('保存に失敗しました。'); } finally { setIsSaving(false); }
   }, [id]);
+
+  // ★復活：アップロード機能
+  const uploadMapImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!project || !id || !e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    setIsSaving(true);
+    try {
+      const storageRef = ref(storage, `maps/${id}/${Date.now()}_${file.name}`);
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+
+      const newMapUrls = [...(project.mapUrls || [])];
+      newMapUrls[currentMapIndex] = url;
+
+      setProject(prev => prev ? { ...prev, mapUrls: newMapUrls } : null);
+      await updateDoc(doc(db, 'projects', id), { mapUrls: newMapUrls });
+    } catch (error) {
+      alert('図面のアップロードに失敗しました。');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const deleteMapPhoto = useCallback(async (mapIndex: number) => {
     if (!project || !id) return;
@@ -283,7 +301,9 @@ export default function MapPage() {
     setMapRows(newRows);
     setMapDimensionLines(newDimLines);
     setProject({ ...project, mapUrls: newMapUrls });
-    if (currentMapIndex >= newMapUrls.length) setCurrentMapIndex(Math.max(0, newMapUrls.length - 1));
+    
+    const nextIndex = currentMapIndex >= newMapUrls.length ? Math.max(0, newMapUrls.length - 1) : currentMapIndex;
+    setCurrentMapIndex(nextIndex);
 
     setIsSaving(true);
     try {
@@ -325,7 +345,6 @@ export default function MapPage() {
     }
   }, [editingMode, selectedPinId, selectedDimensionLineId, mapPins, mapRows, mapDimensionLines, currentMapIndex, drawingStartPoint, activeColor, showLegendTable, saveProjectMapData]);
 
-  // ★チューニング5：各ハンドラーをuseCallbackでメモ化
   const updateDimensionLine = useCallback((lineId: number, newProps: Partial<DimensionLine>) => {
     setMapDimensionLines(prev => {
       const newDimLines = prev.map(l => l.id === lineId ? { ...l, ...newProps } : l);
@@ -373,7 +392,6 @@ export default function MapPage() {
     setSelectedRowId(null);
   }, [mapPins, mapDimensionLines, showLegendTable, saveProjectMapData]);
 
-  // ★チューニング6：表示用の配列をuseMemoでキャッシュ
   const currentMapPins = useMemo(() => mapPins.filter(p => (p.mapIndex || 0) === currentMapIndex), [mapPins, currentMapIndex]);
   const currentMapDimensionLines = useMemo(() => mapDimensionLines.filter(l => (l.mapIndex || 0) === currentMapIndex), [mapDimensionLines, currentMapIndex]);
   const currentMapRows = useMemo(() => mapRows.filter(r => (r.mapIndex || 0) === currentMapIndex), [mapRows, currentMapIndex]);
@@ -416,16 +434,22 @@ export default function MapPage() {
           </div>
         </div>
 
-        {totalMaps > 0 && (
-          <div className="flex flex-wrap gap-2 mb-6 no-print p-2 bg-gray-100 rounded-2xl w-fit">
-            {project?.mapUrls?.map((_, idx) => (
-              <div key={idx} className="flex items-center gap-1">
-                <button onClick={() => setCurrentMapIndex(idx)} className={`px-6 py-3 rounded-xl text-lg font-black transition-all ${currentMapIndex === idx ? 'bg-white text-blue-600 shadow-md' : 'text-gray-500 hover:bg-white/50'}`}>図面 {idx + 1}</button>
-                <button onClick={() => deleteMapPhoto(idx)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-lg transition-colors" title="この位置図を削除"><Trash2 className="w-4 h-4" /></button>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* ★ タブと追加ボタン */}
+        <div className="flex flex-wrap gap-2 mb-6 no-print p-2 bg-gray-100 rounded-2xl w-fit items-center">
+          {project?.mapUrls?.map((_, idx) => (
+            <div key={idx} className="flex items-center gap-1">
+              <button onClick={() => setCurrentMapIndex(idx)} className={`px-6 py-3 rounded-xl text-lg font-black transition-all ${currentMapIndex === idx ? 'bg-white text-blue-600 shadow-md' : 'text-gray-500 hover:bg-white/50'}`}>図面 {idx + 1}</button>
+              <button onClick={() => deleteMapPhoto(idx)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-lg transition-colors" title="この位置図を削除"><Trash2 className="w-4 h-4" /></button>
+            </div>
+          ))}
+          {/* 新しい図面を追加するタブ */}
+          <button
+            onClick={() => setCurrentMapIndex(totalMaps)}
+            className={`px-4 py-3 rounded-xl text-lg font-black transition-all border-2 border-dashed ${currentMapIndex === totalMaps ? 'bg-white text-blue-600 border-blue-300 shadow-md' : 'text-gray-500 border-gray-300 hover:bg-white/50'}`}
+          >
+            <Plus className="w-5 h-5 inline-block" /> 追加
+          </button>
+        </div>
 
         <div className={`grid ${showLegendTable ? 'grid-cols-1 lg:grid-cols-12' : 'grid-cols-1'} gap-8 items-start`}>
           
@@ -479,7 +503,13 @@ export default function MapPage() {
                   ))}
                 </div>
               ) : (
-                <div className="text-center text-gray-400 py-16"><MapPin className="w-20 h-20 mx-auto mb-4 opacity-20" /><span className="text-xl font-black block">位置図・図面が未登録です</span></div>
+                /* ★ 復活：未登録時のアップロードボタン */
+                <label className="flex flex-col items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors w-full h-full py-24 group">
+                  <UploadCloud className="w-20 h-20 mb-4 text-blue-400 group-hover:scale-110 transition-transform" />
+                  <span className="text-2xl font-black text-blue-600 block mb-2">図面・位置図をアップロード</span>
+                  <span className="text-sm font-bold text-gray-500">ここをタップして画像を選択してください</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={uploadMapImage} disabled={isSaving} />
+                </label>
               )}
             </div>
           </div>
