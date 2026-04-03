@@ -481,16 +481,15 @@ export default function PdfExportPage() {
                                     markerEnd={`url(#cad-tick-pdf-map-${line.id})`}
                                   />
                                 </svg>
-                                {/* ★変更：寸法の文字は図面と一緒に回るので逆回転補正を削除 */}
                                 {line.text && (
                                   <div
-                                    style={{ 
-                                      left: `${midX}%`, 
-                                      top: `${midY}%`, 
-                                      color: color, 
+                                    style={{
+                                      left: `${midX}%`,
+                                      top: `${midY}%`,
+                                      color: color,
                                       backgroundColor: 'rgba(0, 0, 0, 0.5)',
                                       fontSize: `${dynamicFontSize}px`,
-                                      transform: `translate(-50%, -50%)`
+                                      transform: `translate(-50%, -50%) rotate(${-totalRotation}deg)`
                                     }}
                                     className="absolute z-20 font-bold px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap"
                                   >

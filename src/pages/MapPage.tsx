@@ -301,14 +301,14 @@ const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, 
       
       {line.text && (
         <div
-          style={{ 
-            left: `${midPoint.x}%`, 
-            top: `${midPoint.y}%`, 
-            color: color, 
-            backgroundColor: 'rgba(0, 0, 0, 0.5)', 
+          style={{
+            left: `${midPoint.x}%`,
+            top: `${midPoint.y}%`,
+            color: color,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
             backdropFilter: 'blur(2px)',
             fontSize: `${14 + (thickness - 2) * 4}px`,
-            transform: `translate(-50%, -50%)`
+            transform: `translate(-50%, -50%) rotate(${-rotation}deg)`
           }}
           className={`absolute font-bold px-2 py-0.5 rounded pointer-events-none whitespace-nowrap border border-white/20 shadow-sm ${isSelected ? 'z-40' : 'z-20'}`}
         >
