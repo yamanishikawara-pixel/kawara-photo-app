@@ -270,31 +270,31 @@ export default function PdfExportPage() {
             margin: 0 !important;
           }
 
-          .pdf-page-wrapper { 
+          .pdf-page-wrapper {
             position: relative !important;
             display: block !important;
-            width: 210mm !important; 
-            height: auto !important;
-            margin: 0 !important; 
+            width: 794px !important;
+            height: 1123px !important;
+            margin: 0 !important;
             padding: 0 !important;
             overflow: hidden !important;
             box-shadow: none !important;
-            transform: none !important; 
+            transform: none !important;
             -webkit-transform: none !important;
-            
+
             break-after: auto !important;
-            page-break-after: auto !important; 
+            page-break-after: auto !important;
             -webkit-page-break-after: auto !important;
 
             break-before: page !important;
             page-break-before: always !important;
             -webkit-page-break-before: always !important;
-            
+
             break-inside: avoid !important;
             page-break-inside: avoid !important;
             -webkit-page-break-inside: avoid !important;
           }
-          
+
           .pdf-container-wrapper > .pdf-page-wrapper:first-child {
             break-before: auto !important;
             page-break-before: auto !important;
@@ -305,20 +305,15 @@ export default function PdfExportPage() {
             position: relative !important;
             top: auto !important;
             left: auto !important;
-            width: 210mm !important;
-            height: 265mm !important;
-            padding: 8mm !important;
+            width: 794px !important;
+            height: 1123px !important;
+            padding: 15mm !important;
             box-sizing: border-box !important;
             overflow: hidden !important;
             transform: none !important;
             -webkit-transform: none !important;
             transform-origin: unset !important;
             -webkit-transform-origin: unset !important;
-          }
-
-          .pdf-photo-row {
-            height: 70mm !important;
-            flex-shrink: 0 !important;
           }
 
           :has(> .pdf-container-wrapper) {
@@ -547,7 +542,7 @@ export default function PdfExportPage() {
                   const maxImgHeight = isRotated ? '120mm' : '78mm';
 
                   return (
-                    <div key={i} className="pdf-photo-row h-[30%] shrink-0 flex gap-2 p-1.5 rounded border border-gray-500 bg-white print:border-black">
+                    <div key={i} className="h-[30%] shrink-0 flex gap-2 p-1.5 rounded border border-gray-500 bg-white print:border-black">
                       <div className="w-[60%] h-full flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {p.image ? (
                           <div className="relative" style={{ display: 'inline-block' }}>
@@ -656,7 +651,7 @@ export default function PdfExportPage() {
                   const maxImgHeight = isRotated ? '120mm' : '78mm';
 
                   return (
-                    <div key={i} className="pdf-photo-row h-[30%] shrink-0 flex gap-2 p-1.5 rounded border border-gray-500 bg-white print:border-black">
+                    <div key={i} className="h-[30%] shrink-0 flex gap-2 p-1.5 rounded border border-gray-500 bg-white print:border-black">
                       <div className="w-[60%] h-full flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {m.image ? (
                           <div className="relative" style={{ display: 'inline-block' }}>
