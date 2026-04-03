@@ -13,6 +13,7 @@ export interface DimensionLine {
   size?: number;
   color?: string;
   mapIndex?: number;
+  textRotation?: number;
 }
 export interface Photo {
   id: number;

@@ -489,7 +489,7 @@ export default function PdfExportPage() {
                                       color: color,
                                       backgroundColor: 'rgba(0, 0, 0, 0.5)',
                                       fontSize: `${dynamicFontSize}px`,
-                                      transform: `translate(-50%, -50%) rotate(${-totalRotation}deg)`
+                                      transform: `translate(-50%, -50%) rotate(${line.textRotation ?? 0}deg)`
                                     }}
                                     className="absolute z-20 font-bold px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap"
                                   >

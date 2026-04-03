@@ -308,7 +308,7 @@ const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, 
             backgroundColor: 'rgba(0, 0, 0, 0.5)',
             backdropFilter: 'blur(2px)',
             fontSize: `${14 + (thickness - 2) * 4}px`,
-            transform: `translate(-50%, -50%) rotate(${-rotation}deg)`
+            transform: `translate(-50%, -50%) rotate(${line.textRotation ?? 0}deg)`
           }}
           className={`absolute font-bold px-2 py-0.5 rounded pointer-events-none whitespace-nowrap border border-white/20 shadow-sm ${isSelected ? 'z-40' : 'z-20'}`}
         >
@@ -625,7 +625,7 @@ export default function MapPage() {
           } else {
             const newLineId = Date.now();
             const newDimLines: DimensionLine[] = [...mapDimensionLines, {
-              id: newLineId, start: drawingStartPoint, end: { x, y }, text: "", size: 2, color: activeColor, mapIndex: currentMapIndex
+              id: newLineId, start: drawingStartPoint, end: { x, y }, text: "", size: 2, color: activeColor, mapIndex: currentMapIndex, textRotation: -(mapRotations[currentMapIndex] || 0)
             }];
             setMapDimensionLines(newDimLines);
             saveProjectMapData(mapPins, mapRows, newDimLines, whiteoutBoxes, showLegendTable);
