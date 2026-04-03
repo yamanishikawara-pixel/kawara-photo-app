@@ -440,10 +440,9 @@ export default function PdfExportPage() {
                             <div key={box.id} className="absolute bg-white" style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%`, transform: 'translate(-50%, -50%)', zIndex: 5 }} />
                           ))}
 
-                          {/* ★変更：ピンの文字は図面と一緒に回るので逆回転補正を削除 */}
                           {(project.mapPins ?? []).filter(p => p.mapIndex === mapIndex).map(pin => (
                               <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: `translate(-50%, -50%)`, zIndex: 10 }} className="absolute">
-                                <div style={{ transform: `scale(${pin.size ?? 1})` }}>
+                                <div style={{ transform: `scale(${pin.size ?? 1}) rotate(${pin.textRotation ?? 0}deg)` }}>
                                   {pin.type === 'arrow' ? (
                                     <div className="flex items-center gap-1 px-1 rounded bg-white/70 border border-red-200"><span className="font-bold text-[24px] text-red-600" style={{ transform: `rotate(${pin.rotation ?? 0}deg)` }}>➡</span><span className="font-bold text-[20px] text-red-600">{pin.label}</span></div>
                                   ) : (

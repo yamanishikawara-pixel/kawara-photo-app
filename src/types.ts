@@ -50,6 +50,8 @@ export interface MapPin {
   rotation: number;
   /** 位置図上の表示スケール（未指定は 1） */
   size?: number;
+  /** ピン追加時のマップ回転角の逆数（文字固定用） */
+  textRotation?: number;
 }
 
 export interface MapLine {
