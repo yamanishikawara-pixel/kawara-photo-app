@@ -378,7 +378,7 @@ export default function PdfExportPage() {
               </div>
             )}
             {project.shareToken && (
-              <div className="absolute bottom-[18mm] print:bottom-[12mm] left-[15mm] print:left-[8mm] flex flex-col items-center gap-1">
+              <div className="absolute bottom-[18mm] print:bottom-[12mm] left-0 right-0 flex flex-col items-center gap-1">
                 <QRCodeSVG value={`${window.location.origin}/share/${id}/${project.shareToken}`} size={60} level="M" />
                 <span className="text-[9px] text-gray-500">スマホで閲覧</span>
               </div>
