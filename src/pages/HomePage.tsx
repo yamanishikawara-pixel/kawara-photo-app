@@ -14,11 +14,14 @@ import { ErrorMessage } from '../shared/ErrorMessage';
 function QrModal({ url, onClose }: { url: string; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(url).then(() => {
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    });
+    } catch {
+      alert('URLのコピーに失敗しました。\n' + url);
+    }
   };
 
   return (

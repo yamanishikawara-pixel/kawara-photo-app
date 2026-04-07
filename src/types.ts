@@ -76,6 +76,15 @@ export interface Material {
   rotation: number;
 }
 
+export interface WhiteoutBox {
+  id: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  mapIndex?: number;
+}
+
 export interface Project {
   projectName: string;
   projectLocation: string;
@@ -95,5 +104,6 @@ export interface Project {
   showLegendTable?: boolean;
   mapRotations?: number[];
   shareToken?: string;
+  whiteoutBoxes?: WhiteoutBox[];
 }
 

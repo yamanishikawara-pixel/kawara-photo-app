@@ -6,7 +6,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import type { Circle, MapRow, MapLine, Photo, Project, Material } from '../types';
+import type { Circle, MapRow, MapLine, Photo, Project, Material, WhiteoutBox } from '../types';
 import kawaraLogo from '../assets/kawara-logo.png';
 import { A4_HEIGHT_PX, A4_WIDTH_PX, getPreviewScale, proxyUrl } from '../shared/utils';
 import { ErrorMessage } from '../shared/ErrorMessage';
@@ -37,12 +37,13 @@ const COVER_FIELDS: { label: string; key: keyof Project }[] = [
   { label: '作成年月日', key: 'creationDate' },
 ];
 
+let _emptyIdCounter = 0;
 function createEmptyPhoto(): Photo & { circles?: Circle[] } {
-  return { id: Math.random(), image: null, photoNumber: '', shootingDate: '', locationMap: '', process: '', description: '', circles: [] };
+  return { id: -(++_emptyIdCounter), image: null, photoNumber: '', shootingDate: '', locationMap: '', process: '', description: '', circles: [] };
 }
 
 function createEmptyMaterial(): Material {
-  return { id: Math.random(), image: null, name: '', manufacturer: '', specification: '', remarks: '', rotation: 0 };
+  return { id: -(++_emptyIdCounter), image: null, name: '', manufacturer: '', specification: '', remarks: '', rotation: 0 };
 }
 
 function PdfLineLegend() {
@@ -436,7 +437,7 @@ export default function PdfExportPage() {
                           />
                           
                           {/* 白塗りシール */}
-                          {((project as any).whiteoutBoxes ?? []).filter((b: any) => b.mapIndex === mapIndex).map((box: any) => (
+                          {(project.whiteoutBoxes ?? []).filter((b: WhiteoutBox) => b.mapIndex === mapIndex).map((box: WhiteoutBox) => (
                             <div key={box.id} className="absolute bg-white" style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%`, transform: 'translate(-50%, -50%)', zIndex: 5 }} />
                           ))}
 

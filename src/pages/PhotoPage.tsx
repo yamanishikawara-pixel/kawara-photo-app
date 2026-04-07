@@ -327,10 +327,10 @@ export default function PhotoPage() {
     return () => unsub();
   }, [id]);
 
-  const updatePhoto = async (photoId: number, field: string, value: any) => {
+  const updatePhoto = async (photoId: number, field: keyof Photo, value: Photo[keyof Photo]) => {
     if (!project || !id) return;
     const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, [field]: value } : p);
-    setProject({ ...project, photos: newPhotos });
+    setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
     await updateDoc(doc(db, "projects", id), { photos: newPhotos });
   };
 
@@ -424,7 +424,7 @@ export default function PhotoPage() {
     for (let i = 0; i < files.length; i++) {
       let targetIndex = newPhotos.findIndex(p => !p.image);
       if (targetIndex === -1) {
-        newPhotos.push({ id: Date.now() + Math.random(), image: null, photoNumber: String(newPhotos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], dimensionLines: [], rotation: 0 });
+        newPhotos.push({ id: Date.now() + i, image: null, photoNumber: String(newPhotos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], dimensionLines: [], rotation: 0 });
         targetIndex = newPhotos.length - 1;
       }
       
@@ -435,10 +435,11 @@ export default function PhotoPage() {
         const url = await getDownloadURL(r);
         
         newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: todayStr, circles: [], dimensionLines: [] };
-        setProject({ ...project, photos: newPhotos });
+        setProject((prev) => prev ? { ...prev, photos: [...newPhotos] } : null);
         await updateDoc(doc(db, "projects", id), { photos: newPhotos });
-      } catch (error) { 
-        console.error("アップロード失敗", error); 
+      } catch (error) {
+        console.error("アップロード失敗", error);
+        alert(`${i + 1}枚目のアップロードに失敗しました。`);
       }
       
       uploadedCount++;

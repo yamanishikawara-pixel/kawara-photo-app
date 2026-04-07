@@ -4,7 +4,7 @@ import { ArrowLeft, Plus, Trash2, MapPin, CaseUpper, FileText, LayoutGrid, Ruler
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../firebase';
-import type { MapPin as MapPinT, MapRow, Project, DimensionLine } from '../types';
+import type { MapPin as MapPinT, MapRow, Project, DimensionLine, WhiteoutBox } from '../types';
 import { proxyUrl } from '../shared/utils';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
@@ -22,14 +22,6 @@ const COLOR_PALETTE = [
   { name: "Red", value: "#ef4444" },
 ];
 
-export interface WhiteoutBox {
-  id: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  mapIndex?: number;
-}
 
 const getLocalPoint = (e: React.PointerEvent<Element>, angle: number) => {
   const target = e.currentTarget;
@@ -411,7 +403,7 @@ export default function MapPage() {
           setMapDimensionLines(data.mapDimensionLines || []);
           setShowLegendTable(data.showLegendTable !== false);
           setMapRotations(data.mapRotations || []);
-          setWhiteoutBoxes((data as any).whiteoutBoxes || []);
+          setWhiteoutBoxes(data.whiteoutBoxes || []);
         } else { setError('プロジェクトが見つかりません。'); }
       } catch { setError('データの読み込みに失敗しました。'); } finally { setLoading(false); }
     };
@@ -514,7 +506,7 @@ export default function MapPage() {
 
     const urlToDelete = project.mapUrls?.[mapIndex];
     if (urlToDelete) {
-      try { await deleteObject(ref(storage, urlToDelete)); } catch { /* Storage削除失敗は無視 */ }
+      try { await deleteObject(ref(storage, urlToDelete)); } catch { setError('地図画像の削除に失敗しましたが、データは保存されました。'); }
     }
 
     const newMapUrls = (project.mapUrls || []).filter((_, i) => i !== mapIndex);
