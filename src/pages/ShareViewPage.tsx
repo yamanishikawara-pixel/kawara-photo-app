@@ -94,13 +94,13 @@ export default function ShareViewPage() {
                 位置図{mapUrls.length > 1 ? ` (${mapIndex + 1}/${mapUrls.length})` : ''}
               </h2>
             </div>
-            <div className="relative bg-gray-50">
-              <div style={{ display: 'inline-block', position: 'relative', width: '100%' }}>
+            <div className="relative bg-gray-50 flex justify-center">
+              <div style={{ display: 'inline-block', position: 'relative', transform: `rotate(${project.mapRotations?.[mapIndex] || 0}deg)`, maxWidth: '100%' }}>
                 <img
                   src={u}
                   alt="位置図"
-                  className="w-full h-auto block"
-                  style={{ transform: `rotate(${project.mapRotations?.[mapIndex] || 0}deg)` }}
+                  className="block w-auto h-auto"
+                  style={{ maxWidth: '100%', maxHeight: '80vh' }}
                 />
 
                 {/* ピン */}
