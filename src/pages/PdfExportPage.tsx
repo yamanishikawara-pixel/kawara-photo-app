@@ -166,25 +166,31 @@ export default function PdfExportPage() {
 
   const yieldToUI = () => new Promise<void>((r) => setTimeout(r, 0));
 
-  const handleShare = async () => {
-    if (!project || !id) return;
+  const getShareUrl = async (): Promise<string | null> => {
+    if (!project || !id) return null;
     let token = project.shareToken;
     if (!token) {
       token = crypto.randomUUID();
       await updateDoc(doc(db, 'projects', id), { shareToken: token });
       setProject({ ...project, shareToken: token });
     }
-    const url = `${window.location.origin}/share/${id}/${token}`;
-    const shareData = { title: `${project.projectName} 工事写真報告書`, text: '工事写真報告書をご確認ください。', url };
-    if (navigator.share && navigator.canShare?.(shareData)) {
-      await navigator.share(shareData);
-    } else {
-      try {
-        await navigator.clipboard.writeText(url);
-        alert('URLをクリップボードにコピーしました。\nLINEやメールに貼り付けて送付してください。');
-      } catch {
-        alert(`共有URL:\n${url}`);
-      }
+    return `${window.location.origin}/share/${id}/${token}`;
+  };
+
+  const handleLineShare = async () => {
+    const url = await getShareUrl();
+    if (!url) return;
+    window.open(`https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(url)}`, '_blank', 'noopener');
+  };
+
+  const handleCopyUrl = async () => {
+    const url = await getShareUrl();
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      alert('URLをコピーしました。\nメールやSMSに貼り付けて送付してください。');
+    } catch {
+      alert(`共有URL:\n${url}`);
     }
   };
 
@@ -359,7 +365,8 @@ export default function PdfExportPage() {
                {rotateMap ? '図面を縦に戻す' : '図面を90°回転して最大化'}
              </button>
           )}
-          <button type="button" onClick={handleShare} disabled={isZipping || isPrinting} className="flex items-center gap-2 bg-emerald-500 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-emerald-600 disabled:opacity-50"><Share2 className="w-5 h-5" />LINEで共有</button>
+          <button type="button" onClick={handleLineShare} disabled={isZipping || isPrinting} className="flex items-center gap-2 bg-[#06C755] text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-[#05b34c] disabled:opacity-50"><Share2 className="w-5 h-5" />LINEで送る</button>
+          <button type="button" onClick={handleCopyUrl} disabled={isZipping || isPrinting} className="flex items-center gap-2 bg-gray-500 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-gray-600 disabled:opacity-50"><Share2 className="w-4 h-4" />URL共有</button>
           <button type="button" onClick={handleZipExport} disabled={isZipping || isPrinting} className="flex items-center gap-2 bg-green-600 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-green-700 disabled:opacity-50"><Download className="w-5 h-5" />写真のみ(Zip)</button>
           <button type="button" onClick={handlePrint} disabled={isZipping || isPrinting} className="flex items-center gap-2 bg-black text-white px-5 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-gray-800 disabled:opacity-50"><Printer className="w-5 h-5" /> {isPrinting ? (printProgress || '画像処理中...') : 'PDF作成・印刷'}</button>
         </div>
