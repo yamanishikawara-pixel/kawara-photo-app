@@ -142,7 +142,7 @@ export default function MaterialPage() {
 
   const saveMaterials = async (newMaterials: Material[]) => {
     if (!project || !id) return;
-    setProject({ ...project, materials: newMaterials });
+    setProject((prev) => prev ? { ...prev, materials: newMaterials } : null);
     await updateDoc(doc(db, 'projects', id), { materials: newMaterials });
   };
 

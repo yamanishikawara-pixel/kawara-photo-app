@@ -420,9 +420,9 @@ export default function PdfExportPage() {
 
         {/* ② 位置図ページ */}
         {mapUrlsToRender.map((u, mapIndex) => {
-          // ★変更：ユーザーが画面上で回した角度（userRotation）は無視し、元の紙の向きで出力する！
+          const userRotation = project.mapRotations?.[mapIndex] ?? 0;
           const printRotation = (!showLegendTable && rotateMap) ? 90 : 0;
-          const totalRotation = printRotation;
+          const totalRotation = (userRotation + printRotation) % 360;
           
           return (
             <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
@@ -576,7 +576,7 @@ export default function PdfExportPage() {
                     <div key={i} className="h-[30%] shrink-0 flex gap-2 p-1.5 rounded border border-gray-500 bg-white print:border-black">
                       <div className="w-[60%] h-full flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {p.image ? (
-                          <div className="relative" style={{ display: 'inline-block' }}>
+                          <div className="relative" style={{ display: 'inline-block', transform: `rotate(${Number(p.rotation) || 0}deg)` }}>
                             <img
                               src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)}
                               data-original-src={p.image}
@@ -588,7 +588,6 @@ export default function PdfExportPage() {
                                 maxWidth: maxImgWidth,
                                 maxHeight: maxImgHeight,
                                 objectFit: 'contain',
-                                transform: `rotate(${Number(p.rotation) || 0}deg)`
                               }}
                               alt=""
                             />
@@ -635,15 +634,16 @@ export default function PdfExportPage() {
                                   </svg>
                                   {line.text && (
                                     <div
-                                      style={{ 
-                                        left: `${midX}%`, 
-                                        top: `${midY}%`, 
-                                        color: color, 
-                                        backgroundColor: 'rgba(0, 0, 0, 0.4)', 
+                                      style={{
+                                        left: `${midX}%`,
+                                        top: `${midY}%`,
+                                        color: color,
+                                        backgroundColor: 'rgba(0, 0, 0, 0.4)',
                                         backdropFilter: 'blur(2px)',
-                                        fontSize: `${dynamicFontSize}px`
+                                        fontSize: `${dynamicFontSize}px`,
+                                        transform: `translate(-50%, -50%) rotate(${line.textRotation ?? 0}deg)`
                                       }}
-                                      className="absolute z-20 translate-x-[-50%] translate-y-[-50%] font-bold px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap"
+                                      className="absolute z-20 font-bold px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap"
                                     >
                                       {line.text}
                                     </div>
