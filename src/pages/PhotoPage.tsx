@@ -445,7 +445,7 @@ export default function PhotoPage() {
     if (window.confirm('この写真枠を完全に削除しますか？')) {
       const newPhotos = project.photos.filter((p) => p.id !== photoId);
       const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
-      setProject({ ...project, photos: renumbered });
+      setProject((prev) => prev ? { ...prev, photos: renumbered } : null);
       await updateDoc(doc(db, "projects", id), { photos: renumbered });
     }
   };
@@ -459,7 +459,7 @@ export default function PhotoPage() {
     if (window.confirm(`選択した ${selectedPhotoIds.length} 件の写真枠を完全に削除しますか？`)) {
       const newPhotos = project.photos.filter((p) => !selectedPhotoIds.includes(p.id));
       const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
-      setProject({ ...project, photos: renumbered });
+      setProject((prev) => prev ? { ...prev, photos: renumbered } : null);
       await updateDoc(doc(db, "projects", id), { photos: renumbered });
       setSelectedPhotoIds([]);
       setIsSelectMode(false);
@@ -471,7 +471,7 @@ export default function PhotoPage() {
     if (window.confirm(`すべての写真の撮影日を ${batchDate.replace(/-/g, '/')} に統一しますか？`)) {
       const formatted = formatToYMDSlash(batchDate);
       const newPhotos = project.photos.map(p => ({ ...p, shootingDate: formatted }));
-      setProject({ ...project, photos: newPhotos });
+      setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
       await updateDoc(doc(db, "projects", id), { photos: newPhotos });
       setBatchDate("");
       alert('撮影日を一括設定しました！');
@@ -481,7 +481,7 @@ export default function PhotoPage() {
   const addPhotoSlot = async () => {
     if (!project || !id) return;
     const newPhotos: Photo[] = [...project.photos, { id: Date.now(), image: null, photoNumber: String(project.photos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], dimensionLines: [], rotation: 0 }];
-    setProject({ ...project, photos: newPhotos });
+    setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
     await updateDoc(doc(db, "projects", id), { photos: newPhotos });
   };
 
@@ -503,7 +503,7 @@ export default function PhotoPage() {
     const newPhotos = [...project.photos];
     newPhotos.splice(index + 1, 0, newPhoto);
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
-    setProject({ ...project, photos: renumbered });
+    setProject((prev) => prev ? { ...prev, photos: renumbered } : null);
     await updateDoc(doc(db, "projects", id), { photos: renumbered });
   };
 
@@ -514,7 +514,7 @@ export default function PhotoPage() {
     const targetIdx = direction === 'up' ? index - 1 : index + 1;
     [newPhotos[index], newPhotos[targetIdx]] = [newPhotos[targetIdx], newPhotos[index]];
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
-    setProject({ ...project, photos: renumbered });
+    setProject((prev) => prev ? { ...prev, photos: renumbered } : null);
     await updateDoc(doc(db, "projects", id), { photos: renumbered });
   };
 
@@ -568,7 +568,7 @@ export default function PhotoPage() {
       const url = await getDownloadURL(r);
       
       const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, image: url, shootingDate: p.shootingDate || getTodayStr(), circles: [], dimensionLines: [] } : p);
-      setProject({ ...project, photos: newPhotos });
+      setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
       await updateDoc(doc(db, "projects", id), { photos: newPhotos });
     } catch { 
       alert('アップロードに失敗しました。電波の良いところでお試しください。'); 
@@ -587,7 +587,7 @@ export default function PhotoPage() {
     if (editingMode === 'circle') {
       if (selectedCircleId !== null) { setSelectedCircleId(null); return; }
       const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: [...(p.circles || []), { id: Date.now(), x, y, size: 20 }] } : p);
-      setProject({ ...project, photos: newPhotos });
+      setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
       await updateDoc(doc(db, "projects", id), { photos: newPhotos });
     } else if (editingMode === 'dimension') {
       if (selectedDimensionLineId !== null) { setSelectedDimensionLineId(null); return; }
@@ -600,7 +600,7 @@ export default function PhotoPage() {
           ...p,
           dimensionLines: [...(p.dimensionLines || []), { id: newLineId, start: drawingStartPoint, end: { x, y }, text: "", size: 2, color: activeColor }]
         } : p);
-        setProject({ ...project, photos: newPhotos });
+        setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
         await updateDoc(doc(db, "projects", id), { photos: newPhotos });
         setDrawingStartPoint(null); 
         setSelectedDimensionLineId(newLineId); 
@@ -611,14 +611,14 @@ export default function PhotoPage() {
   const updateCircle = async (photoId: number, circleId: number, newProps: Partial<Circle>) => {
     if (!project || !id) return;
     const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: p.circles.map((c) => c.id === circleId ? { ...c, ...newProps } : c) } : p);
-    setProject({ ...project, photos: newPhotos });
+    setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
     await updateDoc(doc(db, "projects", id), { photos: newPhotos });
   };
-  
+
   const removeCircle = async (photoId: number, circleId: number) => {
     if (!project || !id) return;
     const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: p.circles.filter((c) => c.id !== circleId) } : p);
-    setProject({ ...project, photos: newPhotos });
+    setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
     await updateDoc(doc(db, "projects", id), { photos: newPhotos });
     setSelectedCircleId(null);
   };
@@ -626,14 +626,14 @@ export default function PhotoPage() {
   const updateDimensionLine = async (photoId: number, lineId: number, newProps: Partial<DimensionLine>) => {
     if (!project || !id) return;
     const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, dimensionLines: p.dimensionLines?.map((c) => c.id === lineId ? { ...c, ...newProps } : c) } : p);
-    setProject({ ...project, photos: newPhotos });
+    setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
     await updateDoc(doc(db, "projects", id), { photos: newPhotos });
   };
-  
+
   const removeDimensionLine = async (photoId: number, lineId: number) => {
     if (!project || !id) return;
     const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, dimensionLines: p.dimensionLines?.filter((c) => c.id !== lineId) } : p);
-    setProject({ ...project, photos: newPhotos });
+    setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
     await updateDoc(doc(db, "projects", id), { photos: newPhotos });
     setSelectedDimensionLineId(null);
   };

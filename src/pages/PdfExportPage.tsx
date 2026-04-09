@@ -6,7 +6,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import type { Circle, MapRow, MapLine, Photo, Project, Material, WhiteoutBox } from '../types';
+import type { Circle, MapRow, MapLine, Photo, Project, Material, WhiteoutBox, UserSettings } from '../types';
 import kawaraLogo from '../assets/kawara-logo.png';
 import { A4_HEIGHT_PX, A4_WIDTH_PX, getPreviewScale, proxyUrl } from '../shared/utils';
 import { ErrorMessage } from '../shared/ErrorMessage';
@@ -63,7 +63,7 @@ export default function PdfExportPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
-  const [userSettings, setUserSettings] = useState<Record<string, unknown> | null>(null);
+  const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isZipping, setIsZipping] = useState(false);
   const [scale, setScale] = useState(1);
@@ -83,7 +83,7 @@ export default function PdfExportPage() {
         const user = auth.currentUser;
         if (user) {
           const s = await getDoc(doc(db, 'users', user.uid));
-          if (s.exists()) setUserSettings(s.data() as Record<string, unknown>);
+          if (s.exists()) setUserSettings(s.data() as UserSettings);
         }
       } catch { setError('データの読み込みに失敗しました。'); }
     };
@@ -215,10 +215,10 @@ export default function PdfExportPage() {
 
   if (!project) return <LoadingSpinner />;
 
-  const logoUrl = typeof userSettings?.logoUrl === 'string' ? userSettings.logoUrl : undefined;
-  const companyName = typeof userSettings?.companyName === 'string' ? userSettings.companyName : undefined;
-  const address = typeof userSettings?.address === 'string' ? userSettings.address : undefined;
-  const phone = typeof userSettings?.phone === 'string' ? userSettings.phone : undefined;
+  const logoUrl = userSettings?.logoUrl;
+  const companyName = userSettings?.companyName;
+  const address = userSettings?.address;
+  const phone = userSettings?.phone;
 
   const mapUrlsToRender = project.mapUrls?.length ? project.mapUrls.slice(0, 3) : [''];
   const mapCount = mapUrlsToRender.length;

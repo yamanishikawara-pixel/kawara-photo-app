@@ -91,6 +91,17 @@ export interface PhotoMaster {
   description: string; // 説明文
 }
 
+export interface UserSettings {
+  companyName?: string;
+  address?: string;
+  phone?: string;
+  logoUrl?: string;
+  customProcesses?: string[];
+  customDescTemplates?: Array<{ label: string; text: string }>;
+  materialMaster?: MaterialMaster[];
+  photoMaster?: PhotoMaster[];
+}
+
 export interface WhiteoutBox {
   id: number;
   x: number;

@@ -8,6 +8,9 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import type { MaterialMaster, PhotoMaster } from '../types';
 
+let _idCounter = 0;
+const nextId = () => Date.now() + (++_idCounter);
+
 const DEFAULT_PROCESSES = [
   "着工前", "下地・下葺き", "防水ルーフィング施工", "瓦桟施工",
   "流れ壁板金", "平行壁板金", "確認", "棟金具設置", "緊結状況", "施工中", "完成"
@@ -236,7 +239,7 @@ export default function SettingsPage() {
               ))}
             </div>
             <button
-              onClick={() => setPhotoMaster((prev) => [...prev, { id: Date.now(), name: '', process: '', description: '' }])}
+              onClick={() => setPhotoMaster((prev) => [...prev, { id: nextId(), name: '', process: '', description: '' }])}
               className="w-full py-3 bg-gray-50 text-blue-600 font-bold rounded-xl border-2 border-dashed border-blue-200 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
             >
               <Plus className="w-5 h-5" /> テンプレートを追加
@@ -292,7 +295,7 @@ export default function SettingsPage() {
               ))}
             </div>
             <button
-              onClick={() => setMaterialMaster((prev) => [...prev, { id: Date.now(), name: '', manufacturer: '', specification: '', remarks: '' }])}
+              onClick={() => setMaterialMaster((prev) => [...prev, { id: nextId(), name: '', manufacturer: '', specification: '', remarks: '' }])}
               className="w-full py-3 bg-gray-50 text-blue-600 font-bold rounded-xl border-2 border-dashed border-blue-200 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
             >
               <Plus className="w-5 h-5" /> 材料を追加
