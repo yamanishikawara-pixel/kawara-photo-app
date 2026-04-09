@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, LogOut, Settings } from 'lucide-react';
-import { collection, addDoc, deleteDoc, doc, getDoc, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { Plus, Trash2, LogOut, Settings, CheckCircle2, Circle } from 'lucide-react';
+import { collection, addDoc, deleteDoc, doc, getDoc, getDocs, query, where, orderBy, updateDoc } from 'firebase/firestore';
 import { ref, listAll, deleteObject } from 'firebase/storage';
 import { signOut } from 'firebase/auth';
 
@@ -23,6 +23,7 @@ export function ProjectListPage() {
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [hideCompleted, setHideCompleted] = useState(true);
 
   useEffect(() => {
     const fetch = async () => {
@@ -104,6 +105,12 @@ export function ProjectListPage() {
     } catch { setError('削除に失敗しました。'); } finally { setIsDeleting(false); setConfirmDelete(null); }
   };
 
+  const toggleCompleted = async (e: React.MouseEvent, projectId: string, current: boolean) => {
+    e.stopPropagation();
+    await updateDoc(doc(db, 'projects', projectId), { isCompleted: !current });
+    setProjects((prev) => prev.map((p) => p.id === projectId ? { ...p, isCompleted: !current } : p));
+  };
+
   const handleLogout = async () => {
     if (window.confirm('ログアウトしますか？')) {
       await signOut(auth);
@@ -129,19 +136,31 @@ export function ProjectListPage() {
         </div>
 
         <div className="flex justify-between items-center mb-4 border-b border-gray-200 pb-4">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">現場一覧</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">現場一覧</h1>
+            <button type="button" onClick={() => setHideCompleted((v) => !v)} className={`text-xs font-bold px-3 py-1.5 rounded-full border transition-colors ${hideCompleted ? 'bg-gray-100 text-gray-500 border-gray-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+              {hideCompleted ? '完了済みを表示' : '完了済みを非表示'}
+            </button>
+          </div>
           <button type="button" onClick={addProject} className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 sm:px-5 sm:py-3 rounded-xl font-bold text-sm sm:text-base shadow-sm hover:bg-blue-600 transition-colors">
             <Plus className="w-5 h-5" /> 新規現場
           </button>
         </div>
 
-        {/* ★ ここが魔法のグリッド！スマホは1列、iPadは2列、PCは3列 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
-          {projects.map((p) => (
-            <div key={p.id} className="relative flex items-center p-5 rounded-2xl border bg-white border-black/5 shadow-sm hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group min-h-[100px]" onClick={() => navigate(`/project/${p.id}`)}>
-              <div className="flex-1 pr-10">
-                <div className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors break-words line-clamp-2">{p.projectName || '未入力の現場'}</div>
+          {projects.filter((p) => !hideCompleted || !p.isCompleted).map((p) => (
+            <div key={p.id} className={`relative flex items-center p-5 rounded-2xl border bg-white shadow-sm hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group min-h-[100px] ${p.isCompleted ? 'border-emerald-200 opacity-60' : 'border-black/5'}`} onClick={() => navigate(`/project/${p.id}`)}>
+              <div className="flex-1 pr-20">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {p.isCompleted && <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">完了</span>}
+                  <div className={`text-lg font-bold break-words line-clamp-2 ${p.isCompleted ? 'text-gray-400' : 'text-gray-900 group-hover:text-blue-600'} transition-colors`}>{p.projectName || '未入力の現場'}</div>
+                </div>
                 <div className="text-xs text-gray-500 mt-2 line-clamp-1">{p.projectLocation || '場所未登録'}</div>
+              </div>
+              <div className="absolute right-14 flex items-center">
+                <button type="button" onClick={(e) => toggleCompleted(e, p.id, !!p.isCompleted)} className={`p-2 rounded-xl transition-colors ${p.isCompleted ? 'text-emerald-500 hover:bg-emerald-50' : 'text-gray-300 hover:text-emerald-500 hover:bg-emerald-50'}`} title={p.isCompleted ? '完了を取り消す' : '完了にする'}>
+                  {p.isCompleted ? <CheckCircle2 className="w-6 h-6" /> : <Circle className="w-6 h-6" />}
+                </button>
               </div>
               <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete({ id: p.id }); }} className="absolute right-4 p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"><Trash2 className="w-6 h-6" /></button>
             </div>

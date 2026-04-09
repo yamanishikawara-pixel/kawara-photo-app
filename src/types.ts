@@ -131,5 +131,6 @@ export interface Project {
   mapRotations?: number[];
   shareToken?: string;
   whiteoutBoxes?: WhiteoutBox[];
+  isCompleted?: boolean;
 }
 
