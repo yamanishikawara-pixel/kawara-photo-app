@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Camera, RotateCcw, RotateCw, ArrowUp, ArrowDown, BookmarkPlus } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Camera, RotateCcw, RotateCw, ArrowUp, ArrowDown, BookmarkPlus, ChevronDown } from 'lucide-react';
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
@@ -9,7 +9,7 @@ import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { proxyUrl } from '../shared/utils';
 import type { Material, MaterialMaster, Project } from '../types';
 
-// 品名入力のオートコンプリートドロップダウン
+// 品名コンボボックス：▼で全件表示、入力で部分一致絞り込み
 function NameSuggest({
   value,
   masters,
@@ -22,13 +22,16 @@ function NameSuggest({
   onApply: (m: MaterialMaster) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const suggestions = value.trim()
-    ? masters.filter((m) => m.name.includes(value.trim()))
-    : [];
+  // ドロップダウンを開くたびに検索文字列をリセット
+  const handleOpen = () => { setQuery(''); setOpen(true); };
 
-  // 外側クリックで閉じる
+  const filtered = query.trim()
+    ? masters.filter((m) => m.name.includes(query.trim()))
+    : masters;
+
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
@@ -39,37 +42,73 @@ function NameSuggest({
 
   const handleSelect = (m: MaterialMaster) => {
     setOpen(false);
-    if (window.confirm(`「${m.name}」のデータを自動入力しますか？\n\nメーカー: ${m.manufacturer}\n規格: ${m.specification}\n備考: ${m.remarks}`)) {
+    const detail = [m.manufacturer, m.specification, m.remarks].filter(Boolean).join('　/　');
+    if (window.confirm(`「${m.name}」のデータを自動入力しますか？${detail ? '\n' + detail : ''}`)) {
       onApply(m);
     }
   };
 
   return (
     <div ref={wrapRef} className="relative">
-      <input
-        type="text"
-        placeholder="例：改質アスファルトルーフィング"
-        className="w-full p-3 border border-gray-300 rounded-lg text-base font-bold bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-        value={value}
-        onChange={(e) => { onChange(e.target.value); setOpen(true); }}
-        onFocus={() => setOpen(true)}
-        autoComplete="off"
-      />
-      {open && suggestions.length > 0 && (
-        <ul className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-blue-200 rounded-xl shadow-lg overflow-hidden">
-          {suggestions.map((m) => (
-            <li key={m.id}>
-              <button
-                type="button"
-                className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-none"
-                onMouseDown={(e) => { e.preventDefault(); handleSelect(m); }}
-              >
-                <div className="font-bold text-gray-800 text-sm">{m.name}</div>
-                <div className="text-xs text-gray-500 mt-0.5">{m.manufacturer}{m.specification ? `　${m.specification}` : ''}</div>
-              </button>
-            </li>
-          ))}
-        </ul>
+      {/* 表示用インプット＋▼ボタン */}
+      <div className="flex">
+        <input
+          type="text"
+          placeholder="例：改質アスファルトルーフィング"
+          className="flex-1 p-3 border border-gray-300 rounded-l-lg text-base font-bold bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          autoComplete="off"
+        />
+        {masters.length > 0 && (
+          <button
+            type="button"
+            onMouseDown={(e) => { e.preventDefault(); open ? setOpen(false) : handleOpen(); }}
+            className="px-3 border border-l-0 border-gray-300 rounded-r-lg bg-gray-50 hover:bg-gray-100 text-gray-500 transition-colors"
+            title="マスタから選択"
+          >
+            <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+          </button>
+        )}
+      </div>
+
+      {/* ドロップダウン本体 */}
+      {open && (
+        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-blue-200 rounded-xl shadow-xl overflow-hidden">
+          {/* 絞り込みインプット */}
+          <div className="p-2 border-b border-gray-100">
+            <input
+              type="text"
+              placeholder="絞り込み..."
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <ul className="max-h-56 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <li className="px-4 py-3 text-sm text-gray-400 text-center">該当なし</li>
+            ) : (
+              filtered.map((m) => (
+                <li key={m.id}>
+                  <button
+                    type="button"
+                    className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-none"
+                    onMouseDown={(e) => { e.preventDefault(); handleSelect(m); }}
+                  >
+                    <div className="font-bold text-gray-800 text-sm">{m.name}</div>
+                    {(m.manufacturer || m.specification) && (
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {[m.manufacturer, m.specification].filter(Boolean).join('　')}
+                      </div>
+                    )}
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
       )}
     </div>
   );
