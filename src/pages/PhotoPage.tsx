@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus, Edit2, Ruler, Paintbrush, CaseUpper, Copy, CheckSquare, Calendar } from 'lucide-react'; 
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus, Edit2, Ruler, Paintbrush, CaseUpper, Copy, CheckSquare, Calendar, ChevronDown, BookmarkPlus } from 'lucide-react';
+import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import imageCompression from 'browser-image-compression';
 import { proxyUrl, useDraggablePin } from '../shared/utils';
-import type { Circle, MapPin as MapPinT, Photo, Project, DimensionLine } from '../types';
+import type { Circle, MapPin as MapPinT, Photo, Project, DimensionLine, PhotoMaster } from '../types';
 import type { ChangeEvent, MouseEvent } from 'react';
 
 const DEFAULT_PROCESS_OPTIONS = [
@@ -288,6 +288,86 @@ const getTodayStr = () => {
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
 };
 
+// 写真テンプレートのコンボボックス
+function PhotoMasterCombobox({
+  masters,
+  onApply,
+}: {
+  masters: PhotoMaster[];
+  onApply: (m: PhotoMaster) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  const filtered = query.trim()
+    ? masters.filter((m) => m.name.includes(query.trim()) || m.process.includes(query.trim()))
+    : masters;
+
+  useEffect(() => {
+    const handler = (e: globalThis.MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleSelect = (m: PhotoMaster) => {
+    setOpen(false);
+    const detail = [m.process, m.description ? m.description.slice(0, 30) + (m.description.length > 30 ? '…' : '') : ''].filter(Boolean).join('　/　');
+    if (window.confirm(`「${m.name}」を自動入力しますか？${detail ? '\n' + detail : ''}`)) {
+      onApply(m);
+    }
+  };
+
+  if (masters.length === 0) return null;
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        type="button"
+        onMouseDown={(e) => { e.preventDefault(); setQuery(''); setOpen((o) => !o); }}
+        className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
+      >
+        テンプレート <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 left-0 top-full mt-1 w-64 bg-white border border-blue-200 rounded-xl shadow-xl overflow-hidden">
+          <div className="p-2 border-b border-gray-100">
+            <input
+              type="text"
+              placeholder="絞り込み..."
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <ul className="max-h-56 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <li className="px-4 py-3 text-sm text-gray-400 text-center">該当なし</li>
+            ) : (
+              filtered.map((m) => (
+                <li key={m.id}>
+                  <button
+                    type="button"
+                    className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-none"
+                    onMouseDown={(e) => { e.preventDefault(); handleSelect(m); }}
+                  >
+                    <div className="font-bold text-gray-800 text-sm">{m.name}</div>
+                    {m.process && <div className="text-xs text-gray-500 mt-0.5">{m.process}</div>}
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PhotoPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -306,6 +386,8 @@ export default function PhotoPage() {
 
   const [processOptions, setProcessOptions] = useState<string[]>(DEFAULT_PROCESS_OPTIONS);
   const [descTemplates, setDescTemplates] = useState<{label: string, text: string}[]>(DEFAULT_DESC_TEMPLATES);
+  const [photoMasters, setPhotoMasters] = useState<PhotoMaster[]>([]);
+  const [uid, setUid] = useState<string | null>(null);
 
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<number[]>([]);
@@ -316,16 +398,40 @@ export default function PhotoPage() {
     getDoc(doc(db, "projects", id)).then(d => d.exists() && setProject(d.data() as Project));
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        setUid(user.uid);
         const s = await getDoc(doc(db, 'users', user.uid));
         if (s.exists()) {
           const data = s.data();
           if (data.customProcesses && data.customProcesses.length > 0) setProcessOptions(data.customProcesses);
           if (data.customDescTemplates && data.customDescTemplates.length > 0) setDescTemplates(data.customDescTemplates);
+          if (Array.isArray(data.photoMaster)) setPhotoMasters(data.photoMaster);
         }
       }
     });
     return () => unsub();
   }, [id]);
+
+  const applyPhotoMaster = async (photoId: number, m: PhotoMaster) => {
+    if (!project || !id) return;
+    const newPhotos = project.photos.map((p) =>
+      p.id === photoId ? { ...p, process: m.process, description: m.description } : p
+    );
+    setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
+    await updateDoc(doc(db, 'projects', id), { photos: newPhotos });
+  };
+
+  const saveToPhotoMaster = async (photo: Photo) => {
+    if (!uid) { alert('マスタに保存するにはログインが必要です。'); return; }
+    const name = prompt('テンプレート名を入力してください:', photo.process || '');
+    if (!name?.trim()) return;
+    const existing = photoMasters.find((m) => m.name === name.trim());
+    if (existing && !window.confirm(`「${name.trim()}」はすでに存在します。上書きしますか？`)) return;
+    const entry: PhotoMaster = { id: existing?.id ?? Date.now(), name: name.trim(), process: photo.process, description: photo.description };
+    const newMasters = existing ? photoMasters.map((m) => m.id === existing.id ? entry : m) : [...photoMasters, entry];
+    setPhotoMasters(newMasters);
+    await setDoc(doc(db, 'users', uid), { photoMaster: newMasters }, { merge: true });
+    alert(`「${entry.name}」をマスタに保存しました。`);
+  };
 
   const updatePhoto = async (photoId: number, field: keyof Photo, value: Photo[keyof Photo]) => {
     if (!project || !id) return;
@@ -714,7 +820,15 @@ export default function PhotoPage() {
 
                     {/* 工程プルダウン */}
                     <div className="space-y-1 sm:space-y-3">
-                      <label className="text-[10px] sm:text-sm font-black text-gray-400 pl-2 sm:pl-4 uppercase tracking-[0.1em] sm:tracking-[0.2em]">工程 / PROCESS</label>
+                      <div className="flex items-center justify-between pl-2 sm:pl-4">
+                        <label className="text-[10px] sm:text-sm font-black text-gray-400 uppercase tracking-[0.1em] sm:tracking-[0.2em]">工程 / PROCESS</label>
+                        <div className="flex items-center gap-2">
+                          <PhotoMasterCombobox masters={photoMasters} onApply={(m) => applyPhotoMaster(photo.id, m)} />
+                          <button type="button" onClick={() => saveToPhotoMaster(photo)} className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 px-2 py-1.5 rounded-lg transition-colors" title="テンプレートとして保存">
+                            <BookmarkPlus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
                       <select className="w-full p-4 sm:p-6 text-lg sm:text-2xl font-black border-2 sm:border-4 border-gray-100 rounded-xl sm:rounded-[2rem] bg-gray-50 focus:border-blue-500 focus:bg-white transition-all outline-none" value={photo.process} onChange={(e) => updatePhoto(photo.id, "process", e.target.value)}>
                         <option value="">-- 工程を選択 --</option>
                         {processOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}

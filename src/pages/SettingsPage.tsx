@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Plus, Trash2, Settings, Image as ImageIcon, X, Package } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, Settings, Image as ImageIcon, X, Package, Camera } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, auth, storage } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
-import type { MaterialMaster } from '../types';
+import type { MaterialMaster, PhotoMaster } from '../types';
 
 const DEFAULT_PROCESSES = [
   "着工前", "下地・下葺き", "防水ルーフィング施工", "瓦桟施工",
@@ -38,6 +38,7 @@ export default function SettingsPage() {
   const [processes, setProcesses] = useState<string[]>(DEFAULT_PROCESSES);
   const [templates, setTemplates] = useState<{label: string, text: string}[]>(DEFAULT_TEMPLATES);
   const [materialMaster, setMaterialMaster] = useState<MaterialMaster[]>([]);
+  const [photoMaster, setPhotoMaster] = useState<PhotoMaster[]>([]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -53,6 +54,7 @@ export default function SettingsPage() {
           if (data.customProcesses && data.customProcesses.length > 0) setProcesses(data.customProcesses);
           if (data.customDescTemplates && data.customDescTemplates.length > 0) setTemplates(data.customDescTemplates);
           if (Array.isArray(data.materialMaster)) setMaterialMaster(data.materialMaster);
+          if (Array.isArray(data.photoMaster)) setPhotoMaster(data.photoMaster);
         }
       }
       setLoading(false);
@@ -91,6 +93,7 @@ export default function SettingsPage() {
         customProcesses: processes,
         customDescTemplates: templates,
         materialMaster,
+        photoMaster,
       }, { merge: true });
       alert('設定を保存しました！\n（現場の写真入力画面やPDF出力に反映されます）');
     } catch (error) {
@@ -188,6 +191,55 @@ export default function SettingsPage() {
             </div>
             <button onClick={() => setProcesses([...processes, "新しい工程"])} className="w-full py-3 bg-gray-50 text-blue-600 font-bold rounded-xl border-2 border-dashed border-blue-200 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2">
               <Plus className="w-5 h-5" /> 工程項目を追加
+            </button>
+          </div>
+
+          {/* 写真テンプレートマスタ */}
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+            <h2 className="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2">
+              <Camera className="w-5 h-5 text-gray-600" /> 写真テンプレートマスタ
+            </h2>
+            <p className="text-sm text-gray-500 mb-5">よく使う工程と説明文の組み合わせを登録しておくと、写真ページでワンタップで自動入力できます。</p>
+            <div className="space-y-4 mb-5">
+              {photoMaster.map((m, index) => (
+                <div key={m.id} className="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs font-bold text-gray-400 w-4 mt-3">{index + 1}</span>
+                    <div className="flex-1 grid grid-cols-1 gap-2">
+                      <input
+                        type="text"
+                        placeholder="テンプレート名（例：着工前確認）"
+                        value={m.name}
+                        onChange={(e) => setPhotoMaster((prev) => prev.map((item, i) => i === index ? { ...item, name: e.target.value } : item))}
+                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm font-bold bg-white focus:ring-2 focus:ring-blue-500"
+                      />
+                      <input
+                        type="text"
+                        placeholder="工程"
+                        value={m.process}
+                        onChange={(e) => setPhotoMaster((prev) => prev.map((item, i) => i === index ? { ...item, process: e.target.value } : item))}
+                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
+                      />
+                      <textarea
+                        placeholder="説明文"
+                        rows={2}
+                        value={m.description}
+                        onChange={(e) => setPhotoMaster((prev) => prev.map((item, i) => i === index ? { ...item, description: e.target.value } : item))}
+                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 resize-none"
+                      />
+                    </div>
+                    <button onClick={() => setPhotoMaster((prev) => prev.filter((_, i) => i !== index))} className="p-2 mt-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors">
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => setPhotoMaster((prev) => [...prev, { id: Date.now(), name: '', process: '', description: '' }])}
+              className="w-full py-3 bg-gray-50 text-blue-600 font-bold rounded-xl border-2 border-dashed border-blue-200 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
+            >
+              <Plus className="w-5 h-5" /> テンプレートを追加
             </button>
           </div>
 

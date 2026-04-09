@@ -84,6 +84,13 @@ export interface MaterialMaster {
   remarks: string;
 }
 
+export interface PhotoMaster {
+  id: number;
+  name: string;        // テンプレート名（選択キー）
+  process: string;     // 工程
+  description: string; // 説明文
+}
+
 export interface WhiteoutBox {
   id: number;
   x: number;
