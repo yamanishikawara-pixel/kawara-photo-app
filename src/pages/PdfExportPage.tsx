@@ -336,7 +336,7 @@ export default function PdfExportPage() {
             left: auto !important;
             width: 794px !important;
             height: 1123px !important;
-            padding: 15mm !important;
+            padding: 8mm !important;
             box-sizing: border-box !important;
             overflow: hidden !important;
             transform: none !important;
@@ -414,7 +414,7 @@ export default function PdfExportPage() {
                 <span className="text-[9px] text-gray-500">スマホで閲覧</span>
               </div>
             )}
-            <div className="absolute bottom-[10mm] print:bottom-[2mm] right-[15mm] print:right-[8mm] text-[16px] font-bold text-black">- 1 / {totalPages} -</div>
+            <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-[16px] font-bold text-black">- 1 / {totalPages} -</div>
           </div>
         </div>
 
@@ -429,11 +429,11 @@ export default function PdfExportPage() {
               <div className={`pdf-page w-full h-full flex flex-col bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '15mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
                 
                 <div className={`w-full h-full flex flex-col ${showLegendTable ? 'border-[3px] border-gray-800 print:border-black p-6 print:p-2' : 'p-1'}`}>
-                  <h2 className={`text-2xl font-bold text-gray-900 shrink-0 ${showLegendTable ? 'border-gray-800 print:border-black mb-4 pb-2 border-b-2 print:mb-2' : 'mb-2'}`}>
+                  <h2 className={`font-bold text-gray-900 shrink-0 ${showLegendTable ? 'text-2xl border-gray-800 print:border-black mb-4 pb-2 border-b-2 print:mb-2' : 'text-lg print:text-sm mb-1 print:mb-0.5'}`}>
                     位置図 {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}
                   </h2>
                   
-                  <div className={`flex-1 relative flex items-center justify-center overflow-visible bg-gray-50 print:bg-white ${showLegendTable ? 'p-2 border border-gray-400 print:border-gray-500' : 'p-0'}`}>
+                  <div className={`flex-1 relative flex items-center justify-center overflow-hidden bg-gray-50 print:bg-white ${showLegendTable ? 'p-2 border border-gray-400 print:border-gray-500' : 'p-0'}`}>
                     {u ? (
                       <div className="flex items-center justify-center w-full h-full relative">
 
@@ -454,14 +454,14 @@ export default function PdfExportPage() {
                               display: 'block',
                               width: 'auto',
                               height: 'auto',
-                              maxWidth: '175mm',
-                              maxHeight: '255mm',
+                              maxWidth: isPrinting ? '262mm' : '80vh',
+                              maxHeight: isPrinting ? '185mm' : '55vw',
                             } : {
                               display: 'block',
                               width: 'auto',
                               height: 'auto',
-                              maxWidth: '100%',
-                              maxHeight: showLegendTable ? (isPrinting ? '130mm' : '150mm') : (isPrinting ? '230mm' : '265mm'),
+                              maxWidth: isPrinting ? '194mm' : '100%',
+                              maxHeight: showLegendTable ? (isPrinting ? '120mm' : '140mm') : (isPrinting ? '262mm' : '75vh'),
                             }}
                             alt=""
                           />
@@ -556,7 +556,7 @@ export default function PdfExportPage() {
                     </div>
                   )}
                 </div>
-                <div className="absolute bottom-[10mm] print:bottom-[2mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapIndex} / {totalPages} -</div>
+                <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapIndex} / {totalPages} -</div>
               </div>
             </div>
           );
@@ -665,7 +665,7 @@ export default function PdfExportPage() {
                   );
                 })}
               </div>
-              <div className="absolute bottom-[10mm] print:bottom-[2mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapCount + pageIndex} / {totalPages} -</div>
+              <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapCount + pageIndex} / {totalPages} -</div>
             </div>
           </div>
         ))}
@@ -714,7 +714,7 @@ export default function PdfExportPage() {
                   );
                 })}
               </div>
-              <div className="absolute bottom-[10mm] print:bottom-[2mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapCount + photoPages.length + pageIndex} / {totalPages} -</div>
+              <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapCount + photoPages.length + pageIndex} / {totalPages} -</div>
             </div>
           </div>
         ))}
