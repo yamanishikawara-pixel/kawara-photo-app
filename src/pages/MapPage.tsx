@@ -26,15 +26,20 @@ const COLOR_PALETTE = [
 const getLocalPoint = (e: React.PointerEvent<Element>, angle: number) => {
   const target = e.currentTarget;
   const rect = target.getBoundingClientRect();
+  return getLocalPointFromRect(e.clientX, e.clientY, rect, angle);
+};
+
+// rect を直接渡せるバージョン（DimensionLine端点ドラッグ用）
+const getLocalPointFromRect = (clientX: number, clientY: number, rect: DOMRect, angle: number) => {
   let localX = 0, localY = 0;
   let w = rect.width, h = rect.height;
   const normAngle = ((angle % 360) + 360) % 360;
-  
-  if (normAngle === 0) { localX = e.clientX - rect.left; localY = e.clientY - rect.top; }
-  else if (normAngle === 90) { localX = e.clientY - rect.top; localY = rect.right - e.clientX; w = rect.height; h = rect.width; }
-  else if (normAngle === 180) { localX = rect.right - e.clientX; localY = rect.bottom - e.clientY; }
-  else if (normAngle === 270) { localX = rect.bottom - e.clientY; localY = e.clientX - rect.left; w = rect.height; h = rect.width; }
-  
+
+  if (normAngle === 0) { localX = clientX - rect.left; localY = clientY - rect.top; }
+  else if (normAngle === 90) { localX = clientY - rect.top; localY = rect.right - clientX; w = rect.height; h = rect.width; }
+  else if (normAngle === 180) { localX = rect.right - clientX; localY = rect.bottom - clientY; }
+  else if (normAngle === 270) { localX = rect.bottom - clientY; localY = clientX - rect.left; w = rect.height; h = rect.width; }
+
   return { x: Math.max(0, Math.min(100, (localX / w) * 100)), y: Math.max(0, Math.min(100, (localY / h) * 100)) };
 };
 
@@ -192,7 +197,8 @@ const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, 
 
     const parent = (e.currentTarget as Element).closest('.map-content-wrapper') as HTMLElement;
     if (!parent) return;
-    const point = getLocalPoint(e, rotation);
+    const rect = parent.getBoundingClientRect();
+    const point = getLocalPointFromRect(e.clientX, e.clientY, rect, rotation);
     if (isDragging === 'start') setLocalStart(point);
     else setLocalEnd(point);
   };
