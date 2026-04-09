@@ -49,6 +49,7 @@ export function useDraggablePin(
   initialX: number,
   initialY: number,
   onDragEnd: (x: number, y: number) => void,
+  rotation: number = 0,
 ) {
   const [position, setPosition] = useState({ x: initialX, y: initialY });
   const [dragging, setDragging] = useState(false);
@@ -93,12 +94,20 @@ export function useDraggablePin(
       if (!containerRef.current || !containerRef.current.parentElement) return;
       const parentRect = containerRef.current.parentElement.getBoundingClientRect();
       if (!parentRect.width || !parentRect.height) return;
-      
-      const dx = clientX - dragStart.current.x;
-      const dy = clientY - dragStart.current.y;
 
-      const newX = elementStart.current.x + (dx / parentRect.width) * 100;
-      const newY = elementStart.current.y + (dy / parentRect.height) * 100;
+      const dxScreen = clientX - dragStart.current.x;
+      const dyScreen = clientY - dragStart.current.y;
+
+      // 回転角に応じてスクリーン座標のデルタをローカル座標に変換
+      const normAngle = ((rotation % 360) + 360) % 360;
+      let dx = dxScreen, dy = dyScreen;
+      let w = parentRect.width, h = parentRect.height;
+      if (normAngle === 90)  { dx = dyScreen;  dy = -dxScreen; w = parentRect.height; h = parentRect.width; }
+      else if (normAngle === 180) { dx = -dxScreen; dy = -dyScreen; }
+      else if (normAngle === 270) { dx = -dyScreen; dy = dxScreen;  w = parentRect.height; h = parentRect.width; }
+
+      const newX = elementStart.current.x + (dx / w) * 100;
+      const newY = elementStart.current.y + (dy / h) * 100;
 
       // 0〜100%の間に収める（画面外にはみ出さないようにする）
       const next = {

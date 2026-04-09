@@ -34,6 +34,18 @@ const COLOR_PALETTE = [
 
 const DEFAULT_ROOF_PART_NAMES = ['棟', '袖', 'ケラバ', '谷', '隅棟', '平', '軒先'];
 
+// 回転済みコンテナ上のスクリーン座標 → ローカル座標（%）変換
+const getLocalPointFromRect = (clientX: number, clientY: number, rect: DOMRect, angle: number) => {
+  let localX = 0, localY = 0;
+  let w = rect.width, h = rect.height;
+  const normAngle = ((angle % 360) + 360) % 360;
+  if (normAngle === 0)   { localX = clientX - rect.left; localY = clientY - rect.top; }
+  else if (normAngle === 90)  { localX = clientY - rect.top; localY = rect.right - clientX; w = rect.height; h = rect.width; }
+  else if (normAngle === 180) { localX = rect.right - clientX; localY = rect.bottom - clientY; }
+  else if (normAngle === 270) { localX = rect.bottom - clientY; localY = clientX - rect.left; w = rect.height; h = rect.width; }
+  return { x: Math.max(0, Math.min(100, (localX / w) * 100)), y: Math.max(0, Math.min(100, (localY / h) * 100)) };
+};
+
 const compressPhotoWithQuality = async (file: File) => {
   const options = {
     maxSizeMB: 1,          
@@ -50,7 +62,7 @@ const compressPhotoWithQuality = async (file: File) => {
   }
 };
 
-const DimensionLineMarker = React.memo(function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChange, onUpdate, onDeselect }: { line: DimensionLine; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; onUpdate: (props: Partial<DimensionLine>) => void; onDeselect: () => void; }) {
+const DimensionLineMarker = React.memo(function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChange, onUpdate, onDeselect, rotation }: { line: DimensionLine; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; onUpdate: (props: Partial<DimensionLine>) => void; onDeselect: () => void; rotation: number; }) {
   const inputRef = useRef<HTMLInputElement>(null);
   
   const [localStart, setLocalStart] = useState(line.start);
@@ -79,12 +91,10 @@ const DimensionLineMarker = React.memo(function DimensionLineMarker({ line, isSe
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDragging) return;
-    const rect = (e.currentTarget as Element).closest('.cursor-crosshair')?.getBoundingClientRect();
-    if (!rect) return;
-    
-    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
-    
+    const container = (e.currentTarget as Element).closest('.cursor-crosshair') as HTMLElement;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const { x, y } = getLocalPointFromRect(e.clientX, e.clientY, rect, rotation);
     if (isDragging === 'start') setLocalStart({ x, y });
     else setLocalEnd({ x, y });
   };
@@ -211,9 +221,9 @@ const DimensionLineMarker = React.memo(function DimensionLineMarker({ line, isSe
   );
 });
 
-function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChange, onRemove }: { circle: Circle; isSelected: boolean; onSelect: () => void; onDragEnd: (x: number, y: number) => void; onSizeChange: (size: number) => void; onRemove: () => void; }) {
+function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChange, onRemove, rotation }: { circle: Circle; isSelected: boolean; onSelect: () => void; onDragEnd: (x: number, y: number) => void; onSizeChange: (size: number) => void; onRemove: () => void; rotation: number; }) {
   const handleDragEnd = (x: number, y: number) => { onDragEnd(x, y); };
-  const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(circle.x, circle.y, handleDragEnd);
+  const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(circle.x, circle.y, handleDragEnd, rotation);
   const size = Number(circle.size || 20);
 
   return (
@@ -579,10 +589,10 @@ export default function PhotoPage() {
 
   const handlePhotoClick = async (e: MouseEvent<HTMLDivElement>, photoId: number) => {
     if (!project || !id) return;
-
+    const photo = project.photos.find((p) => p.id === photoId);
+    const rotation = Number(photo?.rotation || 0);
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    const { x, y } = getLocalPointFromRect(e.clientX, e.clientY, rect, rotation);
 
     if (editingMode === 'circle') {
       if (selectedCircleId !== null) { setSelectedCircleId(null); return; }
@@ -766,24 +776,25 @@ export default function PhotoPage() {
                       {loadingId === photo.id ? (
                         <div className="flex flex-col items-center gap-4 sm:gap-6"><div className="w-10 h-10 sm:w-14 sm:h-14 border-4 sm:border-6 border-blue-500 border-t-transparent rounded-full animate-spin"></div><span className="text-lg sm:text-2xl font-black text-blue-600 tracking-widest">保存中...</span></div>
                       ) : photo.image ? (
-                        <div className="relative cursor-crosshair" style={{ display: 'inline-block', lineHeight: 0 }} onClick={(e) => handlePhotoClick(e, photo.id)}>
+                        <div className="relative cursor-crosshair" style={{ display: 'inline-block', lineHeight: 0, transform: `rotate(${Number(photo.rotation || 0)}deg)` }} onClick={(e) => handlePhotoClick(e, photo.id)}>
                           {/* スマホとPCで写真の最大高さを調整 */}
-                          <img src={proxyUrl(photo.image, photo.id)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[50vh] sm:max-h-[60vh] lg:max-h-[70vh] pointer-events-none rounded-xl sm:rounded-2xl shadow-xl sm:shadow-2xl transition-transform duration-500 object-contain" style={{ transform: `rotate(${Number(photo.rotation || 0)}deg)` }} alt="" />
-                          
+                          <img src={proxyUrl(photo.image, photo.id)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[50vh] sm:max-h-[60vh] lg:max-h-[70vh] pointer-events-none rounded-xl sm:rounded-2xl shadow-xl sm:shadow-2xl object-contain" alt="" />
+
                           {(photo.circles || []).map((circle) => (
-                            <PhotoCircleMarker key={circle.id} circle={circle} isSelected={selectedCircleId === circle.id} onSelect={() => setSelectedCircleId(circle.id)} onDragEnd={(x, y) => updateCircle(photo.id, circle.id, { x, y })} onSizeChange={(size) => updateCircle(photo.id, circle.id, { size })} onRemove={() => removeCircle(photo.id, circle.id)} />
+                            <PhotoCircleMarker key={circle.id} circle={circle} isSelected={selectedCircleId === circle.id} onSelect={() => setSelectedCircleId(circle.id)} onDragEnd={(x, y) => updateCircle(photo.id, circle.id, { x, y })} onSizeChange={(size) => updateCircle(photo.id, circle.id, { size })} onRemove={() => removeCircle(photo.id, circle.id)} rotation={Number(photo.rotation || 0)} />
                           ))}
-                          
+
                           {(photo.dimensionLines || []).map((line) => (
-                            <DimensionLineMarker 
-                              key={line.id} 
-                              line={line} 
-                              isSelected={selectedDimensionLineId === line.id} 
-                              onSelect={() => setSelectedDimensionLineId(line.id)} 
+                            <DimensionLineMarker
+                              key={line.id}
+                              line={line}
+                              isSelected={selectedDimensionLineId === line.id}
+                              onSelect={() => setSelectedDimensionLineId(line.id)}
                               onRemove={() => removeDimensionLine(photo.id, line.id)}
                               onTextChange={(text) => updateDimensionLine(photo.id, line.id, {text})}
                               onUpdate={(newProps) => updateDimensionLine(photo.id, line.id, newProps)}
                               onDeselect={() => setSelectedDimensionLineId(null)}
+                              rotation={Number(photo.rotation || 0)}
                             />
                           ))}
 
