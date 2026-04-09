@@ -143,13 +143,18 @@ export default function ShareViewPage() {
                         <line x1={`${line.start.x}%`} y1={`${line.start.y}%`} x2={`${line.end.x}%`} y2={`${line.end.y}%`} stroke={color} strokeWidth={thickness} fill="none" markerStart={`url(#share-tick-${line.id})`} markerEnd={`url(#share-tick-${line.id})`} />
                       </svg>
                       {line.text && (
-                        <div style={{ left: `${midX}%`, top: `${midY}%`, color, backgroundColor: 'rgba(0,0,0,0.5)', fontSize: '12px' }} className="absolute translate-x-[-50%] translate-y-[-50%] font-bold px-1 py-0.5 rounded whitespace-nowrap">
+                        <div style={{ left: `${midX}%`, top: `${midY}%`, color, backgroundColor: 'rgba(0,0,0,0.5)', fontSize: '12px', transform: `translate(-50%, -50%) rotate(${line.textRotation ?? 0}deg)` }} className="absolute font-bold px-1 py-0.5 rounded whitespace-nowrap">
                           {line.text}
                         </div>
                       )}
                     </div>
                   );
                 })}
+
+                {/* 白塗り */}
+                {(project.whiteoutBoxes ?? []).filter(b => (b.mapIndex || 0) === mapIndex).map(box => (
+                  <div key={box.id} className="absolute bg-white pointer-events-none" style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%`, transform: 'translate(-50%, -50%)', zIndex: 25 }} />
+                ))}
               </div>
             </div>
 
@@ -194,7 +199,7 @@ export default function ShareViewPage() {
               <div key={photo.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
                 {photo.image && (
                   <div className="flex items-center justify-center bg-black">
-                    <div className="relative" style={{ display: 'inline-block' }}>
+                    <div className="relative" style={{ display: 'inline-block', transform: `rotate(${photo.rotation ?? 0}deg)` }}>
                       <img
                         src={photo.image}
                         alt=""
@@ -204,7 +209,6 @@ export default function ShareViewPage() {
                           height: 'auto',
                           maxWidth: '100%',
                           maxHeight: '80vh',
-                          transform: `rotate(${photo.rotation ?? 0}deg)`,
                         }}
                       />
                       {/* 赤丸 */}
@@ -238,7 +242,7 @@ export default function ShareViewPage() {
                               <line x1={`${line.start.x}%`} y1={`${line.start.y}%`} x2={`${line.end.x}%`} y2={`${line.end.y}%`} stroke={color} strokeWidth={thickness} fill="none" markerStart={`url(#share-photo-tick-${line.id})`} markerEnd={`url(#share-photo-tick-${line.id})`} />
                             </svg>
                             {line.text && (
-                              <div style={{ left: `${midX}%`, top: `${midY}%`, color, backgroundColor: 'rgba(0,0,0,0.5)', fontSize: '11px' }} className="absolute translate-x-[-50%] translate-y-[-50%] font-bold px-1 py-0.5 rounded whitespace-nowrap">
+                              <div style={{ left: `${midX}%`, top: `${midY}%`, color, backgroundColor: 'rgba(0,0,0,0.5)', fontSize: '11px', transform: `translate(-50%, -50%) rotate(${line.textRotation ?? 0}deg)` }} className="absolute font-bold px-1 py-0.5 rounded whitespace-nowrap">
                                 {line.text}
                               </div>
                             )}
