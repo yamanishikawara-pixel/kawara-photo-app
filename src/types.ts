@@ -76,6 +76,14 @@ export interface Material {
   rotation: number;
 }
 
+export interface MaterialMaster {
+  id: number;
+  name: string;
+  manufacturer: string;
+  specification: string;
+  remarks: string;
+}
+
 export interface WhiteoutBox {
   id: number;
   x: number;

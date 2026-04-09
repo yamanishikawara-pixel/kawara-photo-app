@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Plus, Trash2, Settings, Image as ImageIcon, X } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, Settings, Image as ImageIcon, X, Package } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, auth, storage } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
+import type { MaterialMaster } from '../types';
 
 const DEFAULT_PROCESSES = [
   "着工前", "下地・下葺き", "防水ルーフィング施工", "瓦桟施工",
@@ -36,6 +37,7 @@ export default function SettingsPage() {
 
   const [processes, setProcesses] = useState<string[]>(DEFAULT_PROCESSES);
   const [templates, setTemplates] = useState<{label: string, text: string}[]>(DEFAULT_TEMPLATES);
+  const [materialMaster, setMaterialMaster] = useState<MaterialMaster[]>([]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -50,6 +52,7 @@ export default function SettingsPage() {
           if (data.logoUrl) setLogoUrl(data.logoUrl);
           if (data.customProcesses && data.customProcesses.length > 0) setProcesses(data.customProcesses);
           if (data.customDescTemplates && data.customDescTemplates.length > 0) setTemplates(data.customDescTemplates);
+          if (Array.isArray(data.materialMaster)) setMaterialMaster(data.materialMaster);
         }
       }
       setLoading(false);
@@ -86,7 +89,8 @@ export default function SettingsPage() {
         phone,
         logoUrl,
         customProcesses: processes,
-        customDescTemplates: templates
+        customDescTemplates: templates,
+        materialMaster,
       }, { merge: true });
       alert('設定を保存しました！\n（現場の写真入力画面やPDF出力に反映されます）');
     } catch (error) {
@@ -184,6 +188,62 @@ export default function SettingsPage() {
             </div>
             <button onClick={() => setProcesses([...processes, "新しい工程"])} className="w-full py-3 bg-gray-50 text-blue-600 font-bold rounded-xl border-2 border-dashed border-blue-200 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2">
               <Plus className="w-5 h-5" /> 工程項目を追加
+            </button>
+          </div>
+
+          {/* 材料マスタ */}
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+            <h2 className="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2">
+              <Package className="w-5 h-5 text-gray-600" /> 材料マスタ
+            </h2>
+            <p className="text-sm text-gray-500 mb-5">よく使う材料を登録しておくと、材料ページで品名を入力した際に自動入力できます。</p>
+            <div className="space-y-4 mb-5">
+              {materialMaster.map((m, index) => (
+                <div key={m.id} className="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-400 w-4">{index + 1}</span>
+                    <div className="flex-1 grid grid-cols-1 gap-2">
+                      <input
+                        type="text"
+                        placeholder="品名"
+                        value={m.name}
+                        onChange={(e) => setMaterialMaster((prev) => prev.map((item, i) => i === index ? { ...item, name: e.target.value } : item))}
+                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm font-bold bg-white focus:ring-2 focus:ring-blue-500"
+                      />
+                      <input
+                        type="text"
+                        placeholder="メーカー"
+                        value={m.manufacturer}
+                        onChange={(e) => setMaterialMaster((prev) => prev.map((item, i) => i === index ? { ...item, manufacturer: e.target.value } : item))}
+                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
+                      />
+                      <input
+                        type="text"
+                        placeholder="規格 / 寸法 / 数量"
+                        value={m.specification}
+                        onChange={(e) => setMaterialMaster((prev) => prev.map((item, i) => i === index ? { ...item, specification: e.target.value } : item))}
+                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
+                      />
+                      <input
+                        type="text"
+                        placeholder="備考"
+                        value={m.remarks}
+                        onChange={(e) => setMaterialMaster((prev) => prev.map((item, i) => i === index ? { ...item, remarks: e.target.value } : item))}
+                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <button onClick={() => setMaterialMaster((prev) => prev.filter((_, i) => i !== index))} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors self-start mt-1">
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => setMaterialMaster((prev) => [...prev, { id: Date.now(), name: '', manufacturer: '', specification: '', remarks: '' }])}
+              className="w-full py-3 bg-gray-50 text-blue-600 font-bold rounded-xl border-2 border-dashed border-blue-200 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
+            >
+              <Plus className="w-5 h-5" /> 材料を追加
             </button>
           </div>
 

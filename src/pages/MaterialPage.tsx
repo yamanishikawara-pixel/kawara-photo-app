@@ -1,42 +1,115 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Camera, RotateCcw, RotateCw, ArrowUp, ArrowDown } from 'lucide-react';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { ArrowLeft, Plus, Trash2, Camera, RotateCcw, RotateCw, ArrowUp, ArrowDown, BookmarkPlus } from 'lucide-react';
+import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase';
+import { db, storage, auth } from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { proxyUrl } from '../shared/utils';
-import type { Material, Project } from '../types';
+import type { Material, MaterialMaster, Project } from '../types';
+
+// 品名入力のオートコンプリートドロップダウン
+function NameSuggest({
+  value,
+  masters,
+  onChange,
+  onApply,
+}: {
+  value: string;
+  masters: MaterialMaster[];
+  onChange: (v: string) => void;
+  onApply: (m: MaterialMaster) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  const suggestions = value.trim()
+    ? masters.filter((m) => m.name.includes(value.trim()))
+    : [];
+
+  // 外側クリックで閉じる
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleSelect = (m: MaterialMaster) => {
+    setOpen(false);
+    if (window.confirm(`「${m.name}」のデータを自動入力しますか？\n\nメーカー: ${m.manufacturer}\n規格: ${m.specification}\n備考: ${m.remarks}`)) {
+      onApply(m);
+    }
+  };
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <input
+        type="text"
+        placeholder="例：改質アスファルトルーフィング"
+        className="w-full p-3 border border-gray-300 rounded-lg text-base font-bold bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        autoComplete="off"
+      />
+      {open && suggestions.length > 0 && (
+        <ul className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-blue-200 rounded-xl shadow-lg overflow-hidden">
+          {suggestions.map((m) => (
+            <li key={m.id}>
+              <button
+                type="button"
+                className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-none"
+                onMouseDown={(e) => { e.preventDefault(); handleSelect(m); }}
+              >
+                <div className="font-bold text-gray-800 text-sm">{m.name}</div>
+                <div className="text-xs text-gray-500 mt-0.5">{m.manufacturer}{m.specification ? `　${m.specification}` : ''}</div>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export default function MaterialPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
   const [uploadingId, setUploadingId] = useState<number | null>(null);
+  const [masters, setMasters] = useState<MaterialMaster[]>([]);
+  const [uid, setUid] = useState<string | null>(null);
 
-  // 現場データの読み込み
   useEffect(() => {
     if (!id) return;
-    getDoc(doc(db, "projects", id))
-      .then(d => {
-        if (d.exists()) setProject(d.data() as Project);
-      })
-      .catch(() => {
-        alert('材料データの読み込みに失敗しました。');
-      });
+    getDoc(doc(db, 'projects', id))
+      .then((d) => { if (d.exists()) setProject(d.data() as Project); })
+      .catch(() => { alert('材料データの読み込みに失敗しました。'); });
+
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) return;
+      setUid(user.uid);
+      const s = await getDoc(doc(db, 'users', user.uid));
+      if (s.exists()) {
+        const data = s.data();
+        if (Array.isArray(data.materialMaster)) setMasters(data.materialMaster);
+      }
+    });
+    return () => unsub();
   }, [id]);
 
-  // Firebaseへの自動保存
   const saveMaterials = async (newMaterials: Material[]) => {
     if (!project || !id) return;
     setProject({ ...project, materials: newMaterials });
-    await updateDoc(doc(db, "projects", id), { materials: newMaterials });
+    await updateDoc(doc(db, 'projects', id), { materials: newMaterials });
   };
 
-  // 空の材料枠を追加
   const addMaterial = () => {
     const newMaterial: Material = {
-      id: Date.now() + Math.random(),
+      id: Date.now(),
       image: null,
       name: '',
       manufacturer: '',
@@ -47,22 +120,28 @@ export default function MaterialPage() {
     saveMaterials([...(project?.materials || []), newMaterial]);
   };
 
-  // 文字の入力内容を保存
-  const updateMaterial = (materialId: number, field: keyof Material, value: any) => {
-    const newMaterials = (project?.materials || []).map(m => 
+  const updateMaterial = (materialId: number, field: keyof Material, value: Material[keyof Material]) => {
+    const newMaterials = (project?.materials || []).map((m) =>
       m.id === materialId ? { ...m, [field]: value } : m
     );
     saveMaterials(newMaterials);
   };
 
-  // 材料をまるごと削除
-  const removeMaterial = (materialId: number) => {
-    if (!window.confirm('この材料データを削除しますか？')) return;
-    const newMaterials = (project?.materials || []).filter(m => m.id !== materialId);
+  // サジェスト選択時に複数フィールドを一括更新
+  const applyMaster = (materialId: number, m: MaterialMaster) => {
+    const newMaterials = (project?.materials || []).map((mat) =>
+      mat.id === materialId
+        ? { ...mat, name: m.name, manufacturer: m.manufacturer, specification: m.specification, remarks: m.remarks }
+        : mat
+    );
     saveMaterials(newMaterials);
   };
 
-  // 材料の順序を移動（並べ替え機能）
+  const removeMaterial = (materialId: number) => {
+    if (!window.confirm('この材料データを削除しますか？')) return;
+    saveMaterials((project?.materials || []).filter((m) => m.id !== materialId));
+  };
+
   const moveMaterial = (index: number, direction: 'up' | 'down') => {
     const newMaterials = [...(project?.materials || [])];
     if (direction === 'up' && index > 0) {
@@ -73,28 +152,51 @@ export default function MaterialPage() {
     saveMaterials(newMaterials);
   };
 
-  // 写真のアップロード処理
+  // 現在の材料カードをマスタに追加
+  const saveToMaster = async (material: Material) => {
+    if (!uid) { alert('マスタに保存するにはログインが必要です。'); return; }
+    if (!material.name.trim()) { alert('品名を入力してください。'); return; }
+
+    // 同じ品名があれば上書き確認
+    const existing = masters.find((m) => m.name === material.name.trim());
+    if (existing) {
+      if (!window.confirm(`「${material.name}」はすでにマスタにあります。上書きしますか？`)) return;
+    }
+
+    const newEntry: MaterialMaster = {
+      id: existing?.id ?? Date.now(),
+      name: material.name.trim(),
+      manufacturer: material.manufacturer,
+      specification: material.specification,
+      remarks: material.remarks,
+    };
+    const newMasters = existing
+      ? masters.map((m) => (m.id === existing.id ? newEntry : m))
+      : [...masters, newEntry];
+
+    setMasters(newMasters);
+    await setDoc(doc(db, 'users', uid), { materialMaster: newMasters }, { merge: true });
+    alert(`「${newEntry.name}」をマスタに保存しました。`);
+  };
+
   const handleImageUpload = async (materialId: number, e: React.ChangeEvent<HTMLInputElement>) => {
     if (!project || !id || !e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
     setUploadingId(materialId);
-
     try {
       const storageRef = ref(storage, `materials/${id}/${Date.now()}_${file.name}`);
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
       updateMaterial(materialId, 'image', url);
-    } catch (error) {
+    } catch {
       alert('画像のアップロードに失敗しました。');
     } finally {
       setUploadingId(null);
     }
   };
 
-  // 写真の回転処理
   const rotateImage = (materialId: number, currentRotation: number, delta: number) => {
-    const newRotation = (currentRotation + delta) % 360;
-    updateMaterial(materialId, 'rotation', newRotation);
+    updateMaterial(materialId, 'rotation', (currentRotation + delta) % 360);
   };
 
   if (!project) return <LoadingSpinner />;
@@ -104,56 +206,38 @@ export default function MaterialPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 font-sans overflow-x-hidden pb-24">
       <div className="max-w-2xl mx-auto">
-        {/* ヘッダー部分 */}
         <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg">
           <ArrowLeft className="w-6 h-6" /> もどる
         </button>
-        
+
         <div className="flex justify-between items-end mb-6">
           <h1 className="text-3xl font-bold text-gray-900">材料の登録</h1>
           <span className="text-sm font-bold text-gray-500">{materials.length} 件登録済み</span>
         </div>
 
-        {/* ガイダンス */}
         <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-6 shadow-sm">
           <p className="text-sm text-blue-800 font-bold leading-relaxed">
             💡 ここに材料（パッケージやラベル）を登録すると、写真台帳の前に「材料報告書」が自動で追加されます。小規模な修理などで不要な場合は、空のままでOKです！
           </p>
         </div>
 
-        {/* 材料リスト */}
         <div className="space-y-6">
           {materials.map((material, index) => (
             <div key={material.id} className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-gray-200 relative">
               <div className="absolute top-4 left-4 bg-gray-800 text-white text-xs font-bold px-3 py-1 rounded-full z-10 shadow">
                 材料 {index + 1}
               </div>
-              
-              {/* 並べ替えボタン */}
+
               <div className="absolute top-3 right-14 flex gap-1 z-10">
-                <button 
-                  onClick={() => moveMaterial(index, 'up')} 
-                  disabled={index === 0} 
-                  className="p-2 text-gray-600 bg-gray-100 rounded-full hover:bg-gray-200 disabled:opacity-30 transition-colors shadow-sm"
-                  title="上へ移動"
-                >
+                <button onClick={() => moveMaterial(index, 'up')} disabled={index === 0} className="p-2 text-gray-600 bg-gray-100 rounded-full hover:bg-gray-200 disabled:opacity-30 transition-colors shadow-sm" title="上へ移動">
                   <ArrowUp className="w-4 h-4" />
                 </button>
-                <button 
-                  onClick={() => moveMaterial(index, 'down')} 
-                  disabled={index === materials.length - 1} 
-                  className="p-2 text-gray-600 bg-gray-100 rounded-full hover:bg-gray-200 disabled:opacity-30 transition-colors shadow-sm"
-                  title="下へ移動"
-                >
+                <button onClick={() => moveMaterial(index, 'down')} disabled={index === materials.length - 1} className="p-2 text-gray-600 bg-gray-100 rounded-full hover:bg-gray-200 disabled:opacity-30 transition-colors shadow-sm" title="下へ移動">
                   <ArrowDown className="w-4 h-4" />
                 </button>
               </div>
 
-              <button 
-                onClick={() => removeMaterial(material.id)} 
-                className="absolute top-3 right-3 p-2 text-red-500 bg-red-50 rounded-full hover:bg-red-100 z-10 transition-colors shadow-sm"
-                title="削除"
-              >
+              <button onClick={() => removeMaterial(material.id)} className="absolute top-3 right-3 p-2 text-red-500 bg-red-50 rounded-full hover:bg-red-100 z-10 transition-colors shadow-sm" title="削除">
                 <Trash2 className="w-5 h-5" />
               </button>
 
@@ -163,9 +247,9 @@ export default function MaterialPage() {
                   <div className="aspect-square bg-gray-100 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center relative overflow-hidden group">
                     {material.image ? (
                       <>
-                        <img 
-                          src={proxyUrl(material.image, material.id)} 
-                          alt="材料写真" 
+                        <img
+                          src={proxyUrl(material.image, material.id)}
+                          alt="材料写真"
                           className="w-full h-full object-contain transition-transform duration-300"
                           style={{ transform: `rotate(${material.rotation || 0}deg)` }}
                           crossOrigin="anonymous"
@@ -180,10 +264,7 @@ export default function MaterialPage() {
                         {uploadingId === material.id ? (
                           <span className="text-blue-500 font-bold animate-pulse">読込中...</span>
                         ) : (
-                          <>
-                            <Camera className="w-10 h-10 text-gray-400 mb-2" />
-                            <span className="text-sm font-bold text-gray-500">写真を撮影</span>
-                          </>
+                          <><Camera className="w-10 h-10 text-gray-400 mb-2" /><span className="text-sm font-bold text-gray-500">写真を撮影</span></>
                         )}
                         <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(material.id, e)} disabled={uploadingId === material.id} />
                       </label>
@@ -200,29 +281,43 @@ export default function MaterialPage() {
                 {/* 入力項目エリア */}
                 <div className="w-full sm:w-[60%] flex flex-col gap-3">
                   <div>
-                    <label className="text-xs font-bold text-gray-500 mb-1 block">品名</label>
-                    <input type="text" placeholder="例：改質アスファルトルーフィング" className="w-full p-3 border border-gray-300 rounded-lg text-base font-bold bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" value={material.name} onChange={e => updateMaterial(material.id, 'name', e.target.value)} />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-gray-500">品名</label>
+                      <button
+                        type="button"
+                        onClick={() => saveToMaster(material)}
+                        className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 px-2 py-1 rounded-lg transition-colors"
+                        title="この材料をマスタに保存"
+                      >
+                        <BookmarkPlus className="w-3.5 h-3.5" /> マスタに追加
+                      </button>
+                    </div>
+                    <NameSuggest
+                      value={material.name}
+                      masters={masters}
+                      onChange={(v) => updateMaterial(material.id, 'name', v)}
+                      onApply={(m) => applyMaster(material.id, m)}
+                    />
                   </div>
                   <div>
                     <label className="text-xs font-bold text-gray-500 mb-1 block">メーカー</label>
-                    <input type="text" placeholder="例：田島ルーフィング" className="w-full p-3 border border-gray-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" value={material.manufacturer} onChange={e => updateMaterial(material.id, 'manufacturer', e.target.value)} />
+                    <input type="text" placeholder="例：田島ルーフィング" className="w-full p-3 border border-gray-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" value={material.manufacturer} onChange={(e) => updateMaterial(material.id, 'manufacturer', e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs font-bold text-gray-500 mb-1 block">規格 / 寸法 / 数量</label>
-                    <input type="text" placeholder="例：1.0m × 20m / 3巻" className="w-full p-3 border border-gray-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" value={material.specification} onChange={e => updateMaterial(material.id, 'specification', e.target.value)} />
+                    <input type="text" placeholder="例：1.0m × 20m / 3巻" className="w-full p-3 border border-gray-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" value={material.specification} onChange={(e) => updateMaterial(material.id, 'specification', e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs font-bold text-gray-500 mb-1 block">備考</label>
-                    <textarea placeholder="使用箇所や特記事項など" rows={2} className="w-full p-3 border border-gray-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none" value={material.remarks} onChange={e => updateMaterial(material.id, 'remarks', e.target.value)} />
+                    <textarea placeholder="使用箇所や特記事項など" rows={2} className="w-full p-3 border border-gray-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none" value={material.remarks} onChange={(e) => updateMaterial(material.id, 'remarks', e.target.value)} />
                   </div>
                 </div>
               </div>
             </div>
           ))}
 
-          {/* 追加ボタン */}
-          <button 
-            onClick={addMaterial} 
+          <button
+            onClick={addMaterial}
             className="w-full py-5 bg-white text-blue-600 font-bold text-lg rounded-2xl border-2 border-dashed border-blue-300 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2 shadow-sm"
           >
             <Plus className="w-7 h-7" />
