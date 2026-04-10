@@ -121,25 +121,14 @@ export interface Project {
   mapUrls: string[];
   mapRows: MapRow[];
   mapPins: MapPin[];
-  /** 位置図上の線（任意） */
   mapLines?: MapLine[];
-  /** 使用材料（任意） */
   materials?: Material[];
   createdAt?: string;
   mapDimensionLines?: DimensionLine[];
   showLegendTable?: boolean;
   mapRotations?: number[];
+  mapTransforms?: { scale: number; x: number; y: number }[];
   shareToken?: string;
   whiteoutBoxes?: WhiteoutBox[];
   isCompleted?: boolean;
-}
-export interface Project {
-  // ... (既存のコード) ...
-  mapRotations?: number[];
-  
-  // ▼ これを追加します（ズーム・移動位置の保存用）
-  mapTransforms?: { scale: number; x: number; y: number }[];
-  
-  whiteoutBoxes?: WhiteoutBox[];
-  // ...
 }
