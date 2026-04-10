@@ -323,7 +323,7 @@ export default function PdfExportPage() {
             page-break-inside: avoid !important;
             -webkit-page-break-inside: avoid !important;
           }
-
+          
           .pdf-container-wrapper > .pdf-page-wrapper:first-child {
             break-before: auto !important;
             page-break-before: auto !important;
@@ -427,6 +427,9 @@ export default function PdfExportPage() {
           const userRotation = project.mapRotations?.[mapIndex] ?? 0;
           const printRotation = (!showLegendTable && rotateMap) ? 90 : 0;
           const totalRotation = (userRotation + printRotation) % 360;
+          
+          // ★ 追加：MapPageで設定したズーム・パン設定を適用
+          const transform = project.mapTransforms?.[mapIndex] || { scale: 1, x: 0, y: 0 };
 
           // 共通オーバーレイ描画（ピン・ライン・寸法線）
           const mapOverlays = (
@@ -477,7 +480,6 @@ export default function PdfExportPage() {
           );
 
           if (!showLegendTable) {
-            // ===== 全面表示モード：A4いっぱいに地図を表示 =====
             return (
               <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
                 <div
@@ -486,7 +488,7 @@ export default function PdfExportPage() {
                 >
                   <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
                     {u ? (
-                      <div style={{ position: 'absolute', inset: 0, transform: `rotate(${totalRotation}deg)`, transformOrigin: 'center center' }}>
+                      <div style={{ position: 'absolute', inset: 0, transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center' }}>
                         <img
                           src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)}
                           data-original-src={u}
@@ -499,11 +501,9 @@ export default function PdfExportPage() {
                     ) : (
                       <span className="font-bold text-gray-400 absolute inset-0 flex items-center justify-center">位置図未登録</span>
                     )}
-                    {/* 「位置図」ラベル（画像上に重ねる） */}
                     <div style={{ position: 'absolute', top: '6mm', left: '6mm', zIndex: 50, background: 'rgba(255,255,255,0.88)', padding: '1px 6px', borderRadius: '3px', fontWeight: 'bold', fontSize: '13px', color: '#111', lineHeight: '1.6' }}>
                       位置図{mapCount > 1 ? ` (${mapIndex + 1}/${mapCount})` : ''}
                     </div>
-                    {/* ページ番号 */}
                     <div style={{ position: 'absolute', bottom: '5mm', right: '8mm', zIndex: 50, fontSize: '12px', fontWeight: 'bold', color: '#555' }}>
                       - {2 + mapIndex} / {totalPages} -
                     </div>
@@ -513,7 +513,6 @@ export default function PdfExportPage() {
             );
           }
 
-          // ===== 凡例表ありモード（既存レイアウト） =====
           return (
             <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
               <div className={`pdf-page w-full h-full flex flex-col bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '15mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
@@ -523,8 +522,8 @@ export default function PdfExportPage() {
                   </h2>
                   <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-gray-50 print:bg-white p-2 border border-gray-400 print:border-gray-500">
                     {u ? (
-                      <div className="flex items-center justify-center w-full h-full relative">
-                        <div style={{ display: 'inline-block', position: 'relative', transform: `rotate(${totalRotation}deg)`, transformOrigin: 'center center', flexShrink: 0 }}>
+                      <div className="flex items-center justify-center w-full h-full relative overflow-hidden">
+                        <div style={{ display: 'inline-block', position: 'relative', transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center', flexShrink: 0 }}>
                           <img
                             src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)}
                             data-original-src={u}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, MapPin, CaseUpper, FileText, LayoutGrid, Ruler, Paintbrush, Save, UploadCloud, RotateCcw, RotateCw, Eraser } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, MapPin, CaseUpper, FileText, LayoutGrid, Ruler, Paintbrush, Save, UploadCloud, RotateCcw, RotateCw, Eraser, Move } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../firebase';
@@ -22,14 +22,6 @@ const COLOR_PALETTE = [
   { name: "Red", value: "#ef4444" },
 ];
 
-
-const getLocalPoint = (e: React.PointerEvent<Element>, angle: number) => {
-  const target = e.currentTarget;
-  const rect = target.getBoundingClientRect();
-  return getLocalPointFromRect(e.clientX, e.clientY, rect, angle);
-};
-
-// rect を直接渡せるバージョン（DimensionLine端点ドラッグ用）
 const getLocalPointFromRect = (clientX: number, clientY: number, rect: DOMRect, angle: number) => {
   let localX = 0, localY = 0;
   let w = rect.width, h = rect.height;
@@ -43,7 +35,6 @@ const getLocalPointFromRect = (clientX: number, clientY: number, rect: DOMRect, 
   return { x: Math.max(0, Math.min(100, (localX / w) * 100)), y: Math.max(0, Math.min(100, (localY / h) * 100)) };
 };
 
-// ★ 改善：ドラッグ開始に「遊び（5px）」を設けて誤爆を防ぐ賢いフック
 const useRotatedDraggable = (initialX: number, initialY: number, rotation: number, onDragEnd: (x: number, y: number) => void) => {
   const [position, setPosition] = useState({ x: initialX, y: initialY });
   const [dragging, setDragging] = useState(false);
@@ -68,7 +59,6 @@ const useRotatedDraggable = (initialX: number, initialY: number, rotation: numbe
     let dx = e.clientX - startPosRef.current.clientX;
     let dy = e.clientY - startPosRef.current.clientY;
 
-    // ★ 5ピクセル以上動かさないとドラッグと判定しない（指のブレを吸収）
     if (!isMovedRef.current) {
       if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
         isMovedRef.current = true;
@@ -108,7 +98,6 @@ const useRotatedDraggable = (initialX: number, initialY: number, rotation: numbe
 
   const handleClick = (e: React.MouseEvent | React.PointerEvent, onClickCallback: () => void) => {
     e.stopPropagation();
-    // 動かしていなければクリック（選択）として扱う
     if (!isMovedRef.current) {
       onClickCallback();
     }
@@ -175,8 +164,6 @@ const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, 
     e.stopPropagation(); 
     (e.currentTarget as Element).setPointerCapture(e.pointerId); 
     dragStartPos.current = { clientX: e.clientX, clientY: e.clientY, started: false };
-    // ここではまだ isDragging にしない（遊びを持たせる）
-    // 一時的に情報を保持するためのトリックとして isDragging に type を入れるが、実際の移動計算にロックをかける
     setIsDragging(type);
   };
 
@@ -186,7 +173,6 @@ const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, 
     let dx = e.clientX - dragStartPos.current.clientX;
     let dy = e.clientY - dragStartPos.current.clientY;
     
-    // 5px以上動いたらドラッグ開始とみなす
     if (!dragStartPos.current.started) {
       if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
         dragStartPos.current.started = true;
@@ -209,7 +195,6 @@ const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, 
     if (dragStartPos.current.started) {
       onUpdate({ start: localStart, end: localEnd }); 
     } else {
-      // 遊びの範囲内なら動かさずに戻す
       setLocalStart(line.start);
       setLocalEnd(line.end);
     }
@@ -370,6 +355,7 @@ export default function MapPage() {
   const [mapDimensionLines, setMapDimensionLines] = useState<DimensionLine[]>([]);
   const [mapRotations, setMapRotations] = useState<number[]>([]);
   const [whiteoutBoxes, setWhiteoutBoxes] = useState<WhiteoutBox[]>([]);
+  const [mapTransforms, setMapTransforms] = useState<{ scale: number; x: number; y: number }[]>([]);
   
   const [selectedPinId, setSelectedPinId] = useState<number | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
@@ -384,7 +370,7 @@ export default function MapPage() {
   const replaceInputRef = useRef<HTMLInputElement>(null);
   const [currentMapIndex, setCurrentMapIndex] = useState(0);
 
-  const [editingMode, setEditingMode] = useState<'pin' | 'dimension' | 'whiteout'>('pin');
+  const [editingMode, setEditingMode] = useState<'pin' | 'dimension' | 'whiteout' | 'pan'>('pan');
   const [drawingStartPoint, setDrawingStartPoint] = useState<{ x: number; y: number } | null>(null);
   const [activeColor, setActiveColor] = useState<string>(COLOR_PALETTE[0].value); 
   const [showLegendTable, setShowLegendTable] = useState(true);
@@ -393,8 +379,8 @@ export default function MapPage() {
   const [whiteoutCurrent, setWhiteoutCurrent] = useState<{ x: number; y: number } | null>(null);
   const isDraggingWhiteout = whiteoutStart !== null;
 
-  // ★ 追加：タップ判定用のステート
   const [pendingActionInfo, setPendingActionInfo] = useState<{ clientX: number, clientY: number, localX: number, localY: number, time: number } | null>(null);
+  const startDragPan = useRef({ x: 0, y: 0, startX: 0, startY: 0, isDragging: false });
 
   useEffect(() => {
     if (!id) return;
@@ -410,13 +396,14 @@ export default function MapPage() {
           setShowLegendTable(data.showLegendTable !== false);
           setMapRotations(data.mapRotations || []);
           setWhiteoutBoxes(data.whiteoutBoxes || []);
+          setMapTransforms(data.mapTransforms || []);
         } else { setError('プロジェクトが見つかりません。'); }
       } catch { setError('データの読み込みに失敗しました。'); } finally { setLoading(false); }
     };
     fetchData();
   }, [id]);
 
-  const saveProjectMapData = useCallback(async (newPins: MapPinT[], newRows: MapRow[], newDimLines: DimensionLine[], newWhiteouts: WhiteoutBox[], newTableShow: boolean) => {
+  const saveProjectMapData = useCallback(async (newPins: MapPinT[], newRows: MapRow[], newDimLines: DimensionLine[], newWhiteouts: WhiteoutBox[], newTableShow: boolean, newTransforms: { scale: number; x: number; y: number }[]) => {
     if (!id) return;
     setIsSaving(true);
     try {
@@ -426,9 +413,19 @@ export default function MapPage() {
         mapDimensionLines: newDimLines,
         whiteoutBoxes: newWhiteouts,
         showLegendTable: newTableShow,
+        mapTransforms: newTransforms,
       });
     } catch { setError('保存に失敗しました。'); } finally { setIsSaving(false); }
   }, [id]);
+
+  const updateTransform = (index: number, updates: Partial<{ scale: number; x: number; y: number }>) => {
+    setMapTransforms(prev => {
+      const newTransforms = [...prev];
+      const current = newTransforms[index] || { scale: 1, x: 0, y: 0 };
+      newTransforms[index] = { ...current, ...updates };
+      return newTransforms;
+    });
+  };
 
   const uploadMapImage = async (e: React.ChangeEvent<HTMLInputElement>, mode: 'add' | 'replace') => {
     if (!project || !id || !e.target.files || e.target.files.length === 0) return;
@@ -487,6 +484,7 @@ export default function MapPage() {
       setProject(prev => prev ? { ...prev, mapUrls: newMapUrls } : null);
       await updateDoc(doc(db, 'projects', id), { mapUrls: newMapUrls });
       setCurrentMapIndex(insertAt);
+      setEditingMode('pan');
     } catch (err) {
       console.error(err);
       setError('図面のアップロードに失敗しました。');
@@ -517,6 +515,7 @@ export default function MapPage() {
 
     const newMapUrls = (project.mapUrls || []).filter((_, i) => i !== mapIndex);
     const newRotations = mapRotations.filter((_, i) => i !== mapIndex);
+    const newTransforms = mapTransforms.filter((_, i) => i !== mapIndex);
     const reindex = (idx: number) => idx > mapIndex ? idx - 1 : idx;
     const newPins = mapPins.filter(p => (p.mapIndex || 0) !== mapIndex).map(p => ({ ...p, mapIndex: reindex(p.mapIndex || 0) }));
     const newRows = mapRows.filter(r => (r.mapIndex || 0) !== mapIndex).map(r => ({ ...r, mapIndex: reindex(r.mapIndex || 0) }));
@@ -528,6 +527,7 @@ export default function MapPage() {
     setMapDimensionLines(newDimLines);
     setMapRotations(newRotations);
     setWhiteoutBoxes(newWhiteouts);
+    setMapTransforms(newTransforms);
     setProject({ ...project, mapUrls: newMapUrls });
 
     const nextIndex = currentMapIndex >= newMapUrls.length ? Math.max(0, newMapUrls.length - 1) : currentMapIndex;
@@ -535,50 +535,70 @@ export default function MapPage() {
 
     setIsSaving(true);
     try {
-      await updateDoc(doc(db, 'projects', id), { mapUrls: newMapUrls, mapRotations: newRotations, mapPins: newPins, mapRows: newRows, mapDimensionLines: newDimLines, whiteoutBoxes: newWhiteouts });
+      await updateDoc(doc(db, 'projects', id), { mapUrls: newMapUrls, mapRotations: newRotations, mapTransforms: newTransforms, mapPins: newPins, mapRows: newRows, mapDimensionLines: newDimLines, whiteoutBoxes: newWhiteouts });
     } catch { setError('削除に失敗しました。'); } finally { setIsSaving(false); }
-  }, [project, id, mapPins, mapRows, mapDimensionLines, whiteoutBoxes, mapRotations, currentMapIndex]);
+  }, [project, id, mapPins, mapRows, mapDimensionLines, whiteoutBoxes, mapRotations, mapTransforms, currentMapIndex]);
 
+  const handlePanPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (editingMode !== 'pan') return;
+    const current = mapTransforms[currentMapIndex] || { scale: 1, x: 0, y: 0 };
+    startDragPan.current = { x: current.x, y: current.y, startX: e.clientX, startY: e.clientY, isDragging: true };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
 
-  // ★ 改善：キャンバスを押した瞬間（まだタップかスワイプかわからない状態）
+  const handlePanPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!startDragPan.current.isDragging || editingMode !== 'pan') return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const dx = ((e.clientX - startDragPan.current.startX) / rect.width) * 100;
+    const dy = ((e.clientY - startDragPan.current.startY) / rect.height) * 100;
+    updateTransform(currentMapIndex, { x: startDragPan.current.x + dx, y: startDragPan.current.y + dy });
+  };
+
+  const handlePanPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!startDragPan.current.isDragging || editingMode !== 'pan') return;
+    startDragPan.current.isDragging = false;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms);
+  };
+
   const handleMapPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    // 既存の選択をすべて解除（メニューを閉じる）
     if (selectedPinId !== null) setSelectedPinId(null);
     if (selectedRowId !== null) setSelectedRowId(null);
     if (selectedDimensionLineId !== null) setSelectedDimensionLineId(null);
     if (selectedWhiteoutId !== null) setSelectedWhiteoutId(null);
 
     const rotation = mapRotations[currentMapIndex] || 0;
-    const point = getLocalPoint(e, rotation);
+    
+    if (editingMode === 'pan') return;
+
+    const parent = e.currentTarget.closest('.map-content-wrapper') as HTMLDivElement;
+    if (!parent) return;
+    const rect = parent.getBoundingClientRect();
+    const point = getLocalPointFromRect(e.clientX, e.clientY, rect, rotation);
 
     if (editingMode === 'whiteout') {
-      // 文字消しはドラッグで範囲指定なので即座に記録
       e.currentTarget.setPointerCapture(e.pointerId);
       setWhiteoutStart({ x: point.x, y: point.y });
       setWhiteoutCurrent({ x: point.x, y: point.y });
       return;
     }
 
-    // ピンや寸法の場合は、後でタップ判定するために情報を保持
-    setPendingActionInfo({
-      clientX: e.clientX,
-      clientY: e.clientY,
-      localX: point.x,
-      localY: point.y,
-      time: Date.now()
-    });
+    setPendingActionInfo({ clientX: e.clientX, clientY: e.clientY, localX: point.x, localY: point.y, time: Date.now() });
   }, [editingMode, selectedPinId, selectedRowId, selectedDimensionLineId, selectedWhiteoutId, mapRotations, currentMapIndex]);
 
   const handleMapPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (editingMode === 'whiteout' && whiteoutStart) {
       const rotation = mapRotations[currentMapIndex] || 0;
-      const point = getLocalPoint(e, rotation);
+      const parent = e.currentTarget.closest('.map-content-wrapper') as HTMLDivElement;
+      if (!parent) return;
+      const point = getLocalPointFromRect(e.clientX, e.clientY, parent.getBoundingClientRect(), rotation);
       setWhiteoutCurrent(point);
     }
   }, [editingMode, whiteoutStart, mapRotations, currentMapIndex]);
 
-  // ★ 改善：キャンバスから指を離した瞬間（スワイプなら無視、タップなら追加）
   const handleMapPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (editingMode === 'pan') return;
+
     if (editingMode === 'whiteout' && whiteoutStart && whiteoutCurrent) {
       e.currentTarget.releasePointerCapture(e.pointerId);
       const width = Math.abs(whiteoutStart.x - whiteoutCurrent.x);
@@ -590,7 +610,7 @@ export default function MapPage() {
         const newBox: WhiteoutBox = { id: Date.now(), x: centerX, y: centerY, width, height, mapIndex: currentMapIndex };
         const newBoxes = [...whiteoutBoxes, newBox];
         setWhiteoutBoxes(newBoxes);
-        saveProjectMapData(mapPins, mapRows, mapDimensionLines, newBoxes, showLegendTable);
+        saveProjectMapData(mapPins, mapRows, mapDimensionLines, newBoxes, showLegendTable, mapTransforms);
         setSelectedWhiteoutId(newBox.id);
       }
       setWhiteoutStart(null);
@@ -598,14 +618,12 @@ export default function MapPage() {
       return;
     }
 
-    // ★ ピン・寸法の「タップ」判定ロジック
     if (pendingActionInfo) {
       const dx = e.clientX - pendingActionInfo.clientX;
       const dy = e.clientY - pendingActionInfo.clientY;
       const distance = Math.sqrt(dx * dx + dy * dy);
       const timeElapsed = Date.now() - pendingActionInfo.time;
 
-      // 10ピクセル未満、かつ500ms以内の離上なら「タップ」とみなして処理を実行
       if (distance < 10 && timeElapsed < 500) {
         const { localX: x, localY: y } = pendingActionInfo;
 
@@ -615,7 +633,7 @@ export default function MapPage() {
           setMapPins(newPins);
           const newRows: MapRow[] = [...mapRows, { id: Date.now(), symbol: newLabel, part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }];
           setMapRows(newRows);
-          saveProjectMapData(newPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable);
+          saveProjectMapData(newPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms);
 
         } else if (editingMode === 'dimension') {
           if (!drawingStartPoint) {
@@ -626,7 +644,7 @@ export default function MapPage() {
               id: newLineId, start: drawingStartPoint, end: { x, y }, text: "", size: 2, color: activeColor, mapIndex: currentMapIndex, textRotation: -(mapRotations[currentMapIndex] || 0)
             }];
             setMapDimensionLines(newDimLines);
-            saveProjectMapData(mapPins, mapRows, newDimLines, whiteoutBoxes, showLegendTable);
+            saveProjectMapData(mapPins, mapRows, newDimLines, whiteoutBoxes, showLegendTable, mapTransforms);
             setDrawingStartPoint(null); 
             setSelectedDimensionLineId(newLineId); 
           }
@@ -634,59 +652,58 @@ export default function MapPage() {
       }
       setPendingActionInfo(null);
     }
-  }, [editingMode, whiteoutStart, whiteoutCurrent, pendingActionInfo, mapPins, mapRows, mapDimensionLines, whiteoutBoxes, currentMapIndex, drawingStartPoint, activeColor, showLegendTable, saveProjectMapData]);
-
+  }, [editingMode, whiteoutStart, whiteoutCurrent, pendingActionInfo, mapPins, mapRows, mapDimensionLines, whiteoutBoxes, currentMapIndex, drawingStartPoint, activeColor, showLegendTable, mapRotations, mapTransforms, saveProjectMapData]);
 
   const updateDimensionLine = useCallback((lineId: number, newProps: Partial<DimensionLine>) => {
     setMapDimensionLines(prev => {
       const newDimLines = prev.map(l => l.id === lineId ? { ...l, ...newProps } : l);
-      saveProjectMapData(mapPins, mapRows, newDimLines, whiteoutBoxes, showLegendTable);
+      saveProjectMapData(mapPins, mapRows, newDimLines, whiteoutBoxes, showLegendTable, mapTransforms);
       return newDimLines;
     });
-  }, [mapPins, mapRows, whiteoutBoxes, showLegendTable, saveProjectMapData]);
+  }, [mapPins, mapRows, whiteoutBoxes, showLegendTable, mapTransforms, saveProjectMapData]);
 
   const removeDimensionLine = useCallback((lineId: number) => {
     setMapDimensionLines(prev => {
       const newDimLines = prev.filter(l => l.id !== lineId);
-      saveProjectMapData(mapPins, mapRows, newDimLines, whiteoutBoxes, showLegendTable);
+      saveProjectMapData(mapPins, mapRows, newDimLines, whiteoutBoxes, showLegendTable, mapTransforms);
       return newDimLines;
     });
     setSelectedDimensionLineId(null);
-  }, [mapPins, mapRows, whiteoutBoxes, showLegendTable, saveProjectMapData]);
+  }, [mapPins, mapRows, whiteoutBoxes, showLegendTable, mapTransforms, saveProjectMapData]);
 
   const updateMapMarker = useCallback((pinId: number, newProps: Partial<MapPinT>) => {
     setMapPins(prev => {
       const newPins = prev.map(p => p.id === pinId ? { ...p, ...newProps } : p);
-      saveProjectMapData(newPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable);
+      saveProjectMapData(newPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms);
       return newPins;
     });
-  }, [mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, saveProjectMapData]);
+  }, [mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, saveProjectMapData]);
 
   const removeMapMarker = useCallback((pinId: number) => {
     setMapPins(prev => {
       const newPins = prev.filter(p => p.id !== pinId);
-      saveProjectMapData(newPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable);
+      saveProjectMapData(newPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms);
       return newPins;
     });
     setSelectedPinId(null);
-  }, [mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, saveProjectMapData]);
+  }, [mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, saveProjectMapData]);
 
   const updateWhiteout = useCallback((boxId: number, newProps: Partial<WhiteoutBox>) => {
     setWhiteoutBoxes(prev => {
       const newBoxes = prev.map(b => b.id === boxId ? { ...b, ...newProps } : b);
-      saveProjectMapData(mapPins, mapRows, mapDimensionLines, newBoxes, showLegendTable);
+      saveProjectMapData(mapPins, mapRows, mapDimensionLines, newBoxes, showLegendTable, mapTransforms);
       return newBoxes;
     });
-  }, [mapPins, mapRows, mapDimensionLines, showLegendTable, saveProjectMapData]);
+  }, [mapPins, mapRows, mapDimensionLines, showLegendTable, mapTransforms, saveProjectMapData]);
 
   const removeWhiteout = useCallback((boxId: number) => {
     setWhiteoutBoxes(prev => {
       const newBoxes = prev.filter(b => b.id !== boxId);
-      saveProjectMapData(mapPins, mapRows, mapDimensionLines, newBoxes, showLegendTable);
+      saveProjectMapData(mapPins, mapRows, mapDimensionLines, newBoxes, showLegendTable, mapTransforms);
       return newBoxes;
     });
     setSelectedWhiteoutId(null);
-  }, [mapPins, mapRows, mapDimensionLines, showLegendTable, saveProjectMapData]);
+  }, [mapPins, mapRows, mapDimensionLines, showLegendTable, mapTransforms, saveProjectMapData]);
 
   const updateMapRow = useCallback((rowId: number, newProps: Partial<MapRow>) => {
     setMapRows(prev => prev.map(r => r.id === rowId ? { ...r, ...newProps } : r));
@@ -695,11 +712,11 @@ export default function MapPage() {
   const removeMapRow = useCallback((rowId: number) => {
     setMapRows(prev => {
       const newRows = prev.filter(r => r.id !== rowId);
-      saveProjectMapData(mapPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable);
+      saveProjectMapData(mapPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms);
       return newRows;
     });
     setSelectedRowId(null);
-  }, [mapPins, mapDimensionLines, whiteoutBoxes, showLegendTable, saveProjectMapData]);
+  }, [mapPins, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, saveProjectMapData]);
 
   const currentMapPins = useMemo(() => mapPins.filter(p => (p.mapIndex || 0) === currentMapIndex), [mapPins, currentMapIndex]);
   const currentMapDimensionLines = useMemo(() => mapDimensionLines.filter(l => (l.mapIndex || 0) === currentMapIndex), [mapDimensionLines, currentMapIndex]);
@@ -707,11 +724,11 @@ export default function MapPage() {
   const currentWhiteoutBoxes = useMemo(() => whiteoutBoxes.filter(b => (b.mapIndex || 0) === currentMapIndex), [whiteoutBoxes, currentMapIndex]);
 
   const currentMapUrl = project?.mapUrls?.[currentMapIndex];
+  const currentRotation = mapRotations[currentMapIndex] || 0;
+  const currentTransform = mapTransforms[currentMapIndex] || { scale: 1, x: 0, y: 0 };
 
   if (loading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={error} />;
-
-  const currentRotation = mapRotations[currentMapIndex] || 0;
 
   return (
     <div className="min-h-screen bg-[#f8fafc] p-4 lg:p-6 font-sans pb-40 select-none overflow-x-hidden">
@@ -729,7 +746,7 @@ export default function MapPage() {
                  <span className="font-bold text-gray-600">凡例表を</span>
                </div>
                <div className="flex items-center gap-2">
-                 <button onClick={() => { const newState = !showLegendTable; setShowLegendTable(newState); saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, newState); }} className={`relative inline-flex h-9 w-18 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${showLegendTable ? 'bg-blue-600' : 'bg-gray-200'}`}>
+                 <button onClick={() => { const newState = !showLegendTable; setShowLegendTable(newState); saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, newState, mapTransforms); }} className={`relative inline-flex h-9 w-18 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${showLegendTable ? 'bg-blue-600' : 'bg-gray-200'}`}>
                     <span className="sr-only">Toggle Legend</span>
                     <span aria-hidden="true" className={`inline-block h-8 w-8 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${showLegendTable ? 'translate-x-9' : 'translate-x-0'}`} />
                  </button>
@@ -739,6 +756,7 @@ export default function MapPage() {
 
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold text-gray-500 mr-1 w-full sm:w-auto">描画ツール:</span>
+              <button onClick={() => { setEditingMode('pan'); setDrawingStartPoint(null); }} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 lg:px-6 py-3 rounded-xl font-black transition-all ${editingMode === 'pan' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-600 bg-gray-50 hover:bg-gray-100'}`}><Move className="w-5 h-5"/> 印刷枠調整</button>
               <button onClick={() => { setEditingMode('pin'); setDrawingStartPoint(null); }} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 lg:px-6 py-3 rounded-xl font-black transition-all ${editingMode === 'pin' ? 'bg-red-500 text-white shadow-lg' : 'text-gray-600 bg-gray-50 hover:bg-gray-100'}`}><MapPin className="w-5 h-5"/> 番号ピン</button>
               <button onClick={() => { setEditingMode('dimension'); setDrawingStartPoint(null); }} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 lg:px-6 py-3 rounded-xl font-black transition-all ${editingMode === 'dimension' ? 'bg-gray-900 text-white shadow-lg' : 'text-gray-600 bg-gray-50 hover:bg-gray-100'}`}><Ruler className="w-5 h-5"/> 線・寸法</button>
               <button onClick={() => { setEditingMode('whiteout'); setDrawingStartPoint(null); }} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 lg:px-6 py-3 rounded-xl font-black transition-all ${editingMode === 'whiteout' ? 'bg-yellow-400 text-gray-900 shadow-lg' : 'text-gray-600 bg-gray-50 hover:bg-gray-100'}`}><Eraser className="w-5 h-5"/> 文字消し</button>
@@ -761,7 +779,7 @@ export default function MapPage() {
 
         <div className={`grid ${showLegendTable ? 'grid-cols-1 lg:grid-cols-12' : 'grid-cols-1'} gap-8 items-start`}>
           
-          <div className={`${showLegendTable ? 'lg:col-span-8' : ''} bg-white p-4 lg:p-8 rounded-[2rem] lg:rounded-[3rem] border-2 border-gray-100 shadow-2xl relative`}>
+          <div className={`${showLegendTable ? 'lg:col-span-8' : 'w-full max-w-4xl mx-auto'} bg-white p-4 lg:p-8 rounded-[2rem] lg:rounded-[3rem] border-2 border-gray-100 shadow-2xl relative`}>
             {editingMode === 'dimension' && (
               <div className="flex flex-wrap items-center gap-3 p-4 bg-gray-100 rounded-2xl border border-gray-200 mb-6">
                  <Paintbrush className="w-5 h-5 text-gray-500"/>
@@ -782,9 +800,19 @@ export default function MapPage() {
               </div>
             )}
 
-            <div className="w-full min-h-[400px] mt-2 bg-[#f1f5f9] rounded-3xl flex items-center justify-center overflow-hidden border-4 border-dashed border-gray-200 relative">
+            <div className="w-full flex justify-center mt-2 relative">
               {currentMapUrl ? (
-                <>
+                <div className="relative flex flex-col items-center w-full">
+                  
+                  {editingMode === 'pan' && (
+                     <div className="absolute -top-16 lg:-top-20 z-50 flex items-center gap-4 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl">
+                        <span className="font-black whitespace-nowrap">🔍 ズーム:</span>
+                        <input type="range" min="0.2" max="4" step="0.05" value={currentTransform.scale} onChange={(e) => updateTransform(currentMapIndex, { scale: parseFloat(e.target.value) })} onMouseUp={() => saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms)} onTouchEnd={() => saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms)} className="w-32 lg:w-48 accent-indigo-500 cursor-pointer" />
+                        <span className="font-bold w-12 text-center text-sm">{Math.round(currentTransform.scale * 100)}%</span>
+                        <button onClick={() => { updateTransform(currentMapIndex, { scale: 1, x: 0, y: 0 }); saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms); }} className="ml-2 px-4 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-full font-bold text-xs transition-colors whitespace-nowrap">リセット</button>
+                     </div>
+                  )}
+
                   <div className={`absolute top-3 right-3 z-30 flex items-center gap-1.5 transition-opacity duration-200 ${isDraggingWhiteout ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                     <button onClick={() => rotateCurrentMap(-90)} className="p-2 bg-white/90 hover:bg-white text-gray-700 rounded-xl shadow border border-gray-200 transition-all" title="左に90°回転"><RotateCcw className="w-4 h-4" /></button>
                     <button onClick={() => rotateCurrentMap(90)} className="p-2 bg-white/90 hover:bg-white text-gray-700 rounded-xl shadow border border-gray-200 transition-all" title="右に90°回転"><RotateCw className="w-4 h-4" /></button>
@@ -795,93 +823,87 @@ export default function MapPage() {
                   </div>
 
                   <div
-                    className="map-content-wrapper relative inline-block shadow-md transition-transform duration-300"
-                    style={{ transform: `rotate(${currentRotation}deg)` }}
+                    className={`relative overflow-hidden bg-[#e2e8f0] shadow-inner transition-all w-full flex items-center justify-center ${editingMode === 'pan' ? 'ring-4 ring-indigo-500 ring-offset-4 cursor-move' : 'border-2 border-gray-300'}`}
+                    style={{ 
+                      aspectRatio: showLegendTable ? '194/120' : '175/255',
+                      maxHeight: '70vh',
+                      maxWidth: showLegendTable ? '100%' : 'auto'
+                    }}
+                    onPointerDown={handlePanPointerDown}
+                    onPointerMove={handlePanPointerMove}
+                    onPointerUp={handlePanPointerUp}
+                    onPointerCancel={handlePanPointerUp}
                   >
-                    <img
-                      src={proxyUrl(currentMapUrl, `map_${currentMapIndex}_${sessionId}`)}
-                      crossOrigin="anonymous"
-                      className="block w-auto h-auto max-w-full pointer-events-none"
-                      style={{ maxHeight: '70vh' }}
-                      alt=""
-                    />
-                    
-                    <div 
-                      className="absolute inset-0 z-0 cursor-crosshair touch-none"
-                      onPointerDown={handleMapPointerDown}
-                      onPointerMove={handleMapPointerMove}
-                      onPointerUp={handleMapPointerUp}
-                      onPointerCancel={handleMapPointerUp}
-                    />
+                    <div className={`absolute inset-0 border-4 border-red-500 border-dashed z-40 pointer-events-none transition-opacity ${editingMode === 'pan' ? 'opacity-100' : 'opacity-0'}`}>
+                      <div className="absolute top-0 left-0 bg-red-500 text-white font-black text-[10px] px-2 py-0.5 rounded-br-lg">印刷セーフエリア</div>
+                    </div>
 
-                    {isDraggingWhiteout && whiteoutCurrent && (
-                      <div
-                        className="absolute bg-blue-500/30 border-2 border-blue-500 pointer-events-none z-50"
-                        style={{
-                          left: `${Math.min(whiteoutStart.x, whiteoutCurrent.x)}%`,
-                          top: `${Math.min(whiteoutStart.y, whiteoutCurrent.y)}%`,
-                          width: `${Math.abs(whiteoutStart.x - whiteoutCurrent.x)}%`,
-                          height: `${Math.abs(whiteoutStart.y - whiteoutCurrent.y)}%`,
-                        }}
+                    <div
+                      className="map-content-wrapper absolute inset-0 flex items-center justify-center transition-transform duration-75"
+                      style={{ transform: `translate(${currentTransform.x}%, ${currentTransform.y}%) scale(${currentTransform.scale}) rotate(${currentRotation}deg)`, transformOrigin: 'center center' }}
+                    >
+                      <img
+                        src={proxyUrl(currentMapUrl, `map_${currentMapIndex}_${sessionId}`)}
+                        crossOrigin="anonymous"
+                        className="block w-full h-full object-contain pointer-events-none"
+                        alt=""
                       />
-                    )}
+                      
+                      <div 
+                        className="absolute inset-0 z-0 touch-none"
+                        style={{ cursor: editingMode === 'pan' ? 'move' : 'crosshair' }}
+                        onPointerDown={handleMapPointerDown}
+                        onPointerMove={handleMapPointerMove}
+                        onPointerUp={handleMapPointerUp}
+                        onPointerCancel={handleMapPointerUp}
+                      />
 
-                    {currentWhiteoutBoxes.map(box => (
-                      <WhiteoutMarker
-                        key={box.id}
-                        box={box}
-                        rotation={currentRotation}
-                        isSelected={selectedWhiteoutId === box.id}
-                        onDragEnd={(x, y) => updateWhiteout(box.id, { x, y })}
-                        onClick={() => setSelectedWhiteoutId(box.id)}
-                        onSizeChange={(updates) => updateWhiteout(box.id, updates)}
-                        onRemove={() => removeWhiteout(box.id)}
-                      />
-                    ))}
-                    
-                    {currentMapDimensionLines.map((line) => (
-                      <DimensionLineMarker 
-                        key={line.id} line={line} rotation={currentRotation} isSelected={selectedDimensionLineId === line.id} 
-                        onSelect={() => setSelectedDimensionLineId(line.id)} onRemove={() => removeDimensionLine(line.id)}
-                        onTextChange={(text) => updateDimensionLine(line.id, {text})} onUpdate={(newProps) => updateDimensionLine(line.id, newProps)}
-                        onDeselect={() => setSelectedDimensionLineId(null)}
-                      />
-                    ))}
+                      {isDraggingWhiteout && whiteoutCurrent && (
+                        <div
+                          className="absolute bg-blue-500/30 border-2 border-blue-500 pointer-events-none z-50"
+                          style={{
+                            left: `${Math.min(whiteoutStart.x, whiteoutCurrent.x)}%`,
+                            top: `${Math.min(whiteoutStart.y, whiteoutCurrent.y)}%`,
+                            width: `${Math.abs(whiteoutStart.x - whiteoutCurrent.x)}%`,
+                            height: `${Math.abs(whiteoutStart.y - whiteoutCurrent.y)}%`,
+                          }}
+                        />
+                      )}
 
-                    {drawingStartPoint && editingMode === 'dimension' && (
-                      <div style={{ left: `${drawingStartPoint.x}%`, top: `${drawingStartPoint.y}%`, backgroundColor: activeColor }} className="absolute w-4 h-4 rounded-full border-2 border-white shadow-xl pointer-events-none z-20 transform -translate-x-1/2 -translate-y-1/2" />
-                    )}
+                      {currentWhiteoutBoxes.map(box => (
+                        <WhiteoutMarker key={box.id} box={box} rotation={currentRotation} isSelected={selectedWhiteoutId === box.id} onDragEnd={(x, y) => updateWhiteout(box.id, { x, y })} onClick={() => {if(editingMode !== 'pan') setSelectedWhiteoutId(box.id)}} onSizeChange={(updates) => updateWhiteout(box.id, updates)} onRemove={() => removeWhiteout(box.id)} />
+                      ))}
+                      
+                      {currentMapDimensionLines.map((line) => (
+                        <DimensionLineMarker key={line.id} line={line} rotation={currentRotation} isSelected={selectedDimensionLineId === line.id} onSelect={() => {if(editingMode !== 'pan') setSelectedDimensionLineId(line.id)}} onRemove={() => removeDimensionLine(line.id)} onTextChange={(text) => updateDimensionLine(line.id, {text})} onUpdate={(newProps) => updateDimensionLine(line.id, newProps)} onDeselect={() => setSelectedDimensionLineId(null)} />
+                      ))}
 
-                    {currentMapPins.map(pin => (
-                      <MapMarker 
-                        key={pin.id} 
-                        pin={pin} 
-                        rotation={currentRotation}
-                        isSelected={selectedPinId === pin.id} 
-                        onDragEnd={(x, y) => updateMapMarker(pin.id, { x, y })}
-                        onClick={() => setSelectedPinId(pin.id)}
-                      />
-                    ))}
+                      {drawingStartPoint && editingMode === 'dimension' && (
+                        <div style={{ left: `${drawingStartPoint.x}%`, top: `${drawingStartPoint.y}%`, backgroundColor: activeColor }} className="absolute w-4 h-4 rounded-full border-2 border-white shadow-xl pointer-events-none z-20 transform -translate-x-1/2 -translate-y-1/2" />
+                      )}
+
+                      {currentMapPins.map(pin => (
+                        <MapMarker key={pin.id} pin={pin} rotation={currentRotation} isSelected={selectedPinId === pin.id} onDragEnd={(x, y) => updateMapMarker(pin.id, { x, y })} onClick={() => {if(editingMode !== 'pan') setSelectedPinId(pin.id)}} />
+                      ))}
+                    </div>
                   </div>
 
-                  <div className={`absolute top-4 left-4 lg:top-6 lg:left-6 bg-black/80 backdrop-blur text-white text-xs lg:text-sm px-4 lg:px-6 py-2 lg:py-3 rounded-full font-black shadow-2xl border-2 border-white/20 z-10 flex items-center gap-2 transition-opacity duration-200 ${isDraggingWhiteout ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                    {editingMode === 'pin' && <><LayoutGrid className="w-4 h-4 text-red-400"/> タップでピンを追加</>}
-                    {editingMode === 'dimension' && !drawingStartPoint && <><Ruler className="w-4 h-4 text-blue-400"/> 線の始点をタップ</>}
-                    {editingMode === 'dimension' && drawingStartPoint && (
-                      <>
-                        <Ruler className="w-4 h-4 text-yellow-400"/> 線の終点をタップ
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setDrawingStartPoint(null); }}
-                          className="ml-2 px-3 py-1 bg-white/20 hover:bg-white/30 rounded-full text-white font-black text-xs border border-white/30 transition-colors"
-                        >✕ 取消</button>
-                      </>
-                    )}
-                    {editingMode === 'whiteout' && <><Eraser className="w-4 h-4 text-yellow-400"/> 隠したい文字の上をドラッグ</>}
-                  </div>
-                </>
+                  {editingMode !== 'pan' && (
+                    <div className={`absolute top-4 left-4 lg:top-6 lg:left-6 bg-black/80 backdrop-blur text-white text-xs lg:text-sm px-4 lg:px-6 py-2 lg:py-3 rounded-full font-black shadow-2xl border-2 border-white/20 z-10 flex items-center gap-2 transition-opacity duration-200 ${isDraggingWhiteout ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                      {editingMode === 'pin' && <><LayoutGrid className="w-4 h-4 text-red-400"/> タップでピンを追加</>}
+                      {editingMode === 'dimension' && !drawingStartPoint && <><Ruler className="w-4 h-4 text-blue-400"/> 線の始点をタップ</>}
+                      {editingMode === 'dimension' && drawingStartPoint && (
+                        <>
+                          <Ruler className="w-4 h-4 text-yellow-400"/> 線の終点をタップ
+                          <button type="button" onClick={(e) => { e.stopPropagation(); setDrawingStartPoint(null); }} className="ml-2 px-3 py-1 bg-white/20 hover:bg-white/30 rounded-full text-white font-black text-xs border border-white/30 transition-colors">✕ 取消</button>
+                        </>
+                      )}
+                      {editingMode === 'whiteout' && <><Eraser className="w-4 h-4 text-yellow-400"/> 隠したい文字の上をドラッグ</>}
+                    </div>
+                  )}
+                </div>
               ) : (
-                <label className="flex flex-col items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors w-full h-full py-24 group">
+                <label className="flex flex-col items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors w-full h-96 border-4 border-dashed border-gray-300 rounded-3xl group">
                   <UploadCloud className="w-20 h-20 mb-4 text-blue-400 group-hover:scale-110 transition-transform" />
                   <span className="text-2xl font-black text-blue-600 block mb-2">図面・位置図をアップロード</span>
                   <span className="text-sm font-bold text-gray-500">ここをタップして画像またはPDFを選択してください</span>
@@ -890,14 +912,13 @@ export default function MapPage() {
               )}
             </div>
 
-            {/* 選択中ピンのコントロールパネル（マップ外に固定表示） */}
             {selectedPinId !== null && (() => {
               const pin = currentMapPins.find(p => p.id === selectedPinId);
               if (!pin) return null;
               const currentSize = pin.size || 1;
               return (
-                <div className="mt-4 flex items-center justify-center gap-3 p-3 bg-gray-50 border-2 border-red-100 rounded-2xl">
-                  <span className="text-sm font-bold text-gray-500">サイズ</span>
+                <div className="mt-4 flex items-center justify-center gap-3 p-3 bg-gray-50 border-2 border-red-100 rounded-2xl animate-fade-in-up">
+                  <span className="text-sm font-bold text-gray-500">ピンサイズ</span>
                   <button type="button" onClick={() => updateMapMarker(selectedPinId, { size: Math.max(0.3, Math.round((currentSize - 0.1) * 10) / 10) })} className="w-10 h-10 flex items-center justify-center text-xl font-bold bg-white border-2 border-gray-200 rounded-xl hover:bg-gray-100 active:scale-95 shadow-sm">ー</button>
                   <span className="w-12 text-center font-black text-gray-700">{currentSize.toFixed(1)}x</span>
                   <button type="button" onClick={() => updateMapMarker(selectedPinId, { size: Math.min(3, Math.round((currentSize + 0.1) * 10) / 10) })} className="w-10 h-10 flex items-center justify-center text-xl font-bold bg-white border-2 border-gray-200 rounded-xl hover:bg-gray-100 active:scale-95 shadow-sm">＋</button>
@@ -930,12 +951,12 @@ export default function MapPage() {
                   <div className="text-center py-8 text-gray-400 font-bold bg-gray-50 text-sm">ピンを追加すると<br/>ここに行が追加されます</div>
                 )}
               </div>
-              <button onClick={() => { const newRows = [...mapRows, { id: Date.now(), symbol: '', part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }]; setMapRows(newRows); saveProjectMapData(mapPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable); }} className="w-full bg-gray-100 text-gray-800 font-black py-4 px-6 rounded-2xl flex items-center justify-center gap-2 hover:bg-gray-200 active:scale-95"><Plus className="w-5 h-5"/> 行を手動追加</button>
+              <button onClick={() => { const newRows = [...mapRows, { id: Date.now(), symbol: '', part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }]; setMapRows(newRows); saveProjectMapData(mapPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms); }} className="w-full bg-gray-100 text-gray-800 font-black py-4 px-6 rounded-2xl flex items-center justify-center gap-2 hover:bg-gray-200 active:scale-95"><Plus className="w-5 h-5"/> 行を手動追加</button>
             </div>
           )}
         </div>
 
-        <button onClick={() => saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable).then(() => alert('保存しました'))} disabled={isSaving} className="fixed bottom-6 right-6 lg:bottom-10 lg:right-10 z-50 bg-blue-600 text-white font-black px-6 py-4 lg:px-10 lg:py-6 text-xl lg:text-2xl rounded-full lg:rounded-3xl shadow-3xl hover:bg-blue-700 transition-all active:scale-95 flex items-center gap-3 disabled:opacity-50"><Save className="w-6 h-6 lg:w-8 lg:h-8"/> {isSaving ? '保存中...' : '位置図を保存'}</button>
+        <button onClick={() => saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms).then(() => alert('保存しました'))} disabled={isSaving} className="fixed bottom-6 right-6 lg:bottom-10 lg:right-10 z-50 bg-blue-600 text-white font-black px-6 py-4 lg:px-10 lg:py-6 text-xl lg:text-2xl rounded-full lg:rounded-3xl shadow-3xl hover:bg-blue-700 transition-all active:scale-95 flex items-center gap-3 disabled:opacity-50"><Save className="w-6 h-6 lg:w-8 lg:h-8"/> {isSaving ? '保存中...' : '位置図を保存'}</button>
 
       </div>
     </div>

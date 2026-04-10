@@ -133,4 +133,13 @@ export interface Project {
   whiteoutBoxes?: WhiteoutBox[];
   isCompleted?: boolean;
 }
-
+export interface Project {
+  // ... (既存のコード) ...
+  mapRotations?: number[];
+  
+  // ▼ これを追加します（ズーム・移動位置の保存用）
+  mapTransforms?: { scale: number; x: number; y: number }[];
+  
+  whiteoutBoxes?: WhiteoutBox[];
+  // ...
+}
