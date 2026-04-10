@@ -106,6 +106,7 @@ const useRotatedDraggable = (initialX: number, initialY: number, rotation: numbe
   return { position, dragging, onPointerDown, onPointerMove, onPointerUp, containerRef, handleClick };
 };
 
+// ★ 変更：巨大なポップアップを廃止し、直感的なリサイズ＆削除ハンドルを追加
 const WhiteoutMarker = React.memo(({ box, rotation, currentScale, isSelected, onDragEnd, onClick, onSizeChange, onRemove }: { box: WhiteoutBox; rotation: number; currentScale: number; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; onSizeChange: (updates: Partial<WhiteoutBox>) => void; onRemove: () => void; }) => {
   const { position, onPointerDown, onPointerMove, onPointerUp, dragging, containerRef, handleClick } = useRotatedDraggable(box.x, box.y, rotation, onDragEnd);
   
@@ -155,7 +156,7 @@ const WhiteoutMarker = React.memo(({ box, rotation, currentScale, isSelected, on
   };
 
   // ズームしてもハンドルの大きさが一定に見えるように逆スケール
-  const handleSize = 24 / currentScale;
+  const handleSize = Math.max(16, 24 / currentScale);
   const handleOffset = handleSize / 2;
 
   return (
