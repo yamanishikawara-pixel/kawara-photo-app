@@ -212,13 +212,12 @@ const DimensionLineMarker = React.memo(({ line, rotation, currentScale, isSelect
 
   const midPoint = { x: (localStart.x + localEnd.x) / 2, y: (localStart.y + localEnd.y) / 2 };
   const safePopupX = Math.max(10, Math.min(90, midPoint.x));
-  // ★ 修正：ズームスケールに合わせてオフセット値を逆算し、表示崩れを防ぐ
   const isUpperHalf = midPoint.y < 50;
   const popupMarginTop = isUpperHalf ? (80 / currentScale) : (-80 / currentScale);
   
   const color = line.color || "#FFFFFF"; 
   const thickness = Number(line.size || 2); 
-  const handleRadius = Math.max(12, 12 / currentScale); // スケールに合わせてハンドルの大きさを維持
+  const handleRadius = Math.max(12, 12 / currentScale);
 
   return (
     <>
@@ -307,7 +306,6 @@ const DimensionLineMarker = React.memo(({ line, rotation, currentScale, isSelect
 
 const MapMarker = React.memo(({ pin, rotation, currentScale, isSelected, onDragEnd, onClick }: { pin: MapPinT; rotation: number; currentScale: number; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; }) => {
   const { position, onPointerDown, onPointerMove, onPointerUp, dragging, containerRef, handleClick } = useRotatedDraggable(pin.x, pin.y, rotation, onDragEnd);
-  // ★ 修正：ズームしていても、ピンの見た目上の大きさが一定になるように調整
   const visualScale = (pin.size || 1) / currentScale; 
 
   return (
@@ -803,6 +801,23 @@ export default function MapPage() {
               </div>
             )}
 
+            {/* ★ 変更：図面上の邪魔な位置から、図面の外（上部）へ案内メッセージを移動しました */}
+            {currentMapUrl && editingMode !== 'pan' && (
+              <div className={`w-full flex justify-center mb-4 transition-opacity duration-200 ${isDraggingWhiteout ? 'opacity-0' : 'opacity-100'}`}>
+                <div className="bg-gray-800 text-white px-6 py-2.5 rounded-full font-black flex items-center gap-3 shadow-md text-sm border-2 border-gray-700">
+                  {editingMode === 'pin' && <><LayoutGrid className="w-5 h-5 text-red-400"/> タップでピンを追加</>}
+                  {editingMode === 'dimension' && !drawingStartPoint && <><Ruler className="w-5 h-5 text-blue-400"/> 線の始点をタップ</>}
+                  {editingMode === 'dimension' && drawingStartPoint && (
+                    <>
+                      <Ruler className="w-5 h-5 text-yellow-400"/> 線の終点をタップ
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setDrawingStartPoint(null); }} className="ml-2 px-3 py-1 bg-white/20 hover:bg-white/30 rounded-full text-white font-bold text-xs transition-colors">✕ 取消</button>
+                    </>
+                  )}
+                  {editingMode === 'whiteout' && <><Eraser className="w-5 h-5 text-yellow-400"/> 隠したい文字の上をドラッグ</>}
+                </div>
+              </div>
+            )}
+
             <div className="w-full flex justify-center mt-2 relative">
               {currentMapUrl ? (
                 <div className="relative flex flex-col items-center w-full">
@@ -890,20 +905,6 @@ export default function MapPage() {
                       ))}
                     </div>
                   </div>
-
-                  {editingMode !== 'pan' && (
-                    <div className={`absolute top-4 left-4 lg:top-6 lg:left-6 bg-black/80 backdrop-blur text-white text-xs lg:text-sm px-4 lg:px-6 py-2 lg:py-3 rounded-full font-black shadow-2xl border-2 border-white/20 z-10 flex items-center gap-2 transition-opacity duration-200 ${isDraggingWhiteout ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                      {editingMode === 'pin' && <><LayoutGrid className="w-4 h-4 text-red-400"/> タップでピンを追加</>}
-                      {editingMode === 'dimension' && !drawingStartPoint && <><Ruler className="w-4 h-4 text-blue-400"/> 線の始点をタップ</>}
-                      {editingMode === 'dimension' && drawingStartPoint && (
-                        <>
-                          <Ruler className="w-4 h-4 text-yellow-400"/> 線の終点をタップ
-                          <button type="button" onClick={(e) => { e.stopPropagation(); setDrawingStartPoint(null); }} className="ml-2 px-3 py-1 bg-white/20 hover:bg-white/30 rounded-full text-white font-black text-xs border border-white/30 transition-colors">✕ 取消</button>
-                        </>
-                      )}
-                      {editingMode === 'whiteout' && <><Eraser className="w-4 h-4 text-yellow-400"/> 隠したい文字の上をドラッグ</>}
-                    </div>
-                  )}
                 </div>
               ) : (
                 <label className="flex flex-col items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors w-full h-96 border-4 border-dashed border-gray-300 rounded-3xl group">
