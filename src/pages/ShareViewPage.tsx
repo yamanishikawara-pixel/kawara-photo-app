@@ -87,74 +87,91 @@ export default function ShareViewPage() {
         </div>
 
         {/* 位置図 */}
-        {mapUrls.length > 0 && mapUrls.map((u, mapIndex) => (
+        {mapUrls.length > 0 && mapUrls.map((u, mapIndex) => {
+          const mapRotation = project.mapRotations?.[mapIndex] || 0;
+          const t = project.mapTransforms?.[mapIndex] ?? { scale: 1, x: 0, y: 0 };
+          // Use same aspect ratio as MapPage so overlay % coordinates align correctly
+          const containerAspect = (project.showLegendTable !== false) ? '194/120' : '175/255';
+          return (
           <div key={`map-${mapIndex}`} className="bg-white rounded-2xl shadow-sm overflow-hidden">
             <div className="px-5 py-3 border-b border-gray-100">
               <h2 className="font-bold text-gray-800">
                 位置図{mapUrls.length > 1 ? ` (${mapIndex + 1}/${mapUrls.length})` : ''}
               </h2>
             </div>
-            <div className="relative bg-gray-50 flex justify-center">
-              <div style={{ display: 'inline-block', position: 'relative', transform: `rotate(${project.mapRotations?.[mapIndex] || 0}deg)`, maxWidth: '100%' }}>
-                <img
-                  src={u}
-                  alt="位置図"
-                  className="block w-auto h-auto"
-                  style={{ maxWidth: '100%', maxHeight: '80vh' }}
-                />
+            <div className="bg-gray-50 overflow-hidden">
+              {/* Fixed aspect-ratio container matching MapPage — overlays use same % coordinate space */}
+              <div
+                className="relative overflow-hidden w-full"
+                style={{ aspectRatio: containerAspect, maxHeight: '70vh' }}
+              >
+                {/* Inner wrapper: mapTransforms (zoom/pan) + rotation, same as MapPage */}
+                <div
+                  className="absolute inset-0 flex items-center justify-center"
+                  style={{
+                    transform: `translate(${t.x}%, ${t.y}%) scale(${t.scale}) rotate(${mapRotation}deg)`,
+                    transformOrigin: 'center center',
+                  }}
+                >
+                  <img
+                    src={u}
+                    alt="位置図"
+                    className="block w-full h-full object-contain"
+                  />
 
-                {/* ピン */}
-                {(project.mapPins ?? []).filter(p => p.mapIndex === mapIndex).map(pin => (
-                  <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: `translate(-50%, -50%) scale(${pin.size ?? 1})`, zIndex: 10 }} className="absolute">
-                    {pin.type === 'arrow' ? (
-                      <div className="flex items-center gap-1 px-1 rounded bg-white/80 border border-red-200">
-                        <span className="font-bold text-[18px] text-red-600" style={{ transform: `rotate(${pin.rotation ?? 0}deg)` }}>➡</span>
-                        <span className="font-bold text-[15px] text-red-600">{pin.label}</span>
-                      </div>
-                    ) : (
-                      <div className="relative flex items-center justify-center">
-                        <div className="w-[10mm] h-[10mm] rounded-full border-[3px] border-red-600 bg-red-600/10" />
-                        <span className="absolute font-bold text-[13px] px-0.5 rounded text-red-600 bg-white/80">{pin.label}</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                {/* 線 */}
-                {(project.mapLines ?? []).filter(l => l.mapIndex === mapIndex).map((line: MapLine) => (
-                  <div key={`line-${line.id}`} className="absolute" style={{ left: safeStyleLine(line.x, '%'), top: safeStyleLine(line.y, '%'), width: safeStyleLine(line.length, '%'), height: safeStyleLine(line.thickness, 'px'), backgroundColor: line.color || '#000000', transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`, transformOrigin: 'center center', zIndex: 15 }} />
-                ))}
-
-                {/* 寸法線 */}
-                {(project.mapDimensionLines ?? []).filter(l => (l.mapIndex || 0) === mapIndex).map((line) => {
-                  const color = line.color || '#FFFFFF';
-                  const thickness = Number(line.size || 2);
-                  const midX = (line.start.x + line.end.x) / 2;
-                  const midY = (line.start.y + line.end.y) / 2;
-                  return (
-                    <div key={line.id} className="absolute inset-0 z-20 pointer-events-none w-full h-full" style={{ overflow: 'visible' }}>
-                      <svg className="absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
-                        <defs>
-                          <marker id={`share-tick-${line.id}`} markerWidth="12" markerHeight="12" refX="6" refY="6" orient="auto" markerUnits="userSpaceOnUse">
-                            <line x1="0" y1="6" x2="12" y2="6" stroke={color} strokeWidth={thickness} />
-                            <line x1="3" y1="9" x2="9" y2="3" stroke={color} strokeWidth={thickness * 1.5} />
-                          </marker>
-                        </defs>
-                        <line x1={`${line.start.x}%`} y1={`${line.start.y}%`} x2={`${line.end.x}%`} y2={`${line.end.y}%`} stroke={color} strokeWidth={thickness} fill="none" markerStart={`url(#share-tick-${line.id})`} markerEnd={`url(#share-tick-${line.id})`} />
-                      </svg>
-                      {line.text && (
-                        <div style={{ left: `${midX}%`, top: `${midY}%`, color, backgroundColor: 'rgba(0,0,0,0.5)', fontSize: '12px', transform: `translate(-50%, -50%) rotate(${line.textRotation ?? 0}deg)` }} className="absolute font-bold px-1 py-0.5 rounded whitespace-nowrap">
-                          {line.text}
+                  {/* ピン */}
+                  {(project.mapPins ?? []).filter(p => p.mapIndex === mapIndex).map(pin => (
+                    <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: `translate(-50%, -50%) scale(${pin.size ?? 1})`, zIndex: 10 }} className="absolute">
+                      {pin.type === 'arrow' ? (
+                        <div className="flex items-center gap-1 px-1 rounded bg-white/80 border border-red-200">
+                          <span className="font-bold text-[18px] text-red-600" style={{ transform: `rotate(${pin.rotation ?? 0}deg)` }}>➡</span>
+                          <span className="font-bold text-[15px] text-red-600">{pin.label}</span>
+                        </div>
+                      ) : (
+                        <div className="relative flex items-center justify-center">
+                          <div className="w-[10mm] h-[10mm] rounded-full border-[3px] border-red-600 bg-red-600/10" />
+                          <span className="absolute font-bold text-[13px] px-0.5 rounded text-red-600 bg-white/80">{pin.label}</span>
                         </div>
                       )}
                     </div>
-                  );
-                })}
+                  ))}
 
-                {/* 白塗り */}
-                {(project.whiteoutBoxes ?? []).filter(b => (b.mapIndex || 0) === mapIndex).map(box => (
-                  <div key={box.id} className="absolute bg-white pointer-events-none" style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%`, transform: 'translate(-50%, -50%)', zIndex: 25 }} />
-                ))}
+                  {/* 線 */}
+                  {(project.mapLines ?? []).filter(l => l.mapIndex === mapIndex).map((line: MapLine) => (
+                    <div key={`line-${line.id}`} className="absolute" style={{ left: safeStyleLine(line.x, '%'), top: safeStyleLine(line.y, '%'), width: safeStyleLine(line.length, '%'), height: safeStyleLine(line.thickness, 'px'), backgroundColor: line.color || '#000000', transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`, transformOrigin: 'center center', zIndex: 15 }} />
+                  ))}
+
+                  {/* 寸法線 */}
+                  {(project.mapDimensionLines ?? []).filter(l => (l.mapIndex || 0) === mapIndex).map((line) => {
+                    const color = line.color || '#FFFFFF';
+                    const thickness = Number(line.size || 2);
+                    const midX = (line.start.x + line.end.x) / 2;
+                    const midY = (line.start.y + line.end.y) / 2;
+                    return (
+                      <div key={line.id} className="absolute inset-0 z-20 pointer-events-none w-full h-full" style={{ overflow: 'visible' }}>
+                        <svg className="absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
+                          <defs>
+                            <marker id={`share-tick-${line.id}`} markerWidth="12" markerHeight="12" refX="6" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+                              <line x1="0" y1="6" x2="12" y2="6" stroke={color} strokeWidth={thickness} />
+                              <line x1="3" y1="9" x2="9" y2="3" stroke={color} strokeWidth={thickness * 1.5} />
+                            </marker>
+                          </defs>
+                          <line x1={`${line.start.x}%`} y1={`${line.start.y}%`} x2={`${line.end.x}%`} y2={`${line.end.y}%`} stroke={color} strokeWidth={thickness} fill="none" markerStart={`url(#share-tick-${line.id})`} markerEnd={`url(#share-tick-${line.id})`} />
+                        </svg>
+                        {line.text && (
+                          <div style={{ left: `${midX}%`, top: `${midY}%`, color, backgroundColor: 'rgba(0,0,0,0.5)', fontSize: '12px', transform: `translate(-50%, -50%) rotate(${line.textRotation ?? 0}deg)` }} className="absolute font-bold px-1 py-0.5 rounded whitespace-nowrap">
+                            {line.text}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* 白塗り */}
+                  {(project.whiteoutBoxes ?? []).filter(b => (b.mapIndex || 0) === mapIndex).map(box => (
+                    <div key={box.id} className="absolute bg-white pointer-events-none" style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%`, transform: 'translate(-50%, -50%)', zIndex: 25 }} />
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -189,7 +206,8 @@ export default function ShareViewPage() {
               );
             })()}
           </div>
-        ))}
+          );
+        })}
 
         {/* 写真 */}
         {activePhotos.length > 0 && (
