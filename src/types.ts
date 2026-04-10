@@ -132,3 +132,14 @@ export interface Project {
   whiteoutBoxes?: WhiteoutBox[];
   isCompleted?: boolean;
 }
+export interface Project {
+  // ... (既存のコード) ...
+  mapRotations?: number[];
+  mapTransforms?: { scale: number; x: number; y: number }[];
+  
+  // ▼ これを追加します（各図面のタイトル、位置、縦横の設定を保存）
+  mapLayouts?: { title: string; position: string; orientation: 'horizontal' | 'vertical' }[];
+  
+  whiteoutBoxes?: WhiteoutBox[];
+  // ...
+}
