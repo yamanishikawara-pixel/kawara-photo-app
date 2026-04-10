@@ -381,8 +381,6 @@ export default function MapPage() {
   const isDraggingWhiteout = whiteoutStart !== null;
 
   const [pendingActionInfo, setPendingActionInfo] = useState<{ clientX: number, clientY: number, localX: number, localY: number, time: number } | null>(null);
-  // Natural aspect ratio (w/h) per map index — used to show safe zone at image bounds
-  const [mapImageAspects, setMapImageAspects] = useState<Record<number, number>>({});
   const startDragPan = useRef({ x: 0, y: 0, startX: 0, startY: 0, isDragging: false });
 
   useEffect(() => {
@@ -730,22 +728,8 @@ export default function MapPage() {
   const currentRotation = mapRotations[currentMapIndex] || 0;
   const currentTransform = mapTransforms[currentMapIndex] || { scale: 1, x: 0, y: 0 };
 
-  // Compute where the image actually appears within the container (object-contain letterbox)
-  // so the safe zone border tracks the real image bounds, not the container edge
-  const safeZoneBounds = useMemo(() => {
-    const containerAspect = showLegendTable ? 194 / 120 : 175 / 255;
-    const imageAspect = mapImageAspects[currentMapIndex];
-    if (!imageAspect) return { left: 0, top: 0, width: 100, height: 100 };
-    if (imageAspect > containerAspect) {
-      // landscape image in portrait container → letterbox top & bottom
-      const h = (containerAspect / imageAspect) * 100;
-      return { left: 0, top: (100 - h) / 2, width: 100, height: h };
-    } else {
-      // portrait/square image wider container → letterbox left & right
-      const w = (imageAspect / containerAspect) * 100;
-      return { left: (100 - w) / 2, top: 0, width: w, height: 100 };
-    }
-  }, [showLegendTable, mapImageAspects, currentMapIndex]);
+  const aspectStr = showLegendTable ? '194 / 120' : '175 / 255';
+  const aspectNum = showLegendTable ? 194 / 120 : 175 / 255;
 
   if (loading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={error} />;
@@ -820,14 +804,11 @@ export default function MapPage() {
               </div>
             )}
 
-            {/* ★ 変更：案内メッセージと回転・差し替えボタンを、図面の外（上部）にまとめて配置 */}
             {currentMapUrl && (
               <div className={`w-full flex flex-col lg:flex-row justify-between items-center gap-4 mb-4 transition-opacity duration-200 ${isDraggingWhiteout ? 'opacity-0' : 'opacity-100'}`}>
                 
-                {/* 左側スペース（バランス調整用） */}
                 <div className="hidden lg:block flex-1"></div>
 
-                {/* 中央：案内メッセージ */}
                 <div className="flex-1 flex justify-center">
                   {editingMode !== 'pan' && (
                     <div className="bg-gray-800 text-white px-6 py-2.5 rounded-full font-black flex items-center gap-3 shadow-md text-sm border-2 border-gray-700 whitespace-nowrap">
@@ -844,7 +825,6 @@ export default function MapPage() {
                   )}
                 </div>
 
-                {/* 右側：回転・差し替えボタン（外に追放！） */}
                 <div className="flex-1 flex justify-end gap-2 w-full lg:w-auto justify-center lg:justify-end">
                   <button onClick={() => rotateCurrentMap(-90)} className="p-2 bg-white hover:bg-gray-50 text-gray-700 rounded-xl shadow border border-gray-200 transition-all" title="左に90°回転"><RotateCcw className="w-4 h-4" /></button>
                   <button onClick={() => rotateCurrentMap(90)} className="p-2 bg-white hover:bg-gray-50 text-gray-700 rounded-xl shadow border border-gray-200 transition-all" title="右に90°回転"><RotateCw className="w-4 h-4" /></button>
@@ -869,78 +849,72 @@ export default function MapPage() {
                      </div>
                   )}
 
-                  <div
-                    className={`relative overflow-hidden bg-[#e2e8f0] shadow-inner transition-all w-full flex items-center justify-center ${editingMode === 'pan' ? 'ring-4 ring-indigo-500 ring-offset-4 cursor-move' : 'border-2 border-gray-300'}`}
-                    style={{ 
-                      aspectRatio: showLegendTable ? '194/120' : '175/255',
-                      maxHeight: '70vh',
-                      maxWidth: showLegendTable ? '100%' : 'auto'
-                    }}
-                    onPointerDown={handlePanPointerDown}
-                    onPointerMove={handlePanPointerMove}
-                    onPointerUp={handlePanPointerUp}
-                    onPointerCancel={handlePanPointerUp}
-                  >
+                  {/* ★ 修正：コンテナのアスペクト比が絶対に崩れないように強固に固定 */}
+                  <div className="w-full flex justify-center items-center bg-[#e2e8f0] overflow-hidden rounded-md border border-gray-300">
                     <div
-                      className={`absolute z-40 pointer-events-none transition-opacity ${editingMode === 'pan' ? 'opacity-100' : 'opacity-0'}`}
-                      style={{ left: `${safeZoneBounds.left}%`, top: `${safeZoneBounds.top}%`, width: `${safeZoneBounds.width}%`, height: `${safeZoneBounds.height}%`, border: '4px dashed #ef4444' }}
+                      className={`relative w-full transition-all ${editingMode === 'pan' ? 'ring-4 ring-indigo-500 ring-offset-4 cursor-move' : ''}`}
+                      style={{ 
+                        aspectRatio: aspectStr,
+                        maxHeight: '70vh',
+                        maxWidth: `calc(70vh * ${aspectNum})`,
+                      }}
+                      onPointerDown={handlePanPointerDown}
+                      onPointerMove={handlePanPointerMove}
+                      onPointerUp={handlePanPointerUp}
+                      onPointerCancel={handlePanPointerUp}
                     >
-                      <div className="absolute top-0 left-0 bg-red-500 text-white font-black text-[10px] px-2 py-0.5 rounded-br-lg">印刷セーフエリア</div>
-                    </div>
+                      <div className={`absolute inset-0 border-4 border-red-500 border-dashed z-40 pointer-events-none transition-opacity ${editingMode === 'pan' ? 'opacity-100' : 'opacity-0'}`}>
+                        <div className="absolute top-0 left-0 bg-red-500 text-white font-black text-[10px] px-2 py-0.5 rounded-br-lg">印刷セーフエリア</div>
+                      </div>
 
-                    <div
-                      className="map-content-wrapper absolute inset-0 flex items-center justify-center transition-transform duration-75"
-                      style={{ transform: `translate(${currentTransform.x}%, ${currentTransform.y}%) scale(${currentTransform.scale}) rotate(${currentRotation}deg)`, transformOrigin: 'center center' }}
-                    >
-                      <img
-                        src={proxyUrl(currentMapUrl, `map_${currentMapIndex}_${sessionId}`)}
-                        crossOrigin="anonymous"
-                        className="block w-full h-full object-contain pointer-events-none"
-                        alt=""
-                        onLoad={(e) => {
-                          const img = e.currentTarget;
-                          if (img.naturalWidth && img.naturalHeight) {
-                            setMapImageAspects(prev => ({ ...prev, [currentMapIndex]: img.naturalWidth / img.naturalHeight }));
-                          }
-                        }}
-                      />
-                      
-                      <div 
-                        className="absolute inset-0 z-0 touch-none"
-                        style={{ cursor: editingMode === 'pan' ? 'move' : 'crosshair' }}
-                        onPointerDown={handleMapPointerDown}
-                        onPointerMove={handleMapPointerMove}
-                        onPointerUp={handleMapPointerUp}
-                        onPointerCancel={handleMapPointerUp}
-                      />
-
-                      {isDraggingWhiteout && whiteoutCurrent && (
-                        <div
-                          className="absolute bg-blue-500/30 border-2 border-blue-500 pointer-events-none z-50"
-                          style={{
-                            left: `${Math.min(whiteoutStart.x, whiteoutCurrent.x)}%`,
-                            top: `${Math.min(whiteoutStart.y, whiteoutCurrent.y)}%`,
-                            width: `${Math.abs(whiteoutStart.x - whiteoutCurrent.x)}%`,
-                            height: `${Math.abs(whiteoutStart.y - whiteoutCurrent.y)}%`,
-                          }}
+                      <div
+                        className="map-content-wrapper absolute inset-0 flex items-center justify-center transition-transform duration-75"
+                        style={{ transform: `translate(${currentTransform.x}%, ${currentTransform.y}%) scale(${currentTransform.scale}) rotate(${currentRotation}deg)`, transformOrigin: 'center center' }}
+                      >
+                        <img
+                          src={proxyUrl(currentMapUrl, `map_${currentMapIndex}_${sessionId}`)}
+                          crossOrigin="anonymous"
+                          className="block w-full h-full object-contain pointer-events-none"
+                          alt=""
                         />
-                      )}
+                        
+                        <div 
+                          className="absolute inset-0 z-0 touch-none"
+                          style={{ cursor: editingMode === 'pan' ? 'move' : 'crosshair' }}
+                          onPointerDown={handleMapPointerDown}
+                          onPointerMove={handleMapPointerMove}
+                          onPointerUp={handleMapPointerUp}
+                          onPointerCancel={handleMapPointerUp}
+                        />
 
-                      {currentWhiteoutBoxes.map(box => (
-                        <WhiteoutMarker key={box.id} box={box} rotation={currentRotation} currentScale={currentTransform.scale} isSelected={selectedWhiteoutId === box.id} onDragEnd={(x, y) => updateWhiteout(box.id, { x, y })} onClick={() => {if(editingMode !== 'pan') setSelectedWhiteoutId(box.id)}} onSizeChange={(updates) => updateWhiteout(box.id, updates)} onRemove={() => removeWhiteout(box.id)} />
-                      ))}
-                      
-                      {currentMapDimensionLines.map((line) => (
-                        <DimensionLineMarker key={line.id} line={line} rotation={currentRotation} currentScale={currentTransform.scale} isSelected={selectedDimensionLineId === line.id} onSelect={() => {if(editingMode !== 'pan') setSelectedDimensionLineId(line.id)}} onRemove={() => removeDimensionLine(line.id)} onTextChange={(text) => updateDimensionLine(line.id, {text})} onUpdate={(newProps) => updateDimensionLine(line.id, newProps)} onDeselect={() => setSelectedDimensionLineId(null)} />
-                      ))}
+                        {isDraggingWhiteout && whiteoutCurrent && (
+                          <div
+                            className="absolute bg-blue-500/30 border-2 border-blue-500 pointer-events-none z-50"
+                            style={{
+                              left: `${Math.min(whiteoutStart.x, whiteoutCurrent.x)}%`,
+                              top: `${Math.min(whiteoutStart.y, whiteoutCurrent.y)}%`,
+                              width: `${Math.abs(whiteoutStart.x - whiteoutCurrent.x)}%`,
+                              height: `${Math.abs(whiteoutStart.y - whiteoutCurrent.y)}%`,
+                            }}
+                          />
+                        )}
 
-                      {drawingStartPoint && editingMode === 'dimension' && (
-                        <div style={{ left: `${drawingStartPoint.x}%`, top: `${drawingStartPoint.y}%`, backgroundColor: activeColor }} className="absolute w-4 h-4 rounded-full border-2 border-white shadow-xl pointer-events-none z-20 transform -translate-x-1/2 -translate-y-1/2" />
-                      )}
+                        {currentWhiteoutBoxes.map(box => (
+                          <WhiteoutMarker key={box.id} box={box} rotation={currentRotation} currentScale={currentTransform.scale} isSelected={selectedWhiteoutId === box.id} onDragEnd={(x, y) => updateWhiteout(box.id, { x, y })} onClick={() => {if(editingMode !== 'pan') setSelectedWhiteoutId(box.id)}} onSizeChange={(updates) => updateWhiteout(box.id, updates)} onRemove={() => removeWhiteout(box.id)} />
+                        ))}
+                        
+                        {currentMapDimensionLines.map((line) => (
+                          <DimensionLineMarker key={line.id} line={line} rotation={currentRotation} currentScale={currentTransform.scale} isSelected={selectedDimensionLineId === line.id} onSelect={() => {if(editingMode !== 'pan') setSelectedDimensionLineId(line.id)}} onRemove={() => removeDimensionLine(line.id)} onTextChange={(text) => updateDimensionLine(line.id, {text})} onUpdate={(newProps) => updateDimensionLine(line.id, newProps)} onDeselect={() => setSelectedDimensionLineId(null)} />
+                        ))}
 
-                      {currentMapPins.map(pin => (
-                        <MapMarker key={pin.id} pin={pin} rotation={currentRotation} currentScale={currentTransform.scale} isSelected={selectedPinId === pin.id} onDragEnd={(x, y) => updateMapMarker(pin.id, { x, y })} onClick={() => {if(editingMode !== 'pan') setSelectedPinId(pin.id)}} />
-                      ))}
+                        {drawingStartPoint && editingMode === 'dimension' && (
+                          <div style={{ left: `${drawingStartPoint.x}%`, top: `${drawingStartPoint.y}%`, backgroundColor: activeColor }} className="absolute w-4 h-4 rounded-full border-2 border-white shadow-xl pointer-events-none z-20 transform -translate-x-1/2 -translate-y-1/2" />
+                        )}
+
+                        {currentMapPins.map(pin => (
+                          <MapMarker key={pin.id} pin={pin} rotation={currentRotation} currentScale={currentTransform.scale} isSelected={selectedPinId === pin.id} onDragEnd={(x, y) => updateMapMarker(pin.id, { x, y })} onClick={() => {if(editingMode !== 'pan') setSelectedPinId(pin.id)}} />
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>

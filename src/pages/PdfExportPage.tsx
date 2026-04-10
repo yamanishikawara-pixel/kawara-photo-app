@@ -428,26 +428,28 @@ export default function PdfExportPage() {
           const printRotation = (!showLegendTable && rotateMap) ? 90 : 0;
           const totalRotation = (userRotation + printRotation) % 360;
           
-          // ★ 追加：MapPageで設定したズーム・パン設定を適用
           const transform = project.mapTransforms?.[mapIndex] || { scale: 1, x: 0, y: 0 };
 
-          // 共通オーバーレイ描画（ピン・ライン・寸法線）
+          // ★ 修正：パン・ズーム時のピンと文字の巨大化を防ぐ逆スケール処理
           const mapOverlays = (
             <>
               {(project.whiteoutBoxes ?? []).filter((b: WhiteoutBox) => b.mapIndex === mapIndex).map((box: WhiteoutBox) => (
                 <div key={box.id} className="absolute bg-white" style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%`, transform: 'translate(-50%, -50%)', zIndex: 5 }} />
               ))}
-              {(project.mapPins ?? []).filter(p => p.mapIndex === mapIndex).map(pin => (
-                <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: 'translate(-50%, -50%)', zIndex: 10 }} className="absolute">
-                  <div style={{ transform: `scale(${pin.size ?? 1}) rotate(${pin.textRotation ?? 0}deg)` }}>
-                    {pin.type === 'arrow' ? (
-                      <div className="flex items-center gap-1 px-1 rounded bg-white/70 border border-red-200"><span className="font-bold text-[24px] text-red-600" style={{ transform: `rotate(${pin.rotation ?? 0}deg)` }}>➡</span><span className="font-bold text-[20px] text-red-600">{pin.label}</span></div>
-                    ) : (
-                      <div className="relative flex items-center justify-center"><div className="w-[14mm] h-[14mm] rounded-full border-[4px] border-red-600 bg-red-600/10" /><span className="absolute font-bold text-[18px] px-1 rounded text-red-600 bg-white/70">{pin.label}</span></div>
-                    )}
+              {(project.mapPins ?? []).filter(p => p.mapIndex === mapIndex).map(pin => {
+                const visualScale = (pin.size ?? 1) / transform.scale;
+                return (
+                  <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: `translate(-50%, -50%) scale(${visualScale})`, zIndex: 10 }} className="absolute">
+                    <div style={{ transform: `rotate(${pin.textRotation ?? 0}deg)` }}>
+                      {pin.type === 'arrow' ? (
+                        <div className="flex items-center gap-1 px-1 rounded bg-white/70 border border-red-200"><span className="font-bold text-[24px] text-red-600" style={{ transform: `rotate(${pin.rotation ?? 0}deg)` }}>➡</span><span className="font-bold text-[20px] text-red-600">{pin.label}</span></div>
+                      ) : (
+                        <div className="relative flex items-center justify-center"><div className="w-[14mm] h-[14mm] rounded-full border-[4px] border-red-600 bg-red-600/10" /><span className="absolute font-bold text-[18px] px-1 rounded text-red-600 bg-white/70">{pin.label}</span></div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {(project.mapLines ?? []).filter(l => l.mapIndex === mapIndex).map((line: MapLine) => (
                 <div key={`line-${line.id}`} className="absolute" style={{ left: safeStyleLine(line.x, '%'), top: safeStyleLine(line.y, '%'), width: safeStyleLine(line.length, '%'), height: safeStyleLine(line.thickness, 'px'), backgroundColor: line.color || '#000000', transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`, transformOrigin: 'center center', zIndex: 15 }} />
               ))}
@@ -469,7 +471,7 @@ export default function PdfExportPage() {
                       <line x1={`${line.start.x}%`} y1={`${line.start.y}%`} x2={`${line.end.x}%`} y2={`${line.end.y}%`} stroke={color} strokeWidth={thickness} fill="none" markerStart={`url(#cad-tick-pdf-map-${line.id})`} markerEnd={`url(#cad-tick-pdf-map-${line.id})`} />
                     </svg>
                     {line.text && (
-                      <div style={{ left: `${midX}%`, top: `${midY}%`, color, backgroundColor: 'rgba(0,0,0,0.5)', fontSize: `${dynamicFontSize}px`, transform: `translate(-50%,-50%) rotate(${line.textRotation ?? 0}deg)` }} className="absolute z-20 font-bold px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap">
+                      <div style={{ left: `${midX}%`, top: `${midY}%`, color, backgroundColor: 'rgba(0,0,0,0.5)', fontSize: `${dynamicFontSize}px`, transform: `translate(-50%,-50%) rotate(${line.textRotation ?? 0}deg) scale(${1 / transform.scale})` }} className="absolute z-20 font-bold px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap">
                         {line.text}
                       </div>
                     )}
@@ -488,8 +490,8 @@ export default function PdfExportPage() {
                 >
                   <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {u ? (
-                      // aspectRatio must match MapPage fullbleed container (175/255) so overlay % coords align
-                      <div style={{ position: 'relative', aspectRatio: '175/255', height: '100%', overflow: 'hidden' }}>
+                      // ★ 修正：コンテナのアスペクト比を完全に固定
+                      <div style={{ position: 'relative', width: '100%', aspectRatio: '175 / 255', overflow: 'hidden' }}>
                         <div style={{ position: 'absolute', inset: 0, transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center' }}>
                           <img
                             src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)}
@@ -523,10 +525,10 @@ export default function PdfExportPage() {
                   <h2 className="text-2xl font-bold text-gray-900 shrink-0 border-gray-800 print:border-black mb-4 pb-2 border-b-2 print:mb-2">
                     位置図 {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}
                   </h2>
-                  <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-gray-50 print:bg-white p-2 border border-gray-400 print:border-gray-500">
+                  <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-gray-50 print:bg-white border border-gray-400 print:border-gray-500 p-2">
                     {u ? (
-                      // aspectRatio must match MapPage legend container (194/120) so overlay % coords align
-                      <div style={{ position: 'relative', aspectRatio: '194/120', width: '100%', maxWidth: isPrinting ? '194mm' : '100%', maxHeight: isPrinting ? '120mm' : '140mm', overflow: 'hidden' }}>
+                      // ★ 修正：コンテナのアスペクト比を完全に固定（余計なmaxWidthなどを排除）
+                      <div style={{ position: 'relative', width: '100%', aspectRatio: '194 / 120', overflow: 'hidden' }}>
                         <div style={{ position: 'absolute', inset: 0, transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center' }}>
                           <img
                             src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)}
@@ -538,7 +540,7 @@ export default function PdfExportPage() {
                           {mapOverlays}
                         </div>
                       </div>
-                    ) : <span className="font-bold text-gray-400">位置図未登録</span>}
+                    ) : <span className="font-bold text-gray-400 absolute inset-0 flex items-center justify-center">位置図未登録</span>}
                   </div>
                   <div className="mt-4 shrink-0">
                     <div className="flex justify-between items-end mb-2"><div className="text-base font-bold">項目欄</div><PdfLineLegend /></div>
