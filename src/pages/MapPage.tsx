@@ -144,93 +144,146 @@ const TitleMarker = React.memo(({ layout, mapRotation, currentScale, isSelected,
   );
 });
 
-const WhiteoutMarker = React.memo(({ box, rotation, currentScale, isSelected, onDragEnd, onClick, onSizeChange, onRemove }: { box: WhiteoutBox; rotation: number; currentScale: number; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; onSizeChange: (updates: Partial<WhiteoutBox>) => void; onRemove: () => void; }) => {
-  const { position, onPointerDown, onPointerMove, onPointerUp, dragging, containerRef, handleClick } = useRotatedDraggable(box.x, box.y, rotation, onDragEnd);
-  
-  const [isResizing, setIsResizing] = useState(false);
-  const resizeStartPos = useRef({ clientX: 0, clientY: 0, startWidth: 0, startHeight: 0 });
+// ── WhiteoutMarker（全面再設計）────────────────────────────────────────────
+// 設計方針:
+//  - 未選択: 白いボックスのみ（枠なし）
+//  - 選択中: グレー破線枠 + 4隅リサイズハンドル + ×削除ボタン
+//  - ボディ全体ドラッグ → 移動
+//  - ハンドルドラッグ → リサイズ
+//  - × → 削除
+// ─────────────────────────────────────────────────────────────────────────
+const WhiteoutMarker = React.memo(({ box, rotation, currentScale, isSelected, onDragEnd, onClick, onSizeChange, onRemove }: {
+  box: WhiteoutBox; rotation: number; currentScale: number; isSelected: boolean;
+  onDragEnd: (x: number, y: number) => void; onClick: () => void;
+  onSizeChange: (updates: Partial<WhiteoutBox>) => void; onRemove: () => void;
+}) => {
+  // ── 移動ドラッグ ──
+  const moveRef = useRef<{ active: boolean; startClientX: number; startClientY: number; startX: number; startY: number; moved: boolean }>({ active: false, startClientX: 0, startClientY: 0, startX: 0, startY: 0, moved: false });
+  const [livePos, setLivePos] = useState({ x: box.x, y: box.y });
 
-  const handleResizeStart = (e: React.PointerEvent) => {
+  useEffect(() => { if (!moveRef.current.active) setLivePos({ x: box.x, y: box.y }); }, [box.x, box.y]);
+
+  const getParentRect = (el: Element) => {
+    const parent = el.closest('.map-content-wrapper') as HTMLDivElement;
+    return parent ? parent.getBoundingClientRect() : null;
+  };
+
+  const toLocalDelta = (dx: number, dy: number, rect: DOMRect) => {
+    const norm = ((rotation % 360) + 360) % 360;
+    let ldx = dx, ldy = dy, w = rect.width, h = rect.height;
+    if (norm === 90)  { ldx = dy;  ldy = -dx; w = rect.height; h = rect.width; }
+    else if (norm === 180) { ldx = -dx; ldy = -dy; }
+    else if (norm === 270) { ldx = -dy; ldy = dx;  w = rect.height; h = rect.width; }
+    return { ldx: (ldx / w) * 100, ldy: (ldy / h) * 100 };
+  };
+
+  const onMoveDown = (e: React.PointerEvent) => {
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
-    setIsResizing(true);
-    resizeStartPos.current = { clientX: e.clientX, clientY: e.clientY, startWidth: box.width, startHeight: box.height };
+    moveRef.current = { active: true, startClientX: e.clientX, startClientY: e.clientY, startX: box.x, startY: box.y, moved: false };
   };
-
-  const handleResizeMove = (e: React.PointerEvent) => {
-    if (!isResizing) return;
-    e.stopPropagation();
-    
-    const parent = containerRef.current?.closest('.map-content-wrapper') as HTMLDivElement;
-    if (!parent) return;
-    const rect = parent.getBoundingClientRect();
-    const normAngle = ((rotation % 360) + 360) % 360;
-    
-    let dx = e.clientX - resizeStartPos.current.clientX;
-    let dy = e.clientY - resizeStartPos.current.clientY;
-    let w = rect.width, h = rect.height;
-
-    if (normAngle === 0) { /* normal */ }
-    else if (normAngle === 90) { const tmp = dx; dx = dy; dy = -tmp; w = rect.height; h = rect.width; }
-    else if (normAngle === 180) { dx = -dx; dy = -dy; }
-    else if (normAngle === 270) { const tmp = dx; dx = -dy; dy = tmp; w = rect.height; h = rect.width; }
-
-    const deltaWidth = (dx / w) * 100;
-    const deltaHeight = (dy / h) * 100;
-
-    onSizeChange({ 
-      width: Math.max(0.5, resizeStartPos.current.startWidth + deltaWidth * 2), 
-      height: Math.max(0.5, resizeStartPos.current.startHeight + deltaHeight * 2) 
-    });
+  const onMoveMove = (e: React.PointerEvent) => {
+    if (!moveRef.current.active) return;
+    const rect = getParentRect(e.currentTarget);
+    if (!rect) return;
+    const { ldx, ldy } = toLocalDelta(e.clientX - moveRef.current.startClientX, e.clientY - moveRef.current.startClientY, rect);
+    if (Math.abs(ldx) > 0.3 || Math.abs(ldy) > 0.3) moveRef.current.moved = true;
+    setLivePos({ x: Math.max(0, Math.min(100, moveRef.current.startX + ldx)), y: Math.max(0, Math.min(100, moveRef.current.startY + ldy)) });
   };
-
-  const handleResizeEnd = (e: React.PointerEvent) => {
-    if (!isResizing) return;
-    e.stopPropagation();
+  const onMoveUp = (e: React.PointerEvent) => {
+    if (!moveRef.current.active) return;
     e.currentTarget.releasePointerCapture(e.pointerId);
-    setIsResizing(false);
+    moveRef.current.active = false;
+    if (moveRef.current.moved) {
+      onDragEnd(livePos.x, livePos.y);
+    } else {
+      setLivePos({ x: box.x, y: box.y });
+      onClick();
+    }
   };
 
-  const handleSize = Math.max(16, 24 / currentScale);
-  const handleOffset = handleSize / 2;
+  // ── リサイズドラッグ（汎用: corner = 'nw'|'ne'|'sw'|'se'）──
+  const resizeRef = useRef<{ active: boolean; corner: string; startClientX: number; startClientY: number; startX: number; startY: number; startW: number; startH: number }>({ active: false, corner: '', startClientX: 0, startClientY: 0, startX: 0, startY: 0, startW: 0, startH: 0 });
+
+  const onResizeDown = (corner: string) => (e: React.PointerEvent) => {
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    resizeRef.current = { active: true, corner, startClientX: e.clientX, startClientY: e.clientY, startX: box.x, startY: box.y, startW: box.width, startH: box.height };
+  };
+  const onResizeMove = (e: React.PointerEvent) => {
+    if (!resizeRef.current.active) return;
+    const rect = getParentRect(e.currentTarget);
+    if (!rect) return;
+    const rawDx = e.clientX - resizeRef.current.startClientX;
+    const rawDy = e.clientY - resizeRef.current.startClientY;
+    const { ldx, ldy } = toLocalDelta(rawDx, rawDy, rect);
+    const { corner, startX, startY, startW, startH } = resizeRef.current;
+    // 各コーナーで中心・幅・高さを計算
+    let nx = startX, ny = startY, nw = startW, nh = startH;
+    if (corner === 'se') { nw = Math.max(1, startW + ldx); nh = Math.max(1, startH + ldy); nx = startX + ldx / 2; ny = startY + ldy / 2; }
+    if (corner === 'sw') { nw = Math.max(1, startW - ldx); nh = Math.max(1, startH + ldy); nx = startX + ldx / 2; ny = startY + ldy / 2; }
+    if (corner === 'ne') { nw = Math.max(1, startW + ldx); nh = Math.max(1, startH - ldy); nx = startX + ldx / 2; ny = startY + ldy / 2; }
+    if (corner === 'nw') { nw = Math.max(1, startW - ldx); nh = Math.max(1, startH - ldy); nx = startX + ldx / 2; ny = startY + ldy / 2; }
+    onSizeChange({ x: nx, y: ny, width: nw, height: nh });
+  };
+  const onResizeUp = (e: React.PointerEvent) => {
+    if (!resizeRef.current.active) return;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    resizeRef.current.active = false;
+  };
+
+  // ハンドルサイズ（ズームに依存せず一定の視覚サイズ）
+  const H = Math.max(20, 32 / currentScale);
+  const HO = H / 2;
 
   return (
     <div
-      style={{ left: `${position.x}%`, top: `${position.y}%`, width: `${box.width}%`, height: `${box.height}%`, transform: `translate(-50%, -50%)`, touchAction: 'none', zIndex: isSelected ? 100 : (dragging ? 30 : 5) }}
-      className={`absolute pointer-events-none transition-all duration-75`}
+      style={{ position: 'absolute', left: `${livePos.x}%`, top: `${livePos.y}%`, width: `${box.width}%`, height: `${box.height}%`, transform: 'translate(-50%,-50%)', touchAction: 'none', zIndex: isSelected ? 100 : 5 }}
     >
-       <div 
-         ref={containerRef}
-         onPointerDown={onPointerDown}
-         onPointerMove={onPointerMove}
-         onPointerUp={onPointerUp}
-         onPointerCancel={onPointerUp}
-         onClick={(e) => handleClick(e, onClick)}
-         className={`w-full h-full bg-white pointer-events-auto cursor-move ${isSelected ? 'outline outline-2 outline-blue-500 outline-offset-1' : ''} ${dragging ? 'opacity-80 shadow-md' : ''}`}
-       />
-       
-       {isSelected && !dragging && (
-         <>
-           <div 
-             onPointerDown={handleResizeStart}
-             onPointerMove={handleResizeMove}
-             onPointerUp={handleResizeEnd}
-             onPointerCancel={handleResizeEnd}
-             style={{ width: `${handleSize}px`, height: `${handleSize}px`, right: `-${handleOffset}px`, bottom: `-${handleOffset}px`, cursor: 'se-resize' }}
-             className="absolute bg-blue-500 border-2 border-white rounded-full shadow-md pointer-events-auto flex items-center justify-center"
-           >
-              <div className="w-1/2 h-1/2 bg-white rounded-sm" style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}/>
-           </div>
+      {/* 白ボックス本体 + 移動ドラッグ */}
+      <div
+        onPointerDown={onMoveDown}
+        onPointerMove={onMoveMove}
+        onPointerUp={onMoveUp}
+        onPointerCancel={onMoveUp}
+        style={{ width: '100%', height: '100%', backgroundColor: 'white', cursor: isSelected ? 'move' : 'pointer', boxSizing: 'border-box', border: isSelected ? `${Math.max(1, 2 / currentScale)}px dashed #9ca3af` : 'none' }}
+      />
 
-           <div 
-             onPointerDown={(e) => { e.stopPropagation(); onRemove(); }}
-             style={{ width: `${handleSize}px`, height: `${handleSize}px`, right: `-${handleOffset}px`, top: `-${handleOffset}px`, cursor: 'pointer' }}
-             className="absolute bg-red-500 border-2 border-white rounded-full shadow-md pointer-events-auto flex items-center justify-center hover:bg-red-600 active:scale-90 transition-transform"
-           >
-             <span style={{ fontSize: `${handleSize * 0.6}px`, lineHeight: 1, color: 'white', fontWeight: 'bold' }}>×</span>
-           </div>
-         </>
-       )}
+      {/* 選択時のみ: 4隅リサイズ + ×削除 */}
+      {isSelected && (
+        <>
+          {(['nw','ne','sw','se'] as const).map(corner => (
+            <div
+              key={corner}
+              onPointerDown={onResizeDown(corner)}
+              onPointerMove={onResizeMove}
+              onPointerUp={onResizeUp}
+              onPointerCancel={onResizeUp}
+              style={{
+                position: 'absolute',
+                width: `${H}px`, height: `${H}px`,
+                ...(corner.includes('n') ? { top: `-${HO}px` } : { bottom: `-${HO}px` }),
+                ...(corner.includes('w') ? { left: `-${HO}px` } : { right: `-${HO}px` }),
+                cursor: corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize',
+                backgroundColor: 'white', border: '2px solid #6b7280', borderRadius: '4px',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.3)', touchAction: 'none', zIndex: 10,
+              }}
+            />
+          ))}
+          {/* ×削除ボタン（中央上部） */}
+          <div
+            onPointerDown={(e) => { e.stopPropagation(); onRemove(); }}
+            style={{
+              position: 'absolute', top: `-${H + 4}px`, left: '50%', transform: 'translateX(-50%)',
+              width: `${H}px`, height: `${H}px`, borderRadius: '50%',
+              backgroundColor: '#ef4444', border: '2px solid white',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.3)', touchAction: 'none', zIndex: 10,
+              color: 'white', fontWeight: 'bold', fontSize: `${H * 0.55}px`,
+            }}
+          >×</div>
+        </>
+      )}
     </div>
   );
 });
@@ -676,11 +729,17 @@ export default function MapPage() {
     if (selectedPinId !== null) setSelectedPinId(null);
     if (selectedRowId !== null) setSelectedRowId(null);
     if (selectedDimensionLineId !== null) setSelectedDimensionLineId(null);
-    if (selectedWhiteoutId !== null) setSelectedWhiteoutId(null);
 
     const rotation = mapRotations[currentMapIndex] || 0;
-    
+
     if (editingMode === 'pan') return;
+
+    // whiteout モード: 選択済みの場合は空白タップで選択解除するだけ（新ドラッグは開始しない）
+    if (editingMode === 'whiteout' && selectedWhiteoutId !== null) {
+      setSelectedWhiteoutId(null);
+      return;
+    }
+    if (selectedWhiteoutId !== null) setSelectedWhiteoutId(null);
 
     const parent = e.currentTarget.closest('.map-content-wrapper') as HTMLDivElement;
     if (!parent) return;
@@ -715,14 +774,15 @@ export default function MapPage() {
       const width = Math.abs(whiteoutStart.x - whiteoutCurrent.x);
       const height = Math.abs(whiteoutStart.y - whiteoutCurrent.y);
 
-      if (width > 0.5 && height > 0.5) {
+      // 最小 1% × 1% 以上ドラッグしたときのみ作成（小さすぎるタップは無視）
+      if (width > 1 && height > 1) {
         const centerX = Math.min(whiteoutStart.x, whiteoutCurrent.x) + width / 2;
         const centerY = Math.min(whiteoutStart.y, whiteoutCurrent.y) + height / 2;
         const newBox: WhiteoutBox = { id: Date.now(), x: centerX, y: centerY, width, height, mapIndex: currentMapIndex };
         const newBoxes = [...whiteoutBoxes, newBox];
         setWhiteoutBoxes(newBoxes);
         saveProjectMapData(mapPins, mapRows, mapDimensionLines, newBoxes, showLegendTable, mapTransforms, mapLayouts);
-        setSelectedWhiteoutId(newBox.id);
+        // 自動選択しない — ユーザーが次のドラッグを始められる
       }
       setWhiteoutStart(null);
       setWhiteoutCurrent(null);
@@ -1112,12 +1172,14 @@ export default function MapPage() {
 
                         {isDraggingWhiteout && whiteoutCurrent && (
                           <div
-                            className="absolute bg-blue-500/30 border-2 border-blue-500 pointer-events-none z-50"
+                            className="absolute pointer-events-none z-50"
                             style={{
                               left: `${Math.min(whiteoutStart.x, whiteoutCurrent.x)}%`,
                               top: `${Math.min(whiteoutStart.y, whiteoutCurrent.y)}%`,
                               width: `${Math.abs(whiteoutStart.x - whiteoutCurrent.x)}%`,
                               height: `${Math.abs(whiteoutStart.y - whiteoutCurrent.y)}%`,
+                              backgroundColor: 'rgba(255,255,255,0.7)',
+                              border: '2px dashed #6b7280',
                             }}
                           />
                         )}
