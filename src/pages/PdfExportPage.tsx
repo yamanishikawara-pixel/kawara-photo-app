@@ -453,7 +453,7 @@ export default function PdfExportPage() {
               </div>
 
               {(project.whiteoutBoxes ?? []).filter((b: WhiteoutBox) => b.mapIndex === mapIndex).map((box: WhiteoutBox) => (
-                <div key={box.id} className="absolute bg-white" style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%`, transform: 'translate(-50%, -50%)', zIndex: 5 }} />
+                <div key={box.id} style={{ position: 'absolute', left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%`, transform: 'translate(-50%, -50%)', zIndex: 30, backgroundColor: 'white', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} />
               ))}
               {(project.mapPins ?? []).filter(p => p.mapIndex === mapIndex).map(pin => {
                 const visualScale = (pin.size ?? 1) / transform.scale;

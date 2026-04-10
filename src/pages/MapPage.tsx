@@ -144,20 +144,17 @@ const TitleMarker = React.memo(({ layout, mapRotation, currentScale, isSelected,
   );
 });
 
-// ── WhiteoutMarker（全面再設計）────────────────────────────────────────────
-// 設計方針:
-//  - 未選択: 白いボックスのみ（枠なし）
-//  - 選択中: グレー破線枠 + 4隅リサイズハンドル + ×削除ボタン
-//  - ボディ全体ドラッグ → 移動
-//  - ハンドルドラッグ → リサイズ
-//  - × → 削除
+// ── WhiteoutMarker ────────────────────────────────────────────────────────
+// 設計方針（再設計）:
+//  ・マップ内には「白いボックス」だけ置く。ハンドル類は一切出さない。
+//    → ズーム・回転・コンテナ端でUIが見切れる問題を根本解決
+//  ・移動: ボックス全体をドラッグ（短いタップは選択）
+//  ・リサイズ・削除: 画面下部の固定パネル（WhiteoutControlPanel）で行う
 // ─────────────────────────────────────────────────────────────────────────
-const WhiteoutMarker = React.memo(({ box, rotation, currentScale, isSelected, onDragEnd, onClick, onSizeChange, onRemove }: {
+const WhiteoutMarker = React.memo(({ box, rotation, currentScale, isSelected, onDragEnd, onClick }: {
   box: WhiteoutBox; rotation: number; currentScale: number; isSelected: boolean;
   onDragEnd: (x: number, y: number) => void; onClick: () => void;
-  onSizeChange: (updates: Partial<WhiteoutBox>) => void; onRemove: () => void;
 }) => {
-  // ── 移動ドラッグ ──
   const moveRef = useRef<{ active: boolean; startClientX: number; startClientY: number; startX: number; startY: number; moved: boolean }>({ active: false, startClientX: 0, startClientY: 0, startX: 0, startY: 0, moved: false });
   const [livePos, setLivePos] = useState({ x: box.x, y: box.y });
 
@@ -202,88 +199,94 @@ const WhiteoutMarker = React.memo(({ box, rotation, currentScale, isSelected, on
     }
   };
 
-  // ── リサイズドラッグ（汎用: corner = 'nw'|'ne'|'sw'|'se'）──
-  const resizeRef = useRef<{ active: boolean; corner: string; startClientX: number; startClientY: number; startX: number; startY: number; startW: number; startH: number }>({ active: false, corner: '', startClientX: 0, startClientY: 0, startX: 0, startY: 0, startW: 0, startH: 0 });
-
-  const onResizeDown = (corner: string) => (e: React.PointerEvent) => {
-    e.stopPropagation();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    resizeRef.current = { active: true, corner, startClientX: e.clientX, startClientY: e.clientY, startX: box.x, startY: box.y, startW: box.width, startH: box.height };
-  };
-  const onResizeMove = (e: React.PointerEvent) => {
-    if (!resizeRef.current.active) return;
-    const rect = getParentRect(e.currentTarget);
-    if (!rect) return;
-    const rawDx = e.clientX - resizeRef.current.startClientX;
-    const rawDy = e.clientY - resizeRef.current.startClientY;
-    const { ldx, ldy } = toLocalDelta(rawDx, rawDy, rect);
-    const { corner, startX, startY, startW, startH } = resizeRef.current;
-    // 各コーナーで中心・幅・高さを計算
-    let nx = startX, ny = startY, nw = startW, nh = startH;
-    if (corner === 'se') { nw = Math.max(1, startW + ldx); nh = Math.max(1, startH + ldy); nx = startX + ldx / 2; ny = startY + ldy / 2; }
-    if (corner === 'sw') { nw = Math.max(1, startW - ldx); nh = Math.max(1, startH + ldy); nx = startX + ldx / 2; ny = startY + ldy / 2; }
-    if (corner === 'ne') { nw = Math.max(1, startW + ldx); nh = Math.max(1, startH - ldy); nx = startX + ldx / 2; ny = startY + ldy / 2; }
-    if (corner === 'nw') { nw = Math.max(1, startW - ldx); nh = Math.max(1, startH - ldy); nx = startX + ldx / 2; ny = startY + ldy / 2; }
-    onSizeChange({ x: nx, y: ny, width: nw, height: nh });
-  };
-  const onResizeUp = (e: React.PointerEvent) => {
-    if (!resizeRef.current.active) return;
-    e.currentTarget.releasePointerCapture(e.pointerId);
-    resizeRef.current.active = false;
-  };
-
-  // ハンドルサイズ（ズームに依存せず一定の視覚サイズ）
-  const H = Math.max(20, 32 / currentScale);
-  const HO = H / 2;
+  const borderW = Math.max(1, 2 / currentScale);
 
   return (
     <div
-      style={{ position: 'absolute', left: `${livePos.x}%`, top: `${livePos.y}%`, width: `${box.width}%`, height: `${box.height}%`, transform: 'translate(-50%,-50%)', touchAction: 'none', zIndex: isSelected ? 100 : 5 }}
-    >
-      {/* 白ボックス本体 + 移動ドラッグ */}
-      <div
-        onPointerDown={onMoveDown}
-        onPointerMove={onMoveMove}
-        onPointerUp={onMoveUp}
-        onPointerCancel={onMoveUp}
-        style={{ width: '100%', height: '100%', backgroundColor: 'white', cursor: isSelected ? 'move' : 'pointer', boxSizing: 'border-box', border: isSelected ? `${Math.max(1, 2 / currentScale)}px dashed #9ca3af` : 'none' }}
-      />
+      onPointerDown={onMoveDown}
+      onPointerMove={onMoveMove}
+      onPointerUp={onMoveUp}
+      onPointerCancel={onMoveUp}
+      style={{
+        position: 'absolute',
+        left: `${livePos.x}%`, top: `${livePos.y}%`,
+        width: `${box.width}%`, height: `${box.height}%`,
+        transform: 'translate(-50%,-50%)',
+        touchAction: 'none',
+        // 常に最前面 — 他のオーバーレイ（ピン・線・寸法線）より上に白を敷く
+        zIndex: 30,
+        backgroundColor: 'white',
+        cursor: isSelected ? 'move' : 'pointer',
+        boxSizing: 'border-box',
+        // 選択中のみ内側に破線枠（コンテナ外にはみ出さない）
+        outline: isSelected ? `${borderW}px dashed #6b7280` : 'none',
+        outlineOffset: `-${borderW}px`,
+      }}
+    />
+  );
+});
 
-      {/* 選択時のみ: 4隅リサイズ + ×削除 */}
-      {isSelected && (
-        <>
-          {(['nw','ne','sw','se'] as const).map(corner => (
-            <div
-              key={corner}
-              onPointerDown={onResizeDown(corner)}
-              onPointerMove={onResizeMove}
-              onPointerUp={onResizeUp}
-              onPointerCancel={onResizeUp}
-              style={{
-                position: 'absolute',
-                width: `${H}px`, height: `${H}px`,
-                ...(corner.includes('n') ? { top: `-${HO}px` } : { bottom: `-${HO}px` }),
-                ...(corner.includes('w') ? { left: `-${HO}px` } : { right: `-${HO}px` }),
-                cursor: corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize',
-                backgroundColor: 'white', border: '2px solid #6b7280', borderRadius: '4px',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.3)', touchAction: 'none', zIndex: 10,
-              }}
-            />
-          ))}
-          {/* ×削除ボタン（中央上部） */}
-          <div
-            onPointerDown={(e) => { e.stopPropagation(); onRemove(); }}
-            style={{
-              position: 'absolute', top: `-${H + 4}px`, left: '50%', transform: 'translateX(-50%)',
-              width: `${H}px`, height: `${H}px`, borderRadius: '50%',
-              backgroundColor: '#ef4444', border: '2px solid white',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.3)', touchAction: 'none', zIndex: 10,
-              color: 'white', fontWeight: 'bold', fontSize: `${H * 0.55}px`,
-            }}
-          >×</div>
-        </>
-      )}
+// ── WhiteoutControlPanel ───────────────────────────────────────────────────
+// 画面下部に固定表示。ズーム・回転の影響を受けず常に操作可能。
+// ─────────────────────────────────────────────────────────────────────────
+const WhiteoutControlPanel = React.memo(({ box, onUpdate, onRemove, onDeselect }: {
+  box: WhiteoutBox;
+  onUpdate: (updates: Partial<WhiteoutBox>) => void;
+  onRemove: () => void;
+  onDeselect: () => void;
+}) => {
+  const nudge = (dx: number, dy: number) => onUpdate({
+    x: Math.max(0, Math.min(100, box.x + dx)),
+    y: Math.max(0, Math.min(100, box.y + dy)),
+  });
+  const resize = (dw: number, dh: number) => onUpdate({
+    width: Math.max(1, box.width + dw),
+    height: Math.max(1, box.height + dh),
+  });
+
+  const Btn = ({ onClick, children, className = '' }: { onClick: () => void; children: React.ReactNode; className?: string }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-10 h-10 flex items-center justify-center rounded-lg font-bold text-base active:scale-90 transition-all select-none ${className}`}
+    >{children}</button>
+  );
+
+  return (
+    <div className="fixed bottom-0 left-0 right-0 z-[300] bg-gray-900/95 backdrop-blur text-white shadow-2xl border-t border-gray-700">
+      <div className="flex items-center gap-2 px-3 py-2 flex-wrap">
+        <span className="text-[11px] font-bold text-yellow-400 whitespace-nowrap">✏️ 文字消し編集</span>
+
+        {/* 移動 */}
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-gray-400 mr-0.5">移動</span>
+          <Btn onClick={() => nudge(0, -1)} className="bg-gray-700 hover:bg-gray-600 text-lg">↑</Btn>
+          <Btn onClick={() => nudge(0, 1)}  className="bg-gray-700 hover:bg-gray-600 text-lg">↓</Btn>
+          <Btn onClick={() => nudge(-1, 0)} className="bg-gray-700 hover:bg-gray-600 text-lg">←</Btn>
+          <Btn onClick={() => nudge(1, 0)}  className="bg-gray-700 hover:bg-gray-600 text-lg">→</Btn>
+        </div>
+
+        {/* 幅 */}
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-gray-400 mr-0.5">幅</span>
+          <Btn onClick={() => resize(-2, 0)} className="bg-gray-700 hover:bg-gray-600">－</Btn>
+          <span className="text-xs font-bold w-9 text-center tabular-nums">{Math.round(box.width)}%</span>
+          <Btn onClick={() => resize(2, 0)}  className="bg-gray-700 hover:bg-gray-600">＋</Btn>
+        </div>
+
+        {/* 高さ */}
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-gray-400 mr-0.5">高さ</span>
+          <Btn onClick={() => resize(0, -2)} className="bg-gray-700 hover:bg-gray-600">－</Btn>
+          <span className="text-xs font-bold w-9 text-center tabular-nums">{Math.round(box.height)}%</span>
+          <Btn onClick={() => resize(0, 2)}  className="bg-gray-700 hover:bg-gray-600">＋</Btn>
+        </div>
+
+        <div className="flex items-center gap-2 ml-auto">
+          <button type="button" onClick={onRemove}   className="px-3 py-1.5 bg-red-600 hover:bg-red-500 active:scale-95 rounded-lg font-bold text-sm transition-all">削除</button>
+          <button type="button" onClick={onDeselect} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 rounded-lg font-bold text-sm transition-all">完了</button>
+        </div>
+      </div>
     </div>
   );
 });
@@ -1185,7 +1188,7 @@ export default function MapPage() {
                         )}
 
                         {currentWhiteoutBoxes.map(box => (
-                          <WhiteoutMarker key={box.id} box={box} rotation={currentRotation} currentScale={currentTransform.scale} isSelected={selectedWhiteoutId === box.id} onDragEnd={(x, y) => updateWhiteout(box.id, { x, y })} onClick={() => {if(editingMode !== 'pan') setSelectedWhiteoutId(box.id)}} onSizeChange={(updates) => updateWhiteout(box.id, updates)} onRemove={() => removeWhiteout(box.id)} />
+                          <WhiteoutMarker key={box.id} box={box} rotation={currentRotation} currentScale={currentTransform.scale} isSelected={selectedWhiteoutId === box.id} onDragEnd={(x, y) => updateWhiteout(box.id, { x, y })} onClick={() => { if (editingMode !== 'pan') setSelectedWhiteoutId(box.id); }} />
                         ))}
                         
                         {currentMapDimensionLines.map((line) => (
@@ -1212,6 +1215,19 @@ export default function MapPage() {
                 </label>
               )}
             </div>
+
+            {selectedWhiteoutId !== null && (() => {
+              const box = currentWhiteoutBoxes.find(b => b.id === selectedWhiteoutId);
+              if (!box) return null;
+              return (
+                <WhiteoutControlPanel
+                  box={box}
+                  onUpdate={(updates) => updateWhiteout(selectedWhiteoutId, updates)}
+                  onRemove={() => { removeWhiteout(selectedWhiteoutId); setSelectedWhiteoutId(null); }}
+                  onDeselect={() => setSelectedWhiteoutId(null)}
+                />
+              );
+            })()}
 
             {selectedPinId !== null && (() => {
               const pin = currentMapPins.find(p => p.id === selectedPinId);
