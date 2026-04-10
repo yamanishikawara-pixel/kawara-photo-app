@@ -106,7 +106,6 @@ const useRotatedDraggable = (initialX: number, initialY: number, rotation: numbe
   return { position, dragging, onPointerDown, onPointerMove, onPointerUp, containerRef, handleClick };
 };
 
-// ★ 変更：巨大なポップアップを廃止し、直感的なリサイズ＆削除ハンドルを追加
 const WhiteoutMarker = React.memo(({ box, rotation, currentScale, isSelected, onDragEnd, onClick, onSizeChange, onRemove }: { box: WhiteoutBox; rotation: number; currentScale: number; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; onSizeChange: (updates: Partial<WhiteoutBox>) => void; onRemove: () => void; }) => {
   const { position, onPointerDown, onPointerMove, onPointerUp, dragging, containerRef, handleClick } = useRotatedDraggable(box.x, box.y, rotation, onDragEnd);
   
@@ -921,8 +920,15 @@ export default function MapPage() {
                       onPointerUp={handlePanPointerUp}
                       onPointerCancel={handlePanPointerUp}
                     >
+                      {/* セーフエリア枠 ＋ センターガイド十字線 */}
                       <div className={`absolute inset-0 border-4 border-red-500 border-dashed z-40 pointer-events-none transition-opacity ${editingMode === 'pan' ? 'opacity-100' : 'opacity-0'}`}>
                         <div className="absolute top-0 left-0 bg-red-500 text-white font-black text-[10px] px-2 py-0.5 rounded-br-lg">印刷セーフエリア</div>
+                        
+                        {/* ▼ ここから追加：センターを示す十字ガイド */}
+                        <div className="absolute top-1/2 left-0 w-full border-t border-red-500/40 border-dashed" />
+                        <div className="absolute left-1/2 top-0 h-full border-l border-red-500/40 border-dashed" />
+                        <div className="absolute top-1/2 left-1/2 -mt-3 -ml-3 w-6 h-6 border-2 border-red-500/50 rounded-full" />
+                        {/* ▲ ここまで追加 */}
                       </div>
 
                       <div
