@@ -430,7 +430,6 @@ export default function PdfExportPage() {
           
           const transform = project.mapTransforms?.[mapIndex] || { scale: 1, x: 0, y: 0 };
 
-          // ★ 修正：パン・ズーム時のピンと文字の巨大化を防ぐ逆スケール処理
           const mapOverlays = (
             <>
               {(project.whiteoutBoxes ?? []).filter((b: WhiteoutBox) => b.mapIndex === mapIndex).map((box: WhiteoutBox) => (
@@ -490,7 +489,6 @@ export default function PdfExportPage() {
                 >
                   <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {u ? (
-                      // ★ 修正：コンテナのアスペクト比を完全に固定
                       <div style={{ position: 'relative', width: '100%', aspectRatio: '175 / 255', overflow: 'hidden' }}>
                         <div style={{ position: 'absolute', inset: 0, transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center' }}>
                           <img
@@ -506,7 +504,8 @@ export default function PdfExportPage() {
                     ) : (
                       <span className="font-bold text-gray-400 absolute inset-0 flex items-center justify-center">位置図未登録</span>
                     )}
-                    <div style={{ position: 'absolute', top: '6mm', left: '6mm', zIndex: 50, background: 'rgba(255,255,255,0.88)', padding: '1px 6px', borderRadius: '3px', fontWeight: 'bold', fontSize: '13px', color: '#111', lineHeight: '1.6' }}>
+                    {/* ★ 変更箇所：全画面時の「位置図」タイトルを凡例表示時(text-2xl)と同サイズに大型化 */}
+                    <div style={{ position: 'absolute', top: '10mm', left: '10mm', zIndex: 50, background: 'rgba(255,255,255,0.95)', padding: '6px 16px', borderRadius: '4px', fontWeight: 'bold', fontSize: '24px', color: '#111', border: '2px solid #333' }}>
                       位置図{mapCount > 1 ? ` (${mapIndex + 1}/${mapCount})` : ''}
                     </div>
                     <div style={{ position: 'absolute', bottom: '5mm', right: '8mm', zIndex: 50, fontSize: '12px', fontWeight: 'bold', color: '#555' }}>
@@ -527,7 +526,6 @@ export default function PdfExportPage() {
                   </h2>
                   <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-gray-50 print:bg-white border border-gray-400 print:border-gray-500 p-2">
                     {u ? (
-                      // ★ 修正：コンテナのアスペクト比を完全に固定（余計なmaxWidthなどを排除）
                       <div style={{ position: 'relative', width: '100%', aspectRatio: '194 / 120', overflow: 'hidden' }}>
                         <div style={{ position: 'absolute', inset: 0, transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center' }}>
                           <img
