@@ -137,8 +137,8 @@ export interface Project {
   mapRotations?: number[];
   mapTransforms?: { scale: number; x: number; y: number }[];
   
-  // ▼ これを追加します（各図面のタイトル、位置、縦横の設定を保存）
-  mapLayouts?: { title: string; position: string; orientation: 'horizontal' | 'vertical' }[];
+  // ▼ ここを書き換えます（x, y, rotationを追加）
+  mapLayouts?: { title: string; x?: number; y?: number; rotation?: number }[];
   
   whiteoutBoxes?: WhiteoutBox[];
   // ...

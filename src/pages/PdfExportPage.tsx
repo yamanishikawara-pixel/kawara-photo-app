@@ -429,43 +429,29 @@ export default function PdfExportPage() {
           const totalRotation = (userRotation + printRotation) % 360;
           
           const transform = project.mapTransforms?.[mapIndex] || { scale: 1, x: 0, y: 0 };
-
-          // ★ 追加：DBから取得したレイアウト設定（未設定の場合はデフォルト値）
-          const layout = project.mapLayouts?.[mapIndex] || { title: '位置図', position: 'top-left', orientation: 'horizontal' };
-
-          // PDF用紙上の絶対配置を決める関数（10mm余白）
-          const getPdfPosStyles = (pos: string): React.CSSProperties => {
-            switch(pos) {
-               case 'top-left': return { top: '10mm', left: '10mm' };
-               case 'top-right': return { top: '10mm', right: '10mm' };
-               case 'bottom-left': return { bottom: '10mm', left: '10mm' };
-               case 'bottom-right': return { bottom: '10mm', right: '10mm' };
-               default: return { top: '10mm', left: '10mm' };
-            }
-          };
-
-          // ユーザーが設定した通りの文字の向きと配置
-          const titleOverlay = (
-            <div style={{
-              position: 'absolute',
-              zIndex: 50,
-              ...getPdfPosStyles(layout.position),
-              writingMode: layout.orientation === 'vertical' ? 'vertical-rl' : 'horizontal-tb',
-              textOrientation: 'upright', // 縦書き時の日本語正立
-              background: 'rgba(255,255,255,0.95)',
-              padding: layout.orientation === 'vertical' ? '16px 8px' : '8px 16px',
-              borderRadius: '4px',
-              fontWeight: 'bold',
-              fontSize: '24px', // 凡例あり時と同じ大きさに統一
-              color: '#111',
-              border: '2px solid #333'
-            }}>
-              {layout.title}{mapCount > 1 ? ` (${mapIndex + 1}/${mapCount})` : ''}
-            </div>
-          );
+          const layout = project.mapLayouts?.[mapIndex] || { title: '位置図', x: 15, y: 10, rotation: 0 };
 
           const mapOverlays = (
             <>
+              {/* ★ 変更：ユーザーが自由に配置したタイトル札を描画 */}
+              <div style={{
+                position: 'absolute',
+                left: `${layout.x ?? 15}%`,
+                top: `${layout.y ?? 10}%`,
+                transform: `translate(-50%, -50%) rotate(${layout.rotation || 0}deg) scale(${1 / transform.scale})`,
+                zIndex: 60,
+                background: 'rgba(255,255,255,0.95)',
+                padding: '6px 16px',
+                borderRadius: '4px',
+                fontWeight: 'bold',
+                fontSize: '24px',
+                color: '#111',
+                border: '2px solid #333',
+                whiteSpace: 'nowrap'
+              }}>
+                {layout.title}{mapCount > 1 ? ` (${mapIndex + 1}/${mapCount})` : ''}
+              </div>
+
               {(project.whiteoutBoxes ?? []).filter((b: WhiteoutBox) => b.mapIndex === mapIndex).map((box: WhiteoutBox) => (
                 <div key={box.id} className="absolute bg-white" style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%`, transform: 'translate(-50%, -50%)', zIndex: 5 }} />
               ))}
@@ -523,7 +509,7 @@ export default function PdfExportPage() {
                 >
                   <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {u ? (
-                      <div style={{ position: 'relative', width: '100%', aspectRatio: '175 / 255', overflow: 'hidden' }}>
+                      <div style={{ position: 'relative', aspectRatio: '175/255', height: '100%', overflow: 'hidden' }}>
                         <div style={{ position: 'absolute', inset: 0, transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center' }}>
                           <img
                             src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)}
@@ -538,10 +524,6 @@ export default function PdfExportPage() {
                     ) : (
                       <span className="font-bold text-gray-400 absolute inset-0 flex items-center justify-center">位置図未登録</span>
                     )}
-                    
-                    {/* ★ 自由設定されたタイトル札の配置 */}
-                    {titleOverlay}
-
                     <div style={{ position: 'absolute', bottom: '5mm', right: '8mm', zIndex: 50, fontSize: '12px', fontWeight: 'bold', color: '#555' }}>
                       - {2 + mapIndex} / {totalPages} -
                     </div>
@@ -555,13 +537,10 @@ export default function PdfExportPage() {
             <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
               <div className={`pdf-page w-full h-full flex flex-col bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '15mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
                 <div className="w-full h-full flex flex-col border-[3px] border-gray-800 print:border-black p-6 print:p-2">
-                  <h2 className="text-2xl font-bold text-gray-900 shrink-0 border-gray-800 print:border-black mb-4 pb-2 border-b-2 print:mb-2">
-                    {/* ★ 凡例あり時のタイトルも設定名に連動 */}
-                    {layout.title} {mapCount > 1 ? `(${mapIndex + 1}/${mapCount})` : ''}
-                  </h2>
-                  <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-gray-50 print:bg-white border border-gray-400 print:border-gray-500 p-2">
+                  
+                  <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-gray-50 print:bg-white p-2 border border-gray-400 print:border-gray-500">
                     {u ? (
-                      <div style={{ position: 'relative', width: '100%', aspectRatio: '194 / 120', overflow: 'hidden' }}>
+                      <div style={{ position: 'relative', aspectRatio: '194/120', width: '100%', maxWidth: isPrinting ? '194mm' : '100%', maxHeight: isPrinting ? '120mm' : '140mm', overflow: 'hidden' }}>
                         <div style={{ position: 'absolute', inset: 0, transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center' }}>
                           <img
                             src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)}
@@ -573,7 +552,7 @@ export default function PdfExportPage() {
                           {mapOverlays}
                         </div>
                       </div>
-                    ) : <span className="font-bold text-gray-400 absolute inset-0 flex items-center justify-center">位置図未登録</span>}
+                    ) : <span className="font-bold text-gray-400">位置図未登録</span>}
                   </div>
                   <div className="mt-4 shrink-0">
                     <div className="flex justify-between items-end mb-2"><div className="text-base font-bold">項目欄</div><PdfLineLegend /></div>

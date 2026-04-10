@@ -106,6 +106,44 @@ const useRotatedDraggable = (initialX: number, initialY: number, rotation: numbe
   return { position, dragging, onPointerDown, onPointerMove, onPointerUp, containerRef, handleClick };
 };
 
+// ★ 追加：自由にドラッグできるタイトルマーカー
+const TitleMarker = React.memo(({ layout, mapRotation, currentScale, isSelected, onDragEnd, onClick, mapCount, mapIndex }: { layout: any; mapRotation: number; currentScale: number; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; mapCount: number; mapIndex: number }) => {
+  const { position, onPointerDown, onPointerMove, onPointerUp, dragging, containerRef, handleClick } = useRotatedDraggable(layout.x ?? 15, layout.y ?? 10, mapRotation, onDragEnd);
+  const visualScale = 1 / currentScale;
+
+  return (
+    <div
+      ref={containerRef}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onClick={(e) => handleClick(e, onClick)}
+      style={{
+        left: `${position.x}%`,
+        top: `${position.y}%`,
+        transform: `translate(-50%, -50%) rotate(${layout.rotation || 0}deg) scale(${visualScale})`,
+        touchAction: 'none',
+        zIndex: isSelected ? 100 : (dragging ? 60 : 50),
+        position: 'absolute',
+        background: 'rgba(255,255,255,0.95)',
+        padding: '6px 16px',
+        borderRadius: '4px',
+        fontWeight: 'bold',
+        fontSize: '20px',
+        color: '#111',
+        border: '2px solid #333',
+        cursor: 'move',
+        whiteSpace: 'nowrap',
+        boxShadow: dragging ? '0 10px 15px rgba(0,0,0,0.2)' : (isSelected ? '0 0 0 4px rgba(59, 130, 246, 0.5)' : '0 4px 6px rgba(0,0,0,0.1)')
+      }}
+      title="ドラッグで移動 / タップで編集"
+    >
+      {layout.title}{mapCount > 1 ? ` (${mapIndex + 1}/${mapCount})` : ''}
+    </div>
+  );
+});
+
 const WhiteoutMarker = React.memo(({ box, rotation, currentScale, isSelected, onDragEnd, onClick, onSizeChange, onRemove }: { box: WhiteoutBox; rotation: number; currentScale: number; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; onSizeChange: (updates: Partial<WhiteoutBox>) => void; onRemove: () => void; }) => {
   const { position, onPointerDown, onPointerMove, onPointerUp, dragging, containerRef, handleClick } = useRotatedDraggable(box.x, box.y, rotation, onDragEnd);
   
@@ -410,7 +448,7 @@ export default function MapPage() {
   const [whiteoutBoxes, setWhiteoutBoxes] = useState<WhiteoutBox[]>([]);
   const [mapTransforms, setMapTransforms] = useState<{ scale: number; x: number; y: number }[]>([]);
   
-  const [mapLayouts, setMapLayouts] = useState<{ title: string; position: string; orientation: 'horizontal' | 'vertical' }[]>([]);
+  const [mapLayouts, setMapLayouts] = useState<{ title: string; x?: number; y?: number; rotation?: number }[]>([]);
   const [editingTitle, setEditingTitle] = useState(false);
   
   const [selectedPinId, setSelectedPinId] = useState<number | null>(null);
@@ -460,7 +498,7 @@ export default function MapPage() {
     fetchData();
   }, [id]);
 
-  const saveProjectMapData = useCallback(async (newPins: MapPinT[], newRows: MapRow[], newDimLines: DimensionLine[], newWhiteouts: WhiteoutBox[], newTableShow: boolean, newTransforms: { scale: number; x: number; y: number }[], newLayouts: { title: string; position: string; orientation: 'horizontal' | 'vertical' }[]) => {
+  const saveProjectMapData = useCallback(async (newPins: MapPinT[], newRows: MapRow[], newDimLines: DimensionLine[], newWhiteouts: WhiteoutBox[], newTableShow: boolean, newTransforms: { scale: number; x: number; y: number }[], newLayouts: { title: string; x?: number; y?: number; rotation?: number }[]) => {
     if (!id) return;
     setIsSaving(true);
     try {
@@ -476,9 +514,9 @@ export default function MapPage() {
     } catch { setError('保存に失敗しました。'); } finally { setIsSaving(false); }
   }, [id]);
 
-  const updateMapLayout = (updates: Partial<{ title: string; position: string; orientation: 'horizontal' | 'vertical' }>) => {
+  const updateMapLayout = (updates: Partial<{ title: string; x?: number; y?: number; rotation?: number }>) => {
     const newLayouts = [...mapLayouts];
-    const current = newLayouts[currentMapIndex] || { title: '位置図', position: 'top-left', orientation: 'horizontal' };
+    const current = newLayouts[currentMapIndex] || { title: '位置図', x: 15, y: 10, rotation: 0 };
     newLayouts[currentMapIndex] = { ...current, ...updates };
     setMapLayouts(newLayouts);
     saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, newLayouts);
@@ -545,7 +583,7 @@ export default function MapPage() {
           newMapUrls[insertAt] = url;
         } else {
           newMapUrls.splice(insertAt + (mode === 'replace' ? 1 : 0) + (i > 0 ? i : 0), 0, url);
-          newMapLayouts.splice(insertAt + (mode === 'replace' ? 1 : 0) + (i > 0 ? i : 0), 0, { title: '位置図', position: 'top-left', orientation: 'horizontal' });
+          newMapLayouts.splice(insertAt + (mode === 'replace' ? 1 : 0) + (i > 0 ? i : 0), 0, { title: '位置図', x: 15, y: 10, rotation: 0 });
         }
       }
 
@@ -798,22 +836,11 @@ export default function MapPage() {
   const currentRotation = mapRotations[currentMapIndex] || 0;
   const currentTransform = mapTransforms[currentMapIndex] || { scale: 1, x: 0, y: 0 };
   
-  const currentLayout = mapLayouts[currentMapIndex] || { title: '位置図', position: 'top-left', orientation: 'horizontal' };
+  const currentLayout = mapLayouts[currentMapIndex] || { title: '位置図', x: 15, y: 10, rotation: 0 };
 
   const aspectStr = showLegendTable ? '194 / 120' : '175 / 255';
   const aspectNum = showLegendTable ? 194 / 120 : 175 / 255;
 
-  const getOverlayPosStyles = (pos: string): React.CSSProperties => {
-    switch(pos) {
-       case 'top-left': return { top: '12px', left: '12px' };
-       case 'top-right': return { top: '12px', right: '12px' };
-       case 'bottom-left': return { bottom: '12px', left: '12px' };
-       case 'bottom-right': return { bottom: '12px', right: '12px' };
-       default: return { top: '12px', left: '12px' };
-    }
-  };
-
-  // ★ 追加：mapCountの変数を定義（PDFExportPageにあるものと同じロジック）
   const mapCount = project?.mapUrls?.length || 0;
 
   if (loading) return <LoadingSpinner />;
@@ -825,7 +852,7 @@ export default function MapPage() {
       {editingTitle && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/20 backdrop-blur-sm" onPointerDown={() => setEditingTitle(false)}>
           <div className="bg-white p-6 rounded-3xl shadow-2xl border-2 border-gray-200 flex flex-col gap-5 w-[90%] max-w-sm" onPointerDown={e => e.stopPropagation()}>
-             <h4 className="font-black text-gray-800 border-b-2 border-gray-100 pb-2 text-xl text-center">タイトル・配置設定</h4>
+             <h4 className="font-black text-gray-800 border-b-2 border-gray-100 pb-2 text-xl text-center">タイトル設定</h4>
              
              <div>
                 <label className="text-xs font-bold text-gray-500 block mb-1">図面名 (例: 1階平面図)</label>
@@ -837,30 +864,13 @@ export default function MapPage() {
                 />
              </div>
              
-             <div className="flex gap-4">
-                <div className="flex-1">
-                   <label className="text-xs font-bold text-gray-500 block mb-1">配置する角</label>
-                   <select 
-                     value={currentLayout.position} 
-                     onChange={e => updateMapLayout({ position: e.target.value })} 
-                     className="border-2 border-gray-200 p-3 rounded-xl w-full font-bold outline-none cursor-pointer bg-gray-50"
-                   >
-                     <option value="top-left">左上</option>
-                     <option value="top-right">右上</option>
-                     <option value="bottom-left">左下</option>
-                     <option value="bottom-right">右下</option>
-                   </select>
-                </div>
-                <div className="flex-1">
-                   <label className="text-xs font-bold text-gray-500 block mb-1">文字の向き</label>
-                   <select 
-                     value={currentLayout.orientation} 
-                     onChange={e => updateMapLayout({ orientation: e.target.value as 'horizontal'|'vertical' })} 
-                     className="border-2 border-gray-200 p-3 rounded-xl w-full font-bold outline-none cursor-pointer bg-gray-50"
-                   >
-                     <option value="horizontal">横書き</option>
-                     <option value="vertical">縦書き</option>
-                   </select>
+             <div>
+                <label className="text-xs font-bold text-gray-500 block mb-1">文字の向き（回転）</label>
+                <div className="grid grid-cols-4 gap-2">
+                   <button onClick={() => updateMapLayout({ rotation: 0 })} className={`p-3 rounded-xl font-black border-2 transition-all ${currentLayout.rotation === 0 ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}>0°</button>
+                   <button onClick={() => updateMapLayout({ rotation: 90 })} className={`p-3 rounded-xl font-black border-2 transition-all ${currentLayout.rotation === 90 ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}>90°</button>
+                   <button onClick={() => updateMapLayout({ rotation: 180 })} className={`p-3 rounded-xl font-black border-2 transition-all ${currentLayout.rotation === 180 ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}>180°</button>
+                   <button onClick={() => updateMapLayout({ rotation: 270 })} className={`p-3 rounded-xl font-black border-2 transition-all ${currentLayout.rotation === 270 ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}>270°</button>
                 </div>
              </div>
              
@@ -944,7 +954,7 @@ export default function MapPage() {
                 
                 <div className="hidden lg:flex flex-1 justify-start">
                    <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-xl text-xs font-black border border-blue-200 flex items-center gap-2">
-                     💡 枠内のタイトルをタップで名前・位置を変更
+                     💡 枠内のタイトルを指で移動・タップで編集
                    </div>
                 </div>
 
@@ -1001,32 +1011,8 @@ export default function MapPage() {
                       onPointerUp={handlePanPointerUp}
                       onPointerCancel={handlePanPointerUp}
                     >
-                      <div
-                        style={{
-                          position: 'absolute',
-                          zIndex: 50,
-                          ...getOverlayPosStyles(currentLayout.position),
-                          writingMode: currentLayout.orientation === 'vertical' ? 'vertical-rl' : 'horizontal-tb',
-                          textOrientation: 'upright',
-                          background: 'rgba(255,255,255,0.95)',
-                          padding: currentLayout.orientation === 'vertical' ? '12px 6px' : '6px 12px',
-                          borderRadius: '4px',
-                          fontWeight: 'bold',
-                          fontSize: '18px',
-                          color: '#111',
-                          border: '2px solid #333',
-                          cursor: 'pointer',
-                          boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-                        }}
-                        onClick={() => setEditingTitle(true)}
-                        title="タップして編集"
-                      >
-                         {currentLayout.title}{mapCount > 1 ? ` (${currentMapIndex + 1}/${mapCount})` : ''}
-                      </div>
-
                       <div className={`absolute inset-0 border-4 border-red-500 border-dashed z-40 pointer-events-none transition-opacity ${editingMode === 'pan' ? 'opacity-100' : 'opacity-0'}`}>
                         <div className="absolute top-0 left-0 bg-red-500 text-white font-black text-[10px] px-2 py-0.5 rounded-br-lg">印刷セーフエリア</div>
-                        
                         <div className="absolute top-1/2 left-0 w-full border-t border-red-500/40 border-dashed" />
                         <div className="absolute left-1/2 top-0 h-full border-l border-red-500/40 border-dashed" />
                         <div className="absolute top-1/2 left-1/2 -mt-3 -ml-3 w-6 h-6 border-2 border-red-500/50 rounded-full" />
@@ -1050,6 +1036,18 @@ export default function MapPage() {
                           onPointerMove={handleMapPointerMove}
                           onPointerUp={handleMapPointerUp}
                           onPointerCancel={handleMapPointerUp}
+                        />
+
+                        {/* ★ 追加：ドラッグ可能なタイトルマーカー */}
+                        <TitleMarker
+                           layout={currentLayout}
+                           mapRotation={currentRotation}
+                           currentScale={currentTransform.scale}
+                           isSelected={editingTitle}
+                           onClick={() => setEditingTitle(true)}
+                           onDragEnd={(x, y) => updateMapLayout({ x, y })}
+                           mapCount={mapCount}
+                           mapIndex={currentMapIndex}
                         />
 
                         {isDraggingWhiteout && whiteoutCurrent && (
