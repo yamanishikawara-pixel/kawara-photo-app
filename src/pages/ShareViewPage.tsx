@@ -99,13 +99,10 @@ export default function ShareViewPage() {
                 位置図{mapUrls.length > 1 ? ` (${mapIndex + 1}/${mapUrls.length})` : ''}
               </h2>
             </div>
-            <div className="bg-gray-50 overflow-hidden">
-              {/* Fixed aspect-ratio container matching MapPage — overlays use same % coordinate space */}
-              <div
-                className="relative overflow-hidden w-full"
-                style={{ aspectRatio: containerAspect, maxHeight: '70vh' }}
-              >
-                {/* Inner wrapper: mapTransforms (zoom/pan) + rotation, same as MapPage */}
+            <div className="bg-gray-50 overflow-hidden flex items-center justify-center" style={{ maxHeight: '70vh' }}>
+              {/* aspectRatio container — height-constrained same as MapPage so overlay % coords align */}
+              <div className="relative overflow-hidden" style={{ aspectRatio: containerAspect, height: '100%', maxHeight: '70vh' }}>
+                {/* Inner wrapper: mapTransforms (zoom/pan) + rotation */}
                 <div
                   className="absolute inset-0 flex items-center justify-center"
                   style={{

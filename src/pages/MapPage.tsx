@@ -450,6 +450,8 @@ export default function MapPage() {
   
   const [mapLayouts, setMapLayouts] = useState<{ title: string; x?: number; y?: number; rotation?: number }[]>([]);
   const [editingTitle, setEditingTitle] = useState(false);
+  // Natural aspect ratio (w/h) of each map image, captured on load, used for safe-zone accuracy
+  const [mapImageAspects, setMapImageAspects] = useState<Record<number, number>>({});
   
   const [selectedPinId, setSelectedPinId] = useState<number | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
@@ -841,6 +843,54 @@ export default function MapPage() {
   const aspectStr = showLegendTable ? '194 / 120' : '175 / 255';
   const aspectNum = showLegendTable ? 194 / 120 : 175 / 255;
 
+  /**
+   * セーフゾーン計算（CSS % 座標空間）
+   * 以下2つの交差領域 = 実際に PDF に印刷される範囲
+   *  A) object-contain レターボックスを除いた画像領域
+   *  B) ズーム・パンによって overflow:hidden でクリップされない領域
+   */
+  const safeZoneBounds = useMemo(() => {
+    const containerAspect = showLegendTable ? 194 / 120 : 175 / 255;
+    const imageAspect = mapImageAspects[currentMapIndex];
+    const s = currentTransform.scale;
+    const tx = currentTransform.x; // % of container width
+    const ty = currentTransform.y; // % of container height
+
+    // A) 画像が占める CSS % 範囲（レターボックス除外）
+    let imgMinX = 0, imgMaxX = 100, imgMinY = 0, imgMaxY = 100;
+    if (imageAspect) {
+      if (imageAspect > containerAspect) {
+        // 横長画像 → 上下に余白
+        const vPad = (1 - containerAspect / imageAspect) / 2 * 100;
+        imgMinY = vPad; imgMaxY = 100 - vPad;
+      } else if (imageAspect < containerAspect) {
+        // 縦長画像 → 左右に余白
+        const hPad = (1 - imageAspect / containerAspect) / 2 * 100;
+        imgMinX = hPad; imgMaxX = 100 - hPad;
+      }
+    }
+
+    // B) transform scale+translate でクリップされず見える CSS % 範囲
+    //    vx% = 50 + s*(cx-50) + tx  →  可視条件 0≤vx%≤100 を解くと:
+    const visMinX = Math.max(0, 50 - (50 + tx) / s);
+    const visMaxX = Math.min(100, 50 + (50 - tx) / s);
+    const visMinY = Math.max(0, 50 - (50 + ty) / s);
+    const visMaxY = Math.min(100, 50 + (50 - ty) / s);
+
+    // A ∩ B
+    const left = Math.max(imgMinX, visMinX);
+    const top  = Math.max(imgMinY, visMinY);
+    const right  = Math.min(imgMaxX, visMaxX);
+    const bottom = Math.min(imgMaxY, visMaxY);
+
+    return {
+      left:   Math.max(0, left),
+      top:    Math.max(0, top),
+      width:  Math.max(0, right - left),
+      height: Math.max(0, bottom - top),
+    };
+  }, [showLegendTable, mapImageAspects, currentMapIndex, currentTransform]);
+
   const mapCount = project?.mapUrls?.length || 0;
 
   if (loading) return <LoadingSpinner />;
@@ -1011,7 +1061,11 @@ export default function MapPage() {
                       onPointerUp={handlePanPointerUp}
                       onPointerCancel={handlePanPointerUp}
                     >
-                      <div className={`absolute inset-0 border-4 border-red-500 border-dashed z-40 pointer-events-none transition-opacity ${editingMode === 'pan' ? 'opacity-100' : 'opacity-0'}`}>
+                      {/* セーフゾーン: object-contain レターボックス + ズームクリップの交差領域 */}
+                      <div
+                        className={`absolute z-40 pointer-events-none transition-opacity ${editingMode === 'pan' ? 'opacity-100' : 'opacity-0'}`}
+                        style={{ left: `${safeZoneBounds.left}%`, top: `${safeZoneBounds.top}%`, width: `${safeZoneBounds.width}%`, height: `${safeZoneBounds.height}%`, border: '4px dashed #ef4444' }}
+                      >
                         <div className="absolute top-0 left-0 bg-red-500 text-white font-black text-[10px] px-2 py-0.5 rounded-br-lg">印刷セーフエリア</div>
                         <div className="absolute top-1/2 left-0 w-full border-t border-red-500/40 border-dashed" />
                         <div className="absolute left-1/2 top-0 h-full border-l border-red-500/40 border-dashed" />
@@ -1027,6 +1081,12 @@ export default function MapPage() {
                           crossOrigin="anonymous"
                           className="block w-full h-full object-contain pointer-events-none"
                           alt=""
+                          onLoad={(e) => {
+                            const img = e.currentTarget;
+                            if (img.naturalWidth && img.naturalHeight) {
+                              setMapImageAspects(prev => ({ ...prev, [currentMapIndex]: img.naturalWidth / img.naturalHeight }));
+                            }
+                          }}
                         />
                         
                         <div 
