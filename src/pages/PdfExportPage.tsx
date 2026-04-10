@@ -504,13 +504,31 @@ export default function PdfExportPage() {
                     ) : (
                       <span className="font-bold text-gray-400 absolute inset-0 flex items-center justify-center">位置図未登録</span>
                     )}
-                    {/* ★ 変更箇所：全画面時の「位置図」タイトルを凡例表示時(text-2xl)と同サイズに大型化 */}
-                    <div style={{ position: 'absolute', top: '10mm', left: '10mm', zIndex: 50, background: 'rgba(255,255,255,0.95)', padding: '6px 16px', borderRadius: '4px', fontWeight: 'bold', fontSize: '24px', color: '#111', border: '2px solid #333' }}>
-                      位置図{mapCount > 1 ? ` (${mapIndex + 1}/${mapCount})` : ''}
-                    </div>
-                    <div style={{ position: 'absolute', bottom: '5mm', right: '8mm', zIndex: 50, fontSize: '12px', fontWeight: 'bold', color: '#555' }}>
-                      - {2 + mapIndex} / {totalPages} -
-                    </div>
+                    
+                    {/* ★ 変更箇所：図面を横にした時は、タイトルとページ番号も首を傾げずに読めるよう回転させる */}
+                    {printRotation === 90 ? (
+                      <>
+                        <div style={{ position: 'absolute', top: '10mm', right: '10mm', zIndex: 50 }}>
+                          <div style={{ transform: 'rotate(90deg)', transformOrigin: 'top left', position: 'absolute', left: 0, top: 0, background: 'rgba(255,255,255,0.95)', padding: '6px 16px', borderRadius: '4px', fontWeight: 'bold', fontSize: '24px', color: '#111', border: '2px solid #333', whiteSpace: 'nowrap' }}>
+                            位置図{mapCount > 1 ? ` (${mapIndex + 1}/${mapCount})` : ''}
+                          </div>
+                        </div>
+                        <div style={{ position: 'absolute', bottom: '5mm', left: '8mm', zIndex: 50 }}>
+                          <div style={{ transform: 'rotate(90deg)', transformOrigin: 'bottom right', position: 'absolute', right: 0, bottom: 0, fontSize: '12px', fontWeight: 'bold', color: '#555', whiteSpace: 'nowrap' }}>
+                            - {2 + mapIndex} / {totalPages} -
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ position: 'absolute', top: '10mm', left: '10mm', zIndex: 50, background: 'rgba(255,255,255,0.95)', padding: '6px 16px', borderRadius: '4px', fontWeight: 'bold', fontSize: '24px', color: '#111', border: '2px solid #333' }}>
+                          位置図{mapCount > 1 ? ` (${mapIndex + 1}/${mapCount})` : ''}
+                        </div>
+                        <div style={{ position: 'absolute', bottom: '5mm', right: '8mm', zIndex: 50, fontSize: '12px', fontWeight: 'bold', color: '#555' }}>
+                          - {2 + mapIndex} / {totalPages} -
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
