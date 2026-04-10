@@ -381,6 +381,8 @@ export default function MapPage() {
   const isDraggingWhiteout = whiteoutStart !== null;
 
   const [pendingActionInfo, setPendingActionInfo] = useState<{ clientX: number, clientY: number, localX: number, localY: number, time: number } | null>(null);
+  // Natural aspect ratio (w/h) per map index — used to show safe zone at image bounds
+  const [mapImageAspects, setMapImageAspects] = useState<Record<number, number>>({});
   const startDragPan = useRef({ x: 0, y: 0, startX: 0, startY: 0, isDragging: false });
 
   useEffect(() => {
@@ -728,6 +730,23 @@ export default function MapPage() {
   const currentRotation = mapRotations[currentMapIndex] || 0;
   const currentTransform = mapTransforms[currentMapIndex] || { scale: 1, x: 0, y: 0 };
 
+  // Compute where the image actually appears within the container (object-contain letterbox)
+  // so the safe zone border tracks the real image bounds, not the container edge
+  const safeZoneBounds = useMemo(() => {
+    const containerAspect = showLegendTable ? 194 / 120 : 175 / 255;
+    const imageAspect = mapImageAspects[currentMapIndex];
+    if (!imageAspect) return { left: 0, top: 0, width: 100, height: 100 };
+    if (imageAspect > containerAspect) {
+      // landscape image in portrait container → letterbox top & bottom
+      const h = (containerAspect / imageAspect) * 100;
+      return { left: 0, top: (100 - h) / 2, width: 100, height: h };
+    } else {
+      // portrait/square image wider container → letterbox left & right
+      const w = (imageAspect / containerAspect) * 100;
+      return { left: (100 - w) / 2, top: 0, width: w, height: 100 };
+    }
+  }, [showLegendTable, mapImageAspects, currentMapIndex]);
+
   if (loading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={error} />;
 
@@ -862,7 +881,10 @@ export default function MapPage() {
                     onPointerUp={handlePanPointerUp}
                     onPointerCancel={handlePanPointerUp}
                   >
-                    <div className={`absolute inset-0 border-4 border-red-500 border-dashed z-40 pointer-events-none transition-opacity ${editingMode === 'pan' ? 'opacity-100' : 'opacity-0'}`}>
+                    <div
+                      className={`absolute z-40 pointer-events-none transition-opacity ${editingMode === 'pan' ? 'opacity-100' : 'opacity-0'}`}
+                      style={{ left: `${safeZoneBounds.left}%`, top: `${safeZoneBounds.top}%`, width: `${safeZoneBounds.width}%`, height: `${safeZoneBounds.height}%`, border: '4px dashed #ef4444' }}
+                    >
                       <div className="absolute top-0 left-0 bg-red-500 text-white font-black text-[10px] px-2 py-0.5 rounded-br-lg">印刷セーフエリア</div>
                     </div>
 
@@ -875,6 +897,12 @@ export default function MapPage() {
                         crossOrigin="anonymous"
                         className="block w-full h-full object-contain pointer-events-none"
                         alt=""
+                        onLoad={(e) => {
+                          const img = e.currentTarget;
+                          if (img.naturalWidth && img.naturalHeight) {
+                            setMapImageAspects(prev => ({ ...prev, [currentMapIndex]: img.naturalWidth / img.naturalHeight }));
+                          }
+                        }}
                       />
                       
                       <div 
