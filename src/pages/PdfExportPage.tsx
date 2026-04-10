@@ -431,9 +431,11 @@ export default function PdfExportPage() {
           const transform = project.mapTransforms?.[mapIndex] || { scale: 1, x: 0, y: 0 };
           const layout = project.mapLayouts?.[mapIndex] || { title: '位置図', x: 15, y: 10, rotation: 0 };
 
+          const whiteoutBoxesForMap = (project.whiteoutBoxes ?? []).filter((b: WhiteoutBox) => b.mapIndex === mapIndex);
+
           const mapOverlays = (
             <>
-              {/* ★ 変更：ユーザーが自由に配置したタイトル札を描画 */}
+              {/* ★ タイトル札 */}
               <div style={{
                 position: 'absolute',
                 left: `${layout.x ?? 15}%`,
@@ -452,23 +454,6 @@ export default function PdfExportPage() {
                 {layout.title}{mapCount > 1 ? ` (${mapIndex + 1}/${mapCount})` : ''}
               </div>
 
-              {/* 白塗りボックス: SVG rect で描画することでブラウザPDF出力時も確実に白く消える */}
-              {(project.whiteoutBoxes ?? []).filter((b: WhiteoutBox) => b.mapIndex === mapIndex).length > 0 && (
-                <svg
-                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible', zIndex: 30, pointerEvents: 'none' }}
-                >
-                  {(project.whiteoutBoxes ?? []).filter((b: WhiteoutBox) => b.mapIndex === mapIndex).map((box: WhiteoutBox) => (
-                    <rect
-                      key={box.id}
-                      x={`${box.x - box.width / 2}%`}
-                      y={`${box.y - box.height / 2}%`}
-                      width={`${box.width}%`}
-                      height={`${box.height}%`}
-                      fill="white"
-                    />
-                  ))}
-                </svg>
-              )}
               {(project.mapPins ?? []).filter(p => p.mapIndex === mapIndex).map(pin => {
                 const visualScale = (pin.size ?? 1) / transform.scale;
                 return (
@@ -511,6 +496,24 @@ export default function PdfExportPage() {
                   </div>
                 );
               })}
+
+              {/* 白塗りは全オーバーレイの最後 = 最前面に描画。
+                  SVG rect を使うことでブラウザPDF出力時も確実に白く塗られる。
+                  overflow:visible な寸法線SVGより後に置くことで必ず上に重なる。 */}
+              {whiteoutBoxesForMap.length > 0 && (
+                <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible', zIndex: 50, pointerEvents: 'none' }}>
+                  {whiteoutBoxesForMap.map((box: WhiteoutBox) => (
+                    <rect
+                      key={box.id}
+                      x={`${box.x - box.width / 2}%`}
+                      y={`${box.y - box.height / 2}%`}
+                      width={`${box.width}%`}
+                      height={`${box.height}%`}
+                      fill="white"
+                    />
+                  ))}
+                </svg>
+              )}
             </>
           );
 
