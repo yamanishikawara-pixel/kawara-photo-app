@@ -486,17 +486,20 @@ export default function PdfExportPage() {
                   className={`pdf-page pdf-map-fullbleed w-full h-full bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`}
                   style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: 0, transform: isPrinting ? 'none' : `scale(${scale})` }}
                 >
-                  <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+                  <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {u ? (
-                      <div style={{ position: 'absolute', inset: 0, transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center' }}>
-                        <img
-                          src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)}
-                          data-original-src={u}
-                          crossOrigin="anonymous"
-                          style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
-                          alt=""
-                        />
-                        {mapOverlays}
+                      // aspectRatio must match MapPage fullbleed container (175/255) so overlay % coords align
+                      <div style={{ position: 'relative', aspectRatio: '175/255', height: '100%', overflow: 'hidden' }}>
+                        <div style={{ position: 'absolute', inset: 0, transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center' }}>
+                          <img
+                            src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)}
+                            data-original-src={u}
+                            crossOrigin="anonymous"
+                            style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
+                            alt=""
+                          />
+                          {mapOverlays}
+                        </div>
                       </div>
                     ) : (
                       <span className="font-bold text-gray-400 absolute inset-0 flex items-center justify-center">位置図未登録</span>
@@ -522,13 +525,14 @@ export default function PdfExportPage() {
                   </h2>
                   <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-gray-50 print:bg-white p-2 border border-gray-400 print:border-gray-500">
                     {u ? (
-                      <div className="flex items-center justify-center w-full h-full relative overflow-hidden">
-                        <div style={{ display: 'inline-block', position: 'relative', transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center', flexShrink: 0 }}>
+                      // aspectRatio must match MapPage legend container (194/120) so overlay % coords align
+                      <div style={{ position: 'relative', aspectRatio: '194/120', width: '100%', maxWidth: isPrinting ? '194mm' : '100%', maxHeight: isPrinting ? '120mm' : '140mm', overflow: 'hidden' }}>
+                        <div style={{ position: 'absolute', inset: 0, transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center' }}>
                           <img
                             src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)}
                             data-original-src={u}
                             crossOrigin="anonymous"
-                            style={{ display: 'block', width: 'auto', height: 'auto', maxWidth: isPrinting ? '194mm' : '100%', maxHeight: isPrinting ? '120mm' : '140mm' }}
+                            style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
                             alt=""
                           />
                           {mapOverlays}
