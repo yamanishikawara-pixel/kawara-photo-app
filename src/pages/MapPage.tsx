@@ -801,19 +801,38 @@ export default function MapPage() {
               </div>
             )}
 
-            {/* ★ 変更：図面上の邪魔な位置から、図面の外（上部）へ案内メッセージを移動しました */}
-            {currentMapUrl && editingMode !== 'pan' && (
-              <div className={`w-full flex justify-center mb-4 transition-opacity duration-200 ${isDraggingWhiteout ? 'opacity-0' : 'opacity-100'}`}>
-                <div className="bg-gray-800 text-white px-6 py-2.5 rounded-full font-black flex items-center gap-3 shadow-md text-sm border-2 border-gray-700">
-                  {editingMode === 'pin' && <><LayoutGrid className="w-5 h-5 text-red-400"/> タップでピンを追加</>}
-                  {editingMode === 'dimension' && !drawingStartPoint && <><Ruler className="w-5 h-5 text-blue-400"/> 線の始点をタップ</>}
-                  {editingMode === 'dimension' && drawingStartPoint && (
-                    <>
-                      <Ruler className="w-5 h-5 text-yellow-400"/> 線の終点をタップ
-                      <button type="button" onClick={(e) => { e.stopPropagation(); setDrawingStartPoint(null); }} className="ml-2 px-3 py-1 bg-white/20 hover:bg-white/30 rounded-full text-white font-bold text-xs transition-colors">✕ 取消</button>
-                    </>
+            {/* ★ 変更：案内メッセージと回転・差し替えボタンを、図面の外（上部）にまとめて配置 */}
+            {currentMapUrl && (
+              <div className={`w-full flex flex-col lg:flex-row justify-between items-center gap-4 mb-4 transition-opacity duration-200 ${isDraggingWhiteout ? 'opacity-0' : 'opacity-100'}`}>
+                
+                {/* 左側スペース（バランス調整用） */}
+                <div className="hidden lg:block flex-1"></div>
+
+                {/* 中央：案内メッセージ */}
+                <div className="flex-1 flex justify-center">
+                  {editingMode !== 'pan' && (
+                    <div className="bg-gray-800 text-white px-6 py-2.5 rounded-full font-black flex items-center gap-3 shadow-md text-sm border-2 border-gray-700 whitespace-nowrap">
+                      {editingMode === 'pin' && <><LayoutGrid className="w-5 h-5 text-red-400"/> タップでピンを追加</>}
+                      {editingMode === 'dimension' && !drawingStartPoint && <><Ruler className="w-5 h-5 text-blue-400"/> 線の始点をタップ</>}
+                      {editingMode === 'dimension' && drawingStartPoint && (
+                        <>
+                          <Ruler className="w-5 h-5 text-yellow-400"/> 線の終点をタップ
+                          <button type="button" onClick={(e) => { e.stopPropagation(); setDrawingStartPoint(null); }} className="ml-2 px-3 py-1 bg-white/20 hover:bg-white/30 rounded-full text-white font-bold text-xs transition-colors">✕ 取消</button>
+                        </>
+                      )}
+                      {editingMode === 'whiteout' && <><Eraser className="w-5 h-5 text-yellow-400"/> 隠したい文字の上をドラッグ</>}
+                    </div>
                   )}
-                  {editingMode === 'whiteout' && <><Eraser className="w-5 h-5 text-yellow-400"/> 隠したい文字の上をドラッグ</>}
+                </div>
+
+                {/* 右側：回転・差し替えボタン（外に追放！） */}
+                <div className="flex-1 flex justify-end gap-2 w-full lg:w-auto justify-center lg:justify-end">
+                  <button onClick={() => rotateCurrentMap(-90)} className="p-2 bg-white hover:bg-gray-50 text-gray-700 rounded-xl shadow border border-gray-200 transition-all" title="左に90°回転"><RotateCcw className="w-4 h-4" /></button>
+                  <button onClick={() => rotateCurrentMap(90)} className="p-2 bg-white hover:bg-gray-50 text-gray-700 rounded-xl shadow border border-gray-200 transition-all" title="右に90°回転"><RotateCw className="w-4 h-4" /></button>
+                  <label className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-xl shadow cursor-pointer border border-gray-200 transition-all" title="この図面を差し替え">
+                    <UploadCloud className="w-4 h-4" /> 差し替え
+                    <input ref={replaceInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => uploadMapImage(e, 'replace')} disabled={isSaving} />
+                  </label>
                 </div>
               </div>
             )}
@@ -830,15 +849,6 @@ export default function MapPage() {
                         <button onClick={() => { updateTransform(currentMapIndex, { scale: 1, x: 0, y: 0 }); saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms); }} className="ml-2 px-4 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-full font-bold text-xs transition-colors whitespace-nowrap">リセット</button>
                      </div>
                   )}
-
-                  <div className={`absolute top-3 right-3 z-30 flex items-center gap-1.5 transition-opacity duration-200 ${isDraggingWhiteout ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                    <button onClick={() => rotateCurrentMap(-90)} className="p-2 bg-white/90 hover:bg-white text-gray-700 rounded-xl shadow border border-gray-200 transition-all" title="左に90°回転"><RotateCcw className="w-4 h-4" /></button>
-                    <button onClick={() => rotateCurrentMap(90)} className="p-2 bg-white/90 hover:bg-white text-gray-700 rounded-xl shadow border border-gray-200 transition-all" title="右に90°回転"><RotateCw className="w-4 h-4" /></button>
-                    <label className="flex items-center gap-1.5 px-3 py-2 bg-white/90 hover:bg-white text-gray-700 text-xs font-bold rounded-xl shadow cursor-pointer border border-gray-200 transition-all" title="この図面を差し替え">
-                      <UploadCloud className="w-4 h-4" /> 差し替え
-                      <input ref={replaceInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => uploadMapImage(e, 'replace')} disabled={isSaving} />
-                    </label>
-                  </div>
 
                   <div
                     className={`relative overflow-hidden bg-[#e2e8f0] shadow-inner transition-all w-full flex items-center justify-center ${editingMode === 'pan' ? 'ring-4 ring-indigo-500 ring-offset-4 cursor-move' : 'border-2 border-gray-300'}`}
