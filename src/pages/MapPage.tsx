@@ -109,39 +109,97 @@ const useRotatedDraggable = (initialX: number, initialY: number, rotation: numbe
 const WhiteoutMarker = React.memo(({ box, rotation, currentScale, isSelected, onDragEnd, onClick, onSizeChange, onRemove }: { box: WhiteoutBox; rotation: number; currentScale: number; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; onSizeChange: (updates: Partial<WhiteoutBox>) => void; onRemove: () => void; }) => {
   const { position, onPointerDown, onPointerMove, onPointerUp, dragging, containerRef, handleClick } = useRotatedDraggable(box.x, box.y, rotation, onDragEnd);
   
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeStartPos = useRef({ clientX: 0, clientY: 0, startWidth: 0, startHeight: 0 });
+
+  const handleResizeStart = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setIsResizing(true);
+    resizeStartPos.current = { clientX: e.clientX, clientY: e.clientY, startWidth: box.width, startHeight: box.height };
+  };
+
+  const handleResizeMove = (e: React.PointerEvent) => {
+    if (!isResizing) return;
+    e.stopPropagation();
+    
+    const parent = containerRef.current?.closest('.map-content-wrapper') as HTMLDivElement;
+    if (!parent) return;
+    const rect = parent.getBoundingClientRect();
+    const normAngle = ((rotation % 360) + 360) % 360;
+    
+    let dx = e.clientX - resizeStartPos.current.clientX;
+    let dy = e.clientY - resizeStartPos.current.clientY;
+    let w = rect.width, h = rect.height;
+
+    if (normAngle === 0) { /* normal */ }
+    else if (normAngle === 90) { const tmp = dx; dx = dy; dy = -tmp; w = rect.height; h = rect.width; }
+    else if (normAngle === 180) { dx = -dx; dy = -dy; }
+    else if (normAngle === 270) { const tmp = dx; dx = -dy; dy = tmp; w = rect.height; h = rect.width; }
+
+    const deltaWidth = (dx / w) * 100;
+    const deltaHeight = (dy / h) * 100;
+
+    // 中心からの拡大となるため、移動量の2倍サイズが変化する
+    onSizeChange({ 
+      width: Math.max(0.5, resizeStartPos.current.startWidth + deltaWidth * 2), 
+      height: Math.max(0.5, resizeStartPos.current.startHeight + deltaHeight * 2) 
+    });
+  };
+
+  const handleResizeEnd = (e: React.PointerEvent) => {
+    if (!isResizing) return;
+    e.stopPropagation();
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    setIsResizing(false);
+  };
+
+  // ズームしてもハンドルの大きさが一定に見えるように逆スケール
+  const handleSize = 24 / currentScale;
+  const handleOffset = handleSize / 2;
+
   return (
-    <>
-      <div
-        ref={containerRef}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onClick={(e) => handleClick(e, onClick)}
-        style={{ left: `${position.x}%`, top: `${position.y}%`, width: `${box.width}%`, height: `${box.height}%`, transform: `translate(-50%, -50%)`, touchAction: 'none', zIndex: isSelected ? 100 : (dragging ? 30 : 5) }}
-        className={`absolute bg-white cursor-pointer transition-all duration-75 ${dragging ? 'opacity-80 shadow-md' : ''} ${isSelected && !dragging ? 'ring-2 ring-blue-500 shadow-lg' : ''}`}
-      />
-      {isSelected && !dragging && (
-        <div style={{ left: `${position.x}%`, top: `${position.y + box.height/2}%`, marginTop: `${10 / currentScale}px`, transform: `translateX(-50%) rotate(${-rotation}deg) scale(${1 / currentScale})`, transformOrigin: 'top center' }} className="absolute z-40 flex flex-col gap-3 bg-white rounded-xl shadow-2xl border-2 border-gray-200 p-4 min-w-[200px]" onPointerDown={(e) => e.stopPropagation()}>
-          <h4 className="text-sm font-black text-gray-700 text-center border-b pb-2">白塗り（文字隠し）</h4>
-           <div className="flex items-center justify-between gap-4">
-             <span className="text-xs font-bold text-gray-500">横幅</span>
-             <div className="flex border-2 border-gray-100 rounded-lg overflow-hidden">
-               <button onClick={() => onSizeChange({ width: Math.max(1, box.width - 1) })} className="w-10 h-8 bg-gray-50 hover:bg-gray-100 border-r-2 border-gray-100 font-bold">-</button>
-               <button onClick={() => onSizeChange({ width: box.width + 1 })} className="w-10 h-8 bg-gray-50 hover:bg-gray-100 font-bold">+</button>
-             </div>
+    <div
+      style={{ left: `${position.x}%`, top: `${position.y}%`, width: `${box.width}%`, height: `${box.height}%`, transform: `translate(-50%, -50%)`, touchAction: 'none', zIndex: isSelected ? 100 : (dragging ? 30 : 5) }}
+      className={`absolute pointer-events-none transition-all duration-75`}
+    >
+       {/* 白塗りの本体（ドラッグで移動可能） */}
+       <div 
+         ref={containerRef}
+         onPointerDown={onPointerDown}
+         onPointerMove={onPointerMove}
+         onPointerUp={onPointerUp}
+         onPointerCancel={onPointerUp}
+         onClick={(e) => handleClick(e, onClick)}
+         className={`w-full h-full bg-white pointer-events-auto cursor-move ${isSelected ? 'outline outline-2 outline-blue-500 outline-offset-1' : ''} ${dragging ? 'opacity-80 shadow-md' : ''}`}
+       />
+       
+       {/* 選択時の直感リサイズ・削除ハンドル（邪魔なポップアップの代わり） */}
+       {isSelected && !dragging && (
+         <>
+           {/* 右下: リサイズハンドル */}
+           <div 
+             onPointerDown={handleResizeStart}
+             onPointerMove={handleResizeMove}
+             onPointerUp={handleResizeEnd}
+             onPointerCancel={handleResizeEnd}
+             style={{ width: `${handleSize}px`, height: `${handleSize}px`, right: `-${handleOffset}px`, bottom: `-${handleOffset}px`, cursor: 'se-resize' }}
+             className="absolute bg-blue-500 border-2 border-white rounded-full shadow-md pointer-events-auto flex items-center justify-center"
+           >
+              <div className="w-1/2 h-1/2 bg-white rounded-sm" style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}/>
            </div>
-           <div className="flex items-center justify-between gap-4">
-             <span className="text-xs font-bold text-gray-500">縦幅</span>
-             <div className="flex border-2 border-gray-100 rounded-lg overflow-hidden">
-               <button onClick={() => onSizeChange({ height: Math.max(1, box.height - 1) })} className="w-10 h-8 bg-gray-50 hover:bg-gray-100 border-r-2 border-gray-100 font-bold">-</button>
-               <button onClick={() => onSizeChange({ height: box.height + 1 })} className="w-10 h-8 bg-gray-50 hover:bg-gray-100 font-bold">+</button>
-             </div>
+
+           {/* 右上: 削除ボタン */}
+           <div 
+             onPointerDown={(e) => { e.stopPropagation(); onRemove(); }}
+             style={{ width: `${handleSize}px`, height: `${handleSize}px`, right: `-${handleOffset}px`, top: `-${handleOffset}px`, cursor: 'pointer' }}
+             className="absolute bg-red-500 border-2 border-white rounded-full shadow-md pointer-events-auto flex items-center justify-center hover:bg-red-600 active:scale-90 transition-transform"
+           >
+             <span style={{ fontSize: `${handleSize * 0.6}px`, lineHeight: 1, color: 'white', fontWeight: 'bold' }}>×</span>
            </div>
-           <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="mt-1 w-full py-2 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 text-sm font-bold"><Trash2 className="w-4 h-4 inline mr-1" /> 削除</button>
-        </div>
-      )}
-    </>
+         </>
+       )}
+    </div>
   );
 });
 
@@ -849,7 +907,6 @@ export default function MapPage() {
                      </div>
                   )}
 
-                  {/* ★ 修正：コンテナのアスペクト比が絶対に崩れないように強固に固定 */}
                   <div className="w-full flex justify-center items-center bg-[#e2e8f0] overflow-hidden rounded-md border border-gray-300">
                     <div
                       className={`relative w-full transition-all ${editingMode === 'pan' ? 'ring-4 ring-indigo-500 ring-offset-4 cursor-move' : ''}`}
