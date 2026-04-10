@@ -106,7 +106,7 @@ const useRotatedDraggable = (initialX: number, initialY: number, rotation: numbe
   return { position, dragging, onPointerDown, onPointerMove, onPointerUp, containerRef, handleClick };
 };
 
-const WhiteoutMarker = React.memo(({ box, rotation, isSelected, onDragEnd, onClick, onSizeChange, onRemove }: { box: WhiteoutBox; rotation: number; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; onSizeChange: (updates: Partial<WhiteoutBox>) => void; onRemove: () => void; }) => {
+const WhiteoutMarker = React.memo(({ box, rotation, currentScale, isSelected, onDragEnd, onClick, onSizeChange, onRemove }: { box: WhiteoutBox; rotation: number; currentScale: number; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; onSizeChange: (updates: Partial<WhiteoutBox>) => void; onRemove: () => void; }) => {
   const { position, onPointerDown, onPointerMove, onPointerUp, dragging, containerRef, handleClick } = useRotatedDraggable(box.x, box.y, rotation, onDragEnd);
   
   return (
@@ -122,7 +122,7 @@ const WhiteoutMarker = React.memo(({ box, rotation, isSelected, onDragEnd, onCli
         className={`absolute bg-white cursor-pointer transition-all duration-75 ${dragging ? 'opacity-80 shadow-md' : ''} ${isSelected && !dragging ? 'ring-2 ring-blue-500 shadow-lg' : ''}`}
       />
       {isSelected && !dragging && (
-        <div style={{ left: `${position.x}%`, top: `${position.y + box.height/2 + 5}%`, transform: `translateX(-50%) rotate(${-rotation}deg)` }} className="absolute z-40 flex flex-col gap-3 bg-white rounded-xl shadow-2xl border-2 border-gray-200 p-4 min-w-[200px]" onPointerDown={(e) => e.stopPropagation()}>
+        <div style={{ left: `${position.x}%`, top: `${position.y + box.height/2}%`, marginTop: `${10 / currentScale}px`, transform: `translateX(-50%) rotate(${-rotation}deg) scale(${1 / currentScale})`, transformOrigin: 'top center' }} className="absolute z-40 flex flex-col gap-3 bg-white rounded-xl shadow-2xl border-2 border-gray-200 p-4 min-w-[200px]" onPointerDown={(e) => e.stopPropagation()}>
           <h4 className="text-sm font-black text-gray-700 text-center border-b pb-2">白塗り（文字隠し）</h4>
            <div className="flex items-center justify-between gap-4">
              <span className="text-xs font-bold text-gray-500">横幅</span>
@@ -145,7 +145,7 @@ const WhiteoutMarker = React.memo(({ box, rotation, isSelected, onDragEnd, onCli
   );
 });
 
-const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, onRemove, onTextChange, onUpdate, onDeselect }: { line: DimensionLine; rotation: number; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; onUpdate: (props: Partial<DimensionLine>) => void; onDeselect: () => void; }) => {
+const DimensionLineMarker = React.memo(({ line, rotation, currentScale, isSelected, onSelect, onRemove, onTextChange, onUpdate, onDeselect }: { line: DimensionLine; rotation: number; currentScale: number; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; onUpdate: (props: Partial<DimensionLine>) => void; onDeselect: () => void; }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [localStart, setLocalStart] = useState(line.start);
   const [localEnd, setLocalEnd] = useState(line.end);
@@ -211,11 +211,14 @@ const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, 
   };
 
   const midPoint = { x: (localStart.x + localEnd.x) / 2, y: (localStart.y + localEnd.y) / 2 };
-  const safePopupX = Math.max(20, Math.min(80, midPoint.x));
+  const safePopupX = Math.max(10, Math.min(90, midPoint.x));
+  // ★ 修正：ズームスケールに合わせてオフセット値を逆算し、表示崩れを防ぐ
   const isUpperHalf = midPoint.y < 50;
-  const offsetY = isUpperHalf ? '+ 140px' : '- 140px';
+  const popupMarginTop = isUpperHalf ? (80 / currentScale) : (-80 / currentScale);
+  
   const color = line.color || "#FFFFFF"; 
   const thickness = Number(line.size || 2); 
+  const handleRadius = Math.max(12, 12 / currentScale); // スケールに合わせてハンドルの大きさを維持
 
   return (
     <>
@@ -238,9 +241,9 @@ const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, 
       </svg>
       
       {isSelected && !isDragging && (
-        <div style={{ left: `${safePopupX}%`, top: `calc(${midPoint.y}% ${offsetY})`, transform: `translate(-50%, -50%) rotate(${-rotation}deg)` }} className="absolute z-30 flex flex-col items-center gap-3 bg-white p-5 rounded-2xl shadow-3xl border-2 border-gray-100 min-w-[300px]" onPointerDown={e => e.stopPropagation()}>
+        <div style={{ left: `${safePopupX}%`, top: `${midPoint.y}%`, marginTop: `${popupMarginTop}px`, transform: `translate(-50%, -50%) rotate(${-rotation}deg) scale(${1 / currentScale})` }} className="absolute z-30 flex flex-col items-center gap-3 bg-white p-4 lg:p-5 rounded-2xl shadow-3xl border-2 border-gray-100 min-w-[280px]" onPointerDown={e => e.stopPropagation()}>
           <div className="flex w-full gap-2 items-center justify-between border-b border-gray-100 pb-2">
-             <h4 className="text-base font-black text-gray-900 flex items-center gap-1"><CaseUpper className="w-4 h-4 text-blue-500"/> 文字と線</h4>
+             <h4 className="text-sm lg:text-base font-black text-gray-900 flex items-center gap-1"><CaseUpper className="w-4 h-4 text-blue-500"/> 文字と線</h4>
              <div className="flex items-center gap-1">
                <button onClick={(e) => { e.stopPropagation(); onUpdate({ size: Math.max(1, thickness - 1) }); }} className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded font-bold text-gray-700">ー</button>
                <span className="text-xs font-bold text-gray-400 mx-1">{thickness}</span>
@@ -251,12 +254,12 @@ const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, 
           </div>
           <div className="flex flex-wrap gap-2 w-full">
             {DEFAULT_MAP_PART_NAMES.map(name => (
-              <button key={name} onClick={() => addPartName(name)} className="text-sm font-black text-blue-700 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-all">＋{name}</button>
+              <button key={name} onClick={() => addPartName(name)} className="text-xs lg:text-sm font-black text-blue-700 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-all">＋{name}</button>
             ))}
           </div>
           <div className="flex gap-2 w-full">
-            <input ref={inputRef} type="text" value={line.text} onChange={(e) => onTextChange(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onDeselect(); } }} className="flex-1 bg-gray-50 border-2 border-gray-100 p-3 text-lg font-bold rounded-xl outline-none focus:border-blue-400 focus:bg-white text-center shadow-inner placeholder:font-normal" placeholder="例: 軒先 5.5m (空欄も可)" />
-            <button type="button" onClick={(e) => { e.stopPropagation(); onDeselect(); }} className="px-4 py-3 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black rounded-xl shadow transition-all whitespace-nowrap">✓ 完了</button>
+            <input ref={inputRef} type="text" value={line.text} onChange={(e) => onTextChange(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onDeselect(); } }} className="flex-1 bg-gray-50 border-2 border-gray-100 p-2 lg:p-3 text-base lg:text-lg font-bold rounded-xl outline-none focus:border-blue-400 focus:bg-white text-center shadow-inner placeholder:font-normal" placeholder="例: 軒先 5.5m" />
+            <button type="button" onClick={(e) => { e.stopPropagation(); onDeselect(); }} className="px-3 lg:px-4 py-2 lg:py-3 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black rounded-xl shadow transition-all whitespace-nowrap">✓ 完了</button>
           </div>
         </div>
       )}
@@ -264,16 +267,16 @@ const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, 
       {isSelected && (
         <>
           <div
-            className="absolute z-40 w-12 h-12 -ml-6 -mt-6 bg-blue-500/30 border-4 border-blue-500 rounded-full cursor-move touch-none backdrop-blur-sm"
-            style={{ left: `${localStart.x}%`, top: `${localStart.y}%` }}
+            className="absolute z-40 bg-blue-500/30 border-2 border-blue-500 rounded-full cursor-move touch-none backdrop-blur-sm"
+            style={{ left: `${localStart.x}%`, top: `${localStart.y}%`, width: `${handleRadius * 2}px`, height: `${handleRadius * 2}px`, marginLeft: `-${handleRadius}px`, marginTop: `-${handleRadius}px` }}
             onPointerDown={(e) => startDrag(e, 'start')}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
           />
           <div
-            className="absolute z-40 w-12 h-12 -ml-6 -mt-6 bg-blue-500/30 border-4 border-blue-500 rounded-full cursor-move touch-none backdrop-blur-sm"
-            style={{ left: `${localEnd.x}%`, top: `${localEnd.y}%` }}
+            className="absolute z-40 bg-blue-500/30 border-2 border-blue-500 rounded-full cursor-move touch-none backdrop-blur-sm"
+            style={{ left: `${localEnd.x}%`, top: `${localEnd.y}%`, width: `${handleRadius * 2}px`, height: `${handleRadius * 2}px`, marginLeft: `-${handleRadius}px`, marginTop: `-${handleRadius}px` }}
             onPointerDown={(e) => startDrag(e, 'end')}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
@@ -291,7 +294,7 @@ const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, 
             backgroundColor: 'rgba(0, 0, 0, 0.5)',
             backdropFilter: 'blur(2px)',
             fontSize: `${14 + (thickness - 2) * 4}px`,
-            transform: `translate(-50%, -50%) rotate(${line.textRotation ?? 0}deg)`
+            transform: `translate(-50%, -50%) rotate(${line.textRotation ?? 0}deg) scale(${1 / currentScale})`
           }}
           className={`absolute font-bold px-2 py-0.5 rounded pointer-events-none whitespace-nowrap border border-white/20 shadow-sm ${isSelected ? 'z-40' : 'z-20'}`}
         >
@@ -302,9 +305,10 @@ const DimensionLineMarker = React.memo(({ line, rotation, isSelected, onSelect, 
   );
 });
 
-const MapMarker = React.memo(({ pin, rotation, isSelected, onDragEnd, onClick }: { pin: MapPinT; rotation: number; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; }) => {
+const MapMarker = React.memo(({ pin, rotation, currentScale, isSelected, onDragEnd, onClick }: { pin: MapPinT; rotation: number; currentScale: number; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; }) => {
   const { position, onPointerDown, onPointerMove, onPointerUp, dragging, containerRef, handleClick } = useRotatedDraggable(pin.x, pin.y, rotation, onDragEnd);
-  const currentSize = pin.size || 1; 
+  // ★ 修正：ズームしていても、ピンの見た目上の大きさが一定になるように調整
+  const visualScale = (pin.size || 1) / currentScale; 
 
   return (
     <>
@@ -315,7 +319,7 @@ const MapMarker = React.memo(({ pin, rotation, isSelected, onDragEnd, onClick }:
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onClick={(e) => handleClick(e, onClick)}
-        style={{ left: `${position.x}%`, top: `${position.y}%`, transform: `translate(-50%, -50%) scale(${currentSize})`, touchAction: 'none', zIndex: isSelected ? 100 : (dragging ? 30 : 10) }}
+        style={{ left: `${position.x}%`, top: `${position.y}%`, transform: `translate(-50%, -50%) scale(${visualScale})`, touchAction: 'none', zIndex: isSelected ? 100 : (dragging ? 30 : 10) }}
         className={`absolute flex items-center justify-center cursor-pointer transition-all duration-75 ${dragging ? 'opacity-80' : ''} ${isSelected && !dragging ? 'ring-4 ring-red-500 ring-offset-2 ring-offset-white/50 rounded-full' : ''}`}
       >
         <div style={{ transform: `rotate(${pin.textRotation ?? 0}deg)` }}>
@@ -326,7 +330,6 @@ const MapMarker = React.memo(({ pin, rotation, isSelected, onDragEnd, onClick }:
           )}
         </div>
       </div>
-
     </>
   );
 });
@@ -871,11 +874,11 @@ export default function MapPage() {
                       )}
 
                       {currentWhiteoutBoxes.map(box => (
-                        <WhiteoutMarker key={box.id} box={box} rotation={currentRotation} isSelected={selectedWhiteoutId === box.id} onDragEnd={(x, y) => updateWhiteout(box.id, { x, y })} onClick={() => {if(editingMode !== 'pan') setSelectedWhiteoutId(box.id)}} onSizeChange={(updates) => updateWhiteout(box.id, updates)} onRemove={() => removeWhiteout(box.id)} />
+                        <WhiteoutMarker key={box.id} box={box} rotation={currentRotation} currentScale={currentTransform.scale} isSelected={selectedWhiteoutId === box.id} onDragEnd={(x, y) => updateWhiteout(box.id, { x, y })} onClick={() => {if(editingMode !== 'pan') setSelectedWhiteoutId(box.id)}} onSizeChange={(updates) => updateWhiteout(box.id, updates)} onRemove={() => removeWhiteout(box.id)} />
                       ))}
                       
                       {currentMapDimensionLines.map((line) => (
-                        <DimensionLineMarker key={line.id} line={line} rotation={currentRotation} isSelected={selectedDimensionLineId === line.id} onSelect={() => {if(editingMode !== 'pan') setSelectedDimensionLineId(line.id)}} onRemove={() => removeDimensionLine(line.id)} onTextChange={(text) => updateDimensionLine(line.id, {text})} onUpdate={(newProps) => updateDimensionLine(line.id, newProps)} onDeselect={() => setSelectedDimensionLineId(null)} />
+                        <DimensionLineMarker key={line.id} line={line} rotation={currentRotation} currentScale={currentTransform.scale} isSelected={selectedDimensionLineId === line.id} onSelect={() => {if(editingMode !== 'pan') setSelectedDimensionLineId(line.id)}} onRemove={() => removeDimensionLine(line.id)} onTextChange={(text) => updateDimensionLine(line.id, {text})} onUpdate={(newProps) => updateDimensionLine(line.id, newProps)} onDeselect={() => setSelectedDimensionLineId(null)} />
                       ))}
 
                       {drawingStartPoint && editingMode === 'dimension' && (
@@ -883,7 +886,7 @@ export default function MapPage() {
                       )}
 
                       {currentMapPins.map(pin => (
-                        <MapMarker key={pin.id} pin={pin} rotation={currentRotation} isSelected={selectedPinId === pin.id} onDragEnd={(x, y) => updateMapMarker(pin.id, { x, y })} onClick={() => {if(editingMode !== 'pan') setSelectedPinId(pin.id)}} />
+                        <MapMarker key={pin.id} pin={pin} rotation={currentRotation} currentScale={currentTransform.scale} isSelected={selectedPinId === pin.id} onDragEnd={(x, y) => updateMapMarker(pin.id, { x, y })} onClick={() => {if(editingMode !== 'pan') setSelectedPinId(pin.id)}} />
                       ))}
                     </div>
                   </div>
