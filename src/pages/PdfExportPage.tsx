@@ -452,9 +452,23 @@ export default function PdfExportPage() {
                 {layout.title}{mapCount > 1 ? ` (${mapIndex + 1}/${mapCount})` : ''}
               </div>
 
-              {(project.whiteoutBoxes ?? []).filter((b: WhiteoutBox) => b.mapIndex === mapIndex).map((box: WhiteoutBox) => (
-                <div key={box.id} style={{ position: 'absolute', left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%`, transform: 'translate(-50%, -50%)', zIndex: 30, backgroundColor: 'white', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} />
-              ))}
+              {/* 白塗りボックス: SVG rect で描画することでブラウザPDF出力時も確実に白く消える */}
+              {(project.whiteoutBoxes ?? []).filter((b: WhiteoutBox) => b.mapIndex === mapIndex).length > 0 && (
+                <svg
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible', zIndex: 30, pointerEvents: 'none' }}
+                >
+                  {(project.whiteoutBoxes ?? []).filter((b: WhiteoutBox) => b.mapIndex === mapIndex).map((box: WhiteoutBox) => (
+                    <rect
+                      key={box.id}
+                      x={`${box.x - box.width / 2}%`}
+                      y={`${box.y - box.height / 2}%`}
+                      width={`${box.width}%`}
+                      height={`${box.height}%`}
+                      fill="white"
+                    />
+                  ))}
+                </svg>
+              )}
               {(project.mapPins ?? []).filter(p => p.mapIndex === mapIndex).map(pin => {
                 const visualScale = (pin.size ?? 1) / transform.scale;
                 return (

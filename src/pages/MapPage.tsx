@@ -213,16 +213,21 @@ const WhiteoutMarker = React.memo(({ box, rotation, currentScale, isSelected, on
         width: `${box.width}%`, height: `${box.height}%`,
         transform: 'translate(-50%,-50%)',
         touchAction: 'none',
-        // 常に最前面 — 他のオーバーレイ（ピン・線・寸法線）より上に白を敷く
         zIndex: 30,
-        backgroundColor: 'white',
         cursor: isSelected ? 'move' : 'pointer',
         boxSizing: 'border-box',
-        // 選択中のみ内側に破線枠（コンテナ外にはみ出さない）
+        // 選択中のみ内側に破線枠
         outline: isSelected ? `${borderW}px dashed #6b7280` : 'none',
         outlineOffset: `-${borderW}px`,
+        // SVG背景で確実に白塗り（printColorAdjustに依存しない）
+        background: 'none',
       }}
-    />
+    >
+      {/* SVG rect で白塗り — div の background はブラウザ印刷で消えることがある */}
+      <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }} preserveAspectRatio="none">
+        <rect x="0" y="0" width="100%" height="100%" fill="white" />
+      </svg>
+    </div>
   );
 });
 
@@ -907,52 +912,47 @@ export default function MapPage() {
   const aspectNum = showLegendTable ? 194 / 120 : 175 / 255;
 
   /**
-   * セーフゾーン計算（CSS % 座標空間）
-   * 以下2つの交差領域 = 実際に PDF に印刷される範囲
-   *  A) object-contain レターボックスを除いた画像領域
-   *  B) ズーム・パンによって overflow:hidden でクリップされない領域
+   * セーフゾーン計算（コンテナ座標系 = transform の外側）
+   *
+   * セーフゾーン枠はコンテナ div（transform外）に absolute で置くため、
+   * コンテナ % 座標で「PDF に実際に印刷される矩形」を求める。
+   *
+   * transform: translate(tx%, ty%) scale(s) rotate(r)
+   * コンテナ中心 = (50%, 50%)
+   *
+   * transform 後、コンテナ内で見える範囲の逆算:
+   *   コンテナ座標 P が transform 内のオーバーレイ % Q にマップされる関係:
+   *   P_x = 50 + s*(Q_x - 50) + tx   (rotate=0 のとき)
+   *
+   * ここでは rotate を無視し（セーフゾーンは矩形近似）、
+   * overflow:hidden でクリップされる外周 → コンテナ座標 0〜100% をそのまま使う。
+   * つまり「コンテナ全体 = セーフゾーン」。ズームしても overflow:hidden が保証するため。
+   *
+   * ただし object-contain のレターボックス（画像の外の余白）は印刷されても白になるだけで
+   * 実害はないが、セーフゾーン表示の精度向上のため除外する。
+   * → 画像のコンテナ内表示位置を計算して枠とする。
    */
   const safeZoneBounds = useMemo(() => {
     const containerAspect = showLegendTable ? 194 / 120 : 175 / 255;
     const imageAspect = mapImageAspects[currentMapIndex];
-    const s = currentTransform.scale;
-    const tx = currentTransform.x; // % of container width
-    const ty = currentTransform.y; // % of container height
 
-    // A) 画像が占める CSS % 範囲（レターボックス除外）
-    let imgMinX = 0, imgMaxX = 100, imgMinY = 0, imgMaxY = 100;
+    // object-contain でのレターボックス計算（コンテナ % 座標）
+    let left = 0, top = 0, width = 100, height = 100;
     if (imageAspect) {
       if (imageAspect > containerAspect) {
-        // 横長画像 → 上下に余白
-        const vPad = (1 - containerAspect / imageAspect) / 2 * 100;
-        imgMinY = vPad; imgMaxY = 100 - vPad;
-      } else if (imageAspect < containerAspect) {
-        // 縦長画像 → 左右に余白
-        const hPad = (1 - imageAspect / containerAspect) / 2 * 100;
-        imgMinX = hPad; imgMaxX = 100 - hPad;
+        // 横長画像 → 上下余白
+        height = (containerAspect / imageAspect) * 100;
+        top    = (100 - height) / 2;
+        left   = 0; width = 100;
+      } else {
+        // 縦長画像 → 左右余白
+        width = (imageAspect / containerAspect) * 100;
+        left  = (100 - width) / 2;
+        top   = 0; height = 100;
       }
     }
-
-    // B) transform scale+translate でクリップされず見える CSS % 範囲
-    //    vx% = 50 + s*(cx-50) + tx  →  可視条件 0≤vx%≤100 を解くと:
-    const visMinX = Math.max(0, 50 - (50 + tx) / s);
-    const visMaxX = Math.min(100, 50 + (50 - tx) / s);
-    const visMinY = Math.max(0, 50 - (50 + ty) / s);
-    const visMaxY = Math.min(100, 50 + (50 - ty) / s);
-
-    // A ∩ B
-    const left = Math.max(imgMinX, visMinX);
-    const top  = Math.max(imgMinY, visMinY);
-    const right  = Math.min(imgMaxX, visMaxX);
-    const bottom = Math.min(imgMaxY, visMaxY);
-
-    return {
-      left:   Math.max(0, left),
-      top:    Math.max(0, top),
-      width:  Math.max(0, right - left),
-      height: Math.max(0, bottom - top),
-    };
-  }, [showLegendTable, mapImageAspects, currentMapIndex, currentTransform]);
+    return { left, top, width, height };
+  }, [showLegendTable, mapImageAspects, currentMapIndex]);
 
   const mapCount = project?.mapUrls?.length || 0;
 
