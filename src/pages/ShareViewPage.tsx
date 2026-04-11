@@ -92,6 +92,7 @@ export default function ShareViewPage() {
           const t = project.mapTransforms?.[mapIndex] ?? { scale: 1, x: 0, y: 0 };
           // Use same aspect ratio as MapPage so overlay % coordinates align correctly
           const containerAspect = (project.showLegendTable !== false) ? '194/120' : '175/255';
+          const containerAspectNum = (project.showLegendTable !== false) ? 194 / 120 : 175 / 255;
           return (
           <div key={`map-${mapIndex}`} className="bg-white rounded-2xl shadow-sm overflow-hidden">
             <div className="px-5 py-3 border-b border-gray-100">
@@ -100,8 +101,8 @@ export default function ShareViewPage() {
               </h2>
             </div>
             <div className="bg-gray-50 overflow-hidden flex items-center justify-center" style={{ maxHeight: '70vh' }}>
-              {/* aspectRatio container — height-constrained same as MapPage so overlay % coords align */}
-              <div className="relative overflow-hidden" style={{ aspectRatio: containerAspect, height: '100%', maxHeight: '70vh' }}>
+              {/* aspectRatio container — same sizing strategy as MapPage: width-first with maxHeight/maxWidth cap */}
+              <div className="relative overflow-hidden" style={{ aspectRatio: containerAspect, width: '100%', maxWidth: `calc(70vh * ${containerAspectNum})`, maxHeight: '70vh' }}>
                 {/* Inner wrapper: mapTransforms (zoom/pan) + rotation */}
                 <div
                   className="absolute inset-0 flex items-center justify-center"

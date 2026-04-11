@@ -556,11 +556,12 @@ export default function PdfExportPage() {
                 <div className="w-full h-full flex flex-col border-[3px] border-gray-800 print:border-black p-6 print:p-2">
                   
                   {/* aspectRatio must match MapPage legend container (194/120) exactly.
-                      Use w-full h-full on the outer box and let the inner keep the ratio via
-                      max-width constrained by height, same pattern as MapPage outer container. */}
+                      width:100% fills the flex-1 area; height is derived from aspect-ratio.
+                      Do NOT use height:100% here — landscape 194/120 would overflow the flex-row
+                      parent width, and browsers differ in how they resolve that conflict. */}
                   <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-gray-50 print:bg-white p-2 border border-gray-400 print:border-gray-500">
                     {u ? (
-                      <div style={{ position: 'relative', aspectRatio: '194/120', height: '100%', overflow: 'hidden' }}>
+                      <div style={{ position: 'relative', aspectRatio: '194/120', width: '100%', overflow: 'hidden' }}>
                         <div style={{ position: 'absolute', inset: 0, transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center' }}>
                           <img
                             src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)}
