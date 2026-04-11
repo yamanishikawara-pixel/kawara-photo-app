@@ -579,7 +579,7 @@ export default function MapPage() {
   const cleanRotations = (arr: number[]) =>
     Array.from({ length: arr.length }, (_, i) => arr[i] ?? 0);
 
-  const saveProjectMapData = useCallback(async (newPins: MapPinT[], newRows: MapRow[], newDimLines: DimensionLine[], newWhiteouts: WhiteoutBox[], newTableShow: boolean, newTransforms: { scale: number; x: number; y: number }[], newLayouts: { title: string; x?: number; y?: number; rotation?: number }[]) => {
+  const saveProjectMapData = useCallback(async (newPins: MapPinT[], newRows: MapRow[], newDimLines: DimensionLine[], newWhiteouts: WhiteoutBox[], newTableShow: boolean, newTransforms: { scale: number; x: number; y: number }[], newLayouts: { title: string; x?: number; y?: number; rotation?: number }[], newRotations?: number[]) => {
     if (!id) return;
     setIsSaving(true);
     try {
@@ -591,6 +591,7 @@ export default function MapPage() {
         showLegendTable: newTableShow,
         mapTransforms: cleanTransforms(newTransforms),
         mapLayouts: cleanLayouts(newLayouts),
+        ...(newRotations !== undefined ? { mapRotations: cleanRotations(newRotations) } : {}),
       });
     } catch { setSaveError('保存に失敗しました。再度お試しください。'); } finally { setIsSaving(false); }
   }, [id]);
@@ -686,12 +687,11 @@ export default function MapPage() {
     if (!id) return;
     const newRotations = [...mapRotations];
     newRotations[currentMapIndex] = ((newRotations[currentMapIndex] ?? 0) + delta + 360) % 360;
-    const safe = cleanRotations(newRotations); // スパース配列(undefined)をFirestoreに送らない
+    const safe = cleanRotations(newRotations);
     setMapRotations(safe);
-    try {
-      await updateDoc(doc(db, 'projects', id), { mapRotations: safe });
-    } catch { setSaveError('回転の保存に失敗しました。再度お試しください。'); }
-  }, [id, mapRotations, currentMapIndex]);
+    // mapRotations を他のマップデータと一緒に保存して確実に反映させる
+    await saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts, safe);
+  }, [id, mapRotations, currentMapIndex, mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts, saveProjectMapData]);
 
   const deleteMapPhoto = useCallback(async (mapIndex: number) => {
     if (!project || !id) return;
