@@ -515,6 +515,7 @@ export default function MapPage() {
   const [mapImageAspects, setMapImageAspects] = useState<Record<number, number>>({});
   
   const [selectedPinId, setSelectedPinId] = useState<number | null>(null);
+  const [editingPinLabel, setEditingPinLabel] = useState<string>('');
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
   const [selectedDimensionLineId, setSelectedDimensionLineId] = useState<number | null>(null);
   const [selectedWhiteoutId, setSelectedWhiteoutId] = useState<number | null>(null);
@@ -807,7 +808,16 @@ export default function MapPage() {
         const { localX: x, localY: y } = pendingActionInfo;
 
         if (editingMode === 'pin') {
-          const newLabel = String(mapPins.filter(p => p.type === 'circle').length + 1);
+          // 現在のマップの欠番を埋める採番（削除後の番号が再利用される）
+          const existingNums = new Set(
+            mapPins
+              .filter(p => (p.mapIndex || 0) === currentMapIndex && p.type === 'circle')
+              .map(p => parseInt(p.label))
+              .filter(n => !isNaN(n) && n > 0)
+          );
+          let nextNum = 1;
+          while (existingNums.has(nextNum)) nextNum++;
+          const newLabel = String(nextNum);
           const newPins: MapPinT[] = [...mapPins, { id: Date.now(), x, y, label: newLabel, type: 'circle', size: 1, rotation: 0, mapIndex: currentMapIndex, textRotation: -(mapRotations[currentMapIndex] || 0) }];
           setMapPins(newPins);
           const newRows: MapRow[] = [...mapRows, { id: Date.now(), symbol: newLabel, part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }];
@@ -851,21 +861,34 @@ export default function MapPage() {
   }, [mapPins, mapRows, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts, saveProjectMapData]);
 
   const updateMapMarker = useCallback((pinId: number, newProps: Partial<MapPinT>) => {
-    setMapPins(prev => {
-      const newPins = prev.map(p => p.id === pinId ? { ...p, ...newProps } : p);
-      saveProjectMapData(newPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts);
-      return newPins;
-    });
-  }, [mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts, saveProjectMapData]);
+    const pin = mapPins.find(p => p.id === pinId);
+    const newPins = mapPins.map(p => p.id === pinId ? { ...p, ...newProps } : p);
+    setMapPins(newPins);
+    // ラベル変更時は対応するmapRowのsymbolも同期
+    let currentRows = mapRows;
+    if (newProps.label !== undefined && pin && newProps.label !== pin.label) {
+      currentRows = mapRows.map(r =>
+        r.symbol === pin.label && (r.mapIndex || 0) === (pin.mapIndex || 0)
+          ? { ...r, symbol: newProps.label! }
+          : r
+      );
+      setMapRows(currentRows);
+    }
+    saveProjectMapData(newPins, currentRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts);
+  }, [mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts, saveProjectMapData]);
 
   const removeMapMarker = useCallback((pinId: number) => {
-    setMapPins(prev => {
-      const newPins = prev.filter(p => p.id !== pinId);
-      saveProjectMapData(newPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts);
-      return newPins;
-    });
+    const pin = mapPins.find(p => p.id === pinId);
+    const newPins = mapPins.filter(p => p.id !== pinId);
+    // ピン削除時に対応するmapRowも削除
+    const newRows = pin
+      ? mapRows.filter(r => !(r.symbol === pin.label && (r.mapIndex || 0) === (pin.mapIndex || 0)))
+      : mapRows;
+    setMapPins(newPins);
+    setMapRows(newRows);
+    saveProjectMapData(newPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts);
     setSelectedPinId(null);
-  }, [mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts, saveProjectMapData]);
+  }, [mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts, saveProjectMapData]);
 
   const updateWhiteout = useCallback((boxId: number, newProps: Partial<WhiteoutBox>) => {
     setWhiteoutBoxes(prev => {
@@ -955,6 +978,14 @@ export default function MapPage() {
   }, [showLegendTable, mapImageAspects, currentMapIndex]);
 
   const mapCount = project?.mapUrls?.length || 0;
+
+  // ピン選択時にラベル編集用ローカル状態を同期
+  React.useEffect(() => {
+    if (selectedPinId !== null) {
+      const pin = mapPins.find(p => p.id === selectedPinId);
+      if (pin) setEditingPinLabel(pin.label);
+    }
+  }, [selectedPinId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={error} />;
@@ -1234,15 +1265,41 @@ export default function MapPage() {
               if (!pin) return null;
               const currentSize = pin.size || 1;
               return (
-                <div className="mt-4 flex items-center justify-center gap-3 p-3 bg-gray-50 border-2 border-red-100 rounded-2xl animate-fade-in-up">
-                  <span className="text-sm font-bold text-gray-500">ピンサイズ</span>
-                  <button type="button" onClick={() => updateMapMarker(selectedPinId, { size: Math.max(0.3, Math.round((currentSize - 0.1) * 10) / 10) })} className="w-10 h-10 flex items-center justify-center text-xl font-bold bg-white border-2 border-gray-200 rounded-xl hover:bg-gray-100 active:scale-95 shadow-sm">ー</button>
-                  <span className="w-12 text-center font-black text-gray-700">{currentSize.toFixed(1)}x</span>
-                  <button type="button" onClick={() => updateMapMarker(selectedPinId, { size: Math.min(3, Math.round((currentSize + 0.1) * 10) / 10) })} className="w-10 h-10 flex items-center justify-center text-xl font-bold bg-white border-2 border-gray-200 rounded-xl hover:bg-gray-100 active:scale-95 shadow-sm">＋</button>
-                  <div className="w-px h-8 bg-gray-200 mx-1" />
-                  <button type="button" onClick={() => { removeMapMarker(selectedPinId); setSelectedPinId(null); }} className="flex items-center gap-1.5 px-4 py-2 bg-red-50 border-2 border-red-200 text-red-600 font-bold rounded-xl hover:bg-red-100 active:scale-95 text-sm">
-                    <Trash2 className="w-4 h-4" /> 削除
-                  </button>
+                <div className="mt-4 flex flex-col gap-3 p-3 bg-gray-50 border-2 border-red-100 rounded-2xl animate-fade-in-up">
+                  {/* 名称編集 */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-gray-500 shrink-0">名称</span>
+                    <input
+                      type="text"
+                      value={editingPinLabel}
+                      onChange={e => setEditingPinLabel(e.target.value)}
+                      onBlur={() => {
+                        const trimmed = editingPinLabel.trim();
+                        if (trimmed && trimmed !== pin.label) {
+                          updateMapMarker(selectedPinId, { label: trimmed });
+                        } else {
+                          setEditingPinLabel(pin.label);
+                        }
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                        if (e.key === 'Escape') { setEditingPinLabel(pin.label); (e.target as HTMLInputElement).blur(); }
+                      }}
+                      className="flex-1 px-3 py-1.5 border-2 border-gray-200 rounded-xl text-base font-bold focus:border-red-400 focus:outline-none bg-white"
+                      maxLength={20}
+                    />
+                  </div>
+                  {/* サイズ・削除 */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-gray-500">サイズ</span>
+                    <button type="button" onClick={() => updateMapMarker(selectedPinId, { size: Math.max(0.3, Math.round((currentSize - 0.1) * 10) / 10) })} className="w-10 h-10 flex items-center justify-center text-xl font-bold bg-white border-2 border-gray-200 rounded-xl hover:bg-gray-100 active:scale-95 shadow-sm">ー</button>
+                    <span className="w-12 text-center font-black text-gray-700">{currentSize.toFixed(1)}x</span>
+                    <button type="button" onClick={() => updateMapMarker(selectedPinId, { size: Math.min(3, Math.round((currentSize + 0.1) * 10) / 10) })} className="w-10 h-10 flex items-center justify-center text-xl font-bold bg-white border-2 border-gray-200 rounded-xl hover:bg-gray-100 active:scale-95 shadow-sm">＋</button>
+                    <div className="flex-1" />
+                    <button type="button" onClick={() => { removeMapMarker(selectedPinId); setSelectedPinId(null); }} className="flex items-center gap-1.5 px-4 py-2 bg-red-50 border-2 border-red-200 text-red-600 font-bold rounded-xl hover:bg-red-100 active:scale-95 text-sm">
+                      <Trash2 className="w-4 h-4" /> 削除
+                    </button>
+                  </div>
                 </div>
               );
             })()}
