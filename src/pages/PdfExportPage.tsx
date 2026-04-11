@@ -204,7 +204,7 @@ export default function PdfExportPage() {
     const savedStyles: Array<{ page: HTMLElement; wrapper: HTMLElement | null; pageStyle: string; wrapperStyle: string }> = [];
 
     try {
-      const html2canvas = (await import('html2canvas')).default;
+      const html2canvas = (await import('html2canvas-pro')).default;
       const { jsPDF } = await import('jspdf');
 
       const pages = Array.from(document.querySelectorAll('.pdf-page')) as HTMLElement[];

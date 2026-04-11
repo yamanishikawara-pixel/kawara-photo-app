@@ -17,6 +17,7 @@
     "firebase": "^12.10.0",
     "heic2any": "^0.0.4",
     "html2canvas": "^1.4.1",
+    "html2canvas-pro": "^2.0.2",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.1",
     "lucide-react": "^0.577.0",
