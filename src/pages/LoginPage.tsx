@@ -28,8 +28,14 @@ export default function LoginPage() {
       navigate('/'); // 成功したら現場一覧へGO！
    } catch (err: any) {
       console.error(err);
-      // ★ Firebaseの本当の怒り声（エラーメッセージ）をそのまま表示するように変更
-      setError(`エラー: ${err.message}`);
+      const code: string = err.code || '';
+      if (code === 'auth/invalid-email') setError('メールアドレスの形式が正しくありません。');
+      else if (code === 'auth/user-not-found' || code === 'auth/invalid-credential') setError('メールアドレスまたはパスワードが違います。');
+      else if (code === 'auth/wrong-password') setError('パスワードが間違っています。');
+      else if (code === 'auth/email-already-in-use') setError('このメールアドレスはすでに登録されています。');
+      else if (code === 'auth/weak-password') setError('パスワードは6文字以上で設定してください。');
+      else if (code === 'auth/too-many-requests') setError('ログイン試行が多すぎます。しばらく待ってから再試行してください。');
+      else setError('ログインに失敗しました。もう一度お試しください。');
     } finally {
       setLoading(false);
     }
@@ -98,6 +104,8 @@ export default function LoginPage() {
             onClick={() => {
               setIsLogin(!isLogin);
               setError('');
+              setEmail('');
+              setPassword('');
             }}
             className="text-sm font-bold text-gray-500 hover:text-blue-600 transition-colors"
           >

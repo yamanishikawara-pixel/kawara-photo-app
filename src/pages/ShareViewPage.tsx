@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from '../firebase';
 import type { Circle, MapLine, MapRow, Photo, Project } from '../types';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
@@ -17,7 +18,12 @@ export default function ShareViewPage() {
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
   const [status, setStatus] = useState<'loading' | 'ok' | 'invalid'>('loading');
-  const isOwner = !!auth.currentUser;
+  const [isOwner, setIsOwner] = useState(false);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => setIsOwner(!!user));
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     if (!id || !token) { setStatus('invalid'); return; }

@@ -93,6 +93,7 @@ export default function PdfExportPage() {
       if (activePhotos.length === 0) {
         setError('ダウンロードする写真がありません。'); setIsZipping(false); return;
       }
+      let failedCount = 0;
       const promises = activePhotos.map(async (p) => {
         if (!p.image) return;
         try {
@@ -101,9 +102,10 @@ export default function PdfExportPage() {
           const processName = p.process ? `_${p.process}` : '';
           const filename = `${p.photoNumber.padStart(2, '0')}${processName}.jpg`;
           imgFolder.file(filename, blob);
-        } catch { /* ignore */ }
+        } catch { failedCount++; }
       });
       await Promise.all(promises);
+      if (failedCount > 0) setError(`${failedCount}枚の写真の取得に失敗しました。他の写真はZIPに含まれています。`);
       const content = await zip.generateAsync({ type: 'blob' });
       saveAs(content, `${folderName}.zip`);
     } catch { setError('Zipファイルの作成に失敗しました。'); } finally { setIsZipping(false); }

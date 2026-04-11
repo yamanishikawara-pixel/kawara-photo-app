@@ -121,12 +121,20 @@ export default function MaterialPage() {
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   const [masters, setMasters] = useState<MaterialMaster[]>([]);
   const [uid, setUid] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
-    getDoc(doc(db, 'projects', id))
-      .then((d) => { if (d.exists()) setProject(d.data() as Project); })
-      .catch(() => { alert('材料データの読み込みに失敗しました。'); });
+    setError(null);
+    const fetchProject = async () => {
+      try {
+        const d = await getDoc(doc(db, 'projects', id));
+        if (d.exists()) setProject(d.data() as Project);
+      } catch {
+        setError('材料データの読み込みに失敗しました。');
+      }
+    };
+    fetchProject();
 
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) return;
@@ -194,17 +202,18 @@ export default function MaterialPage() {
   // 現在の材料カードをマスタに追加
   const saveToMaster = async (material: Material) => {
     if (!uid) { alert('マスタに保存するにはログインが必要です。'); return; }
-    if (!material.name.trim()) { alert('品名を入力してください。'); return; }
+    const trimmedName = material.name.trim();
+    if (!trimmedName) { alert('品名を入力してください。'); return; }
 
     // 同じ品名があれば上書き確認
-    const existing = masters.find((m) => m.name === material.name.trim());
+    const existing = masters.find((m) => m.name === trimmedName);
     if (existing) {
       if (!window.confirm(`「${material.name}」はすでにマスタにあります。上書きしますか？`)) return;
     }
 
     const newEntry: MaterialMaster = {
       id: existing?.id ?? Date.now(),
-      name: material.name.trim(),
+      name: trimmedName,
       manufacturer: material.manufacturer,
       specification: material.specification,
       remarks: material.remarks,
@@ -248,6 +257,12 @@ export default function MaterialPage() {
         <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg">
           <ArrowLeft className="w-6 h-6" /> もどる
         </button>
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm font-bold flex justify-between items-center">
+            {error}
+            <button type="button" onClick={() => setError(null)} className="ml-2 text-red-400 hover:text-red-600">✕</button>
+          </div>
+        )}
 
         <div className="flex justify-between items-end mb-6">
           <h1 className="text-3xl font-bold text-gray-900">材料の登録</h1>

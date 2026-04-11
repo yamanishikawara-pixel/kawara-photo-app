@@ -497,6 +497,7 @@ export default function PhotoPage() {
 
   const duplicatePhotoSlot = async (index: number) => {
     if (!project || !id) return;
+    if (index < 0 || index >= project.photos.length) return;
     const source = project.photos[index];
     const newPhoto: Photo = {
       id: Date.now(),
@@ -550,7 +551,7 @@ export default function PhotoPage() {
         await uploadBytes(r, compressedFile);
         const url = await getDownloadURL(r);
         
-        newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: todayStr, circles: [], dimensionLines: [] };
+        newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: newPhotos[targetIndex].shootingDate || todayStr };
         setProject((prev) => prev ? { ...prev, photos: [...newPhotos] } : null);
         await updateDoc(doc(db, "projects", id), { photos: newPhotos });
       } catch (error) {
@@ -568,6 +569,7 @@ export default function PhotoPage() {
     if (!project || !id) return;
     const f = e.target.files?.[0];
     if (!f) return;
+    if (index < 0 || index >= project.photos.length) return;
     const photoId = project.photos[index].id;
     setLoadingId(photoId);
     
@@ -577,7 +579,7 @@ export default function PhotoPage() {
       await uploadBytes(r, compressedFile);
       const url = await getDownloadURL(r);
       
-      const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, image: url, shootingDate: p.shootingDate || getTodayStr(), circles: [], dimensionLines: [] } : p);
+      const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, image: url, shootingDate: p.shootingDate || getTodayStr() } : p);
       setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
       await updateDoc(doc(db, "projects", id), { photos: newPhotos });
     } catch { 
@@ -590,7 +592,8 @@ export default function PhotoPage() {
   const handlePhotoClick = async (e: MouseEvent<HTMLDivElement>, photoId: number) => {
     if (!project || !id) return;
     const photo = project.photos.find((p) => p.id === photoId);
-    const rotation = Number(photo?.rotation || 0);
+    if (!photo) return;
+    const rotation = Number(photo.rotation || 0);
     const rect = e.currentTarget.getBoundingClientRect();
     const { x, y } = getLocalPointFromRect(e.clientX, e.clientY, rect, rotation);
 
@@ -620,14 +623,14 @@ export default function PhotoPage() {
 
   const updateCircle = async (photoId: number, circleId: number, newProps: Partial<Circle>) => {
     if (!project || !id) return;
-    const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: p.circles.map((c) => c.id === circleId ? { ...c, ...newProps } : c) } : p);
+    const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: (p.circles ?? []).map((c) => c.id === circleId ? { ...c, ...newProps } : c) } : p);
     setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
     await updateDoc(doc(db, "projects", id), { photos: newPhotos });
   };
 
   const removeCircle = async (photoId: number, circleId: number) => {
     if (!project || !id) return;
-    const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: p.circles.filter((c) => c.id !== circleId) } : p);
+    const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: (p.circles ?? []).filter((c) => c.id !== circleId) } : p);
     setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
     await updateDoc(doc(db, "projects", id), { photos: newPhotos });
     setSelectedCircleId(null);

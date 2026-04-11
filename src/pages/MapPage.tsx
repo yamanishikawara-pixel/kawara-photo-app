@@ -543,9 +543,12 @@ export default function MapPage() {
 
   useEffect(() => {
     if (!id) return;
+    setError(null);
+    const abortController = new AbortController();
     const fetchData = async () => {
       try {
         const d = await getDoc(doc(db, 'projects', id));
+        if (abortController.signal.aborted) return;
         if (d.exists()) {
           const data = d.data() as Project;
           setProject(data);
@@ -558,9 +561,14 @@ export default function MapPage() {
           setMapTransforms(data.mapTransforms || []);
           setMapLayouts(data.mapLayouts || []);
         } else { setError('プロジェクトが見つかりません。'); }
-      } catch { setError('データの読み込みに失敗しました。'); } finally { setLoading(false); }
+      } catch {
+        if (!abortController.signal.aborted) setError('データの読み込みに失敗しました。');
+      } finally {
+        if (!abortController.signal.aborted) setLoading(false);
+      }
     };
     fetchData();
+    return () => abortController.abort();
   }, [id]);
 
   // Firestore は undefined / スパース配列を直列化できないため、ホールをデフォルト値で埋める

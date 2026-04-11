@@ -128,18 +128,8 @@ export interface Project {
   showLegendTable?: boolean;
   mapRotations?: number[];
   mapTransforms?: { scale: number; x: number; y: number }[];
+  mapLayouts?: { title: string; x?: number; y?: number; rotation?: number }[];
   shareToken?: string;
   whiteoutBoxes?: WhiteoutBox[];
   isCompleted?: boolean;
-}
-export interface Project {
-  // ... (既存のコード) ...
-  mapRotations?: number[];
-  mapTransforms?: { scale: number; x: number; y: number }[];
-  
-  // ▼ ここを書き換えます（x, y, rotationを追加）
-  mapLayouts?: { title: string; x?: number; y?: number; rotation?: number }[];
-  
-  whiteoutBoxes?: WhiteoutBox[];
-  // ...
 }

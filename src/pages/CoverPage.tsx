@@ -27,11 +27,12 @@ export function CoverPage() {
 
   const update = async (field: keyof Project, value: string) => {
     if (!project || !id) return;
-    const updated: Project = { ...project, [field]: value };
-    setProject(updated);
+    const previous = project;
+    setProject({ ...project, [field]: value });
     try {
       await updateDoc(doc(db, 'projects', id), { [field]: value });
     } catch {
+      setProject(previous);
       setError('保存に失敗しました。');
     }
   };
