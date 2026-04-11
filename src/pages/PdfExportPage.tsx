@@ -20,14 +20,6 @@ function safeStyleLine(val: string | number | undefined | null, defaultUnit: str
   return String(val);
 }
 
-const LINE_TYPES = [
-  { label: '流れ壁', color: '#3b82f6' },
-  { label: '平行壁', color: '#eab308' },
-  { label: '棟', color: '#22c55e' },
-  { label: '軒先', color: '#f97316' },
-  { label: '袖', color: '#ec4899' },
-  { label: 'その他', color: '#ef4444' },
-];
 
 const COVER_FIELDS: { label: string; key: keyof Project }[] = [
   { label: '工事件名', key: 'projectName' },
@@ -46,18 +38,6 @@ function createEmptyMaterial(): Material {
   return { id: -(++_emptyIdCounter), image: null, name: '', manufacturer: '', specification: '', remarks: '', rotation: 0 };
 }
 
-function PdfLineLegend() {
-  return (
-    <div className="flex gap-x-4 gap-y-1 flex-wrap text-xs font-medium rounded-lg p-2 shadow-sm border border-gray-300 bg-white print:border-gray-800">
-      {LINE_TYPES.map((type) => (
-        <div key={type.label} className="flex items-center gap-1.5">
-          <div style={{ backgroundColor: type.color }} className="w-6 h-[2px] rounded-full print:border print:border-black print:h-[3px]" />
-          <span className="text-gray-700 print:text-black">{type.label}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export default function PdfExportPage() {
   const { id } = useParams();
@@ -576,7 +556,7 @@ export default function PdfExportPage() {
                     ) : <span className="font-bold text-gray-400">位置図未登録</span>}
                   </div>
                   <div className="mt-4 shrink-0">
-                    <div className="flex justify-between items-end mb-2"><div className="text-base font-bold">項目欄</div><PdfLineLegend /></div>
+                    <div className="flex justify-between items-end mb-2"><div className="text-base font-bold">項目欄</div></div>
                     <div className="border-2 border-gray-800 print:border-black">
                       <div className="grid grid-cols-12 text-base font-bold border-b-2 border-gray-800 bg-gray-100 print:bg-gray-50 print:border-black">
                         <div className="col-span-1 py-2 text-center flex justify-center items-center border-r-2 border-gray-800 print:border-black">符号</div><div className="col-span-2 py-2 text-center flex justify-center items-center border-r-2 border-gray-800 print:border-black">部位</div><div className="col-span-2 py-2 text-center flex justify-center items-center border-r-2 border-gray-800 print:border-black">写真NO</div><div className="col-span-7 py-2 text-center flex justify-center items-center">備考</div>
