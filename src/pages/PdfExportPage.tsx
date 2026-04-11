@@ -198,12 +198,53 @@ export default function PdfExportPage() {
     if (!project) return;
     setIsCapturingForPdf(true);
     setPdfProgress('準備中...');
-    await new Promise((r) => setTimeout(r, 300));
+    // React の再レンダリングを待つ
+    await new Promise((r) => setTimeout(r, 400));
+
+    const savedStyles: Array<{ page: HTMLElement; wrapper: HTMLElement | null; pageStyle: string; wrapperStyle: string }> = [];
+
     try {
       const html2canvas = (await import('html2canvas')).default;
       const { jsPDF } = await import('jspdf');
+
       const pages = Array.from(document.querySelectorAll('.pdf-page')) as HTMLElement[];
+      if (pages.length === 0) throw new Error('ページが見つかりません');
+
+      // ── フェーズ1: 全ページのスタイルをキャプチャ用に書き換え ──
+      for (const page of pages) {
+        const wrapper = page.parentElement;
+        savedStyles.push({
+          page,
+          wrapper,
+          pageStyle: page.getAttribute('style') || '',
+          wrapperStyle: wrapper?.getAttribute('style') || '',
+        });
+        // ページ本体: 画面外に固定配置、トランスフォームなし
+        page.style.cssText = [
+          `position: fixed`,
+          `top: -${A4_HEIGHT_PX + 100}px`,
+          `left: 0`,
+          `width: ${A4_WIDTH_PX}px`,
+          `height: ${A4_HEIGHT_PX}px`,
+          `transform: none`,
+          `transform-origin: top left`,
+          `overflow: hidden`,
+          `background: white`,
+          `z-index: 9999`,
+        ].join(';');
+        // 親ラッパーのクリッピングを外す
+        if (wrapper) {
+          wrapper.style.overflow = 'visible';
+        }
+      }
+
+      // DOM 反映を待つ
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      await new Promise((r) => setTimeout(r, 100));
+
+      // ── フェーズ2: 1ページずつキャプチャ ──
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
       for (let i = 0; i < pages.length; i++) {
         setPdfProgress(`ページ ${i + 1} / ${pages.length} を処理中...`);
         const canvas = await html2canvas(pages[i], {
@@ -211,20 +252,29 @@ export default function PdfExportPage() {
           useCORS: true,
           allowTaint: false,
           backgroundColor: '#ffffff',
-          onclone: (_, el) => {
-            el.style.transform = 'none';
-            el.style.width = `${A4_WIDTH_PX}px`;
-            el.style.height = `${A4_HEIGHT_PX}px`;
-          },
+          width: A4_WIDTH_PX,
+          height: A4_HEIGHT_PX,
+          x: 0,
+          y: 0,
+          scrollX: 0,
+          scrollY: 0,
+          windowWidth: A4_WIDTH_PX,
+          windowHeight: A4_HEIGHT_PX,
         });
         if (i > 0) pdf.addPage();
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
       }
+
       pdf.save(`${project.projectName || '工事写真報告書'}.pdf`);
     } catch (err) {
       console.error(err);
       setError('PDFの生成に失敗しました。');
     } finally {
+      // ── フェーズ3: スタイルを必ず復元 ──
+      for (const { page, wrapper, pageStyle, wrapperStyle } of savedStyles) {
+        page.setAttribute('style', pageStyle);
+        if (wrapper) wrapper.setAttribute('style', wrapperStyle);
+      }
       setIsCapturingForPdf(false);
       setPdfProgress('');
     }
