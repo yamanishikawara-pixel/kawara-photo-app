@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Download, Printer, RotateCw, Share2 } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { ArrowLeft, Download, Printer } from 'lucide-react';
+import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -51,8 +50,6 @@ export default function PdfExportPage() {
   const [isPrinting, setIsPrinting] = useState(false);
   const [printProgress, setPrintProgress] = useState('');
   
-  const [rotateMap, setRotateMap] = useState(false);
-
   useEffect(() => {
     if (!id) return;
     setError(null);
@@ -145,34 +142,6 @@ export default function PdfExportPage() {
   };
 
   const yieldToUI = () => new Promise<void>((r) => setTimeout(r, 0));
-
-  const getShareUrl = async (): Promise<string | null> => {
-    if (!project || !id) return null;
-    let token = project.shareToken;
-    if (!token) {
-      token = crypto.randomUUID();
-      await updateDoc(doc(db, 'projects', id), { shareToken: token });
-      setProject({ ...project, shareToken: token });
-    }
-    return `${window.location.origin}/share/${id}/${token}`;
-  };
-
-  const handleLineShare = async () => {
-    const url = await getShareUrl();
-    if (!url) return;
-    window.open(`https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(url)}`, '_blank', 'noopener');
-  };
-
-  const handleCopyUrl = async () => {
-    const url = await getShareUrl();
-    if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
-      alert('URLをコピーしました。\nメールやSMSに貼り付けて送付してください。');
-    } catch {
-      alert(`共有URL:\n${url}`);
-    }
-  };
 
   const handlePrint = () => {
     if (!project) return;
@@ -343,14 +312,6 @@ export default function PdfExportPage() {
       <div className={`w-full max-w-2xl mb-6 flex justify-between items-center flex-wrap gap-2 no-print ${isPrinting ? 'hidden' : ''}`}>
         <button type="button" onClick={() => navigate(`/project/${id}`)} className="text-blue-500 font-bold flex items-center gap-2 text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
         <div className="flex gap-2 sm:gap-4 flex-wrap justify-end">
-          {!showLegendTable && mapCount > 0 && (
-             <button type="button" onClick={() => setRotateMap(!rotateMap)} className={`flex items-center gap-2 px-4 py-3 sm:py-4 rounded-xl font-bold shadow-lg transition-all ${rotateMap ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 border-2 border-indigo-600'}`}>
-               <RotateCw className={`w-5 h-5 transition-transform duration-300 ${rotateMap ? 'rotate-90' : ''}`} /> 
-               {rotateMap ? '図面を縦に戻す' : '図面を90°回転して最大化'}
-             </button>
-          )}
-          <button type="button" onClick={handleLineShare} disabled={isZipping || isPrinting} className="flex items-center gap-2 bg-[#06C755] text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-[#05b34c] disabled:opacity-50"><Share2 className="w-5 h-5" />LINEで送る</button>
-          <button type="button" onClick={handleCopyUrl} disabled={isZipping || isPrinting} className="flex items-center gap-2 bg-gray-500 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-gray-600 disabled:opacity-50"><Share2 className="w-4 h-4" />URL共有</button>
           <button type="button" onClick={handleZipExport} disabled={isZipping || isPrinting} className="flex items-center gap-2 bg-green-600 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-green-700 disabled:opacity-50"><Download className="w-5 h-5" />写真のみ(Zip)</button>
           <button type="button" onClick={handlePrint} disabled={isZipping || isPrinting} className="flex items-center gap-2 bg-black text-white px-5 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-gray-800 disabled:opacity-50"><Printer className="w-5 h-5" /> {isPrinting ? (printProgress || '画像処理中...') : 'PDF作成・印刷'}</button>
         </div>
@@ -392,12 +353,6 @@ export default function PdfExportPage() {
                 {phone && <div className="text-[14px] font-bold text-gray-800">TEL: {phone}</div>}
               </div>
             )}
-            {project.shareToken && (
-              <div className="absolute bottom-[18mm] print:bottom-[12mm] left-0 right-0 flex flex-col items-center gap-1">
-                <QRCodeSVG value={`${window.location.origin}/share/${id}/${project.shareToken}`} size={60} level="M" />
-                <span className="text-[9px] text-gray-500">スマホで閲覧</span>
-              </div>
-            )}
             <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-[16px] font-bold text-black">- 1 / {totalPages} -</div>
           </div>
         </div>
@@ -405,8 +360,7 @@ export default function PdfExportPage() {
         {/* ② 位置図ページ */}
         {mapUrlsToRender.map((u, mapIndex) => {
           const userRotation = project.mapRotations?.[mapIndex] ?? 0;
-          const printRotation = (!showLegendTable && rotateMap) ? 90 : 0;
-          const totalRotation = (userRotation + printRotation) % 360;
+          const totalRotation = userRotation % 360;
           
           const transform = project.mapTransforms?.[mapIndex] || { scale: 1, x: 0, y: 0 };
           const layout = project.mapLayouts?.[mapIndex] || { title: '位置図', x: 15, y: 10, rotation: 0 };
