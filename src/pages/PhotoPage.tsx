@@ -7,6 +7,7 @@ import { db, storage, auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import imageCompression from 'browser-image-compression';
 import { proxyUrl, useDraggablePin } from '../shared/utils';
+import { canUpload, trackUpload } from '../shared/storageUtils';
 import type { Circle, MapPin as MapPinT, Photo, Project, DimensionLine, PhotoMaster } from '../types';
 import type { ChangeEvent, MouseEvent } from 'react';
 
@@ -398,6 +399,7 @@ export default function PhotoPage() {
   const [descTemplates, setDescTemplates] = useState<{label: string, text: string}[]>(DEFAULT_DESC_TEMPLATES);
   const [photoMasters, setPhotoMasters] = useState<PhotoMaster[]>([]);
   const [uid, setUid] = useState<string | null>(null);
+  const [storageUsedBytes, setStorageUsedBytes] = useState(0);
 
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<number[]>([]);
@@ -415,6 +417,7 @@ export default function PhotoPage() {
           if (data.customProcesses && data.customProcesses.length > 0) setProcessOptions(data.customProcesses);
           if (data.customDescTemplates && data.customDescTemplates.length > 0) setDescTemplates(data.customDescTemplates);
           if (Array.isArray(data.photoMaster)) setPhotoMasters(data.photoMaster);
+          if (typeof data.storageUsedBytes === 'number') setStorageUsedBytes(data.storageUsedBytes);
         }
       }
     });
@@ -547,10 +550,17 @@ export default function PhotoPage() {
       
       try {
         const compressedFile = await compressPhotoWithQuality(files[i]);
+        if (!canUpload(storageUsedBytes, compressedFile.size)) {
+          alert('ストレージ容量が上限（500MB）に達しています。不要な写真を削除してください。');
+          break;
+        }
         const r = ref(storage, `photos/${id}/${Date.now()}_bulk_${i}.jpg`);
         await uploadBytes(r, compressedFile);
         const url = await getDownloadURL(r);
-        
+        if (uid) {
+          await trackUpload(uid, compressedFile.size);
+          setStorageUsedBytes((prev) => prev + compressedFile.size);
+        }
         newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: newPhotos[targetIndex].shootingDate || todayStr };
         setProject((prev) => prev ? { ...prev, photos: [...newPhotos] } : null);
         await updateDoc(doc(db, "projects", id), { photos: newPhotos });
@@ -575,17 +585,24 @@ export default function PhotoPage() {
     
     try {
       const compressedFile = await compressPhotoWithQuality(f);
-      const r = ref(storage, `photos/${id}/${Date.now()}.jpg`); 
+      if (!canUpload(storageUsedBytes, compressedFile.size)) {
+        alert('ストレージ容量が上限（500MB）に達しています。不要な写真を削除してください。');
+        return;
+      }
+      const r = ref(storage, `photos/${id}/${Date.now()}.jpg`);
       await uploadBytes(r, compressedFile);
       const url = await getDownloadURL(r);
-      
+      if (uid) {
+        await trackUpload(uid, compressedFile.size);
+        setStorageUsedBytes((prev) => prev + compressedFile.size);
+      }
       const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, image: url, shootingDate: p.shootingDate || getTodayStr() } : p);
       setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
       await updateDoc(doc(db, "projects", id), { photos: newPhotos });
-    } catch { 
-      alert('アップロードに失敗しました。電波の良いところでお試しください。'); 
-    } finally { 
-      setLoadingId(null); 
+    } catch {
+      alert('アップロードに失敗しました。電波の良いところでお試しください。');
+    } finally {
+      setLoadingId(null);
     }
   };
 

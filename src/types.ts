@@ -100,6 +100,7 @@ export interface UserSettings {
   customDescTemplates?: Array<{ label: string; text: string }>;
   materialMaster?: MaterialMaster[];
   photoMaster?: PhotoMaster[];
+  storageUsedBytes?: number;
 }
 
 export interface WhiteoutBox {

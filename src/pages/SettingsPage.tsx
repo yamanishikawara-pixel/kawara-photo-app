@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Plus, Trash2, Settings, Image as ImageIcon, X, Package, Camera } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, Settings, Image as ImageIcon, X, Package, Camera, HardDrive } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, auth, storage } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
+import { formatBytes, storageUsageRatio, STORAGE_LIMIT_BYTES } from '../shared/storageUtils';
 import type { MaterialMaster, PhotoMaster } from '../types';
 
 let _idCounter = 0;
@@ -42,6 +43,7 @@ export default function SettingsPage() {
   const [templates, setTemplates] = useState<{label: string, text: string}[]>(DEFAULT_TEMPLATES);
   const [materialMaster, setMaterialMaster] = useState<MaterialMaster[]>([]);
   const [photoMaster, setPhotoMaster] = useState<PhotoMaster[]>([]);
+  const [storageUsedBytes, setStorageUsedBytes] = useState(0);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -58,6 +60,7 @@ export default function SettingsPage() {
           if (data.customDescTemplates && data.customDescTemplates.length > 0) setTemplates(data.customDescTemplates);
           if (Array.isArray(data.materialMaster)) setMaterialMaster(data.materialMaster);
           if (Array.isArray(data.photoMaster)) setPhotoMaster(data.photoMaster);
+          if (typeof data.storageUsedBytes === 'number') setStorageUsedBytes(data.storageUsedBytes);
         }
       }
       setLoading(false);
@@ -126,7 +129,27 @@ export default function SettingsPage() {
         </h1>
 
         <div className="space-y-8">
-          
+
+          {/* ストレージ使用量 */}
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <HardDrive className="w-5 h-5 text-gray-600" /> ストレージ使用量
+            </h2>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm font-bold text-gray-600">
+                <span>{formatBytes(storageUsedBytes)} 使用中</span>
+                <span>上限 {formatBytes(STORAGE_LIMIT_BYTES)}</span>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+                <div
+                  className={`h-3 rounded-full transition-all ${storageUsageRatio(storageUsedBytes) > 0.9 ? 'bg-red-500' : storageUsageRatio(storageUsedBytes) > 0.7 ? 'bg-yellow-400' : 'bg-blue-500'}`}
+                  style={{ width: `${storageUsageRatio(storageUsedBytes) * 100}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-400">写真・位置図・材料画像などすべての画像データの合計です。</p>
+            </div>
+          </div>
+
           {/* 会社情報 */}
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 space-y-5">
             <h2 className="text-xl font-bold text-gray-800 border-b pb-2 mb-4">自社情報（PDF表紙用）</h2>

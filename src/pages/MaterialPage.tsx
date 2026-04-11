@@ -7,6 +7,7 @@ import { db, storage, auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { proxyUrl } from '../shared/utils';
+import { canUpload, trackUpload } from '../shared/storageUtils';
 import type { Material, MaterialMaster, Project } from '../types';
 
 // 品名コンボボックス：▼で全件表示、入力で部分一致絞り込み
@@ -121,6 +122,7 @@ export default function MaterialPage() {
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   const [masters, setMasters] = useState<MaterialMaster[]>([]);
   const [uid, setUid] = useState<string | null>(null);
+  const [storageUsedBytes, setStorageUsedBytes] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -143,6 +145,7 @@ export default function MaterialPage() {
       if (s.exists()) {
         const data = s.data();
         if (Array.isArray(data.materialMaster)) setMasters(data.materialMaster);
+        if (typeof data.storageUsedBytes === 'number') setStorageUsedBytes(data.storageUsedBytes);
       }
     });
     return () => unsub();
@@ -232,9 +235,17 @@ export default function MaterialPage() {
     const file = e.target.files[0];
     setUploadingId(materialId);
     try {
+      if (!canUpload(storageUsedBytes, file.size)) {
+        alert('ストレージ容量が上限（500MB）に達しています。不要な画像を削除してください。');
+        return;
+      }
       const storageRef = ref(storage, `materials/${id}/${Date.now()}_${file.name}`);
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
+      if (uid) {
+        await trackUpload(uid, file.size);
+        setStorageUsedBytes((prev) => prev + file.size);
+      }
       updateMaterial(materialId, 'image', url);
     } catch {
       alert('画像のアップロードに失敗しました。');

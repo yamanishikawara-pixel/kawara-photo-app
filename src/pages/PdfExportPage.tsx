@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Download, Printer } from 'lucide-react';
+import { ArrowLeft, Download, Printer, FileDown } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import JSZip from 'jszip';
@@ -49,6 +49,8 @@ export default function PdfExportPage() {
   const [sessionId] = useState(() => Date.now().toString());
   const [isPrinting, setIsPrinting] = useState(false);
   const [printProgress, setPrintProgress] = useState('');
+  const [isCapturingForPdf, setIsCapturingForPdf] = useState(false);
+  const [pdfProgress, setPdfProgress] = useState('');
   
   useEffect(() => {
     if (!id) return;
@@ -192,6 +194,42 @@ export default function PdfExportPage() {
     }, 500);
   };
 
+  const handlePdfDownload = async () => {
+    if (!project) return;
+    setIsCapturingForPdf(true);
+    setPdfProgress('準備中...');
+    await new Promise((r) => setTimeout(r, 300));
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const { jsPDF } = await import('jspdf');
+      const pages = Array.from(document.querySelectorAll('.pdf-page')) as HTMLElement[];
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      for (let i = 0; i < pages.length; i++) {
+        setPdfProgress(`ページ ${i + 1} / ${pages.length} を処理中...`);
+        const canvas = await html2canvas(pages[i], {
+          scale: 2,
+          useCORS: true,
+          allowTaint: false,
+          backgroundColor: '#ffffff',
+          onclone: (_, el) => {
+            el.style.transform = 'none';
+            el.style.width = `${A4_WIDTH_PX}px`;
+            el.style.height = `${A4_HEIGHT_PX}px`;
+          },
+        });
+        if (i > 0) pdf.addPage();
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
+      }
+      pdf.save(`${project.projectName || '工事写真報告書'}.pdf`);
+    } catch (err) {
+      console.error(err);
+      setError('PDFの生成に失敗しました。');
+    } finally {
+      setIsCapturingForPdf(false);
+      setPdfProgress('');
+    }
+  };
+
   if (!project) return <LoadingSpinner />;
 
   const logoUrl = userSettings?.logoUrl;
@@ -314,8 +352,9 @@ export default function PdfExportPage() {
       <div className={`w-full max-w-2xl mb-6 flex justify-between items-center flex-wrap gap-2 no-print ${isPrinting ? 'hidden' : ''}`}>
         <button type="button" onClick={() => navigate(`/project/${id}`)} className="text-blue-500 font-bold flex items-center gap-2 text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
         <div className="flex gap-2 sm:gap-4 flex-wrap justify-end">
-          <button type="button" onClick={handleZipExport} disabled={isZipping || isPrinting} className="flex items-center gap-2 bg-green-600 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-green-700 disabled:opacity-50"><Download className="w-5 h-5" />写真のみ(Zip)</button>
-          <button type="button" onClick={handlePrint} disabled={isZipping || isPrinting} className="flex items-center gap-2 bg-black text-white px-5 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-gray-800 disabled:opacity-50"><Printer className="w-5 h-5" /> {isPrinting ? (printProgress || '画像処理中...') : 'PDF作成・印刷'}</button>
+          <button type="button" onClick={handleZipExport} disabled={isZipping || isPrinting || isCapturingForPdf} className="flex items-center gap-2 bg-green-600 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-green-700 disabled:opacity-50"><Download className="w-5 h-5" />写真のみ(Zip)</button>
+          <button type="button" onClick={handlePdfDownload} disabled={isZipping || isPrinting || isCapturingForPdf} className="flex items-center gap-2 bg-blue-600 text-white px-5 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-blue-700 disabled:opacity-50"><FileDown className="w-5 h-5" /> {isCapturingForPdf ? (pdfProgress || '処理中...') : 'PDFダウンロード'}</button>
+          <button type="button" onClick={handlePrint} disabled={isZipping || isPrinting || isCapturingForPdf} className="flex items-center gap-2 bg-black text-white px-5 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-gray-800 disabled:opacity-50"><Printer className="w-5 h-5" /> {isPrinting ? (printProgress || '画像処理中...') : 'PDF作成・印刷'}</button>
         </div>
       </div>
 

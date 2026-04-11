@@ -3,9 +3,11 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, MapPin, CaseUpper, FileText, LayoutGrid, Ruler, Paintbrush, Save, UploadCloud, RotateCcw, RotateCw, Eraser, Move } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { db, storage } from '../firebase';
+import { db, storage, auth } from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import type { MapPin as MapPinT, MapRow, Project, DimensionLine, WhiteoutBox } from '../types';
 import { proxyUrl } from '../shared/utils';
+import { canUpload, trackUpload } from '../shared/storageUtils';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 
@@ -529,6 +531,8 @@ export default function MapPage() {
   const replaceInputRef = useRef<HTMLInputElement>(null);
   const [currentMapIndex, setCurrentMapIndex] = useState(0);
 
+  const [uid, setUid] = useState<string | null>(null);
+  const [storageUsedBytes, setStorageUsedBytes] = useState(0);
   const [editingMode, setEditingMode] = useState<'pin' | 'dimension' | 'whiteout' | 'pan'>('pan');
   const [drawingStartPoint, setDrawingStartPoint] = useState<{ x: number; y: number } | null>(null);
   const [activeColor, setActiveColor] = useState<string>(COLOR_PALETTE[0].value); 
@@ -568,7 +572,16 @@ export default function MapPage() {
       }
     };
     fetchData();
-    return () => abortController.abort();
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) return;
+      setUid(user.uid);
+      const s = await getDoc(doc(db, 'users', user.uid));
+      if (s.exists()) {
+        const data = s.data();
+        if (typeof data.storageUsedBytes === 'number') setStorageUsedBytes(data.storageUsedBytes);
+      }
+    });
+    return () => { abortController.abort(); unsub(); };
   }, [id]);
 
   // Firestore は undefined / スパース配列を直列化できないため、ホールをデフォルト値で埋める
@@ -658,9 +671,17 @@ export default function MapPage() {
       for (let i = 0; i < imageFiles.length; i++) {
         setUploadProgress(`アップロード中... (${i + 1}/${imageFiles.length})`);
         const f = imageFiles[i];
+        if (!canUpload(storageUsedBytes, f.size)) {
+          setError('ストレージ容量が上限（500MB）に達しています。不要な図面を削除してください。');
+          break;
+        }
         const storageRef = ref(storage, `maps/${id}/${Date.now()}_${f.name}`);
         await uploadBytes(storageRef, f);
         const url = await getDownloadURL(storageRef);
+        if (uid) {
+          await trackUpload(uid, f.size);
+          setStorageUsedBytes((prev) => prev + f.size);
+        }
         if (mode === 'replace' && i === 0) {
           newMapUrls[insertAt] = url;
         } else {
