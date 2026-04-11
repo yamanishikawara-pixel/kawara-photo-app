@@ -522,6 +522,7 @@ export default function MapPage() {
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
   const addInputRef = useRef<HTMLInputElement>(null);
@@ -562,6 +563,14 @@ export default function MapPage() {
     fetchData();
   }, [id]);
 
+  // Firestore は undefined / スパース配列を直列化できないため、ホールをデフォルト値で埋める
+  const cleanTransforms = (arr: { scale: number; x: number; y: number }[]) =>
+    Array.from({ length: arr.length }, (_, i) => arr[i] ?? { scale: 1, x: 0, y: 0 });
+  const cleanLayouts = (arr: { title: string; x?: number; y?: number; rotation?: number }[]) =>
+    Array.from({ length: arr.length }, (_, i) => arr[i] ?? { title: '位置図', x: 15, y: 10, rotation: 0 });
+  const cleanRotations = (arr: number[]) =>
+    Array.from({ length: arr.length }, (_, i) => arr[i] ?? 0);
+
   const saveProjectMapData = useCallback(async (newPins: MapPinT[], newRows: MapRow[], newDimLines: DimensionLine[], newWhiteouts: WhiteoutBox[], newTableShow: boolean, newTransforms: { scale: number; x: number; y: number }[], newLayouts: { title: string; x?: number; y?: number; rotation?: number }[]) => {
     if (!id) return;
     setIsSaving(true);
@@ -572,10 +581,10 @@ export default function MapPage() {
         mapDimensionLines: newDimLines,
         whiteoutBoxes: newWhiteouts,
         showLegendTable: newTableShow,
-        mapTransforms: newTransforms,
-        mapLayouts: newLayouts,
+        mapTransforms: cleanTransforms(newTransforms),
+        mapLayouts: cleanLayouts(newLayouts),
       });
-    } catch { setError('保存に失敗しました。'); } finally { setIsSaving(false); }
+    } catch { setSaveError('保存に失敗しました。再度お試しください。'); } finally { setIsSaving(false); }
   }, [id]);
 
   const updateMapLayout = (updates: Partial<{ title: string; x?: number; y?: number; rotation?: number }>) => {
@@ -668,11 +677,12 @@ export default function MapPage() {
   const rotateCurrentMap = useCallback(async (delta: number) => {
     if (!id) return;
     const newRotations = [...mapRotations];
-    newRotations[currentMapIndex] = ((newRotations[currentMapIndex] || 0) + delta + 360) % 360;
-    setMapRotations(newRotations);
+    newRotations[currentMapIndex] = ((newRotations[currentMapIndex] ?? 0) + delta + 360) % 360;
+    const safe = cleanRotations(newRotations); // スパース配列(undefined)をFirestoreに送らない
+    setMapRotations(safe);
     try {
-      await updateDoc(doc(db, 'projects', id), { mapRotations: newRotations });
-    } catch { setError('保存に失敗しました。'); }
+      await updateDoc(doc(db, 'projects', id), { mapRotations: safe });
+    } catch { setSaveError('回転の保存に失敗しました。再度お試しください。'); }
   }, [id, mapRotations, currentMapIndex]);
 
   const deleteMapPhoto = useCallback(async (mapIndex: number) => {
@@ -992,7 +1002,15 @@ export default function MapPage() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] p-4 lg:p-6 font-sans pb-40 select-none overflow-x-hidden">
-      
+
+      {/* 保存エラートースト（ページ全体を置き換えない軽量通知） */}
+      {saveError && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[500] flex items-center gap-3 bg-red-600 text-white px-5 py-3 rounded-2xl shadow-2xl font-bold text-sm">
+          <span>⚠️ {saveError}</span>
+          <button onClick={() => setSaveError(null)} className="ml-2 text-white/80 hover:text-white font-black text-lg leading-none">×</button>
+        </div>
+      )}
+
       {editingTitle && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/20 backdrop-blur-sm" onPointerDown={() => setEditingTitle(false)}>
           <div className="bg-white p-6 rounded-3xl shadow-2xl border-2 border-gray-200 flex flex-col gap-5 w-[90%] max-w-sm" onPointerDown={e => e.stopPropagation()}>
