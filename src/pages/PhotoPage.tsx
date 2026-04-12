@@ -755,8 +755,8 @@ export default function PhotoPage() {
               <div key={photo.id} className="bg-white p-4 sm:p-8 rounded-[2rem] sm:rounded-[3rem] border-2 border-gray-100 shadow-xl relative animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {/* 一括削除モード時のチェックボックス */}
                 {isSelectMode && (
-                  <div 
-                    onClick={() => toggleSelectPhoto(photo.id)} 
+                  <div
+                    onClick={() => toggleSelectPhoto(photo.id)}
                     className={`absolute inset-0 z-50 rounded-[2rem] sm:rounded-[3rem] border-4 sm:border-8 cursor-pointer transition-all flex items-center justify-center bg-black/5 ${selectedPhotoIds.includes(photo.id) ? 'border-red-500 bg-red-500/10' : 'border-transparent hover:bg-black/10'}`}
                   >
                     <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-full border-4 flex items-center justify-center ${selectedPhotoIds.includes(photo.id) ? 'bg-red-500 border-red-500 text-white' : 'bg-white border-gray-300'}`}>
@@ -765,39 +765,37 @@ export default function PhotoPage() {
                   </div>
                 )}
 
-                {/* 順番入れ替えボタン（右上に配置） */}
-                <div className="absolute top-4 right-4 sm:top-8 sm:right-8 flex gap-2 sm:gap-4 z-10">
-                  <button onClick={() => movePhoto(index, 'up')} className="bg-white/90 backdrop-blur p-2 sm:p-4 rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 text-gray-700 hover:bg-gray-50 active:scale-90 transition-all"><ArrowUp className="w-5 h-5 sm:w-7 sm:h-7" /></button>
-                  <button onClick={() => movePhoto(index, 'down')} className="bg-white/90 backdrop-blur p-2 sm:p-4 rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 text-gray-700 hover:bg-gray-50 active:scale-90 transition-all"><ArrowDown className="w-5 h-5 sm:w-7 sm:h-7" /></button>
+                {/* ── ヘッダー行：番号 ＋ 順番入れ替えボタン ── */}
+                <div className="flex justify-between items-center mb-3 sm:mb-4">
+                  <div className="font-black text-gray-900 text-xl sm:text-3xl flex items-center gap-2 sm:gap-4">
+                    <span className="bg-gray-900 text-white w-8 h-8 sm:w-12 sm:h-12 flex items-center justify-center rounded-lg sm:rounded-2xl text-sm sm:text-xl">{index + 1}</span> 写真
+                  </div>
+                  <div className="flex gap-2 sm:gap-3">
+                    <button onClick={() => movePhoto(index, 'up')} className="p-2 sm:p-3 bg-gray-100 rounded-xl sm:rounded-2xl border border-gray-200 text-gray-600 hover:bg-gray-200 active:scale-90 transition-all" title="上へ"><ArrowUp className="w-4 h-4 sm:w-6 sm:h-6" /></button>
+                    <button onClick={() => movePhoto(index, 'down')} className="p-2 sm:p-3 bg-gray-100 rounded-xl sm:rounded-2xl border border-gray-200 text-gray-600 hover:bg-gray-200 active:scale-90 transition-all" title="下へ"><ArrowDown className="w-4 h-4 sm:w-6 sm:h-6" /></button>
+                  </div>
                 </div>
 
-                {/* ★ 魔法の2カラムレイアウト：スマホは flex-col(縦)、PCは lg:flex-row(横) */}
-                <div className="flex flex-col lg:flex-row gap-6 sm:gap-8 pt-12 sm:pt-4">
-                  
-                  {/* 左カラム：写真と操作ボタン */}
-                  <div className="w-full lg:w-[55%] flex flex-col gap-4 sm:gap-6">
-                    <div className="flex justify-between items-center pb-4 border-b-2 sm:border-b-4 border-gray-50 flex-wrap gap-4">
-                      <div className="font-black text-gray-900 text-xl sm:text-3xl flex items-center gap-2 sm:gap-4">
-                        <span className="bg-gray-900 text-white w-8 h-8 sm:w-12 sm:h-12 flex items-center justify-center rounded-lg sm:rounded-2xl text-sm sm:text-xl">{index + 1}</span> 写真
-                      </div>
-                      
-                      {/* 写真に対するアクションボタン群 */}
-                      <div className="flex gap-2 sm:gap-3 flex-wrap">
-                        <button type="button" onClick={() => duplicatePhotoSlot(index)} className="p-2 sm:p-3 text-blue-600 bg-blue-50 rounded-xl sm:rounded-[1.5rem] border-2 border-blue-100 font-bold hover:bg-blue-100 active:scale-95 flex items-center gap-1 sm:gap-2 transition-colors text-xs sm:text-base"><Copy className="w-4 h-4 sm:w-6 sm:h-6"/> 複製</button>
-                        <button type="button" onClick={() => updatePhoto(photo.id, 'rotation', ((Number(photo.rotation || 0)) + 90) % 360)} className="p-2 sm:p-3 text-gray-700 bg-gray-100 rounded-xl sm:rounded-[1.5rem] border-2 border-gray-200 font-bold hover:bg-gray-200 active:scale-95 flex items-center gap-1 sm:gap-2 text-xs sm:text-base">↻ 回転</button>
-                        <button onClick={() => deletePhotoSlot(photo.id)} className="p-2 sm:p-3 text-red-500 bg-red-50 rounded-xl sm:rounded-[1.5rem] border-2 border-red-100 hover:bg-red-100 active:scale-95"><Trash2 className="w-4 h-4 sm:w-6 sm:h-6"/></button>
-                        <label className="bg-blue-100 text-blue-800 font-black py-2 px-4 sm:py-3 sm:px-6 rounded-xl sm:rounded-[1.5rem] cursor-pointer shadow-sm border-2 border-blue-200 hover:bg-blue-200 active:scale-95 text-xs sm:text-base flex items-center">
-                          {photo.image ? '変更' : '選択'} <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadPhoto(e, index)} />
-                        </label>
-                      </div>
-                    </div>
+                {/* ── アクション行：複製・回転・削除・変更 ── */}
+                <div className="flex gap-2 sm:gap-3 flex-wrap mb-4 sm:mb-6 pb-4 sm:pb-6 border-b-2 sm:border-b-4 border-gray-50">
+                  <button type="button" onClick={() => duplicatePhotoSlot(index)} className="p-2 sm:p-3 text-blue-600 bg-blue-50 rounded-xl sm:rounded-[1.5rem] border-2 border-blue-100 font-bold hover:bg-blue-100 active:scale-95 flex items-center gap-1 sm:gap-2 transition-colors text-xs sm:text-base"><Copy className="w-4 h-4 sm:w-5 sm:h-5"/> 複製</button>
+                  <button type="button" onClick={() => updatePhoto(photo.id, 'rotation', ((Number(photo.rotation || 0)) + 90) % 360)} className="p-2 sm:p-3 text-gray-700 bg-gray-100 rounded-xl sm:rounded-[1.5rem] border-2 border-gray-200 font-bold hover:bg-gray-200 active:scale-95 flex items-center gap-1 sm:gap-2 text-xs sm:text-base">↻ 回転</button>
+                  <button onClick={() => deletePhotoSlot(photo.id)} className="p-2 sm:p-3 text-red-500 bg-red-50 rounded-xl sm:rounded-[1.5rem] border-2 border-red-100 hover:bg-red-100 active:scale-95 flex items-center gap-1 sm:gap-2 text-xs sm:text-base"><Trash2 className="w-4 h-4 sm:w-5 sm:h-5"/> 削除</button>
+                  <label className="bg-blue-600 text-white font-black py-2 px-4 sm:py-3 sm:px-6 rounded-xl sm:rounded-[1.5rem] cursor-pointer shadow-sm hover:bg-blue-700 active:scale-95 text-xs sm:text-base flex items-center gap-1 sm:gap-2 ml-auto">
+                    <Camera className="w-4 h-4 sm:w-5 sm:h-5"/> {photo.image ? '写真を変更' : '写真を選択'} <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadPhoto(e, index)} />
+                  </label>
+                </div>
 
+                {/* ★ 2カラムレイアウト */}
+                <div className="flex flex-col lg:flex-row gap-6 sm:gap-8">
+
+                  {/* 左カラム：写真エリア */}
+                  <div className="w-full lg:w-[55%] flex flex-col gap-3 sm:gap-4">
                     <div className={containerClassName}>
                       {loadingId === photo.id ? (
                         <div className="flex flex-col items-center gap-4 sm:gap-6"><div className="w-10 h-10 sm:w-14 sm:h-14 border-4 sm:border-6 border-blue-500 border-t-transparent rounded-full animate-spin"></div><span className="text-lg sm:text-2xl font-black text-blue-600 tracking-widest">保存中...</span></div>
                       ) : photo.image ? (
                         <div className="relative cursor-crosshair" style={{ display: 'inline-block', lineHeight: 0, transform: `rotate(${Number(photo.rotation || 0)}deg)` }} onClick={(e) => handlePhotoClick(e, photo.id)}>
-                          {/* スマホとPCで写真の最大高さを調整 */}
                           <img src={proxyUrl(photo.image, photo.id)} crossOrigin="anonymous" className="block w-auto h-auto max-w-full max-h-[50vh] sm:max-h-[60vh] lg:max-h-[70vh] pointer-events-none rounded-xl sm:rounded-2xl shadow-xl sm:shadow-2xl object-contain" alt="" />
 
                           {(photo.circles || []).map((circle) => (
@@ -824,15 +822,23 @@ export default function PhotoPage() {
                               className="absolute w-3 h-3 sm:w-4 sm:h-4 rounded-full border-2 border-white shadow-xl pointer-events-none z-20"
                             />
                           )}
-
-                          <div className="absolute top-4 left-4 sm:top-6 sm:left-6 bg-black/70 backdrop-blur text-white text-[10px] sm:text-xs px-3 py-2 sm:px-6 sm:py-3 rounded-full font-black pointer-events-none shadow-2xl border border-white/20 z-10 flex items-center gap-1 sm:gap-2">
-                            {editingMode === 'circle' ? <><Edit2 className="w-3 h-3 sm:w-4 sm:h-4 text-red-400"/> タップで赤丸を追加</> : !drawingStartPoint ? <><Ruler className="w-3 h-3 sm:w-4 sm:h-4 text-blue-400"/> 始点をタップ</> : <><Ruler className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-400"/> 終点をタップ</>}
-                          </div>
                         </div>
                       ) : (
                         <div className="text-center text-gray-300 py-10 sm:py-16"><Camera className="w-16 h-16 sm:w-24 sm:h-24 mx-auto mb-4 sm:mb-6 opacity-20" /><span className="text-lg sm:text-2xl font-black block">画像を選択してください</span></div>
                       )}
                     </div>
+
+                    {/* モードヒント（画像の外・下に配置） */}
+                    {photo.image && (
+                      <div className={`flex items-center gap-2 sm:gap-3 px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold border-2 ${editingMode === 'circle' ? 'bg-red-50 border-red-200 text-red-700' : drawingStartPoint ? 'bg-yellow-50 border-yellow-200 text-yellow-700' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
+                        {editingMode === 'circle'
+                          ? <><span className="w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-red-500 shrink-0 inline-block" /> 赤丸モード：画像をタップして追加</>
+                          : !drawingStartPoint
+                            ? <><Ruler className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" /> 寸法記入：始点をタップしてください</>
+                            : <><Ruler className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" /> 寸法記入：終点をタップしてください</>
+                        }
+                      </div>
+                    )}
                   </div>
 
                   {/* 右カラム：入力フォーム群 */}
