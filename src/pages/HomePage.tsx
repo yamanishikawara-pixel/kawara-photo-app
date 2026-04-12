@@ -21,6 +21,7 @@ export function HomePage() {
     getDoc(doc(db, 'projects', id))
       .then((d) => {
         if (d.exists()) setProject(d.data() as Project);
+        else setError('現場データが見つかりません。');
       })
       .catch(() => setError('現場データの読み込みに失敗しました。'));
   }, [id]);

@@ -685,8 +685,8 @@ export default function MapPage() {
         if (mode === 'replace' && i === 0) {
           newMapUrls[insertAt] = url;
         } else {
-          newMapUrls.splice(insertAt + (mode === 'replace' ? 1 : 0) + (i > 0 ? i : 0), 0, url);
-          newMapLayouts.splice(insertAt + (mode === 'replace' ? 1 : 0) + (i > 0 ? i : 0), 0, { title: '位置図', x: 15, y: 10, rotation: 0 });
+          newMapUrls.splice(insertAt + i, 0, url);
+          newMapLayouts.splice(insertAt + i, 0, { title: '位置図', x: 15, y: 10, rotation: 0 });
         }
       }
 

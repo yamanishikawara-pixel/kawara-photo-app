@@ -100,6 +100,7 @@ export default function PdfExportPage() {
         if (!p.image) return;
         try {
           const response = await fetch(p.image);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const blob = await response.blob();
           const processName = p.process ? `_${p.process}` : '';
           const filename = `${p.photoNumber.padStart(2, '0')}${processName}.jpg`;
@@ -241,9 +242,9 @@ export default function PdfExportPage() {
           try {
             const dataUrl = await renderAnnotatedPhoto(
               photo.image,
-              (photo as any).circles ?? [],
-              (photo as any).dimensionLines ?? [],
-              (photo as any).rotation ?? 0,
+              photo.circles ?? [],
+              photo.dimensionLines ?? [],
+              photo.rotation ?? 0,
             );
             photoDataMap.set(photo.id, dataUrl);
           } catch { /* 画像なしのまま */ }
@@ -258,7 +259,7 @@ export default function PdfExportPage() {
       for (const mat of activeMaterials) {
         if (mat.image) {
           try {
-            const dataUrl = await renderAnnotatedPhoto(mat.image, [], [], (mat as any).rotation ?? 0);
+            const dataUrl = await renderAnnotatedPhoto(mat.image, [], [], mat.rotation ?? 0);
             materialDataMap.set(mat.id, dataUrl);
           } catch { /* スキップ */ }
         }

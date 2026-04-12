@@ -107,14 +107,18 @@ export function ProjectListPage() {
 
   const toggleCompleted = async (e: React.MouseEvent, projectId: string, current: boolean) => {
     e.stopPropagation();
-    await updateDoc(doc(db, 'projects', projectId), { isCompleted: !current });
-    setProjects((prev) => prev.map((p) => p.id === projectId ? { ...p, isCompleted: !current } : p));
+    try {
+      await updateDoc(doc(db, 'projects', projectId), { isCompleted: !current });
+      setProjects((prev) => prev.map((p) => p.id === projectId ? { ...p, isCompleted: !current } : p));
+    } catch { setError('更新に失敗しました。'); }
   };
 
   const handleLogout = async () => {
     if (window.confirm('ログアウトしますか？')) {
-      await signOut(auth);
-      navigate('/login');
+      try {
+        await signOut(auth);
+        navigate('/login');
+      } catch { setError('ログアウトに失敗しました。'); }
     }
   };
 

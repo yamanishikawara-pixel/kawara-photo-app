@@ -21,6 +21,7 @@ export function CoverPage() {
     getDoc(doc(db, 'projects', id))
       .then((d) => {
         if (d.exists()) setProject(d.data() as Project);
+        else setError('表紙データが見つかりません。');
       })
       .catch(() => setError('表紙データの読み込みに失敗しました。'));
   }, [id]);
