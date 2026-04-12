@@ -9,8 +9,8 @@ export async function renderAnnotatedPhoto(
   circles: Circle[],
   dimensionLines: DimensionLine[],
   rotation: number,
-  targetW = 480,
-  targetH = 340,
+  targetW = 1600,
+  targetH = 1200,
 ): Promise<string> {
   const img = await loadImageWithCORS(imageUrl);
 
@@ -19,8 +19,8 @@ export async function renderAnnotatedPhoto(
   const logicW = isRotated90 ? img.naturalHeight : img.naturalWidth;
   const logicH = isRotated90 ? img.naturalWidth : img.naturalHeight;
 
-  // targetW × targetH に収まるスケール
-  const scale = Math.min(targetW / logicW, targetH / logicH);
+  // 元画像が target より小さければ拡大しない（等倍以下で収める）
+  const scale = Math.min(1, targetW / logicW, targetH / logicH);
   const drawW = logicW * scale;
   const drawH = logicH * scale;
 
@@ -101,7 +101,7 @@ export async function renderAnnotatedPhoto(
   }
 
   canvas.width; // flush
-  return canvas.toDataURL('image/jpeg', 0.88);
+  return canvas.toDataURL('image/jpeg', 0.95);
 }
 
 function loadImageWithCORS(url: string): Promise<HTMLImageElement> {
