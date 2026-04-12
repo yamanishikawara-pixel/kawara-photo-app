@@ -198,83 +198,91 @@ export default function PdfExportPage() {
     if (!project) return;
     setIsCapturingForPdf(true);
     setPdfProgress('準備中...');
-    // React の再レンダリングを待つ
-    await new Promise((r) => setTimeout(r, 400));
-
-    const savedStyles: Array<{ page: HTMLElement; wrapper: HTMLElement | null; pageStyle: string; wrapperStyle: string }> = [];
 
     try {
-      const html2canvas = (await import('html2canvas-pro')).default;
-      const { jsPDF } = await import('jspdf');
+      const { renderAnnotatedPhoto } = await import('../pdf/renderAnnotatedPhoto');
+      const { PdfDocument } = await import('../pdf/PdfDocument');
+      const { pdf } = await import('@react-pdf/renderer');
 
-      const pages = Array.from(document.querySelectorAll('.pdf-page')) as HTMLElement[];
-      if (pages.length === 0) throw new Error('ページが見つかりません');
+      // ── ロゴ取得 ──
+      const fetchDataUrl = async (url: string): Promise<string | null> => {
+        try {
+          const res = await fetch(url);
+          if (!res.ok) return null;
+          const blob = await res.blob();
+          return await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch { return null; }
+      };
 
-      // ── フェーズ1: 全ページのスタイルをキャプチャ用に書き換え ──
-      for (const page of pages) {
-        const wrapper = page.parentElement;
-        savedStyles.push({
-          page,
-          wrapper,
-          pageStyle: page.getAttribute('style') || '',
-          wrapperStyle: wrapper?.getAttribute('style') || '',
-        });
-        // ページ本体: 画面外に固定配置、トランスフォームなし
-        page.style.cssText = [
-          `position: fixed`,
-          `top: -${A4_HEIGHT_PX + 100}px`,
-          `left: 0`,
-          `width: ${A4_WIDTH_PX}px`,
-          `height: ${A4_HEIGHT_PX}px`,
-          `transform: none`,
-          `transform-origin: top left`,
-          `overflow: hidden`,
-          `background: white`,
-          `z-index: 9999`,
-        ].join(';');
-        // 親ラッパーのクリッピングを外す
-        if (wrapper) {
-          wrapper.style.overflow = 'visible';
+      const fallbackLogoData = await fetchDataUrl(kawaraLogo) ?? '';
+      const logoData = userSettings?.logoUrl ? await fetchDataUrl(userSettings.logoUrl) : null;
+
+      // ── 地図画像取得 ──
+      const mapDataMap = new Map<string, string>();
+      const mapUrls = project.mapUrls?.filter(Boolean) ?? [];
+      setPdfProgress('地図画像を取得中...');
+      for (const url of mapUrls) {
+        const data = await fetchDataUrl(url);
+        if (data) mapDataMap.set(url, data);
+      }
+
+      // ── 写真レンダリング ──
+      const activePhotos = (project.photos ?? []).filter((p) => p.image || p.process || p.description);
+      const photoDataMap = new Map<number, string>();
+      let done = 0;
+      for (const photo of activePhotos) {
+        if (photo.image) {
+          setPdfProgress(`写真を処理中... (${++done}/${activePhotos.length})`);
+          try {
+            const dataUrl = await renderAnnotatedPhoto(
+              photo.image,
+              (photo as any).circles ?? [],
+              (photo as any).dimensionLines ?? [],
+              (photo as any).rotation ?? 0,
+            );
+            photoDataMap.set(photo.id, dataUrl);
+          } catch { /* 画像なしのまま */ }
         }
       }
 
-      // DOM 反映を待つ
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      await new Promise((r) => setTimeout(r, 100));
-
-      // ── フェーズ2: 1ページずつキャプチャ ──
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-      for (let i = 0; i < pages.length; i++) {
-        setPdfProgress(`ページ ${i + 1} / ${pages.length} を処理中...`);
-        const canvas = await html2canvas(pages[i], {
-          scale: 2,
-          useCORS: true,
-          allowTaint: false,
-          backgroundColor: '#ffffff',
-          width: A4_WIDTH_PX,
-          height: A4_HEIGHT_PX,
-          x: 0,
-          y: 0,
-          scrollX: 0,
-          scrollY: 0,
-          windowWidth: A4_WIDTH_PX,
-          windowHeight: A4_HEIGHT_PX,
-        });
-        if (i > 0) pdf.addPage();
-        pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
+      // ── 材料画像取得 ──
+      const activeMaterials = (project.materials ?? []).filter(
+        (m) => m.image || m.name || m.manufacturer || m.specification || m.remarks
+      );
+      const materialDataMap = new Map<number, string>();
+      for (const mat of activeMaterials) {
+        if (mat.image) {
+          try {
+            const dataUrl = await renderAnnotatedPhoto(mat.image, [], [], (mat as any).rotation ?? 0);
+            materialDataMap.set(mat.id, dataUrl);
+          } catch { /* スキップ */ }
+        }
       }
 
-      pdf.save(`${project.projectName || '工事写真報告書'}.pdf`);
+      // ── PDF生成 ──
+      setPdfProgress('PDF生成中...');
+      const blob = await pdf(
+        <PdfDocument
+          project={project}
+          userSettings={userSettings}
+          logoData={logoData}
+          fallbackLogoData={fallbackLogoData}
+          photoDataMap={photoDataMap}
+          materialDataMap={materialDataMap}
+          mapDataMap={mapDataMap}
+        />
+      ).toBlob();
+
+      saveAs(blob, `${project.projectName || '工事写真報告書'}.pdf`);
     } catch (err) {
       console.error(err);
       setError('PDFの生成に失敗しました。');
     } finally {
-      // ── フェーズ3: スタイルを必ず復元 ──
-      for (const { page, wrapper, pageStyle, wrapperStyle } of savedStyles) {
-        page.setAttribute('style', pageStyle);
-        if (wrapper) wrapper.setAttribute('style', wrapperStyle);
-      }
       setIsCapturingForPdf(false);
       setPdfProgress('');
     }
