@@ -390,10 +390,10 @@ export default function PhotoPage() {
   const [currentPhotoId, setCurrentPhotoId] = useState<number | null>(null);
   const [selectedCircleId, setSelectedCircleId] = useState<number | null>(null);
 
-  const [editingMode, setEditingMode] = useState<'circle' | 'dimension'>('circle');
+  const [cardMode, setCardMode] = useState<{ photoId: number; mode: 'circle' | 'dimension' } | null>(null);
   const [selectedDimensionLineId, setSelectedDimensionLineId] = useState<number | null>(null);
   const [drawingStartPoint, setDrawingStartPoint] = useState<{ x: number; y: number } | null>(null);
-  const [activeColor, setActiveColor] = useState<string>(COLOR_PALETTE[0].value); 
+  const [activeColor, setActiveColor] = useState<string>(COLOR_PALETTE[0].value);
 
   const [processOptions, setProcessOptions] = useState<string[]>(DEFAULT_PROCESS_OPTIONS);
   const [descTemplates, setDescTemplates] = useState<{label: string, text: string}[]>(DEFAULT_DESC_TEMPLATES);
@@ -606,22 +606,30 @@ export default function PhotoPage() {
     }
   };
 
+  const setPhotoMode = (photoId: number, mode: 'circle' | 'dimension') => {
+    setCardMode((prev) => (prev?.photoId === photoId && prev.mode === mode) ? null : { photoId, mode });
+    setDrawingStartPoint(null);
+    setSelectedCircleId(null);
+    setSelectedDimensionLineId(null);
+  };
+
   const handlePhotoClick = async (e: MouseEvent<HTMLDivElement>, photoId: number) => {
     if (!project || !id) return;
+    const mode = cardMode?.photoId === photoId ? cardMode.mode : null;
+    if (!mode) return;
     const photo = project.photos.find((p) => p.id === photoId);
     if (!photo) return;
     const rotation = Number(photo.rotation || 0);
     const rect = e.currentTarget.getBoundingClientRect();
     const { x, y } = getLocalPointFromRect(e.clientX, e.clientY, rect, rotation);
 
-    if (editingMode === 'circle') {
+    if (mode === 'circle') {
       if (selectedCircleId !== null) { setSelectedCircleId(null); return; }
       const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: [...(p.circles || []), { id: Date.now(), x, y, size: 20 }] } : p);
       setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
       await updateDoc(doc(db, "projects", id), { photos: newPhotos });
-    } else if (editingMode === 'dimension') {
+    } else if (mode === 'dimension') {
       if (selectedDimensionLineId !== null) { setSelectedDimensionLineId(null); return; }
-      
       if (!drawingStartPoint) {
         setDrawingStartPoint({ x, y });
       } else {
@@ -632,8 +640,8 @@ export default function PhotoPage() {
         } : p);
         setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
         await updateDoc(doc(db, "projects", id), { photos: newPhotos });
-        setDrawingStartPoint(null); 
-        setSelectedDimensionLineId(newLineId); 
+        setDrawingStartPoint(null);
+        setSelectedDimensionLineId(newLineId);
       }
     }
   };
@@ -688,31 +696,6 @@ export default function PhotoPage() {
               <input type="file" multiple accept="image/*" className="hidden" onChange={handleBulkUpload} disabled={bulkUploading} />
             </label>
 
-            <div className="grid grid-cols-2 gap-3 sm:gap-4 border-2 border-gray-100 rounded-2xl sm:rounded-3xl p-2 sm:p-3 bg-gray-50">
-              <button onClick={() => { setEditingMode('circle'); setDrawingStartPoint(null); }} className={`flex items-center gap-2 sm:gap-3 justify-center py-3 sm:py-5 rounded-xl sm:rounded-2xl font-black text-sm sm:text-xl transition-all ${editingMode === 'circle' ? 'bg-red-500 text-white shadow-lg' : 'text-gray-600 hover:bg-gray-100'}`}>
-                <Edit2 className="w-5 h-5 sm:w-7 sm:h-7" /> 赤丸を追加
-              </button>
-              <button onClick={() => setEditingMode('dimension')} className={`flex items-center gap-2 sm:gap-3 justify-center py-3 sm:py-5 rounded-xl sm:rounded-2xl font-black text-sm sm:text-xl transition-all ${editingMode === 'dimension' ? 'bg-gray-900 text-white shadow-lg' : 'text-gray-600 hover:bg-gray-100'}`}>
-                <Ruler className="w-5 h-5 sm:w-7 sm:h-7" /> 寸法記入
-              </button>
-            </div>
-            {editingMode === 'dimension' && (
-              <div className="flex items-center gap-3 p-3 sm:p-4 bg-gray-100 rounded-xl sm:rounded-2xl border border-gray-200">
-                 <Paintbrush className="w-5 h-5 sm:w-6 sm:h-6 text-gray-500"/>
-                 <span className="font-bold text-sm sm:text-base text-gray-600 mr-1 sm:mr-2">寸法線の色：</span>
-                {COLOR_PALETTE.map(color => (
-                  <button
-                    key={color.name}
-                    onClick={() => setActiveColor(color.value)}
-                    className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full border-4 transition-all ${activeColor === color.value ? 'border-gray-900 scale-110 shadow-lg' : 'border-white hover:scale-105'}`}
-                    style={{ backgroundColor: color.value }}
-                  />
-                ))}
-                <label className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full border-4 transition-all cursor-pointer overflow-hidden flex items-center justify-center hover:scale-105 ${!COLOR_PALETTE.some(c => c.value === activeColor) ? 'border-gray-900 scale-110 shadow-lg' : 'border-white'}`} style={{ background: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)' }} title="自由色">
-                  <input type="color" value={activeColor} onChange={(e) => setActiveColor(e.target.value)} className="opacity-0 absolute w-px h-px" />
-                </label>
-              </div>
-            )}
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 bg-white p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border-2 border-gray-100 shadow-sm mb-12">
@@ -828,15 +811,54 @@ export default function PhotoPage() {
                       )}
                     </div>
 
-                    {/* モードヒント（画像の外・下に配置） */}
+                    {/* ── 編集ツール（各カードに配置） ── */}
                     {photo.image && (
-                      <div className={`flex items-center gap-2 sm:gap-3 px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold border-2 ${editingMode === 'circle' ? 'bg-red-50 border-red-200 text-red-700' : drawingStartPoint ? 'bg-yellow-50 border-yellow-200 text-yellow-700' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
-                        {editingMode === 'circle'
-                          ? <><span className="w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-red-500 shrink-0 inline-block" /> 赤丸モード：画像をタップして追加</>
-                          : !drawingStartPoint
-                            ? <><Ruler className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" /> 寸法記入：始点をタップしてください</>
-                            : <><Ruler className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" /> 寸法記入：終点をタップしてください</>
-                        }
+                      <div className="space-y-2 sm:space-y-3">
+                        {/* モード切替ボタン */}
+                        <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                          <button
+                            onClick={() => setPhotoMode(photo.id, 'circle')}
+                            className={`flex items-center gap-2 justify-center py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-black text-xs sm:text-sm transition-all border-2 ${cardMode?.photoId === photo.id && cardMode.mode === 'circle' ? 'bg-red-500 text-white border-red-500 shadow-md' : 'bg-white text-gray-600 border-gray-200 hover:bg-red-50 hover:border-red-200'}`}
+                          >
+                            <Edit2 className="w-4 h-4 sm:w-5 sm:h-5" /> 赤丸を追加
+                          </button>
+                          <button
+                            onClick={() => setPhotoMode(photo.id, 'dimension')}
+                            className={`flex items-center gap-2 justify-center py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-black text-xs sm:text-sm transition-all border-2 ${cardMode?.photoId === photo.id && cardMode.mode === 'dimension' ? 'bg-gray-900 text-white border-gray-900 shadow-md' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                          >
+                            <Ruler className="w-4 h-4 sm:w-5 sm:h-5" /> 寸法記入
+                          </button>
+                        </div>
+
+                        {/* カラーパレット（寸法モード時のみ表示） */}
+                        {cardMode?.photoId === photo.id && cardMode.mode === 'dimension' && (
+                          <div className="flex items-center gap-2 sm:gap-3 px-3 py-2 bg-gray-50 rounded-xl border border-gray-200 flex-wrap">
+                            <Paintbrush className="w-4 h-4 text-gray-400 shrink-0" />
+                            {COLOR_PALETTE.map(color => (
+                              <button
+                                key={color.name}
+                                onClick={() => setActiveColor(color.value)}
+                                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full border-4 transition-all ${activeColor === color.value ? 'border-gray-900 scale-110 shadow-md' : 'border-white hover:scale-105'}`}
+                                style={{ backgroundColor: color.value }}
+                              />
+                            ))}
+                            <label className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full border-4 transition-all cursor-pointer overflow-hidden flex items-center justify-center hover:scale-105 ${!COLOR_PALETTE.some(c => c.value === activeColor) ? 'border-gray-900 scale-110 shadow-md' : 'border-white'}`} style={{ background: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)' }} title="自由色">
+                              <input type="color" value={activeColor} onChange={(e) => setActiveColor(e.target.value)} className="opacity-0 absolute w-px h-px" />
+                            </label>
+                          </div>
+                        )}
+
+                        {/* ヒントバー（アクティブ時のみ表示） */}
+                        {cardMode?.photoId === photo.id && (
+                          <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold border-2 ${cardMode.mode === 'circle' ? 'bg-red-50 border-red-200 text-red-700' : drawingStartPoint ? 'bg-yellow-50 border-yellow-200 text-yellow-700' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
+                            {cardMode.mode === 'circle'
+                              ? <><span className="w-3 h-3 rounded-full bg-red-500 shrink-0 inline-block" /> 赤丸モード：画像をタップして追加</>
+                              : !drawingStartPoint
+                                ? <><Ruler className="w-3 h-3 shrink-0" /> 寸法記入：始点をタップしてください</>
+                                : <><Ruler className="w-3 h-3 shrink-0" /> 寸法記入：終点をタップしてください</>
+                            }
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
