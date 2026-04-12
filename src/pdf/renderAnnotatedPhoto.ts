@@ -54,6 +54,9 @@ export async function renderAnnotatedPhoto(
     ctx.stroke();
   }
 
+  // カンバスサイズに比例したスケール係数（基準: 480×340）
+  const annotScale = Math.min(drawW, drawH) / 340;
+
   // 寸法線
   for (const line of dimensionLines) {
     const x1 = (line.start.x / 100) * drawW;
@@ -61,7 +64,7 @@ export async function renderAnnotatedPhoto(
     const x2 = (line.end.x / 100) * drawW;
     const y2 = (line.end.y / 100) * drawH;
     const color = line.color || '#FFD700';
-    const lw = Math.max(1, (line.size || 2));
+    const lw = Math.max(1, (line.size || 2) * annotScale);
 
     ctx.beginPath();
     ctx.moveTo(x1, y1);
@@ -72,7 +75,7 @@ export async function renderAnnotatedPhoto(
 
     // 矢印
     const angle = Math.atan2(y2 - y1, x2 - x1);
-    const arrowLen = 8;
+    const arrowLen = 8 * annotScale;
     for (const [ex, ey, ea] of [[x2, y2, angle], [x1, y1, angle + Math.PI]] as [number, number, number][]) {
       ctx.beginPath();
       ctx.moveTo(ex, ey);
@@ -88,15 +91,15 @@ export async function renderAnnotatedPhoto(
     if (line.text) {
       const mx = (x1 + x2) / 2;
       const my = (y1 + y2) / 2;
-      const fs = 12;
+      const fs = 12 * annotScale;
       ctx.font = `bold ${fs}px sans-serif`;
       const tw = ctx.measureText(line.text).width;
       ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      ctx.fillRect(mx - tw / 2 - 3, my - fs, tw + 6, fs + 4);
+      ctx.fillRect(mx - tw / 2 - 3 * annotScale, my - fs, tw + 6 * annotScale, fs + 4 * annotScale);
       ctx.fillStyle = color;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(line.text, mx, my - fs / 2 + 2);
+      ctx.fillText(line.text, mx, my - fs / 2 + 2 * annotScale);
     }
   }
 
