@@ -114,121 +114,96 @@ export default function PdfExportPage() {
     } catch { setError('Zipファイルの作成に失敗しました。'); } finally { setIsZipping(false); }
   };
 
-  // ── react-pdf による共通PDF生成 ──
-  const generatePdfBlob = async (onProgress: (msg: string) => void): Promise<Blob> => {
-    const { renderAnnotatedPhoto } = await import('../pdf/renderAnnotatedPhoto');
-    const { PdfDocument } = await import('../pdf/PdfDocument');
-    const { pdf } = await import('@react-pdf/renderer');
-
-    const fetchDataUrl = async (url: string): Promise<string | null> => {
-      try {
-        const res = await fetch(url);
-        if (!res.ok) return null;
-        const blob = await res.blob();
-        return await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-      } catch { return null; }
-    };
-
-    const fallbackLogoData = await fetchDataUrl(kawaraLogo) ?? '';
-    const logoData = userSettings?.logoUrl ? await fetchDataUrl(userSettings.logoUrl) : null;
-
-    const mapDataMap = new Map<string, string>();
-    const mapUrls = project!.mapUrls?.filter(Boolean) ?? [];
-    onProgress('地図画像を取得中...');
-    for (const url of mapUrls) {
-      const data = await fetchDataUrl(url);
-      if (data) mapDataMap.set(url, data);
-    }
-
-    const activePhotos = (project!.photos ?? []).filter((p) => p.image || p.process || p.description);
-    const photoDataMap = new Map<number, string>();
-    let done = 0;
-    for (const photo of activePhotos) {
-      if (photo.image) {
-        onProgress(`写真を処理中... (${++done}/${activePhotos.length})`);
-        try {
-          const dataUrl = await renderAnnotatedPhoto(
-            photo.image,
-            photo.circles ?? [],
-            photo.dimensionLines ?? [],
-            photo.rotation ?? 0,
-          );
-          photoDataMap.set(photo.id, dataUrl);
-        } catch { /* スキップ */ }
-      }
-    }
-
-    const activeMaterials = (project!.materials ?? []).filter(
-      (m) => m.image || m.name || m.manufacturer || m.specification || m.remarks
-    );
-    const materialDataMap = new Map<number, string>();
-    for (const mat of activeMaterials) {
-      if (mat.image) {
-        try {
-          const dataUrl = await renderAnnotatedPhoto(mat.image, [], [], mat.rotation ?? 0);
-          materialDataMap.set(mat.id, dataUrl);
-        } catch { /* スキップ */ }
-      }
-    }
-
-    onProgress('PDF生成中...');
-    return pdf(
-      <PdfDocument
-        project={project!}
-        userSettings={userSettings}
-        logoData={logoData}
-        fallbackLogoData={fallbackLogoData}
-        photoDataMap={photoDataMap}
-        materialDataMap={materialDataMap}
-        mapDataMap={mapDataMap}
-      />
-    ).toBlob();
+  const optimizeImageForPrint = (imgEl: HTMLImageElement): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const MAX_PRINT_PX = 800;
+        let { width, height } = img;
+        if (width > MAX_PRINT_PX || height > MAX_PRINT_PX) {
+          const ratio = Math.min(MAX_PRINT_PX / width, MAX_PRINT_PX / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(img.src); return; }
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+        canvas.width = 0;
+        canvas.height = 0;
+        resolve(dataUrl);
+      };
+      img.onerror = () => resolve(imgEl.src);
+      img.src = imgEl.getAttribute('data-original-src') || imgEl.src;
+    });
   };
 
-  // ── PDFダウンロード ──
-  const handlePdfDownload = async () => {
-    if (!project) return;
-    setIsCapturingForPdf(true);
-    setPdfProgress('準備中...');
-    try {
-      const blob = await generatePdfBlob(setPdfProgress);
-      saveAs(blob, `${project.projectName || '工事写真報告書'}.pdf`);
-    } catch (err) {
-      console.error(err);
-      setError('PDFの生成に失敗しました。');
-    } finally {
-      setIsCapturingForPdf(false);
-      setPdfProgress('');
+  const yieldToUI = () => new Promise<void>((r) => setTimeout(r, 0));
+
+  // ── 印刷 / PDFダウンロード共通：window.print() で統一 ──
+  const executePrint = async (progressSetter: (msg: string) => void) => {
+    const images = Array.from(document.querySelectorAll('.pdf-page img'));
+    const needsConversion = images.filter((img) => {
+      const src = img.getAttribute('data-original-src') || img.getAttribute('src');
+      return src && !src.startsWith('data:');
+    });
+    const total = needsConversion.length;
+    const BATCH_SIZE = 2;
+    for (let i = 0; i < total; i += BATCH_SIZE) {
+      const batch = needsConversion.slice(i, i + BATCH_SIZE);
+      progressSetter(`画像を最適化中... (${Math.min(i + BATCH_SIZE, total)}/${total})`);
+      await Promise.all(batch.map(async (img) => {
+        try {
+          const dataUrl = await optimizeImageForPrint(img as HTMLImageElement);
+          img.setAttribute('src', dataUrl);
+          img.removeAttribute('crossorigin');
+        } catch { /* スキップ */ }
+      }));
+      await yieldToUI();
     }
+    progressSetter('PDF生成中...');
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 100)));
+    });
+    window.print();
   };
 
-  // ── PDF印刷（react-pdf で生成 → 新タブで開いて印刷） ──
-  const handlePrint = async () => {
+  const handlePrint = () => {
     if (!project) return;
     setIsPrinting(true);
     setPrintProgress('準備中...');
-    try {
-      const blob = await generatePdfBlob(setPrintProgress);
-      const url = URL.createObjectURL(blob);
-      const win = window.open(url, '_blank');
-      if (!win) {
-        // ポップアップブロック時はダウンロードにフォールバック
-        saveAs(blob, `${project.projectName || '工事写真報告書'}.pdf`);
-        setError('印刷ウィンドウがブロックされました。ダウンロードしたPDFから印刷してください。');
+    setTimeout(async () => {
+      try {
+        await executePrint(setPrintProgress);
+      } catch {
+        setError('印刷の準備中にエラーが発生しました。');
+        setIsPrinting(false);
+      } finally {
+        setPrintProgress('');
       }
-      setTimeout(() => URL.revokeObjectURL(url), 120_000);
-    } catch (err) {
-      console.error(err);
-      setError('PDFの生成に失敗しました。');
-    } finally {
-      setIsPrinting(false);
-      setPrintProgress('');
-    }
+    }, 500);
+  };
+
+  const handlePdfDownload = () => {
+    if (!project) return;
+    setIsCapturingForPdf(true);
+    setPdfProgress('準備中...');
+    setTimeout(async () => {
+      try {
+        await executePrint(setPdfProgress);
+      } catch {
+        setError('PDFの生成に失敗しました。');
+      } finally {
+        setIsCapturingForPdf(false);
+        setPdfProgress('');
+      }
+    }, 500);
   };
 
   if (!project) return <LoadingSpinner />;
