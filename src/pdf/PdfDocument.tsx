@@ -1,5 +1,5 @@
 import {
-  Document, Page, View, Text, Image, Font, StyleSheet, Svg, Line as SvgLine,
+  Document, Page, View, Text, Image, Font, StyleSheet,
 } from '@react-pdf/renderer';
 import type { Project, UserSettings } from '../types';
 
@@ -32,8 +32,9 @@ const S = StyleSheet.create({
   pageHeaderTitle: { fontSize: 10, fontWeight: 'bold', color: '#374151' },
   pageNum: { fontSize: 8, color: '#9ca3af' },
   // 写真ページ
-  photoSection: { flex: 1, flexDirection: 'row', borderWidth: 0.5, borderColor: '#e5e7eb', borderRadius: 3, marginBottom: 5, overflow: 'hidden' },
-  photoLeft: { width: '56%', borderRightWidth: 0.5, borderRightColor: '#e5e7eb', backgroundColor: '#f8fafc' },
+  // A4(842pt) - padding(40) - header(24) - gaps(10) = 768pt → 3分割 = 256pt
+  photoSection: { height: 248, flexDirection: 'row', borderWidth: 0.5, borderColor: '#e5e7eb', borderRadius: 3, marginBottom: 8, overflow: 'hidden' },
+  photoLeft: { width: '56%', height: 248, borderRightWidth: 0.5, borderRightColor: '#e5e7eb', backgroundColor: '#f8fafc' },
   photoImg: { width: '100%', height: '100%', objectFit: 'contain' },
   photoRight: { flex: 1, padding: 6, gap: 4 },
   photoBadge: { backgroundColor: '#111827', color: '#fff', fontSize: 8, fontWeight: 'bold', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 3, alignSelf: 'flex-start', marginBottom: 4 },
@@ -45,8 +46,8 @@ const S = StyleSheet.create({
   photoEmpty: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
   photoEmptyText: { fontSize: 8, color: '#d1d5db' },
   // 材料ページ
-  materialSection: { flex: 1, flexDirection: 'row', borderWidth: 0.5, borderColor: '#e5e7eb', borderRadius: 3, marginBottom: 5, overflow: 'hidden' },
-  materialImg: { width: '40%', borderRightWidth: 0.5, borderRightColor: '#e5e7eb', backgroundColor: '#f8fafc' },
+  materialSection: { height: 248, flexDirection: 'row', borderWidth: 0.5, borderColor: '#e5e7eb', borderRadius: 3, marginBottom: 8, overflow: 'hidden' },
+  materialImg: { width: '40%', height: 248, borderRightWidth: 0.5, borderRightColor: '#e5e7eb', backgroundColor: '#f8fafc' },
   materialInfo: { flex: 1, padding: 6 },
   materialName: { fontSize: 10, fontWeight: 'bold', color: '#111827', marginBottom: 4 },
   materialRow: { flexDirection: 'row', marginBottom: 2 },
@@ -102,7 +103,7 @@ function CoverPage({ project, userSettings, logoData, fallbackLogoData }: {
 }
 
 // ── 位置図ページ ──
-function MapPage({ mapData, index, total }: { mapData: string; index: number; total: number }) {
+function MapPage({ mapData }: { mapData: string; index: number; total: number }) {
   return (
     <Page size="A4" style={S.mapPage}>
       {mapData ? (
@@ -117,11 +118,10 @@ function MapPage({ mapData, index, total }: { mapData: string; index: number; to
 }
 
 // ── 写真1枚セクション ──
-function PhotoSection({ photo, renderedSrc, idx, totalInPage }: {
+function PhotoSection({ photo, renderedSrc, idx }: {
   photo: { id: number; photoNumber: string; shootingDate: string; process: string; description: string; image: string | null };
   renderedSrc: string | null;
   idx: number;
-  totalInPage: number;
 }) {
   return (
     <View style={S.photoSection}>
@@ -162,7 +162,7 @@ function PhotoPage({ photos, renderedSrcs, pageIdx, total, projectName }: {
         <Text style={S.pageNum}>{pageIdx + 1} / {total}</Text>
       </View>
       {photos.map((photo, i) => (
-        <PhotoSection key={photo.id} photo={photo} renderedSrc={renderedSrcs[i] ?? null} idx={i} totalInPage={photos.length} />
+        <PhotoSection key={photo.id} photo={photo} renderedSrc={renderedSrcs[i] ?? null} idx={i} />
       ))}
     </Page>
   );
