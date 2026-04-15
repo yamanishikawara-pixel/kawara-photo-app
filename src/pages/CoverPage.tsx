@@ -1,19 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Paperclip, Trash2, Upload } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 
-import { db } from '../firebase';
+import { db, auth, storage } from '../firebase';
 import type { Project } from '../types';
 import { InputField } from '../shared/components';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { ErrorMessage } from '../shared/ErrorMessage';
+import { canUpload, trackUpload } from '../shared/storageUtils';
 
 export function CoverPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [appendixUploading, setAppendixUploading] = useState(false);
+  const [appendixProgress, setAppendixProgress] = useState(0);
+  const appendixInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -36,6 +41,55 @@ export function CoverPage() {
       setProject(previous);
       setError('保存に失敗しました。');
     }
+  };
+
+  const handleAppendixUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !id) return;
+    if (file.type !== 'application/pdf') { setError('PDFファイルを選択してください。'); return; }
+    if (file.size > 20 * 1024 * 1024) { setError('ファイルサイズは20MB以下にしてください。'); return; }
+    const uid = auth.currentUser?.uid;
+    if (!uid) { setError('ログインが必要です。'); return; }
+    const storageUsed = (await getDoc(doc(db, 'users', uid))).data()?.storageUsedBytes ?? 0;
+    if (!canUpload(storageUsed, file.size)) { setError('ストレージ容量が不足しています。'); return; }
+
+    setAppendixUploading(true);
+    setAppendixProgress(0);
+    try {
+      // 既存ファイルを削除
+      if (project?.appendixPdfUrl) {
+        try { await deleteObject(ref(storage, project.appendixPdfUrl)); } catch { /* 無視 */ }
+      }
+      const storageRef = ref(storage, `users/${uid}/projects/${id}/appendix.pdf`);
+      await new Promise<void>((resolve, reject) => {
+        const task = uploadBytesResumable(storageRef, file);
+        task.on('state_changed',
+          (snap) => setAppendixProgress(Math.round(snap.bytesTransferred / snap.totalBytes * 100)),
+          reject,
+          () => resolve(),
+        );
+      });
+      const url = await getDownloadURL(storageRef);
+      await updateDoc(doc(db, 'projects', id), { appendixPdfUrl: url });
+      await trackUpload(uid, file.size);
+      setProject((prev) => prev ? { ...prev, appendixPdfUrl: url } : prev);
+    } catch {
+      setError('PDFのアップロードに失敗しました。');
+    } finally {
+      setAppendixUploading(false);
+      setAppendixProgress(0);
+      if (appendixInputRef.current) appendixInputRef.current.value = '';
+    }
+  };
+
+  const handleAppendixDelete = async () => {
+    if (!project?.appendixPdfUrl || !id) return;
+    if (!window.confirm('添付PDFを削除しますか？')) return;
+    try {
+      await deleteObject(ref(storage, project.appendixPdfUrl));
+    } catch { /* Storage削除失敗は無視 */ }
+    await updateDoc(doc(db, 'projects', id), { appendixPdfUrl: null });
+    setProject((prev) => prev ? { ...prev, appendixPdfUrl: undefined } : prev);
   };
 
   if (error && !project) {
@@ -104,6 +158,49 @@ export function CoverPage() {
             bgColor="bg-gray-50/50"
             id="cover-creationDate"
           />
+        </div>
+
+        {/* 添付PDF */}
+        <div className="mt-6 bg-white p-6 rounded-3xl shadow-sm border border-black/5">
+          <h2 className="text-base font-bold text-gray-700 mb-4 flex items-center gap-2">
+            <Paperclip className="w-4 h-4" /> 添付資料PDF（最終ページに追加）
+          </h2>
+          {project.appendixPdfUrl ? (
+            <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl border border-blue-200">
+              <Paperclip className="w-5 h-5 text-blue-500 shrink-0" />
+              <span className="text-sm text-blue-700 font-bold flex-1 truncate">PDF添付済み</span>
+              <button
+                type="button"
+                onClick={handleAppendixDelete}
+                className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => appendixInputRef.current?.click()}
+              disabled={appendixUploading}
+              className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-xl py-4 text-gray-500 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition-colors disabled:opacity-50"
+            >
+              <Upload className="w-5 h-5" />
+              {appendixUploading ? `アップロード中... ${appendixProgress}%` : 'PDFを選択'}
+            </button>
+          )}
+          <input
+            ref={appendixInputRef}
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            onChange={handleAppendixUpload}
+          />
+          {appendixUploading && (
+            <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div className="h-full bg-blue-500 transition-all" style={{ width: `${appendixProgress}%` }} />
+            </div>
+          )}
+          <p className="text-xs text-gray-400 mt-2">最大20MB・PDF形式のみ</p>
         </div>
       </div>
     </div>

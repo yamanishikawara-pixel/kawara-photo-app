@@ -133,4 +133,5 @@ export interface Project {
   shareToken?: string;
   whiteoutBoxes?: WhiteoutBox[];
   isCompleted?: boolean;
+  appendixPdfUrl?: string;
 }

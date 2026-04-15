@@ -51,6 +51,7 @@ export default function PdfExportPage() {
   const [printProgress, setPrintProgress] = useState('');
   const [isCapturingForPdf, setIsCapturingForPdf] = useState(false);
   const [pdfProgress, setPdfProgress] = useState('');
+  const [appendixPages, setAppendixPages] = useState<string[]>([]); // 添付PDF→画像
   
   useEffect(() => {
     if (!id) return;
@@ -81,6 +82,38 @@ export default function PdfExportPage() {
     window.addEventListener('afterprint', handleAfterPrint);
     return () => window.removeEventListener('afterprint', handleAfterPrint);
   }, []);
+
+  // 添付PDFをページ画像に変換
+  useEffect(() => {
+    const url = project?.appendixPdfUrl;
+    if (!url) { setAppendixPages([]); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const pdfjsLib = await import('pdfjs-dist');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+          'pdfjs-dist/build/pdf.worker.min.mjs',
+          import.meta.url,
+        ).href;
+        const pdfDoc = await pdfjsLib.getDocument(url).promise;
+        const pages: string[] = [];
+        for (let i = 1; i <= Math.min(pdfDoc.numPages, 20); i++) {
+          if (cancelled) return;
+          const page = await pdfDoc.getPage(i);
+          // A4 150DPI 相当（794px幅）
+          const viewport = page.getViewport({ scale: 794 / page.getViewport({ scale: 1 }).width });
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(viewport.width);
+          canvas.height = Math.round(viewport.height);
+          const ctx = canvas.getContext('2d')!;
+          await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+          pages.push(canvas.toDataURL('image/jpeg', 0.92));
+        }
+        if (!cancelled) setAppendixPages(pages);
+      } catch { /* 読み込み失敗は無視 */ }
+    })();
+    return () => { cancelled = true; };
+  }, [project?.appendixPdfUrl]);
 
   const handleZipExport = async () => {
     if (!project) return;
@@ -119,7 +152,8 @@ export default function PdfExportPage() {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
-        const MAX_PRINT_PX = 800;
+        // A4 300DPI 印刷品質：写真欄幅 ≈ 120mm → 300DPI で約 1417px
+        const MAX_PRINT_PX = 1600;
         let { width, height } = img;
         if (width > MAX_PRINT_PX || height > MAX_PRINT_PX) {
           const ratio = Math.min(MAX_PRINT_PX / width, MAX_PRINT_PX / height);
@@ -134,7 +168,7 @@ export default function PdfExportPage() {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
         canvas.width = 0;
         canvas.height = 0;
         resolve(dataUrl);
@@ -234,7 +268,7 @@ export default function PdfExportPage() {
     }
   }
 
-  const totalPages = 1 + mapCount + photoPages.length + materialPages.length;
+  const totalPages = 1 + mapCount + photoPages.length + materialPages.length + appendixPages.length;
   const showLegendTable = project.showLegendTable !== false;
   
   return (
@@ -245,7 +279,14 @@ export default function PdfExportPage() {
         .pdf-container-wrapper * { font-family: ${JP_FONT} !important; }
         
         @media print {
-          @page { size: A4 portrait; margin: 0; }
+          /* ブラウザ自動ヘッダー・フッター（ページ番号・URL）を非表示 */
+          @page {
+            size: A4 portrait;
+            margin: 0;
+            /* Chrome/Edge: ヘッダー・フッターを空文字で上書き */
+            @top-center { content: ''; }
+            @bottom-center { content: ''; }
+          }
           html, body { 
             -webkit-print-color-adjust: exact !important; 
             print-color-adjust: exact !important; 
@@ -704,6 +745,19 @@ export default function PdfExportPage() {
                 })}
               </div>
               <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapCount + photoPages.length + pageIndex} / {totalPages} -</div>
+            </div>
+          </div>
+        ))}
+
+        {/* 添付PDF ページ */}
+        {appendixPages.map((src, pageIndex) => (
+          <div key={`appendix-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `auto` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+            <div className={`pdf-page bg-white overflow-hidden ${isPrinting ? '' : 'absolute top-0 left-0 origin-top-left'}`}
+              style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? 'auto' : `${A4_HEIGHT_PX}px`, transform: isPrinting ? 'none' : `scale(${scale})`, padding: 0 }}>
+              <img src={src} alt={`添付資料 ${pageIndex + 1}`} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+              <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500">
+                - {1 + mapCount + photoPages.length + materialPages.length + pageIndex + 1} / {totalPages} -
+              </div>
             </div>
           </div>
         ))}
