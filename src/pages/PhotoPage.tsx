@@ -8,6 +8,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import imageCompression from 'browser-image-compression';
 import { proxyUrl, useDraggablePin } from '../shared/utils';
 import { canUpload, trackUpload } from '../shared/storageUtils';
+import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import type { Circle, MapPin as MapPinT, Photo, Project, DimensionLine, PhotoMaster } from '../types';
 import type { ChangeEvent, MouseEvent } from 'react';
 
@@ -621,8 +622,8 @@ export default function PhotoPage() {
         setProject((prev) => prev ? { ...prev, photos: [...newPhotos] } : null);
         await updateDoc(doc(db, "projects", id), { photos: newPhotos });
       } catch (error) {
-        console.error("アップロード失敗", error);
-        alert(`${i + 1}枚目のアップロードに失敗しました。`);
+        logFirebaseError(error, `写真一括アップロード(${i + 1}枚目)`);
+        alert(`${i + 1}枚目：${firebaseErrorMessage(error, 'アップロード')}`);
       }
 
       uploadedCount++;
@@ -655,8 +656,9 @@ export default function PhotoPage() {
       const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, image: url, shootingDate: p.shootingDate || getTodayStr() } : p);
       setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
       await updateDoc(doc(db, "projects", id), { photos: newPhotos });
-    } catch {
-      alert('アップロードに失敗しました。電波の良いところでお試しください。');
+    } catch (err) {
+      logFirebaseError(err, '写真アップロード');
+      alert(firebaseErrorMessage(err, '写真のアップロード'));
     } finally {
       setLoadingId(null);
     }

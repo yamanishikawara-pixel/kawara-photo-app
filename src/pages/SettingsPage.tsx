@@ -7,6 +7,7 @@ import { db, auth, storage } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { formatBytes, storageUsageRatio, STORAGE_LIMIT_BYTES } from '../shared/storageUtils';
+import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import type { MaterialMaster, PhotoMaster } from '../types';
 
 let _idCounter = 0;
@@ -101,8 +102,9 @@ export default function SettingsPage() {
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
       setLogoUrl(url);
-    } catch {
-      alert('ロゴのアップロードに失敗しました。');
+    } catch (err) {
+      logFirebaseError(err, 'ロゴアップロード');
+      alert(firebaseErrorMessage(err, 'ロゴのアップロード'));
     } finally {
       setUploadingLogo(false);
     }
@@ -120,9 +122,9 @@ export default function SettingsPage() {
         photoMaster,
       }, { merge: true });
       alert('設定を保存しました！\n（現場の写真入力画面やPDF出力に反映されます）');
-    } catch (error) {
-      console.error(error);
-      alert('保存に失敗しました。');
+    } catch (err) {
+      logFirebaseError(err, '設定保存');
+      alert(firebaseErrorMessage(err, '設定の保存'));
     } finally {
       setSaving(false);
     }

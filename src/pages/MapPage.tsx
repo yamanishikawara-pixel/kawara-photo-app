@@ -10,6 +10,7 @@ import { proxyUrl } from '../shared/utils';
 import { canUpload, trackUpload } from '../shared/storageUtils';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
+import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -291,7 +292,7 @@ const WhiteoutControlPanel = React.memo(({ box, onUpdate, onRemove, onDeselect }
 
         <div className="flex items-center gap-2 ml-auto">
           <button type="button" onClick={onRemove}   className="px-3 py-1.5 bg-red-600 hover:bg-red-500 active:scale-95 rounded-lg font-bold text-sm transition-all">削除</button>
-          <button type="button" onClick={onDeselect} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 rounded-lg font-bold text-sm transition-all">完了</button>
+          <button type="button" onClick={onDeselect} className="px-3 py-1.5 active:scale-95 rounded-lg font-bold text-sm transition-all" style={{ background: '#ff6b35', color: '#fff' }}>完了</button>
         </div>
       </div>
     </div>
@@ -574,9 +575,10 @@ export default function MapPage() {
           setWhiteoutBoxes(data.whiteoutBoxes || []);
           setMapTransforms(data.mapTransforms || []);
           setMapLayouts(data.mapLayouts || []);
-        } else { setError('プロジェクトが見つかりません。'); }
-      } catch {
-        if (!abortController.signal.aborted) setError('データの読み込みに失敗しました。');
+        } else { setError('プロジェクトが見つかりません。既に削除されている可能性があります。'); }
+      } catch (err) {
+        logFirebaseError(err, '位置図読込');
+        if (!abortController.signal.aborted) setError(firebaseErrorMessage(err, 'データの読み込み'));
       } finally {
         if (!abortController.signal.aborted) setLoading(false);
       }
@@ -616,7 +618,10 @@ export default function MapPage() {
         mapLayouts: cleanLayouts(newLayouts),
         ...(newRotations !== undefined ? { mapRotations: cleanRotations(newRotations) } : {}),
       });
-    } catch { setSaveError('保存に失敗しました。再度お試しください。'); } finally { setIsSaving(false); }
+    } catch (err) {
+      logFirebaseError(err, '位置図保存');
+      setSaveError(firebaseErrorMessage(err, '保存'));
+    } finally { setIsSaving(false); }
   }, [id]);
 
   const updateMapLayout = (updates: Partial<{ title: string; x?: number; y?: number; rotation?: number }>) => {
@@ -706,8 +711,8 @@ export default function MapPage() {
       setCurrentMapIndex(insertAt);
       setEditingMode('pan');
     } catch (err) {
-      console.error(err);
-      setError('図面のアップロードに失敗しました。');
+      logFirebaseError(err, '図面アップロード');
+      setError(firebaseErrorMessage(err, '図面のアップロード'));
     } finally {
       setIsSaving(false);
       setUploadProgress('');
@@ -730,7 +735,7 @@ export default function MapPage() {
 
     const urlToDelete = project.mapUrls?.[mapIndex];
     if (urlToDelete) {
-      try { await deleteObject(ref(storage, urlToDelete)); } catch { setError('地図画像の削除に失敗しましたが、データは保存されました。'); }
+      try { await deleteObject(ref(storage, urlToDelete)); } catch (err) { logFirebaseError(err, '位置図ファイル削除'); /* Storage削除失敗はDB削除を妨げない */ }
     }
 
     const newMapUrls = (project.mapUrls || []).filter((_, i) => i !== mapIndex);
@@ -758,7 +763,10 @@ export default function MapPage() {
     setIsSaving(true);
     try {
       await updateDoc(doc(db, 'projects', id), { mapUrls: newMapUrls, mapRotations: newRotations, mapTransforms: newTransforms, mapLayouts: newMapLayouts, mapPins: newPins, mapRows: newRows, mapDimensionLines: newDimLines, whiteoutBoxes: newWhiteouts });
-    } catch { setError('削除に失敗しました。'); } finally { setIsSaving(false); }
+    } catch (err) {
+      logFirebaseError(err, '位置図削除');
+      setError(firebaseErrorMessage(err, '位置図の削除'));
+    } finally { setIsSaving(false); }
   }, [project, id, mapPins, mapRows, mapDimensionLines, whiteoutBoxes, mapRotations, mapTransforms, mapLayouts, currentMapIndex]);
 
   const handlePanPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {

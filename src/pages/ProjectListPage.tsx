@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, LogOut, Settings, CheckCircle2, Circle, HardHat } from 'lucide-react';
+import { Plus, Trash2, LogOut, Settings, CheckCircle2, Circle, HardHat, Database } from 'lucide-react';
 import { collection, addDoc, deleteDoc, doc, getDoc, getDocs, query, where, orderBy, updateDoc } from 'firebase/firestore';
 import { ref, listAll, deleteObject } from 'firebase/storage';
 import { signOut } from 'firebase/auth';
@@ -10,10 +10,68 @@ import type { Project } from '../types';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { ConfirmModal } from '../shared/ConfirmModal';
+import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
+import { formatBytes, STORAGE_LIMIT_BYTES } from '../shared/storageUtils';
 
 interface ProjectWithId extends Project {
   id: string;
   userId?: string;
+}
+
+// ==========================================
+// ストレージ使用量バー
+// ==========================================
+function StorageUsageBar({ used, quota, onClick }: { used: number; quota: number; onClick?: () => void }) {
+  const percent = Math.min(100, Math.round((used / quota) * 100));
+
+  let barColor = '#10b981';
+  let textColor = '#8b8ba8';
+  if (percent >= 85) {
+    barColor = '#ef4444';
+    textColor = '#f87171';
+  } else if (percent >= 60) {
+    barColor = '#f59e0b';
+    textColor = '#fbbf24';
+  }
+
+  const warningMsg = percent >= 90 ? ' ⚠ 容量不足です' : percent >= 75 ? ' ⚠ まもなく上限' : '';
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all mt-4"
+      style={{ background: '#1c1c30', borderColor: '#2e2e50' }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLButtonElement).style.borderColor = barColor;
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLButtonElement).style.borderColor = '#2e2e50';
+      }}
+    >
+      <Database className="w-4 h-4 shrink-0" style={{ color: barColor }} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-xs font-bold tracking-wide" style={{ color: textColor }}>
+            ストレージ{warningMsg}
+          </span>
+          <span className="text-xs font-bold" style={{ color: textColor }}>
+            {formatBytes(used)} / {formatBytes(quota)} <span style={{ opacity: 0.7 }}>({percent}%)</span>
+          </span>
+        </div>
+        <div className="h-1.5 rounded-full overflow-hidden" style={{ background: '#12122a' }}>
+          <div
+            className="h-full rounded-full transition-all"
+            style={{
+              width: `${percent}%`,
+              background: barColor,
+              boxShadow: percent >= 60 ? `0 0 8px ${barColor}66` : 'none',
+            }}
+          />
+        </div>
+      </div>
+    </button>
+  );
 }
 
 export function ProjectListPage() {
@@ -26,9 +84,10 @@ export function ProjectListPage() {
   const [hideCompleted, setHideCompleted] = useState(true);
   const [companyName, setCompanyName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
+  const [storageUsed, setStorageUsed] = useState(0);
 
   useEffect(() => {
-    const fetch = async () => {
+    const fetchData = async () => {
       setError(null);
       try {
         const user = auth.currentUser;
@@ -49,18 +108,16 @@ export function ProjectListPage() {
           const d = userDoc.data();
           if (d.companyName) setCompanyName(d.companyName);
           if (d.logoUrl) setLogoUrl(d.logoUrl);
+          setStorageUsed(d.storageUsedBytes ?? 0);
         }
-      } catch (err: any) {
-        if (err.code === 'failed-precondition') {
-          setError('初回実行のため、インデックスの作成が必要です。');
-        } else {
-          setError('現場一覧の読み込みに失敗しました。');
-        }
+      } catch (err) {
+        logFirebaseError(err, '現場一覧読込');
+        setError(firebaseErrorMessage(err, '現場一覧の読み込み'));
       } finally {
         setLoading(false);
       }
     };
-    fetch();
+    fetchData();
   }, []);
 
   const addProject = async () => {
@@ -87,7 +144,10 @@ export function ProjectListPage() {
         createdAt: new Date().toISOString(),
       });
       navigate(`/project/${docRef.id}`);
-    } catch { setError('新規現場の作成に失敗しました。'); }
+    } catch (err) {
+      logFirebaseError(err, '新規現場作成');
+      setError(firebaseErrorMessage(err, '新規現場の作成'));
+    }
   };
 
   const deleteProject = async (id: string) => {
@@ -102,7 +162,13 @@ export function ProjectListPage() {
       }
       await deleteDoc(doc(db, 'projects', id));
       setProjects((prev) => prev.filter((p) => p.id !== id));
-    } catch { setError('削除に失敗しました。'); } finally { setIsDeleting(false); setConfirmDelete(null); }
+    } catch (err) {
+      logFirebaseError(err, '現場削除');
+      setError(firebaseErrorMessage(err, '現場の削除'));
+    } finally {
+      setIsDeleting(false);
+      setConfirmDelete(null);
+    }
   };
 
   const toggleCompleted = async (e: React.MouseEvent, projectId: string, current: boolean) => {
@@ -110,7 +176,10 @@ export function ProjectListPage() {
     try {
       await updateDoc(doc(db, 'projects', projectId), { isCompleted: !current });
       setProjects((prev) => prev.map((p) => p.id === projectId ? { ...p, isCompleted: !current } : p));
-    } catch { setError('更新に失敗しました。'); }
+    } catch (err) {
+      logFirebaseError(err, '完了状態更新');
+      setError(firebaseErrorMessage(err, '完了状態の更新'));
+    }
   };
 
   const handleLogout = async () => {
@@ -118,7 +187,10 @@ export function ProjectListPage() {
       try {
         await signOut(auth);
         navigate('/login');
-      } catch { setError('ログアウトに失敗しました。'); }
+      } catch (err) {
+        logFirebaseError(err, 'ログアウト');
+        setError(firebaseErrorMessage(err, 'ログアウト'));
+      }
     }
   };
 
@@ -157,6 +229,13 @@ export function ProjectListPage() {
             </button>
           </div>
         </header>
+
+        {/* ── ストレージ使用量バー ── */}
+        <StorageUsageBar
+          used={storageUsed}
+          quota={STORAGE_LIMIT_BYTES}
+          onClick={() => navigate('/settings')}
+        />
 
         {error && (
           <div className="mt-4">
@@ -236,7 +315,6 @@ export function ProjectListPage() {
                     (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
                   }}
                 >
-                  {/* サムネイル */}
                   <div className="relative w-full" style={{ aspectRatio: '16/9', background: '#12122a' }}>
                     {thumb ? (
                       <img src={thumb} alt="現場写真" className="w-full h-full object-cover" />
@@ -245,13 +323,11 @@ export function ProjectListPage() {
                         <HardHat className="w-10 h-10" style={{ color: '#2e2e50' }} />
                       </div>
                     )}
-                    {/* 写真枚数バッジ */}
                     {photoCount > 0 && (
                       <div className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold" style={{ background: 'rgba(0,0,0,0.65)', color: '#f0ede8', backdropFilter: 'blur(4px)' }}>
                         📷 {photoCount}
                       </div>
                     )}
-                    {/* 完了オーバーレイ */}
                     {p.isCompleted && (
                       <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
                         <span className="text-xs font-bold px-3 py-1 rounded-full" style={{ background: 'rgba(16,185,129,0.85)', color: '#fff' }}>完了</span>
@@ -259,7 +335,6 @@ export function ProjectListPage() {
                     )}
                   </div>
 
-                  {/* カード情報 */}
                   <div className="p-4">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
@@ -272,7 +347,6 @@ export function ProjectListPage() {
                           </div>
                         )}
                       </div>
-                      {/* アクションボタン */}
                       <div className="flex gap-0.5 shrink-0">
                         <button
                           type="button"
@@ -304,7 +378,6 @@ export function ProjectListPage() {
           </div>
         )}
 
-        {/* 件数表示 */}
         {visibleProjects.length > 0 && (
           <p className="mt-6 text-xs text-center" style={{ color: '#3d3d60' }}>
             {visibleProjects.length} 件の現場

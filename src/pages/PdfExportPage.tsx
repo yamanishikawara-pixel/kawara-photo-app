@@ -10,6 +10,7 @@ import kawaraLogo from '../assets/kawara-logo.png';
 import { A4_HEIGHT_PX, A4_WIDTH_PX, getPreviewScale, proxyUrl } from '../shared/utils';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
+import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 
 const JP_FONT = "'BIZ UDPGothic', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', Meiryo, sans-serif";
 
@@ -65,7 +66,10 @@ export default function PdfExportPage() {
           const s = await getDoc(doc(db, 'users', user.uid));
           if (s.exists()) setUserSettings(s.data() as UserSettings);
         }
-      } catch { setError('データの読み込みに失敗しました。'); }
+      } catch (err) {
+        logFirebaseError(err, 'PDF出力用データ読込');
+        setError(firebaseErrorMessage(err, 'データの読み込み'));
+      }
     };
     fetchData();
   }, [id]);
@@ -144,7 +148,10 @@ export default function PdfExportPage() {
       if (failedCount > 0) setError(`${failedCount}枚の写真の取得に失敗しました。他の写真はZIPに含まれています。`);
       const content = await zip.generateAsync({ type: 'blob' });
       saveAs(content, `${folderName}.zip`);
-    } catch { setError('Zipファイルの作成に失敗しました。'); } finally { setIsZipping(false); }
+    } catch (err) {
+      logFirebaseError(err, 'ZIP作成');
+      setError(firebaseErrorMessage(err, 'ZIPファイルの作成'));
+    } finally { setIsZipping(false); }
   };
 
   const optimizeImageForPrint = (imgEl: HTMLImageElement): Promise<string> => {
@@ -231,8 +238,9 @@ export default function PdfExportPage() {
     setTimeout(async () => {
       try {
         await executePrint(setPdfProgress);
-      } catch {
-        setError('PDFの生成に失敗しました。');
+      } catch (err) {
+        logFirebaseError(err, 'PDF生成');
+        setError(firebaseErrorMessage(err, 'PDFの生成'));
       } finally {
         setIsCapturingForPdf(false);
         setPdfProgress('');

@@ -8,6 +8,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { proxyUrl } from '../shared/utils';
 import { canUpload, trackUpload } from '../shared/storageUtils';
+import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import type { Material, MaterialMaster, Project } from '../types';
 
 // 品名コンボボックス：▼で全件表示、入力で部分一致絞り込み
@@ -134,8 +135,9 @@ export default function MaterialPage() {
       try {
         const d = await getDoc(doc(db, 'projects', id));
         if (d.exists()) setProject(d.data() as Project);
-      } catch {
-        setError('材料データの読み込みに失敗しました。');
+      } catch (err) {
+        logFirebaseError(err, '材料読込');
+        setError(firebaseErrorMessage(err, '材料データの読み込み'));
       }
     };
     fetchProject();
@@ -246,8 +248,9 @@ export default function MaterialPage() {
         setStorageUsedBytes((prev) => prev + file.size);
       }
       updateMaterial(materialId, 'image', url);
-    } catch {
-      alert('画像のアップロードに失敗しました。');
+    } catch (err) {
+      logFirebaseError(err, '材料画像アップロード');
+      alert(firebaseErrorMessage(err, '画像のアップロード'));
     } finally {
       setUploadingId(null);
     }
