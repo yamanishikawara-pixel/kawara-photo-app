@@ -393,25 +393,29 @@ const DimensionLineMarker = React.memo(({ line, rotation, currentScale, isSelect
       </svg>
       
       {isSelected && !isDragging && (
-        <div style={{ left: `${safePopupX}%`, top: `${midPoint.y}%`, marginTop: `${popupMarginTop}px`, transform: `translate(-50%, -50%) rotate(${-rotation}deg) scale(${1 / currentScale})` }} className="absolute z-30 flex flex-col items-center gap-3 bg-white p-4 lg:p-5 rounded-2xl shadow-3xl border-2 border-gray-100 min-w-[280px]" onPointerDown={e => e.stopPropagation()}>
-          <div className="flex w-full gap-2 items-center justify-between border-b border-gray-100 pb-2">
-             <h4 className="text-sm lg:text-base font-black text-gray-900 flex items-center gap-1"><CaseUpper className="w-4 h-4 text-blue-500"/> 文字と線</h4>
+        <div
+          style={{ left: `${safePopupX}%`, top: `${midPoint.y}%`, marginTop: `${popupMarginTop}px`, transform: `translate(-50%, -50%) rotate(${-rotation}deg) scale(${1 / currentScale})`, background: '#1c1c30', borderColor: '#2e2e50' }}
+          className="absolute z-30 flex flex-col items-center gap-3 p-4 rounded-2xl shadow-2xl border min-w-[280px]"
+          onPointerDown={e => e.stopPropagation()}
+        >
+          <div className="flex w-full gap-2 items-center justify-between border-b pb-2" style={{ borderColor: '#2e2e50' }}>
+             <h4 className="text-sm font-black flex items-center gap-1" style={{ color: '#f0ede8' }}><CaseUpper className="w-4 h-4" style={{ color: '#ff6b35' }}/> 文字と線</h4>
              <div className="flex items-center gap-1">
-               <button onClick={(e) => { e.stopPropagation(); onUpdate({ size: Math.max(1, thickness - 1) }); }} className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded font-bold text-gray-700">ー</button>
-               <span className="text-xs font-bold text-gray-400 mx-1">{thickness}</span>
-               <button onClick={(e) => { e.stopPropagation(); onUpdate({ size: Math.min(10, thickness + 1) }); }} className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded font-bold text-gray-700 mr-2">＋</button>
-               <div className="w-px h-6 bg-gray-200 mx-1"></div>
-               <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-2 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 ml-1"><Trash2 className="w-5 h-5" /></button>
+               <button onClick={(e) => { e.stopPropagation(); onUpdate({ size: Math.max(1, thickness - 1) }); }} className="w-7 h-7 flex items-center justify-center rounded font-bold transition-colors" style={{ background: '#2e2e50', color: '#f0ede8' }}>ー</button>
+               <span className="text-xs font-bold mx-1" style={{ color: '#8b8ba8' }}>{thickness}</span>
+               <button onClick={(e) => { e.stopPropagation(); onUpdate({ size: Math.min(10, thickness + 1) }); }} className="w-7 h-7 flex items-center justify-center rounded font-bold transition-colors mr-1" style={{ background: '#2e2e50', color: '#f0ede8' }}>＋</button>
+               <div className="w-px h-5 mx-1" style={{ background: '#2e2e50' }}></div>
+               <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-1.5 rounded-lg transition-colors" style={{ color: '#ef4444', background: 'rgba(239,68,68,0.1)' }}><Trash2 className="w-4 h-4" /></button>
              </div>
           </div>
-          <div className="flex flex-wrap gap-2 w-full">
+          <div className="flex flex-wrap gap-1.5 w-full">
             {DEFAULT_MAP_PART_NAMES.map(name => (
-              <button key={name} onClick={() => addPartName(name)} className="text-xs lg:text-sm font-black text-blue-700 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-all">＋{name}</button>
+              <button key={name} onClick={() => addPartName(name)} className="text-xs font-bold px-2.5 py-1.5 rounded-lg transition-all" style={{ color: '#ff6b35', background: 'rgba(255,107,53,0.12)', border: '1px solid rgba(255,107,53,0.25)' }}>＋{name}</button>
             ))}
           </div>
           <div className="flex gap-2 w-full">
-            <input ref={inputRef} type="text" value={line.text} onChange={(e) => onTextChange(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onDeselect(); } }} className="flex-1 bg-gray-50 border-2 border-gray-100 p-2 lg:p-3 text-base lg:text-lg font-bold rounded-xl outline-none focus:border-blue-400 focus:bg-white text-center shadow-inner placeholder:font-normal" placeholder="例: 軒先 5.5m" />
-            <button type="button" onClick={(e) => { e.stopPropagation(); onDeselect(); }} className="px-3 lg:px-4 py-2 lg:py-3 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black rounded-xl shadow transition-all whitespace-nowrap">✓ 完了</button>
+            <input ref={inputRef} type="text" value={line.text} onChange={(e) => onTextChange(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onDeselect(); } }} className="flex-1 p-2.5 text-sm font-bold rounded-xl outline-none text-center" style={{ background: '#12122a', border: '1px solid #3d3d60', color: '#f0ede8' }} placeholder="例: 軒先 5.5m" />
+            <button type="button" onClick={(e) => { e.stopPropagation(); onDeselect(); }} className="px-3 py-2 font-black rounded-xl shadow transition-all whitespace-nowrap" style={{ background: '#ff6b35', color: '#fff' }}>✓ 完了</button>
           </div>
         </div>
       )}
@@ -419,16 +423,16 @@ const DimensionLineMarker = React.memo(({ line, rotation, currentScale, isSelect
       {isSelected && (
         <>
           <div
-            className="absolute z-40 bg-blue-500/30 border-2 border-blue-500 rounded-full cursor-move touch-none backdrop-blur-sm"
-            style={{ left: `${localStart.x}%`, top: `${localStart.y}%`, width: `${handleRadius * 2}px`, height: `${handleRadius * 2}px`, marginLeft: `-${handleRadius}px`, marginTop: `-${handleRadius}px` }}
+            className="absolute z-40 rounded-full cursor-move touch-none"
+            style={{ left: `${localStart.x}%`, top: `${localStart.y}%`, width: `${handleRadius * 2}px`, height: `${handleRadius * 2}px`, marginLeft: `-${handleRadius}px`, marginTop: `-${handleRadius}px`, background: 'rgba(255,107,53,0.25)', border: '2px solid #ff6b35' }}
             onPointerDown={(e) => startDrag(e, 'start')}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
           />
           <div
-            className="absolute z-40 bg-blue-500/30 border-2 border-blue-500 rounded-full cursor-move touch-none backdrop-blur-sm"
-            style={{ left: `${localEnd.x}%`, top: `${localEnd.y}%`, width: `${handleRadius * 2}px`, height: `${handleRadius * 2}px`, marginLeft: `-${handleRadius}px`, marginTop: `-${handleRadius}px` }}
+            className="absolute z-40 rounded-full cursor-move touch-none"
+            style={{ left: `${localEnd.x}%`, top: `${localEnd.y}%`, width: `${handleRadius * 2}px`, height: `${handleRadius * 2}px`, marginLeft: `-${handleRadius}px`, marginTop: `-${handleRadius}px`, background: 'rgba(255,107,53,0.25)', border: '2px solid #ff6b35' }}
             onPointerDown={(e) => startDrag(e, 'end')}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
@@ -487,12 +491,18 @@ const MapMarker = React.memo(({ pin, rotation, currentScale, isSelected, onDragE
 
 const LegendRow = React.memo(({ row, isSelected, onSelect, onChange, onRemove }: { row: MapRow; isSelected: boolean; onSelect: () => void; onChange: (updates: Partial<MapRow>) => void; onRemove: () => void; }) => {
   return (
-    <div onPointerDown={onSelect} className={`grid grid-cols-12 text-base lg:text-lg border-b border-gray-100 last:border-b-0 cursor-pointer ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
-      <input type="text" value={row.symbol} onChange={(e) => onChange({ symbol: e.target.value })} className="col-span-2 py-3 text-center font-black text-red-700 bg-transparent outline-none border-r border-gray-100" />
-      <input type="text" value={row.part} placeholder="軒先" onChange={(e) => onChange({ part: e.target.value })} className="col-span-4 py-3 px-2 font-bold bg-transparent outline-none border-r border-gray-100" />
-      <input type="text" value={row.remarks} placeholder="..." onChange={(e) => onChange({ remarks: e.target.value })} className="col-span-5 py-3 px-2 font-bold bg-transparent outline-none border-r border-gray-100" />
+    <div
+      onPointerDown={onSelect}
+      className="grid grid-cols-12 text-sm border-b last:border-b-0 cursor-pointer transition-colors"
+      style={{ borderColor: '#2e2e50', background: isSelected ? 'rgba(59,130,246,0.08)' : 'transparent' }}
+      onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)'; }}
+      onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
+    >
+      <input type="text" value={row.symbol} onChange={(e) => onChange({ symbol: e.target.value })} className="col-span-2 py-2.5 text-center font-black bg-transparent outline-none border-r" style={{ color: '#ef4444', borderColor: '#2e2e50' }} />
+      <input type="text" value={row.part} placeholder="軒先" onChange={(e) => onChange({ part: e.target.value })} className="col-span-4 py-2.5 px-2 font-bold bg-transparent outline-none border-r" style={{ color: '#f0ede8', borderColor: '#2e2e50' }} />
+      <input type="text" value={row.remarks} placeholder="..." onChange={(e) => onChange({ remarks: e.target.value })} className="col-span-5 py-2.5 px-2 font-bold bg-transparent outline-none border-r" style={{ color: '#f0ede8', borderColor: '#2e2e50' }} />
       <div className="col-span-1 flex items-center justify-center">
-        <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-lg transition-colors"><Trash2 className="w-5 h-5"/></button>
+        <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-1.5 rounded-lg transition-colors" style={{ color: '#3d3d60' }} onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')} onMouseLeave={e => (e.currentTarget.style.color = '#3d3d60')}><Trash2 className="w-4 h-4"/></button>
       </div>
     </div>
   );
@@ -1030,9 +1040,9 @@ export default function MapPage() {
   if (error) return <ErrorMessage message={error} />;
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] p-4 lg:p-6 font-sans pb-40 select-none overflow-x-hidden">
+    <div className="min-h-screen p-4 lg:p-6 font-sans pb-40 select-none overflow-x-hidden" style={{ background: '#0f0f1a', color: '#f0ede8' }}>
 
-      {/* 保存エラートースト（ページ全体を置き換えない軽量通知） */}
+      {/* 保存エラートースト */}
       {saveError && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[500] flex items-center gap-3 bg-red-600 text-white px-5 py-3 rounded-2xl shadow-2xl font-bold text-sm">
           <span>⚠️ {saveError}</span>
@@ -1041,31 +1051,31 @@ export default function MapPage() {
       )}
 
       {editingTitle && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/20 backdrop-blur-sm" onPointerDown={() => setEditingTitle(false)}>
-          <div className="bg-white p-6 rounded-3xl shadow-2xl border-2 border-gray-200 flex flex-col gap-5 w-[90%] max-w-sm" onPointerDown={e => e.stopPropagation()}>
-             <h4 className="font-black text-gray-800 border-b-2 border-gray-100 pb-2 text-xl text-center">タイトル設定</h4>
-             
+        <div className="fixed inset-0 z-[100] flex items-center justify-center backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.7)' }} onPointerDown={() => setEditingTitle(false)}>
+          <div className="p-6 rounded-2xl shadow-2xl flex flex-col gap-5 w-[90%] max-w-sm" style={{ background: '#1c1c30', border: '1px solid #2e2e50' }} onPointerDown={e => e.stopPropagation()}>
+             <h4 className="font-black border-b pb-2 text-lg text-center" style={{ color: '#f0ede8', borderColor: '#2e2e50' }}>タイトル設定</h4>
+
              <div>
-                <label className="text-xs font-bold text-gray-500 block mb-1">図面名 (例: 1階平面図)</label>
-                <input 
-                  value={currentLayout.title} 
-                  onChange={e => updateMapLayout({ title: e.target.value })} 
-                  className="border-2 border-gray-200 p-3 rounded-xl w-full font-black text-lg focus:border-blue-500 focus:bg-blue-50 outline-none transition-all" 
+                <label className="text-xs font-bold block mb-1" style={{ color: '#6b7280' }}>図面名 (例: 1階平面図)</label>
+                <input
+                  value={currentLayout.title}
+                  onChange={e => updateMapLayout({ title: e.target.value })}
+                  className="p-3 rounded-xl w-full font-black text-base outline-none transition-all"
+                  style={{ background: '#12122a', border: '1px solid #3d3d60', color: '#f0ede8' }}
                   placeholder="位置図"
                 />
              </div>
-             
+
              <div>
-                <label className="text-xs font-bold text-gray-500 block mb-1">文字の向き（回転）</label>
+                <label className="text-xs font-bold block mb-1" style={{ color: '#6b7280' }}>文字の向き（回転）</label>
                 <div className="grid grid-cols-4 gap-2">
-                   <button onClick={() => updateMapLayout({ rotation: 0 })} className={`p-3 rounded-xl font-black border-2 transition-all ${currentLayout.rotation === 0 ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}>0°</button>
-                   <button onClick={() => updateMapLayout({ rotation: 90 })} className={`p-3 rounded-xl font-black border-2 transition-all ${currentLayout.rotation === 90 ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}>90°</button>
-                   <button onClick={() => updateMapLayout({ rotation: 180 })} className={`p-3 rounded-xl font-black border-2 transition-all ${currentLayout.rotation === 180 ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}>180°</button>
-                   <button onClick={() => updateMapLayout({ rotation: 270 })} className={`p-3 rounded-xl font-black border-2 transition-all ${currentLayout.rotation === 270 ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}>270°</button>
+                   {[0, 90, 180, 270].map(deg => (
+                     <button key={deg} onClick={() => updateMapLayout({ rotation: deg })} className="p-3 rounded-xl font-black border transition-all" style={currentLayout.rotation === deg ? { background: '#3b82f6', color: '#fff', borderColor: '#3b82f6' } : { background: '#12122a', color: '#8b8ba8', borderColor: '#2e2e50' }}>{deg}°</button>
+                   ))}
                 </div>
              </div>
-             
-             <button onClick={() => setEditingTitle(false)} className="mt-2 w-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black py-4 rounded-xl shadow-lg transition-all text-lg">
+
+             <button onClick={() => setEditingTitle(false)} className="mt-1 w-full font-black py-3 rounded-xl shadow-lg transition-all" style={{ background: '#ff6b35', color: '#fff' }}>
                 ✓ 完了
              </button>
           </div>
@@ -1073,69 +1083,76 @@ export default function MapPage() {
       )}
 
       <div className="max-w-7xl mx-auto pb-12">
-        <div className="flex flex-col xl:flex-row justify-between xl:items-center mb-8 gap-6 no-print">
+        <div className="flex flex-col xl:flex-row justify-between xl:items-center mb-6 gap-4 no-print">
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-600 font-black text-xl px-4 py-2 hover:bg-blue-50 rounded-2xl transition-all active:scale-95"><ArrowLeft strokeWidth={4} /> 戻る</button>
-            <h1 className="text-3xl lg:text-4xl font-black text-gray-900 tracking-tighter">屋根伏図・位置図の編集</h1>
+            <button
+              onClick={() => navigate(`/project/${id}`)}
+              className="flex items-center gap-2 font-bold text-sm transition-colors"
+              style={{ color: '#8b8ba8' }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#ff6b35')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+            >
+              <ArrowLeft className="w-4 h-4" /> もどる
+            </button>
+            <div>
+              <h1 className="text-xl font-bold tracking-wide" style={{ color: '#f0ede8' }}>位置図の編集</h1>
+              <div className="mt-1 h-0.5 w-8 rounded-full" style={{ background: '#3b82f6' }} />
+            </div>
           </div>
-          
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
-            <div className="flex justify-between sm:justify-start items-center gap-3 sm:pr-5 sm:border-r border-gray-100">
-               <div className="flex items-center gap-2">
-                 <FileText className={`w-6 h-6 ${showLegendTable ? 'text-blue-500' : 'text-gray-300'}`}/>
-                 <span className="font-bold text-gray-600">凡例表を</span>
-               </div>
-               <div className="flex items-center gap-2">
-                 <button onClick={() => { const newState = !showLegendTable; setShowLegendTable(newState); saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, newState, mapTransforms, mapLayouts); }} className={`relative inline-flex h-9 w-18 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${showLegendTable ? 'bg-blue-600' : 'bg-gray-200'}`}>
-                    <span className="sr-only">Toggle Legend</span>
-                    <span aria-hidden="true" className={`inline-block h-8 w-8 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${showLegendTable ? 'translate-x-9' : 'translate-x-0'}`} />
-                 </button>
-                 <span className={`font-black w-10 ${showLegendTable ? 'text-blue-600' : 'text-gray-400'}`}>{showLegendTable ? '表示' : '非表示'}</span>
-               </div>
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-3 rounded-2xl border" style={{ background: '#1c1c30', borderColor: '#2e2e50' }}>
+            <div className="flex items-center gap-2 sm:pr-4 sm:border-r" style={{ borderColor: '#2e2e50' }}>
+               <FileText className="w-4 h-4" style={{ color: showLegendTable ? '#3b82f6' : '#3d3d60' }}/>
+               <span className="font-bold text-xs" style={{ color: '#8b8ba8' }}>凡例表</span>
+               <button onClick={() => { const newState = !showLegendTable; setShowLegendTable(newState); saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, newState, mapTransforms, mapLayouts); }} className={`relative inline-flex h-7 w-14 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none`} style={{ background: showLegendTable ? '#3b82f6' : '#3d3d60' }}>
+                  <span aria-hidden="true" className={`inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${showLegendTable ? 'translate-x-7' : 'translate-x-0'}`} />
+               </button>
+               <span className="font-black text-xs w-8" style={{ color: showLegendTable ? '#3b82f6' : '#6b7280' }}>{showLegendTable ? '表示' : '非表示'}</span>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-bold text-gray-500 mr-1 w-full sm:w-auto">描画ツール:</span>
-              <button onClick={() => { setEditingMode('pan'); setDrawingStartPoint(null); }} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 lg:px-6 py-3 rounded-xl font-black transition-all ${editingMode === 'pan' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-600 bg-gray-50 hover:bg-gray-100'}`}><Move className="w-5 h-5"/> 印刷枠調整</button>
-              <button onClick={() => { setEditingMode('pin'); setDrawingStartPoint(null); }} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 lg:px-6 py-3 rounded-xl font-black transition-all ${editingMode === 'pin' ? 'bg-red-500 text-white shadow-lg' : 'text-gray-600 bg-gray-50 hover:bg-gray-100'}`}><MapPin className="w-5 h-5"/> 番号ピン</button>
-              <button onClick={() => { setEditingMode('dimension'); setDrawingStartPoint(null); }} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 lg:px-6 py-3 rounded-xl font-black transition-all ${editingMode === 'dimension' ? 'bg-gray-900 text-white shadow-lg' : 'text-gray-600 bg-gray-50 hover:bg-gray-100'}`}><Ruler className="w-5 h-5"/> 線・寸法</button>
-              <button onClick={() => { setEditingMode('whiteout'); setDrawingStartPoint(null); }} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 lg:px-6 py-3 rounded-xl font-black transition-all ${editingMode === 'whiteout' ? 'bg-yellow-400 text-gray-900 shadow-lg' : 'text-gray-600 bg-gray-50 hover:bg-gray-100'}`}><Eraser className="w-5 h-5"/> 文字消し</button>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="font-bold text-xs w-full sm:w-auto" style={{ color: '#6b7280' }}>描画:</span>
+              <button onClick={() => { setEditingMode('pan'); setDrawingStartPoint(null); }} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs transition-all" style={editingMode === 'pan' ? { background: '#4f46e5', color: '#fff' } : { background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}><Move className="w-4 h-4"/> 印刷枠</button>
+              <button onClick={() => { setEditingMode('pin'); setDrawingStartPoint(null); }} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs transition-all" style={editingMode === 'pin' ? { background: '#ef4444', color: '#fff' } : { background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}><MapPin className="w-4 h-4"/> ピン</button>
+              <button onClick={() => { setEditingMode('dimension'); setDrawingStartPoint(null); }} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs transition-all" style={editingMode === 'dimension' ? { background: '#f0ede8', color: '#0f0f1a' } : { background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}><Ruler className="w-4 h-4"/> 寸法</button>
+              <button onClick={() => { setEditingMode('whiteout'); setDrawingStartPoint(null); }} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs transition-all" style={editingMode === 'whiteout' ? { background: '#eab308', color: '#0f0f1a' } : { background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}><Eraser className="w-4 h-4"/> 消し</button>
             </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 mb-6 no-print p-2 bg-gray-100 rounded-2xl w-fit items-center">
+        {/* 図面タブバー */}
+        <div className="flex flex-wrap gap-2 mb-5 no-print p-2 rounded-2xl w-fit items-center" style={{ background: '#1c1c30' }}>
           {project?.mapUrls?.map((_, idx) => (
             <div key={idx} className="flex items-center gap-1">
-              <button onClick={() => setCurrentMapIndex(idx)} className={`px-6 py-3 rounded-xl text-lg font-black transition-all ${currentMapIndex === idx ? 'bg-white text-blue-600 shadow-md' : 'text-gray-500 hover:bg-white/50'}`}>図面 {idx + 1}</button>
-              <button onClick={() => deleteMapPhoto(idx)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-lg transition-colors" title="この位置図を削除"><Trash2 className="w-4 h-4" /></button>
+              <button onClick={() => setCurrentMapIndex(idx)} className="px-5 py-2.5 rounded-xl text-sm font-black transition-all" style={currentMapIndex === idx ? { background: '#12122a', color: '#3b82f6', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' } : { color: '#8b8ba8' }}>図面 {idx + 1}</button>
+              <button onClick={() => deleteMapPhoto(idx)} className="p-1.5 rounded-lg transition-colors" style={{ color: '#3d3d60' }} onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')} onMouseLeave={e => (e.currentTarget.style.color = '#3d3d60')} title="削除"><Trash2 className="w-3.5 h-3.5" /></button>
             </div>
           ))}
-          <label className="flex items-center gap-2 px-4 py-3 rounded-xl text-lg font-black text-gray-500 border-2 border-dashed border-gray-300 hover:bg-white/50 cursor-pointer transition-all" title="図面を追加">
-            <Plus className="w-5 h-5" /> 追加
+          <label className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-black cursor-pointer transition-all border-2 border-dashed" style={{ color: '#8b8ba8', borderColor: '#3d3d60' }} title="図面を追加">
+            <Plus className="w-4 h-4" /> 追加
             <input ref={addInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => uploadMapImage(e, 'add')} disabled={isSaving} />
           </label>
         </div>
 
-        <div className={`grid ${showLegendTable ? 'grid-cols-1 lg:grid-cols-12' : 'grid-cols-1'} gap-8 items-start`}>
-          
-          <div className={`${showLegendTable ? 'lg:col-span-8' : 'w-full max-w-4xl mx-auto'} bg-white p-4 lg:p-8 rounded-[2rem] lg:rounded-[3rem] border-2 border-gray-100 shadow-2xl relative`}>
+        <div className={`grid ${showLegendTable ? 'grid-cols-1 lg:grid-cols-12' : 'grid-cols-1'} gap-6 items-start`}>
+
+          <div className={`${showLegendTable ? 'lg:col-span-8' : 'w-full max-w-4xl mx-auto'} p-4 lg:p-6 rounded-2xl border relative`} style={{ background: '#1c1c30', borderColor: '#2e2e50' }}>
             {editingMode === 'dimension' && (
-              <div className="flex flex-wrap items-center gap-3 p-4 bg-gray-100 rounded-2xl border border-gray-200 mb-6">
-                 <Paintbrush className="w-5 h-5 text-gray-500"/>
-                 <span className="font-bold text-gray-600 mr-2">線の色：</span>
+              <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl border mb-4" style={{ background: '#12122a', borderColor: '#2e2e50' }}>
+                 <Paintbrush className="w-4 h-4" style={{ color: '#6b7280' }}/>
+                 <span className="font-bold text-xs mr-1" style={{ color: '#8b8ba8' }}>線の色：</span>
                 {COLOR_PALETTE.map(color => (
-                  <button key={color.name} onClick={() => setActiveColor(color.value)} className={`w-10 h-10 rounded-full border-4 transition-all ${activeColor === color.value ? 'border-gray-900 scale-110 shadow-lg' : 'border-white hover:scale-105'}`} style={{ backgroundColor: color.value }} />
+                  <button key={color.name} onClick={() => setActiveColor(color.value)} className="w-7 h-7 rounded-full transition-all" style={{ backgroundColor: color.value, border: activeColor === color.value ? '3px solid #ff6b35' : '2px solid #2e2e50', transform: activeColor === color.value ? 'scale(1.2)' : 'scale(1)' }} />
                 ))}
-                <label className={`w-10 h-10 rounded-full border-4 transition-all cursor-pointer overflow-hidden flex items-center justify-center hover:scale-105 ${!COLOR_PALETTE.some(c => c.value === activeColor) ? 'border-gray-900 scale-110 shadow-lg' : 'border-white'}`} style={{ background: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)' }} title="自由色">
+                <label className="w-7 h-7 rounded-full cursor-pointer overflow-hidden flex items-center justify-center transition-all hover:scale-105" style={{ background: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)', border: !COLOR_PALETTE.some(c => c.value === activeColor) ? '3px solid #ff6b35' : '2px solid #2e2e50' }} title="自由色">
                   <input type="color" value={activeColor} onChange={(e) => setActiveColor(e.target.value)} className="opacity-0 absolute w-px h-px" />
                 </label>
               </div>
             )}
-            
+
             {uploadProgress && (
-              <div className="mt-2 mb-2 flex items-center gap-3 px-5 py-3 bg-blue-50 border border-blue-200 rounded-2xl text-blue-700 font-bold text-sm">
-                <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
+              <div className="mt-2 mb-2 flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold" style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', color: '#60a5fa' }}>
+                <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin shrink-0" style={{ borderColor: '#3b82f6', borderTopColor: 'transparent' }} />
                 {uploadProgress}
               </div>
             )}
@@ -1144,31 +1161,31 @@ export default function MapPage() {
               <div className={`w-full flex flex-col lg:flex-row justify-between items-center gap-4 mb-4 transition-opacity duration-200 ${isDraggingWhiteout ? 'opacity-0' : 'opacity-100'}`}>
                 
                 <div className="hidden lg:flex flex-1 justify-start">
-                   <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-xl text-xs font-black border border-blue-200 flex items-center gap-2">
+                   <div className="px-3 py-1.5 rounded-xl text-xs font-bold" style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', color: '#60a5fa' }}>
                      💡 枠内のタイトルを指で移動・タップで編集
                    </div>
                 </div>
 
                 <div className="flex-1 flex justify-center">
                   {editingMode !== 'pan' && (
-                    <div className="bg-gray-800 text-white px-6 py-2.5 rounded-full font-black flex items-center gap-3 shadow-md text-sm border-2 border-gray-700 whitespace-nowrap">
-                      {editingMode === 'pin' && <><LayoutGrid className="w-5 h-5 text-red-400"/> タップでピンを追加</>}
-                      {editingMode === 'dimension' && !drawingStartPoint && <><Ruler className="w-5 h-5 text-blue-400"/> 線の始点をタップ</>}
+                    <div className="px-5 py-2 rounded-full font-black flex items-center gap-2 shadow-md text-xs whitespace-nowrap" style={{ background: '#12122a', border: '1px solid #3d3d60', color: '#f0ede8' }}>
+                      {editingMode === 'pin' && <><LayoutGrid className="w-4 h-4" style={{ color: '#ef4444' }}/> タップでピンを追加</>}
+                      {editingMode === 'dimension' && !drawingStartPoint && <><Ruler className="w-4 h-4" style={{ color: '#3b82f6' }}/> 線の始点をタップ</>}
                       {editingMode === 'dimension' && drawingStartPoint && (
                         <>
-                          <Ruler className="w-5 h-5 text-yellow-400"/> 線の終点をタップ
-                          <button type="button" onClick={(e) => { e.stopPropagation(); setDrawingStartPoint(null); }} className="ml-2 px-3 py-1 bg-white/20 hover:bg-white/30 rounded-full text-white font-bold text-xs transition-colors">✕ 取消</button>
+                          <Ruler className="w-4 h-4" style={{ color: '#eab308' }}/> 線の終点をタップ
+                          <button type="button" onClick={(e) => { e.stopPropagation(); setDrawingStartPoint(null); }} className="ml-1 px-2 py-0.5 rounded-full font-bold text-xs transition-colors" style={{ background: 'rgba(255,255,255,0.15)', color: '#f0ede8' }}>✕ 取消</button>
                         </>
                       )}
-                      {editingMode === 'whiteout' && <><Eraser className="w-5 h-5 text-yellow-400"/> 隠したい文字の上をドラッグ</>}
+                      {editingMode === 'whiteout' && <><Eraser className="w-4 h-4" style={{ color: '#eab308' }}/> 隠したい文字の上をドラッグ</>}
                     </div>
                   )}
                 </div>
 
-                <div className="flex-1 flex justify-end gap-2 w-full lg:w-auto justify-center lg:justify-end">
-                  <button onClick={() => rotateCurrentMap(-90)} className="p-2 bg-white hover:bg-gray-50 text-gray-700 rounded-xl shadow border border-gray-200 transition-all" title="左に90°回転"><RotateCcw className="w-4 h-4" /></button>
-                  <button onClick={() => rotateCurrentMap(90)} className="p-2 bg-white hover:bg-gray-50 text-gray-700 rounded-xl shadow border border-gray-200 transition-all" title="右に90°回転"><RotateCw className="w-4 h-4" /></button>
-                  <label className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-xl shadow cursor-pointer border border-gray-200 transition-all" title="この図面を差し替え">
+                <div className="flex-1 flex justify-end gap-2 w-full lg:w-auto">
+                  <button onClick={() => rotateCurrentMap(-90)} className="p-2 rounded-xl transition-colors" style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }} onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')} onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')} title="左に90°回転"><RotateCcw className="w-4 h-4" /></button>
+                  <button onClick={() => rotateCurrentMap(90)} className="p-2 rounded-xl transition-colors" style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }} onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')} onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')} title="右に90°回転"><RotateCw className="w-4 h-4" /></button>
+                  <label className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl cursor-pointer transition-colors" style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }} onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')} onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')} title="この図面を差し替え">
                     <UploadCloud className="w-4 h-4" /> 差し替え
                     <input ref={replaceInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => uploadMapImage(e, 'replace')} disabled={isSaving} />
                   </label>
@@ -1181,15 +1198,15 @@ export default function MapPage() {
                 <div className="relative flex flex-col items-center w-full">
                   
                   {editingMode === 'pan' && (
-                     <div className="absolute -top-16 lg:-top-20 z-50 flex items-center gap-4 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl">
-                        <span className="font-black whitespace-nowrap">🔍 ズーム:</span>
-                        <input type="range" min="0.2" max="4" step="0.05" value={currentTransform.scale} onChange={(e) => updateTransform(currentMapIndex, { scale: parseFloat(e.target.value) })} onMouseUp={() => saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts)} onTouchEnd={() => saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts)} className="w-32 lg:w-48 accent-indigo-500 cursor-pointer" />
-                        <span className="font-bold w-12 text-center text-sm">{Math.round(currentTransform.scale * 100)}%</span>
-                        <button onClick={() => { updateTransform(currentMapIndex, { scale: 1, x: 0, y: 0 }); saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts); }} className="ml-2 px-4 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-full font-bold text-xs transition-colors whitespace-nowrap">リセット</button>
+                     <div className="absolute -top-14 z-50 flex items-center gap-3 px-5 py-2.5 rounded-full shadow-2xl" style={{ background: '#12122a', border: '1px solid #3d3d60' }}>
+                        <span className="font-black text-xs whitespace-nowrap" style={{ color: '#f0ede8' }}>🔍 ズーム:</span>
+                        <input type="range" min="0.2" max="4" step="0.05" value={currentTransform.scale} onChange={(e) => updateTransform(currentMapIndex, { scale: parseFloat(e.target.value) })} onMouseUp={() => saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts)} onTouchEnd={() => saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts)} className="w-28 lg:w-40 accent-orange-500 cursor-pointer" />
+                        <span className="font-bold w-10 text-center text-xs" style={{ color: '#8b8ba8' }}>{Math.round(currentTransform.scale * 100)}%</span>
+                        <button onClick={() => { updateTransform(currentMapIndex, { scale: 1, x: 0, y: 0 }); saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts); }} className="ml-1 px-3 py-1 rounded-full font-bold text-xs transition-colors whitespace-nowrap" style={{ background: '#2e2e50', color: '#8b8ba8' }}>リセット</button>
                      </div>
                   )}
 
-                  <div className="w-full flex justify-center items-center bg-[#e2e8f0] overflow-hidden rounded-md border border-gray-300">
+                  <div className="w-full flex justify-center items-center overflow-hidden rounded-xl border" style={{ background: '#12122a', borderColor: '#2e2e50' }}>
                     <div
                       className={`relative w-full transition-all ${editingMode === 'pan' ? 'ring-4 ring-indigo-500 ring-offset-4 cursor-move' : ''}`}
                       style={{ 
@@ -1285,10 +1302,10 @@ export default function MapPage() {
                   </div>
                 </div>
               ) : (
-                <label className="flex flex-col items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors w-full h-96 border-4 border-dashed border-gray-300 rounded-3xl group">
-                  <UploadCloud className="w-20 h-20 mb-4 text-blue-400 group-hover:scale-110 transition-transform" />
-                  <span className="text-2xl font-black text-blue-600 block mb-2">図面・位置図をアップロード</span>
-                  <span className="text-sm font-bold text-gray-500">ここをタップして画像またはPDFを選択してください</span>
+                <label className="flex flex-col items-center justify-center cursor-pointer w-full h-72 rounded-2xl border-2 border-dashed group transition-colors" style={{ borderColor: '#3d3d60' }} onMouseEnter={e => (e.currentTarget.style.borderColor = '#3b82f6')} onMouseLeave={e => (e.currentTarget.style.borderColor = '#3d3d60')}>
+                  <UploadCloud className="w-14 h-14 mb-3 transition-transform group-hover:scale-110" style={{ color: '#3b82f6' }} />
+                  <span className="text-lg font-black block mb-1" style={{ color: '#3b82f6' }}>図面・位置図をアップロード</span>
+                  <span className="text-xs font-bold" style={{ color: '#6b7280' }}>画像またはPDFを選択してください</span>
                   <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => uploadMapImage(e, 'add')} disabled={isSaving} />
                 </label>
               )}
@@ -1312,10 +1329,9 @@ export default function MapPage() {
               if (!pin) return null;
               const currentSize = pin.size || 1;
               return (
-                <div className="mt-4 flex flex-col gap-3 p-3 bg-gray-50 border-2 border-red-100 rounded-2xl animate-fade-in-up">
-                  {/* 名称編集 */}
+                <div className="mt-4 flex flex-col gap-3 p-3 rounded-xl border" style={{ background: '#12122a', borderColor: 'rgba(239,68,68,0.3)' }}>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-gray-500 shrink-0">名称</span>
+                    <span className="text-xs font-bold shrink-0" style={{ color: '#8b8ba8' }}>名称</span>
                     <input
                       type="text"
                       value={editingPinLabel}
@@ -1332,19 +1348,19 @@ export default function MapPage() {
                         if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                         if (e.key === 'Escape') { setEditingPinLabel(pin.label); (e.target as HTMLInputElement).blur(); }
                       }}
-                      className="flex-1 px-3 py-1.5 border-2 border-gray-200 rounded-xl text-base font-bold focus:border-red-400 focus:outline-none bg-white"
+                      className="flex-1 px-3 py-1.5 rounded-xl text-sm font-bold outline-none"
+                      style={{ background: '#1c1c30', border: '1px solid #3d3d60', color: '#f0ede8' }}
                       maxLength={20}
                     />
                   </div>
-                  {/* サイズ・削除 */}
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-bold text-gray-500">サイズ</span>
-                    <button type="button" onClick={() => updateMapMarker(selectedPinId, { size: Math.max(0.3, Math.round((currentSize - 0.1) * 10) / 10) })} className="w-10 h-10 flex items-center justify-center text-xl font-bold bg-white border-2 border-gray-200 rounded-xl hover:bg-gray-100 active:scale-95 shadow-sm">ー</button>
-                    <span className="w-12 text-center font-black text-gray-700">{currentSize.toFixed(1)}x</span>
-                    <button type="button" onClick={() => updateMapMarker(selectedPinId, { size: Math.min(3, Math.round((currentSize + 0.1) * 10) / 10) })} className="w-10 h-10 flex items-center justify-center text-xl font-bold bg-white border-2 border-gray-200 rounded-xl hover:bg-gray-100 active:scale-95 shadow-sm">＋</button>
+                    <span className="text-xs font-bold" style={{ color: '#8b8ba8' }}>サイズ</span>
+                    <button type="button" onClick={() => updateMapMarker(selectedPinId, { size: Math.max(0.3, Math.round((currentSize - 0.1) * 10) / 10) })} className="w-9 h-9 flex items-center justify-center text-base font-bold rounded-xl transition-colors" style={{ background: '#2e2e50', color: '#f0ede8' }}>ー</button>
+                    <span className="w-10 text-center font-black text-sm" style={{ color: '#f0ede8' }}>{currentSize.toFixed(1)}x</span>
+                    <button type="button" onClick={() => updateMapMarker(selectedPinId, { size: Math.min(3, Math.round((currentSize + 0.1) * 10) / 10) })} className="w-9 h-9 flex items-center justify-center text-base font-bold rounded-xl transition-colors" style={{ background: '#2e2e50', color: '#f0ede8' }}>＋</button>
                     <div className="flex-1" />
-                    <button type="button" onClick={() => { removeMapMarker(selectedPinId); setSelectedPinId(null); }} className="flex items-center gap-1.5 px-4 py-2 bg-red-50 border-2 border-red-200 text-red-600 font-bold rounded-xl hover:bg-red-100 active:scale-95 text-sm">
-                      <Trash2 className="w-4 h-4" /> 削除
+                    <button type="button" onClick={() => { removeMapMarker(selectedPinId); setSelectedPinId(null); }} className="flex items-center gap-1.5 px-3 py-2 font-bold rounded-xl active:scale-95 text-xs transition-colors" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' }}>
+                      <Trash2 className="w-3.5 h-3.5" /> 削除
                     </button>
                   </div>
                 </div>
@@ -1353,31 +1369,33 @@ export default function MapPage() {
           </div>
 
           {showLegendTable && (
-            <div className="lg:col-span-4 bg-white p-6 lg:p-8 rounded-[2rem] lg:rounded-[3rem] border-2 border-gray-100 shadow-2xl space-y-6">
-              <h3 className="text-2xl lg:text-3xl font-black text-gray-900 flex items-center gap-3 border-b-4 border-gray-100 pb-4"><FileText className="text-blue-500 w-8 h-8"/> 凡例（項目欄）</h3>
-              <div className="border-2 border-gray-200 rounded-2xl overflow-hidden shadow-inner">
-                <div className="grid grid-cols-12 text-xs lg:text-sm font-black bg-gray-100 border-b-2 border-gray-200 text-gray-600">
-                  <div className="col-span-2 py-3 text-center border-r-2 border-gray-200">符号</div>
-                  <div className="col-span-4 py-3 text-center border-r-2 border-gray-200">部位</div>
-                  <div className="col-span-5 py-3 text-center border-r-2 border-gray-200">備考</div>
-                  <div className="col-span-1 py-3 text-center text-gray-400">削</div>
+            <div className="lg:col-span-4 p-5 rounded-2xl border space-y-4" style={{ background: '#1c1c30', borderColor: '#2e2e50' }}>
+              <h3 className="text-base font-black flex items-center gap-2 border-b pb-3" style={{ color: '#f0ede8', borderColor: '#2e2e50' }}>
+                <FileText className="w-5 h-5" style={{ color: '#3b82f6' }}/> 凡例（項目欄）
+              </h3>
+              <div className="rounded-xl overflow-hidden border" style={{ borderColor: '#2e2e50' }}>
+                <div className="grid grid-cols-12 text-xs font-black border-b" style={{ background: '#12122a', borderColor: '#2e2e50', color: '#8b8ba8' }}>
+                  <div className="col-span-2 py-2.5 text-center border-r" style={{ borderColor: '#2e2e50' }}>符号</div>
+                  <div className="col-span-4 py-2.5 text-center border-r" style={{ borderColor: '#2e2e50' }}>部位</div>
+                  <div className="col-span-5 py-2.5 text-center border-r" style={{ borderColor: '#2e2e50' }}>備考</div>
+                  <div className="col-span-1 py-2.5 text-center" style={{ color: '#3d3d60' }}>削</div>
                 </div>
                 {currentMapRows.length > 0 ? currentMapRows.map((row) => (
-                  <LegendRow 
-                    key={row.id} row={row} isSelected={selectedRowId === row.id} 
-                    onSelect={() => setSelectedRowId(row.id)} onChange={(updates) => updateMapRow(row.id, updates)} 
-                    onRemove={() => removeMapRow(row.id)} 
+                  <LegendRow
+                    key={row.id} row={row} isSelected={selectedRowId === row.id}
+                    onSelect={() => setSelectedRowId(row.id)} onChange={(updates) => updateMapRow(row.id, updates)}
+                    onRemove={() => removeMapRow(row.id)}
                   />
                 )) : (
-                  <div className="text-center py-8 text-gray-400 font-bold bg-gray-50 text-sm">ピンを追加すると<br/>ここに行が追加されます</div>
+                  <div className="text-center py-8 text-sm font-bold" style={{ background: '#12122a', color: '#6b7280' }}>ピンを追加すると<br/>ここに行が追加されます</div>
                 )}
               </div>
-              <button onClick={() => { const newRows = [...mapRows, { id: Date.now(), symbol: '', part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }]; setMapRows(newRows); saveProjectMapData(mapPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts); }} className="w-full bg-gray-100 text-gray-800 font-black py-4 px-6 rounded-2xl flex items-center justify-center gap-2 hover:bg-gray-200 active:scale-95"><Plus className="w-5 h-5"/> 行を手動追加</button>
+              <button onClick={() => { const newRows = [...mapRows, { id: Date.now(), symbol: '', part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }]; setMapRows(newRows); saveProjectMapData(mapPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts); }} className="w-full font-black py-3 px-4 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-colors text-sm" style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }} onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')} onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}><Plus className="w-4 h-4"/> 行を手動追加</button>
             </div>
           )}
         </div>
 
-        <button onClick={() => saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts).then(() => alert('保存しました'))} disabled={isSaving} className="fixed bottom-6 right-6 lg:bottom-10 lg:right-10 z-50 bg-blue-600 text-white font-black px-6 py-4 lg:px-10 lg:py-6 text-xl lg:text-2xl rounded-full lg:rounded-3xl shadow-3xl hover:bg-blue-700 transition-all active:scale-95 flex items-center gap-3 disabled:opacity-50"><Save className="w-6 h-6 lg:w-8 lg:h-8"/> {isSaving ? '保存中...' : '位置図を保存'}</button>
+        <button onClick={() => saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts).then(() => alert('保存しました'))} disabled={isSaving} className="fixed bottom-6 right-6 z-50 font-black px-6 py-4 rounded-2xl shadow-2xl transition-all active:scale-95 flex items-center gap-2 disabled:opacity-50 text-sm" style={{ background: '#ff6b35', color: '#fff', boxShadow: '0 0 24px rgba(255,107,53,0.4)' }}><Save className="w-5 h-5"/> {isSaving ? '保存中...' : '位置図を保存'}</button>
 
       </div>
     </div>

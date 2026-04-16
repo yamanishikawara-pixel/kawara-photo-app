@@ -272,7 +272,7 @@ export default function PdfExportPage() {
   const showLegendTable = project.showLegendTable !== false;
   
   return (
-    <div className={`min-h-screen font-sans pb-12 overflow-x-hidden w-full relative ${isPrinting ? 'bg-white p-0 block' : 'bg-gray-200 p-4 sm:p-6 flex flex-col items-center'}`}>
+    <div className={`min-h-screen font-sans overflow-x-hidden w-full relative ${isPrinting ? 'bg-white p-0 block' : 'pb-12 p-4 sm:p-6 flex flex-col items-center'}`} style={isPrinting ? {} : { background: '#12122a' }}>
       
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap');
@@ -366,12 +366,57 @@ export default function PdfExportPage() {
         }
       `}</style>
 
-      <div className={`w-full max-w-2xl mb-6 flex justify-between items-center flex-wrap gap-2 no-print ${isPrinting ? 'hidden' : ''}`}>
-        <button type="button" onClick={() => navigate(`/project/${id}`)} className="text-blue-500 font-bold flex items-center gap-2 text-lg"><ArrowLeft className="w-6 h-6" /> もどる</button>
-        <div className="flex gap-2 sm:gap-4 flex-wrap justify-end">
-          <button type="button" onClick={handleZipExport} disabled={isZipping || isPrinting || isCapturingForPdf} className="flex items-center gap-2 bg-green-600 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-green-700 disabled:opacity-50"><Download className="w-5 h-5" />写真のみ(Zip)</button>
-          <button type="button" onClick={handlePdfDownload} disabled={isZipping || isPrinting || isCapturingForPdf} className="flex items-center gap-2 bg-blue-600 text-white px-5 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-blue-700 disabled:opacity-50"><FileDown className="w-5 h-5" /> {isCapturingForPdf ? (pdfProgress || '処理中...') : 'PDFダウンロード'}</button>
-          <button type="button" onClick={handlePrint} disabled={isZipping || isPrinting || isCapturingForPdf} className="flex items-center gap-2 bg-black text-white px-5 sm:px-8 py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:bg-gray-800 disabled:opacity-50"><Printer className="w-5 h-5" /> {isPrinting ? (printProgress || '画像処理中...') : 'PDF作成・印刷'}</button>
+      <div className={`w-full max-w-2xl mb-6 flex justify-between items-center flex-wrap gap-3 no-print ${isPrinting ? 'hidden' : ''}`}>
+        {/* もどる */}
+        <button
+          type="button"
+          onClick={() => navigate(`/project/${id}`)}
+          className="flex items-center gap-2 font-bold text-sm transition-colors"
+          style={{ color: '#8b8ba8' }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+        >
+          <ArrowLeft className="w-4 h-4" /> もどる
+        </button>
+        <div className="flex gap-2 sm:gap-3 flex-wrap justify-end">
+          {/* Zip */}
+          <button
+            type="button"
+            onClick={handleZipExport}
+            disabled={isZipping || isPrinting || isCapturingForPdf}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm border transition-colors disabled:opacity-40"
+            style={{ background: '#1c1c30', borderColor: '#2e2e50', color: '#8b8ba8' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#f0ede8'; e.currentTarget.style.color = '#f0ede8'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#2e2e50'; e.currentTarget.style.color = '#8b8ba8'; }}
+          >
+            <Download className="w-4 h-4" /> 写真のみ(Zip)
+          </button>
+          {/* PDFダウンロード */}
+          <button
+            type="button"
+            onClick={handlePdfDownload}
+            disabled={isZipping || isPrinting || isCapturingForPdf}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-colors disabled:opacity-40"
+            style={{ background: '#f59e0b', color: '#000' }}
+            onMouseEnter={e => (e.currentTarget.style.background = '#fbbf24')}
+            onMouseLeave={e => (e.currentTarget.style.background = '#f59e0b')}
+          >
+            <FileDown className="w-4 h-4" />
+            {isCapturingForPdf ? (pdfProgress || '処理中...') : 'PDFダウンロード'}
+          </button>
+          {/* 印刷 */}
+          <button
+            type="button"
+            onClick={handlePrint}
+            disabled={isZipping || isPrinting || isCapturingForPdf}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-colors disabled:opacity-40"
+            style={{ background: '#f59e0b', color: '#000', boxShadow: '0 0 14px rgba(245,158,11,0.35)' }}
+            onMouseEnter={e => (e.currentTarget.style.background = '#fbbf24')}
+            onMouseLeave={e => (e.currentTarget.style.background = '#f59e0b')}
+          >
+            <Printer className="w-4 h-4" />
+            {isPrinting ? (printProgress || '画像処理中...') : 'PDF作成・印刷'}
+          </button>
         </div>
       </div>
 
@@ -381,37 +426,65 @@ export default function PdfExportPage() {
         
         {/* ① 表紙ページ */}
         <div style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-          <div className={`pdf-page flex flex-col items-center bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '15mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
-            <div className="flex flex-col items-center w-full justify-center flex-1">
-              <div className="shrink-0 flex justify-center mb-6">
-                {logoUrl ? <img src={proxyUrl(logoUrl, `logo_${sessionId}`)} data-original-src={logoUrl} alt="自社ロゴ" className="block h-auto object-contain" style={{ width: '151px' }} crossOrigin="anonymous" /> : <img src={kawaraLogo} data-original-src={kawaraLogo} alt="標準ロゴ" className="block h-auto object-contain grayscale" style={{ width: '121px' }} crossOrigin="anonymous" />}
+          <div className={`pdf-page bg-white text-black overflow-hidden ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, transform: isPrinting ? 'none' : `scale(${scale})`, position: 'relative' }}>
+
+            {/* ── メインコンテンツ (タイトル + フィールド) ── */}
+            {/* 下部会社情報エリア26mmを除いた領域で縦中央 */}
+            <div style={{ position: 'absolute', top: 0, bottom: isPrinting ? '26mm' : '98px', left: 0, right: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingBottom: isPrinting ? '6mm' : '23px' }}>
+
+              {/* タイトルブロック */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: isPrinting ? '21mm' : '79px' }}>
+                <h1 style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '28pt' : '37px', fontWeight: '900', letterSpacing: '0.28em', textAlign: 'center', color: '#111', margin: 0, lineHeight: 1.15 }}>工事写真報告書</h1>
+                {/* 黒のアクセントライン — 1本 */}
+                <div style={{ width: isPrinting ? '120mm' : '454px', height: isPrinting ? '2mm' : '7px', background: '#111', borderRadius: '1px', marginTop: isPrinting ? '5mm' : '19px' }} />
               </div>
-              <div className="flex flex-col items-center mb-12">
-                <h1 className="text-[48px] font-bold tracking-[0.3em] mb-4 text-center">工事写真報告書</h1>
-                <div className="w-[160mm] border-b-[4px] border-black" />
-                <div className="w-[160mm] border-b-[1px] border-black mt-1.5" />
-              </div>
-              <div className="w-[150mm] flex flex-col gap-y-[12mm]">
+
+              {/* フィールドリスト */}
+              <div style={{ width: isPrinting ? '168mm' : '635px', display: 'flex', flexDirection: 'column', gap: isPrinting ? '8mm' : '30px' }}>
                 {COVER_FIELDS.map((item, idx) => {
                   let value = String(project[item.key] ?? '　');
                   if (item.key === 'contractorName' && companyName) value = companyName;
                   return (
-                    <div key={idx} className="flex items-end pb-2 border-b-2 border-black">
-                      <div className="w-[45mm] flex-shrink-0 flex justify-between text-[22px] font-bold pr-8 leading-none">{item.label.split('').map((c: string, i: number) => <span key={i} className="block leading-none">{c}</span>)}</div>
-                      <div className="flex-1 text-[26px] font-bold whitespace-nowrap overflow-hidden pl-4 leading-none pb-[2px]">{value}</div>
+                    <div key={idx} style={{ display: 'flex', alignItems: 'flex-end', borderBottom: '1px solid #e5e5e5', paddingBottom: isPrinting ? '3mm' : '11px' }}>
+                      <div style={{ width: isPrinting ? '52mm' : '197px', flexShrink: 0, display: 'flex', justifyContent: 'space-between', paddingRight: isPrinting ? '8mm' : '30px', fontFamily: JP_FONT, fontSize: isPrinting ? '10pt' : '13px', fontWeight: 'bold', color: '#777', lineHeight: 1 }}>
+                        {item.label.split('').map((c: string, i: number) => <span key={i}>{c}</span>)}
+                      </div>
+                      <div style={{ flex: 1, fontFamily: JP_FONT, fontSize: isPrinting ? '15pt' : '20px', fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', color: '#111', lineHeight: 1 }}>{value}</div>
                     </div>
                   );
                 })}
               </div>
+
             </div>
-            {userSettings && (address || phone) && (
-              <div className="absolute bottom-[16mm] right-[15mm] text-right flex flex-col items-end pl-4 py-1 bg-white">
-                {companyName && <div className="text-[18px] font-bold mb-1 text-black">{companyName}</div>}
-                {address && <div className="text-[14px] font-bold text-gray-800">{address}</div>}
-                {phone && <div className="text-[14px] font-bold text-gray-800">TEL: {phone}</div>}
+
+            {/* ── 下部: ロゴ + 会社情報 + ページ番号 ── */}
+            {/* ロゴwidth : 情報width ≈ 1 : φ の黄金比配置 */}
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: isPrinting ? '26mm' : '98px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: isPrinting ? '0 21mm' : '0 79px', borderTop: `${isPrinting ? '0.3mm' : '1px'} solid #e8e8e8` }}>
+
+              {/* ロゴ + 縦セパレーター + 会社情報 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: isPrinting ? '5mm' : '19px', minWidth: 0 }}>
+                {/* ロゴ: maxWidth ≈ 28mm → 会社情報エリア ≈ 28×φ≈45mm (黄金比) */}
+                {logoUrl ? (
+                  <img src={proxyUrl(logoUrl, `logo_${sessionId}`)} data-original-src={logoUrl} alt="自社ロゴ" style={{ height: isPrinting ? '12mm' : '45px', width: 'auto', maxWidth: isPrinting ? '28mm' : '106px', objectFit: 'contain', flexShrink: 0 }} crossOrigin="anonymous" />
+                ) : (
+                  <img src={kawaraLogo} data-original-src={kawaraLogo} alt="標準ロゴ" style={{ height: isPrinting ? '10mm' : '38px', width: 'auto', maxWidth: isPrinting ? '25mm' : '95px', objectFit: 'contain', flexShrink: 0, filter: 'grayscale(1)' }} crossOrigin="anonymous" />
+                )}
+                {userSettings && (companyName || address || phone) && (<>
+                  {/* 縦セパレーター */}
+                  <div style={{ width: isPrinting ? '0.3mm' : '1px', height: isPrinting ? '10mm' : '38px', background: '#d0d0d0', flexShrink: 0 }} />
+                  {/* 会社情報: flex-1 でロゴとの比率が自然な黄金比に */}
+                  <div style={{ lineHeight: 1.45, minWidth: 0 }}>
+                    {companyName && <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '10pt' : '13px', fontWeight: 'bold', color: '#222', whiteSpace: 'nowrap', overflow: 'hidden' }}>{companyName}</div>}
+                    {address && <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7.5pt' : '10px', color: '#666', whiteSpace: 'nowrap', overflow: 'hidden' }}>{address}</div>}
+                    {phone && <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7.5pt' : '10px', color: '#666', whiteSpace: 'nowrap' }}>TEL: {phone}</div>}
+                  </div>
+                </>)}
               </div>
-            )}
-            <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-[16px] font-bold text-black">- 1 / {totalPages} -</div>
+
+              {/* ページ番号 */}
+              <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8.5pt' : '11px', fontWeight: 'bold', color: '#999', whiteSpace: 'nowrap', flexShrink: 0, paddingLeft: isPrinting ? '5mm' : '19px' }}>- 1 / {totalPages} -</div>
+
+            </div>
           </div>
         </div>
 

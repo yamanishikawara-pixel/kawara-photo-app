@@ -26,7 +26,6 @@ function NameSuggest({
   const [query, setQuery] = useState('');
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  // ドロップダウンを開くたびに検索文字列をリセット
   const handleOpen = () => { setQuery(''); setOpen(true); };
 
   const filtered = query.trim()
@@ -51,12 +50,12 @@ function NameSuggest({
 
   return (
     <div ref={wrapRef} className="relative">
-      {/* 表示用インプット＋▼ボタン */}
       <div className="flex">
         <input
           type="text"
           placeholder="例：改質アスファルトルーフィング"
-          className="flex-1 p-3 border border-gray-300 rounded-l-lg text-base font-bold bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+          className="flex-1 p-3 rounded-l-lg text-sm font-bold outline-none transition-all"
+          style={{ background: '#12122a', border: '1px solid #2e2e50', borderRight: 'none', color: '#f0ede8' }}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           autoComplete="off"
@@ -65,7 +64,8 @@ function NameSuggest({
           <button
             type="button"
             onMouseDown={(e) => { e.preventDefault(); open ? setOpen(false) : handleOpen(); }}
-            className="px-3 border border-l-0 border-gray-300 rounded-r-lg bg-gray-50 hover:bg-gray-100 text-gray-500 transition-colors"
+            className="px-3 rounded-r-lg transition-colors"
+            style={{ background: '#1c1c30', border: '1px solid #2e2e50', color: '#8b8ba8' }}
             title="マスタから選択"
           >
             <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -73,15 +73,14 @@ function NameSuggest({
         )}
       </div>
 
-      {/* ドロップダウン本体 */}
       {open && (
-        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-blue-200 rounded-xl shadow-xl overflow-hidden">
-          {/* 絞り込みインプット */}
-          <div className="p-2 border-b border-gray-100">
+        <div className="absolute z-50 left-0 right-0 top-full mt-1 rounded-xl shadow-xl overflow-hidden" style={{ background: '#1c1c30', border: '1px solid #2e2e50' }}>
+          <div className="p-2 border-b" style={{ borderColor: '#2e2e50' }}>
             <input
               type="text"
               placeholder="絞り込み..."
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
+              className="w-full px-3 py-2 text-sm rounded-lg outline-none"
+              style={{ background: '#12122a', border: '1px solid #3d3d60', color: '#f0ede8' }}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               autoFocus
@@ -89,18 +88,21 @@ function NameSuggest({
           </div>
           <ul className="max-h-56 overflow-y-auto">
             {filtered.length === 0 ? (
-              <li className="px-4 py-3 text-sm text-gray-400 text-center">該当なし</li>
+              <li className="px-4 py-3 text-sm text-center" style={{ color: '#6b7280' }}>該当なし</li>
             ) : (
               filtered.map((m) => (
                 <li key={m.id}>
                   <button
                     type="button"
-                    className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-none"
+                    className="w-full text-left px-4 py-3 transition-colors border-b last:border-none"
+                    style={{ borderColor: '#2e2e50' }}
                     onMouseDown={(e) => { e.preventDefault(); handleSelect(m); }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#2e2e50')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                   >
-                    <div className="font-bold text-gray-800 text-sm">{m.name}</div>
+                    <div className="font-bold text-sm" style={{ color: '#f0ede8' }}>{m.name}</div>
                     {(m.manufacturer || m.specification) && (
-                      <div className="text-xs text-gray-500 mt-0.5">
+                      <div className="text-xs mt-0.5" style={{ color: '#6b7280' }}>
                         {[m.manufacturer, m.specification].filter(Boolean).join('　')}
                       </div>
                     )}
@@ -177,7 +179,6 @@ export default function MaterialPage() {
     saveMaterials(newMaterials);
   };
 
-  // サジェスト選択時に複数フィールドを一括更新
   const applyMaster = (materialId: number, m: MaterialMaster) => {
     const newMaterials = (project?.materials || []).map((mat) =>
       mat.id === materialId
@@ -202,13 +203,11 @@ export default function MaterialPage() {
     saveMaterials(newMaterials);
   };
 
-  // 現在の材料カードをマスタに追加
   const saveToMaster = async (material: Material) => {
     if (!uid) { alert('マスタに保存するにはログインが必要です。'); return; }
     const trimmedName = material.name.trim();
     if (!trimmedName) { alert('品名を入力してください。'); return; }
 
-    // 同じ品名があれば上書き確認
     const existing = masters.find((m) => m.name === trimmedName);
     if (existing) {
       if (!window.confirm(`「${material.name}」はすでにマスタにあります。上書きしますか？`)) return;
@@ -263,53 +262,97 @@ export default function MaterialPage() {
   const materials = project.materials || [];
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 font-sans overflow-x-hidden pb-24">
-      <div className="max-w-2xl mx-auto">
-        <button onClick={() => navigate(`/project/${id}`)} className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg">
-          <ArrowLeft className="w-6 h-6" /> もどる
-        </button>
+    <div className="min-h-screen font-sans overflow-x-hidden pb-24" style={{ background: '#0f0f1a', color: '#f0ede8' }}>
+      <div className="max-w-2xl mx-auto px-4 sm:px-6">
+
+        {/* ヘッダー */}
+        <div className="flex items-center justify-between py-5">
+          <button
+            onClick={() => navigate(`/project/${id}`)}
+            className="flex items-center gap-2 font-bold text-sm transition-colors"
+            style={{ color: '#8b8ba8' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#ff6b35')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+          >
+            <ArrowLeft className="w-4 h-4" /> もどる
+          </button>
+        </div>
+
+        {/* タイトル */}
+        <div className="mb-6">
+          <div className="flex items-end justify-between">
+            <div>
+              <h1 className="text-2xl font-bold tracking-wide" style={{ color: '#f0ede8' }}>材料の登録</h1>
+              <div className="mt-1.5 h-0.5 w-12 rounded-full" style={{ background: '#8b5cf6' }} />
+            </div>
+            <span className="text-xs font-bold" style={{ color: '#6b7280' }}>{materials.length} 件登録済み</span>
+          </div>
+        </div>
+
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm font-bold flex justify-between items-center">
+          <div className="mb-4 p-3 rounded-xl flex justify-between items-center text-sm font-bold" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' }}>
             {error}
-            <button type="button" onClick={() => setError(null)} className="ml-2 text-red-400 hover:text-red-600">✕</button>
+            <button type="button" onClick={() => setError(null)} className="ml-2 opacity-70 hover:opacity-100">✕</button>
           </div>
         )}
 
-        <div className="flex justify-between items-end mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">材料の登録</h1>
-          <span className="text-sm font-bold text-gray-500">{materials.length} 件登録済み</span>
-        </div>
-
-        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-6 shadow-sm">
-          <p className="text-sm text-blue-800 font-bold leading-relaxed">
-            💡 ここに材料（パッケージやラベル）を登録すると、写真台帳の前に「材料報告書」が自動で追加されます。小規模な修理などで不要な場合は、空のままでOKです！
+        {/* ヒントバナー */}
+        <div className="p-4 rounded-xl border mb-6" style={{ background: 'rgba(139,92,246,0.08)', borderColor: 'rgba(139,92,246,0.25)' }}>
+          <p className="text-xs font-bold leading-relaxed" style={{ color: '#a78bfa' }}>
+            材料（パッケージやラベル）を登録すると、写真台帳の前に「材料報告書」が自動で追加されます。不要な場合は空のままでOKです。
           </p>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-4">
           {materials.map((material, index) => (
-            <div key={material.id} className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-gray-200 relative">
-              <div className="absolute top-4 left-4 bg-gray-800 text-white text-xs font-bold px-3 py-1 rounded-full z-10 shadow">
-                材料 {index + 1}
+            <div key={material.id} className="rounded-2xl border relative p-4 sm:p-5" style={{ background: '#1c1c30', borderColor: '#2e2e50' }}>
+
+              {/* ヘッダー行 */}
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs font-black px-3 py-1 rounded-full" style={{ background: '#8b5cf6', color: '#fff' }}>
+                  材料 {index + 1}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => moveMaterial(index, 'up')}
+                    disabled={index === 0}
+                    className="p-1.5 rounded-lg transition-colors disabled:opacity-30"
+                    style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+                    title="上へ"
+                  >
+                    <ArrowUp className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => moveMaterial(index, 'down')}
+                    disabled={index === materials.length - 1}
+                    className="p-1.5 rounded-lg transition-colors disabled:opacity-30"
+                    style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+                    title="下へ"
+                  >
+                    <ArrowDown className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => removeMaterial(material.id)}
+                    className="p-1.5 rounded-lg transition-colors"
+                    style={{ color: '#ef4444', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}
+                    title="削除"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
-              <div className="absolute top-3 right-14 flex gap-1 z-10">
-                <button onClick={() => moveMaterial(index, 'up')} disabled={index === 0} className="p-2 text-gray-600 bg-gray-100 rounded-full hover:bg-gray-200 disabled:opacity-30 transition-colors shadow-sm" title="上へ移動">
-                  <ArrowUp className="w-4 h-4" />
-                </button>
-                <button onClick={() => moveMaterial(index, 'down')} disabled={index === materials.length - 1} className="p-2 text-gray-600 bg-gray-100 rounded-full hover:bg-gray-200 disabled:opacity-30 transition-colors shadow-sm" title="下へ移動">
-                  <ArrowDown className="w-4 h-4" />
-                </button>
-              </div>
-
-              <button onClick={() => removeMaterial(material.id)} className="absolute top-3 right-3 p-2 text-red-500 bg-red-50 rounded-full hover:bg-red-100 z-10 transition-colors shadow-sm" title="削除">
-                <Trash2 className="w-5 h-5" />
-              </button>
-
-              <div className="flex flex-col sm:flex-row gap-5 mt-10">
+              <div className="flex flex-col sm:flex-row gap-4">
                 {/* 写真エリア */}
-                <div className="w-full sm:w-[40%] flex flex-col gap-2">
-                  <div className="aspect-square bg-gray-100 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center relative overflow-hidden group">
+                <div className="w-full sm:w-[38%] flex flex-col gap-2">
+                  <div
+                    className="aspect-square rounded-xl overflow-hidden flex items-center justify-center relative"
+                    style={{ background: '#12122a', border: '1px dashed #2e2e50' }}
+                  >
                     {material.image ? (
                       <>
                         <img
@@ -319,40 +362,51 @@ export default function MaterialPage() {
                           style={{ transform: `rotate(${material.rotation || 0}deg)` }}
                           crossOrigin="anonymous"
                         />
-                        <div className="absolute bottom-2 right-2 flex gap-1 bg-black/60 p-1.5 rounded-lg backdrop-blur-sm shadow-lg z-20">
-                          <button onClick={() => rotateImage(material.id, material.rotation || 0, -90)} className="p-1.5 text-white hover:bg-white/30 rounded"><RotateCcw className="w-5 h-5" /></button>
-                          <button onClick={() => rotateImage(material.id, material.rotation || 0, 90)} className="p-1.5 text-white hover:bg-white/30 rounded"><RotateCw className="w-5 h-5" /></button>
+                        <div className="absolute bottom-2 right-2 flex gap-1 p-1.5 rounded-lg z-20" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
+                          <button onClick={() => rotateImage(material.id, material.rotation || 0, -90)} className="p-1.5 rounded transition-colors" style={{ color: '#f0ede8' }} onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}><RotateCcw className="w-4 h-4" /></button>
+                          <button onClick={() => rotateImage(material.id, material.rotation || 0, 90)} className="p-1.5 rounded transition-colors" style={{ color: '#f0ede8' }} onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}><RotateCw className="w-4 h-4" /></button>
                         </div>
                       </>
                     ) : (
-                      <label className="flex flex-col items-center justify-center w-full h-full cursor-pointer hover:bg-gray-50 transition-colors">
+                      <label className="flex flex-col items-center justify-center w-full h-full cursor-pointer transition-colors" onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                         {uploadingId === material.id ? (
-                          <span className="text-blue-500 font-bold animate-pulse">読込中...</span>
+                          <span className="text-sm font-bold animate-pulse" style={{ color: '#ff6b35' }}>読込中...</span>
                         ) : (
-                          <><Camera className="w-10 h-10 text-gray-400 mb-2" /><span className="text-sm font-bold text-gray-500">写真を撮影</span></>
+                          <>
+                            <Camera className="w-8 h-8 mb-2" style={{ color: '#3d3d60' }} />
+                            <span className="text-xs font-bold" style={{ color: '#6b7280' }}>写真を撮影</span>
+                          </>
                         )}
                         <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(material.id, e)} disabled={uploadingId === material.id} />
                       </label>
                     )}
                   </div>
                   {material.image && (
-                    <label className="text-center w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm rounded-lg cursor-pointer transition-colors shadow-sm">
+                    <label
+                      className="text-center w-full py-2 rounded-lg cursor-pointer transition-colors text-xs font-bold"
+                      style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')}
+                      onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+                    >
                       写真を変更
                       <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(material.id, e)} disabled={uploadingId === material.id} />
                     </label>
                   )}
                 </div>
 
-                {/* 入力項目エリア */}
-                <div className="w-full sm:w-[60%] flex flex-col gap-3">
+                {/* 入力項目 */}
+                <div className="w-full sm:w-[62%] flex flex-col gap-3">
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-bold text-gray-500">品名</label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold" style={{ color: '#6b7280' }}>品名</label>
                       <button
                         type="button"
                         onClick={() => saveToMaster(material)}
-                        className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 px-2 py-1 rounded-lg transition-colors"
-                        title="この材料をマスタに保存"
+                        className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg transition-colors"
+                        style={{ color: '#10b981' }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(16,185,129,0.1)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        title="マスタに保存"
                       >
                         <BookmarkPlus className="w-3.5 h-3.5" /> マスタに追加
                       </button>
@@ -364,28 +418,49 @@ export default function MaterialPage() {
                       onApply={(m) => applyMaster(material.id, m)}
                     />
                   </div>
+
+                  {[
+                    { label: 'メーカー', field: 'manufacturer' as keyof Material, placeholder: '例：田島ルーフィング' },
+                    { label: '規格 / 寸法 / 数量', field: 'specification' as keyof Material, placeholder: '例：1.0m × 20m / 3巻' },
+                  ].map(({ label, field, placeholder }) => (
+                    <div key={field}>
+                      <label className="text-xs font-bold block mb-1.5" style={{ color: '#6b7280' }}>{label}</label>
+                      <input
+                        type="text"
+                        placeholder={placeholder}
+                        className="w-full p-2.5 rounded-lg text-sm outline-none transition-all"
+                        style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }}
+                        value={material[field] as string}
+                        onChange={(e) => updateMaterial(material.id, field, e.target.value)}
+                      />
+                    </div>
+                  ))}
+
                   <div>
-                    <label className="text-xs font-bold text-gray-500 mb-1 block">メーカー</label>
-                    <input type="text" placeholder="例：田島ルーフィング" className="w-full p-3 border border-gray-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" value={material.manufacturer} onChange={(e) => updateMaterial(material.id, 'manufacturer', e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-gray-500 mb-1 block">規格 / 寸法 / 数量</label>
-                    <input type="text" placeholder="例：1.0m × 20m / 3巻" className="w-full p-3 border border-gray-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" value={material.specification} onChange={(e) => updateMaterial(material.id, 'specification', e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-gray-500 mb-1 block">備考</label>
-                    <textarea placeholder="使用箇所や特記事項など" rows={2} className="w-full p-3 border border-gray-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none" value={material.remarks} onChange={(e) => updateMaterial(material.id, 'remarks', e.target.value)} />
+                    <label className="text-xs font-bold block mb-1.5" style={{ color: '#6b7280' }}>備考</label>
+                    <textarea
+                      placeholder="使用箇所や特記事項など"
+                      rows={2}
+                      className="w-full p-2.5 rounded-lg text-sm outline-none transition-all resize-none"
+                      style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }}
+                      value={material.remarks}
+                      onChange={(e) => updateMaterial(material.id, 'remarks', e.target.value)}
+                    />
                   </div>
                 </div>
               </div>
             </div>
           ))}
 
+          {/* 追加ボタン */}
           <button
             onClick={addMaterial}
-            className="w-full py-5 bg-white text-blue-600 font-bold text-lg rounded-2xl border-2 border-dashed border-blue-300 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2 shadow-sm"
+            className="w-full py-5 font-bold text-sm rounded-2xl border-2 border-dashed flex items-center justify-center gap-2 transition-all"
+            style={{ borderColor: '#2e2e50', color: '#8b8ba8', background: 'transparent' }}
+            onMouseEnter={e => { (e.currentTarget.style.borderColor = '#8b5cf6'); (e.currentTarget.style.color = '#8b5cf6'); }}
+            onMouseLeave={e => { (e.currentTarget.style.borderColor = '#2e2e50'); (e.currentTarget.style.color = '#8b8ba8'); }}
           >
-            <Plus className="w-7 h-7" />
+            <Plus className="w-5 h-5" />
             材料の枠を追加する
           </button>
         </div>

@@ -1,21 +1,31 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Paperclip, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, Paperclip, Trash2, Upload, List, Check } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 
 import { db, auth, storage } from '../firebase';
 import type { Project } from '../types';
-import { InputField } from '../shared/components';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { canUpload, trackUpload } from '../shared/storageUtils';
+
+const ACCENT = '#10b981';
+
+const FIELDS: { label: string; key: keyof Project; placeholder: string }[] = [
+  { label: '工事件名', key: 'projectName',        placeholder: '例：○○邸 外壁塗装工事' },
+  { label: '工事場所', key: 'projectLocation',    placeholder: '例：東京都渋谷区○○1-2-3' },
+  { label: '工期',     key: 'constructionPeriod', placeholder: '例：令和○年○月○日〜令和○年○月○日' },
+  { label: '施工業者', key: 'contractorName',     placeholder: '例：株式会社○○' },
+  { label: '作成年月日', key: 'creationDate',     placeholder: '例：令和○年○月○日' },
+];
 
 export function CoverPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [savedKey, setSavedKey] = useState<string | null>(null);
   const [appendixUploading, setAppendixUploading] = useState(false);
   const [appendixProgress, setAppendixProgress] = useState(0);
   const appendixInputRef = useRef<HTMLInputElement>(null);
@@ -37,6 +47,8 @@ export function CoverPage() {
     setProject({ ...project, [field]: value });
     try {
       await updateDoc(doc(db, 'projects', id), { [field]: value });
+      setSavedKey(field as string);
+      setTimeout(() => setSavedKey(null), 1500);
     } catch {
       setProject(previous);
       setError('保存に失敗しました。');
@@ -56,7 +68,6 @@ export function CoverPage() {
     setAppendixUploading(true);
     setAppendixProgress(0);
     try {
-      // 既存ファイルを削除
       if (project?.appendixPdfUrl) {
         try { await deleteObject(ref(storage, project.appendixPdfUrl)); } catch { /* 無視 */ }
       }
@@ -87,21 +98,17 @@ export function CoverPage() {
     if (!window.confirm('添付PDFを削除しますか？')) return;
     try {
       await deleteObject(ref(storage, project.appendixPdfUrl));
-    } catch { /* Storage削除失敗は無視 */ }
+    } catch { /* 無視 */ }
     await updateDoc(doc(db, 'projects', id), { appendixPdfUrl: null });
     setProject((prev) => prev ? { ...prev, appendixPdfUrl: undefined } : prev);
   };
 
   if (error && !project) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6 font-sans flex flex-col items-center justify-center">
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 font-sans" style={{ background: '#0f0f1a' }}>
         <ErrorMessage message={error} onDismiss={() => setError(null)} />
-        <button
-          type="button"
-          onClick={() => navigate(`/project/${id}`)}
-          className="mt-4 text-blue-500 font-bold flex items-center gap-2"
-        >
-          <ArrowLeft className="w-5 h-5" /> もどる
+        <button onClick={() => navigate(`/project/${id}`)} className="mt-4 flex items-center gap-2 font-bold" style={{ color: ACCENT }}>
+          <ArrowLeft className="w-4 h-4" /> もどる
         </button>
       </div>
     );
@@ -110,69 +117,99 @@ export function CoverPage() {
   if (!project) return <LoadingSpinner />;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 font-sans">
-      <div className="max-w-md mx-auto pb-12">
-        {error && <ErrorMessage message={error} onDismiss={() => setError(null)} />}
-        <button
-          type="button"
-          onClick={() => navigate(`/project/${id}`)}
-          className="flex items-center gap-2 text-blue-500 mb-6 font-bold text-lg"
-          aria-label="現場メニューにもどる"
-        >
-          <ArrowLeft className="w-6 h-6" /> もどる
-        </button>
-        <h1 className="text-3xl font-bold mb-8 text-gray-900">表紙の入力</h1>
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-black/5">
-          <InputField
-            label="工事件名"
-            value={project.projectName}
-            onChange={(v: string) => update('projectName', v)}
-            bgColor="bg-blue-50/50"
-            id="cover-projectName"
-          />
-          <InputField
-            label="工事場所"
-            value={project.projectLocation}
-            onChange={(v: string) => update('projectLocation', v)}
-            bgColor="bg-green-50/50"
-            id="cover-projectLocation"
-          />
-          <InputField
-            label="工期"
-            value={project.constructionPeriod}
-            onChange={(v: string) => update('constructionPeriod', v)}
-            bgColor="bg-purple-50/50"
-            id="cover-constructionPeriod"
-          />
-          <InputField
-            label="施工業者"
-            value={project.contractorName}
-            onChange={(v: string) => update('contractorName', v)}
-            bgColor="bg-orange-50/50"
-            id="cover-contractorName"
-          />
-          <InputField
-            label="作成年月日"
-            value={project.creationDate}
-            onChange={(v: string) => update('creationDate', v)}
-            bgColor="bg-gray-50/50"
-            id="cover-creationDate"
-          />
+    <div className="min-h-screen font-sans" style={{ background: '#0f0f1a', color: '#f0ede8' }}>
+      <div className="max-w-md mx-auto px-4 pb-16">
+
+        {/* ── ヘッダー ── */}
+        <div className="flex items-center justify-between py-5">
+          <button
+            type="button"
+            onClick={() => navigate(`/project/${id}`)}
+            className="flex items-center gap-2 font-bold text-sm transition-colors"
+            style={{ color: '#8b8ba8' }}
+            onMouseEnter={e => (e.currentTarget.style.color = ACCENT)}
+            onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <List className="w-4 h-4" /> 現場メニュー
+          </button>
         </div>
 
-        {/* 添付PDF */}
-        <div className="mt-6 bg-white p-6 rounded-3xl shadow-sm border border-black/5">
-          <h2 className="text-base font-bold text-gray-700 mb-4 flex items-center gap-2">
-            <Paperclip className="w-4 h-4" /> 添付資料PDF（最終ページに追加）
+        {error && <ErrorMessage message={error} onDismiss={() => setError(null)} />}
+
+        {/* ── ページタイトル ── */}
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-1 h-7 rounded-full" style={{ background: ACCENT }} />
+          <h1 className="text-2xl font-bold" style={{ color: '#f0ede8' }}>表紙の入力</h1>
+        </div>
+
+        {/* ── 入力フィールド ── */}
+        <div className="rounded-2xl border overflow-hidden mb-4" style={{ background: '#1c1c30', borderColor: '#2e2e50' }}>
+          {FIELDS.map((f, idx) => {
+            const val = String(project[f.key] ?? '');
+            const isSaved = savedKey === (f.key as string);
+            return (
+              <div
+                key={f.key}
+                className="px-5 py-4"
+                style={{ borderBottom: idx < FIELDS.length - 1 ? '1px solid #2e2e50' : 'none' }}
+              >
+                {/* ラベル行 */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1 h-4 rounded-full" style={{ background: ACCENT }} />
+                    <label className="text-xs font-bold tracking-wide" style={{ color: '#8b8ba8' }}>
+                      {f.label}
+                    </label>
+                  </div>
+                  {isSaved && (
+                    <div className="flex items-center gap-1 text-xs font-bold transition-opacity" style={{ color: ACCENT }}>
+                      <Check className="w-3 h-3" /> 保存済み
+                    </div>
+                  )}
+                </div>
+                {/* 入力欄 */}
+                <input
+                  type="text"
+                  value={val}
+                  placeholder={f.placeholder}
+                  onChange={e => update(f.key, e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl text-sm font-medium transition-colors outline-none"
+                  style={{
+                    background: '#12122a',
+                    border: '1.5px solid #2e2e50',
+                    color: '#f0ede8',
+                  }}
+                  onFocus={e => (e.currentTarget.style.borderColor = ACCENT)}
+                  onBlur={e => (e.currentTarget.style.borderColor = '#2e2e50')}
+                />
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ── 添付資料PDF ── */}
+        <div className="rounded-2xl border p-5" style={{ background: '#1c1c30', borderColor: '#2e2e50' }}>
+          <h2 className="flex items-center gap-2 text-sm font-bold mb-4" style={{ color: '#8b8ba8' }}>
+            <Paperclip className="w-4 h-4" style={{ color: ACCENT }} />
+            添付資料PDF
+            <span className="ml-auto text-xs font-normal" style={{ color: '#4b4b70' }}>最終ページに追加</span>
           </h2>
+
           {project.appendixPdfUrl ? (
-            <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl border border-blue-200">
-              <Paperclip className="w-5 h-5 text-blue-500 shrink-0" />
-              <span className="text-sm text-blue-700 font-bold flex-1 truncate">PDF添付済み</span>
+            <div
+              className="flex items-center gap-3 px-4 py-3 rounded-xl border"
+              style={{ background: '#0f1f1a', borderColor: '#1a4a3a' }}
+            >
+              <Paperclip className="w-4 h-4 shrink-0" style={{ color: ACCENT }} />
+              <span className="text-sm font-bold flex-1 truncate" style={{ color: '#6ee7b7' }}>PDF添付済み</span>
               <button
                 type="button"
                 onClick={handleAppendixDelete}
-                className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                className="p-1.5 rounded-lg transition-colors"
+                style={{ color: '#6b7280' }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                onMouseLeave={e => (e.currentTarget.style.color = '#6b7280')}
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -182,12 +219,22 @@ export function CoverPage() {
               type="button"
               onClick={() => appendixInputRef.current?.click()}
               disabled={appendixUploading}
-              className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-xl py-4 text-gray-500 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition-colors disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 rounded-xl py-4 border-2 border-dashed transition-colors disabled:opacity-50 text-sm font-bold"
+              style={{ borderColor: '#2e2e50', color: '#6b7280' }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = ACCENT;
+                e.currentTarget.style.color = ACCENT;
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = '#2e2e50';
+                e.currentTarget.style.color = '#6b7280';
+              }}
             >
-              <Upload className="w-5 h-5" />
+              <Upload className="w-4 h-4" />
               {appendixUploading ? `アップロード中... ${appendixProgress}%` : 'PDFを選択'}
             </button>
           )}
+
           <input
             ref={appendixInputRef}
             type="file"
@@ -195,13 +242,19 @@ export function CoverPage() {
             className="hidden"
             onChange={handleAppendixUpload}
           />
+
           {appendixUploading && (
-            <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-              <div className="h-full bg-blue-500 transition-all" style={{ width: `${appendixProgress}%` }} />
+            <div className="mt-3 h-1 rounded-full overflow-hidden" style={{ background: '#12122a' }}>
+              <div
+                className="h-full rounded-full transition-all"
+                style={{ width: `${appendixProgress}%`, background: ACCENT }}
+              />
             </div>
           )}
-          <p className="text-xs text-gray-400 mt-2">最大20MB・PDF形式のみ</p>
+
+          <p className="text-xs mt-3" style={{ color: '#4b4b70' }}>最大20MB・PDF形式のみ</p>
         </div>
+
       </div>
     </div>
   );

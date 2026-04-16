@@ -1,20 +1,57 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Building2, Camera, FileText, Images, Map, Package } from 'lucide-react';
-import { List, BookOpen } from 'lucide-react';
+import { ArrowLeft, Camera, FileDown, MapPin, Wrench, ClipboardList, List, ChevronRight } from 'lucide-react';
 
 import type { Project } from '../types';
 import { db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { MenuButton } from '../shared/components';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { ErrorMessage } from '../shared/ErrorMessage';
+
+const MENU_ITEMS = [
+  {
+    title: '写真',
+    subtitle: '赤丸・寸法線付き写真の登録',
+    icon: Camera,
+    path: 'photo',
+    accent: '#ff6b35',
+  },
+  {
+    title: '位置図',
+    subtitle: '図面登録・赤丸・矢印の配置',
+    icon: MapPin,
+    path: 'map',
+    accent: '#3b82f6',
+  },
+  {
+    title: '材料',
+    subtitle: '使用部材の登録',
+    icon: Wrench,
+    path: 'material',
+    accent: '#8b5cf6',
+  },
+  {
+    title: '表紙',
+    subtitle: '現場名・住所・工期の入力',
+    icon: ClipboardList,
+    path: 'cover',
+    accent: '#10b981',
+  },
+  {
+    title: 'PDF出力',
+    subtitle: '印刷・ダウンロード',
+    icon: FileDown,
+    path: 'pdf',
+    accent: '#f59e0b',
+  },
+];
 
 export function HomePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!id) return;
     setError(null);
@@ -28,82 +65,111 @@ export function HomePage() {
 
   if (error && !project) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6 font-sans flex flex-col items-center justify-center">
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 font-sans" style={{ background: '#0f0f1a' }}>
         <ErrorMessage message={error} onDismiss={() => setError(null)} />
+        <button onClick={() => navigate('/')} className="mt-4 flex items-center gap-2 font-bold" style={{ color: '#ff6b35' }}>
+          <ArrowLeft className="w-4 h-4" /> 現場一覧へ
+        </button>
       </div>
     );
   }
 
   if (!project) return <LoadingSpinner />;
 
+  const thumb = project.photos?.find(ph => ph.image)?.image ?? null;
+  const photoCount = project.photos?.filter(ph => ph.image).length ?? 0;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-orange-50 p-6 font-sans">
-      <div className="max-w-md mx-auto space-y-6">
-        {error && <ErrorMessage message={error} onDismiss={() => setError(null)} />}
-        <div className="flex flex-col items-center py-10 px-4 bg-white/80 backdrop-blur-sm rounded-3xl shadow-sm">
-          <div className="w-[88px] h-[88px] bg-blue-100/50 rounded-full flex items-center justify-center mb-5">
-            <Images className="w-10 h-10 text-blue-500" aria-hidden />
-          </div>
-          <h1 className="text-3xl font-bold mb-3 text-gray-900">
-            瓦工事 写真台帳
-          </h1>
-          <p className="text-base text-gray-500 text-center mb-6">
-            現場ごとに写真と位置図を管理
-          </p>
+    <div className="min-h-screen font-sans" style={{ background: '#0f0f1a', color: '#f0ede8' }}>
+      <div className="max-w-md mx-auto px-4 pb-16">
+
+        {/* ── ヘッダー ── */}
+        <div className="flex items-center justify-between py-5">
           <button
             type="button"
             onClick={() => navigate('/')}
-            className="flex items-center gap-2 text-sm font-bold text-blue-700 bg-blue-100/80 px-6 py-3 rounded-full hover:bg-blue-200"
-            aria-label="現場一覧を開く"
+            className="flex items-center gap-2 font-bold text-sm transition-colors"
+            style={{ color: '#8b8ba8' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#ff6b35')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
           >
-            <Building2 className="w-4 h-4" /> 現場切替: {project.projectName}
+            <ArrowLeft className="w-4 h-4" />
+            <List className="w-4 h-4" /> 現場一覧
           </button>
         </div>
-        <div className="space-y-4">
-          <MenuButton
-            title="現場一覧"
-            subtitle="現場の切り替え・新規追加・削除"
-            icon={List}
-            colorClass="bg-teal-100/30"
-            onClick={() => navigate('/')}
-          />
-          <MenuButton
-            title="表紙"
-            subtitle="現場名・住所・工期の入力"
-            icon={BookOpen}
-            colorClass="bg-purple-100/30"
-            onClick={() => navigate(`/project/${id}/cover`)}
-          />
-          <MenuButton
-            title="材料"
-            subtitle="材料報告書（使用部材）の登録"
-            icon={Package}
-            colorClass="bg-indigo-100/30"
-            onClick={() => navigate(`/project/${id}/material`)}
-          />
-          <MenuButton
-            title="写真"
-            subtitle="赤丸マーカー付き写真の登録"
-            icon={Camera}
-            colorClass="bg-blue-100/30"
-            onClick={() => navigate(`/project/${id}/photo`)}
-          />
-          <MenuButton
-            title="位置図"
-            subtitle="図面登録と赤丸・矢印の配置"
-            icon={Map}
-            colorClass="bg-green-100/30"
-            onClick={() => navigate(`/project/${id}/map`)}
-          />
-          <MenuButton
-            title="PDF出力"
-            subtitle="黄金比レイアウトで書き出し"
-            icon={FileText}
-            colorClass="bg-orange-100/30"
-            onClick={() => navigate(`/project/${id}/pdf`)}
-          />
 
+        {error && <ErrorMessage message={error} onDismiss={() => setError(null)} />}
+
+        {/* ── 現場ヒーロー ── */}
+        <div className="rounded-2xl overflow-hidden border mb-6" style={{ borderColor: '#2e2e50' }}>
+          {/* サムネイル */}
+          <div className="relative w-full" style={{ aspectRatio: '21/9', background: '#12122a' }}>
+            {thumb ? (
+              <img src={thumb} alt="現場写真" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Camera className="w-12 h-12" style={{ color: '#2e2e50' }} />
+              </div>
+            )}
+            {/* グラデーションオーバーレイ */}
+            <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(15,15,26,0.85) 0%, transparent 60%)' }} />
+            {/* 写真枚数 */}
+            {photoCount > 0 && (
+              <div className="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold" style={{ background: 'rgba(0,0,0,0.6)', color: '#f0ede8', backdropFilter: 'blur(6px)' }}>
+                📷 {photoCount}枚
+              </div>
+            )}
+            {/* 現場名オーバーレイ */}
+            <div className="absolute bottom-0 left-0 right-0 p-4">
+              <div className="text-xl font-bold leading-snug" style={{ color: '#f0ede8' }}>
+                {project.projectName || '現場名未入力'}
+              </div>
+              {project.projectLocation && (
+                <div className="text-xs mt-1" style={{ color: '#e8d5b7', opacity: 0.8 }}>
+                  📍 {project.projectLocation}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
+
+        {/* ── メニュー ── */}
+        <div className="space-y-2">
+          {MENU_ITEMS.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.path}
+                type="button"
+                onClick={() => navigate(`/project/${id}/${item.path}`)}
+                className="w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all"
+                style={{ background: '#1c1c30', borderColor: '#2e2e50' }}
+                onMouseEnter={e => {
+                  const el = e.currentTarget;
+                  el.style.borderColor = item.accent;
+                  el.style.background = '#21213a';
+                }}
+                onMouseLeave={e => {
+                  const el = e.currentTarget;
+                  el.style.borderColor = '#2e2e50';
+                  el.style.background = '#1c1c30';
+                }}
+              >
+                {/* アイコン */}
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${item.accent}18` }}>
+                  <Icon className="w-5 h-5" style={{ color: item.accent }} />
+                </div>
+                {/* テキスト */}
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-sm" style={{ color: '#f0ede8' }}>{item.title}</div>
+                  <div className="text-xs mt-0.5 truncate" style={{ color: '#6b7280' }}>{item.subtitle}</div>
+                </div>
+                <ChevronRight className="w-4 h-4 shrink-0" style={{ color: '#3d3d60' }} />
+              </button>
+            );
+          })}
+        </div>
+
       </div>
     </div>
   );

@@ -27,6 +27,30 @@ const DEFAULT_TEMPLATES = [
   { label: "棟部(増張り)", text: "棟部：増し張り " },
 ];
 
+// セクションカード
+function Section({ title, icon, accent = '#ff6b35', children }: {
+  title: string;
+  icon: React.ReactNode;
+  accent?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border" style={{ background: '#1c1c30', borderColor: '#2e2e50' }}>
+      <div className="flex items-center gap-3 px-5 py-4 border-b" style={{ borderColor: '#2e2e50' }}>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${accent}18` }}>
+          <span style={{ color: accent }}>{icon}</span>
+        </div>
+        <h2 className="text-sm font-black tracking-wide" style={{ color: '#f0ede8' }}>{title}</h2>
+      </div>
+      <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
+// ダークなインプット
+const inputCls = "w-full p-3 rounded-xl text-sm font-bold outline-none transition-all";
+const inputStyle = { background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' };
+
 export default function SettingsPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -77,7 +101,7 @@ export default function SettingsPage() {
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
       setLogoUrl(url);
-    } catch (error) {
+    } catch {
       alert('ロゴのアップロードに失敗しました。');
     } finally {
       setUploadingLogo(false);
@@ -85,17 +109,11 @@ export default function SettingsPage() {
   };
 
   const handleSave = async () => {
-    if (!uid) {
-      alert('設定を保存するにはログインが必要です。');
-      return;
-    }
+    if (!uid) { alert('設定を保存するにはログインが必要です。'); return; }
     setSaving(true);
     try {
       await setDoc(doc(db, 'users', uid), {
-        companyName,
-        address,
-        phone,
-        logoUrl,
+        companyName, address, phone, logoUrl,
         customProcesses: processes,
         customDescTemplates: templates,
         materialMaster,
@@ -110,95 +128,130 @@ export default function SettingsPage() {
     }
   };
 
+  const usageRatio = storageUsageRatio(storageUsedBytes);
+
   if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 font-sans">
-      <div className="max-w-xl mx-auto pb-12">
-        <div className="flex justify-between items-center mb-6">
-          <button onClick={() => navigate('/')} className="flex items-center gap-2 text-blue-500 font-bold text-lg hover:underline">
-            <ArrowLeft className="w-6 h-6" /> ホームへ
+    <div className="min-h-screen font-sans pb-16" style={{ background: '#0f0f1a', color: '#f0ede8' }}>
+      <div className="max-w-xl mx-auto px-4 sm:px-6">
+
+        {/* ヘッダー */}
+        <div className="flex items-center justify-between py-5 border-b" style={{ borderColor: '#2e2e50' }}>
+          <button
+            onClick={() => navigate('/')}
+            className="flex items-center gap-2 font-bold text-sm transition-colors"
+            style={{ color: '#8b8ba8' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#ff6b35')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+          >
+            <ArrowLeft className="w-4 h-4" /> ホームへ
           </button>
-          <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-md hover:bg-blue-700 disabled:opacity-50 transition-colors">
-            <Save className="w-5 h-5" /> {saving ? '保存中...' : '設定を保存'}
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all disabled:opacity-50"
+            style={{ background: '#ff6b35', color: '#fff', boxShadow: '0 0 16px rgba(255,107,53,0.35)' }}
+            onMouseEnter={e => !saving && ((e.currentTarget as HTMLButtonElement).style.background = '#e85d2a')}
+            onMouseLeave={e => !saving && ((e.currentTarget as HTMLButtonElement).style.background = '#ff6b35')}
+          >
+            <Save className="w-4 h-4" /> {saving ? '保存中...' : '設定を保存'}
           </button>
         </div>
 
-        <h1 className="text-3xl font-bold mb-8 text-gray-900 flex items-center gap-3">
-          <Settings className="w-8 h-8 text-gray-700" /> 基本設定・カスタマイズ
-        </h1>
+        {/* タイトル */}
+        <div className="mt-6 mb-7">
+          <h1 className="text-2xl font-bold flex items-center gap-3" style={{ color: '#f0ede8' }}>
+            <Settings className="w-6 h-6" style={{ color: '#8b8ba8' }} /> 基本設定・カスタマイズ
+          </h1>
+          <div className="mt-1.5 h-0.5 w-12 rounded-full" style={{ background: '#ff6b35' }} />
+        </div>
 
-        <div className="space-y-8">
+        <div className="space-y-5">
 
           {/* ストレージ使用量 */}
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <HardDrive className="w-5 h-5 text-gray-600" /> ストレージ使用量
-            </h2>
+          <Section title="ストレージ使用量" icon={<HardDrive className="w-4 h-4" />} accent="#6b7280">
             <div className="space-y-2">
-              <div className="flex justify-between text-sm font-bold text-gray-600">
+              <div className="flex justify-between text-xs font-bold" style={{ color: '#8b8ba8' }}>
                 <span>{formatBytes(storageUsedBytes)} 使用中</span>
                 <span>上限 {formatBytes(STORAGE_LIMIT_BYTES)}</span>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+              <div className="w-full rounded-full h-2.5 overflow-hidden" style={{ background: '#12122a' }}>
                 <div
-                  className={`h-3 rounded-full transition-all ${storageUsageRatio(storageUsedBytes) > 0.9 ? 'bg-red-500' : storageUsageRatio(storageUsedBytes) > 0.7 ? 'bg-yellow-400' : 'bg-blue-500'}`}
-                  style={{ width: `${storageUsageRatio(storageUsedBytes) * 100}%` }}
+                  className="h-2.5 rounded-full transition-all"
+                  style={{
+                    width: `${usageRatio * 100}%`,
+                    background: usageRatio > 0.9 ? '#ef4444' : usageRatio > 0.7 ? '#eab308' : '#3b82f6',
+                  }}
                 />
               </div>
-              <p className="text-xs text-gray-400">写真・位置図・材料画像などすべての画像データの合計です。</p>
+              <p className="text-xs" style={{ color: '#6b7280' }}>写真・位置図・材料画像などすべての画像データの合計です。</p>
             </div>
-          </div>
+          </Section>
 
-          {/* 会社情報 */}
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 space-y-5">
-            <h2 className="text-xl font-bold text-gray-800 border-b pb-2 mb-4">自社情報（PDF表紙用）</h2>
-            
-            {/* ロゴのアップロード */}
-            <div>
-              <label className="block text-sm font-bold text-gray-600 mb-2">自社ロゴ画像</label>
+          {/* 自社情報 */}
+          <Section title="自社情報（PDF表紙用）" icon={<Settings className="w-4 h-4" />} accent="#ff6b35">
+            {/* ロゴ */}
+            <div className="mb-5">
+              <label className="block text-xs font-bold mb-2" style={{ color: '#6b7280' }}>自社ロゴ画像</label>
               <div className="flex items-center gap-4">
                 {logoUrl ? (
-                  <div className="relative w-32 h-32 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-center p-2">
+                  <div className="relative w-28 h-28 rounded-xl flex items-center justify-center p-2" style={{ background: '#12122a', border: '1px solid #2e2e50' }}>
                     <img src={logoUrl} alt="ロゴ" className="max-w-full max-h-full object-contain" />
-                    <button onClick={() => setLogoUrl('')} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600"><X className="w-4 h-4"/></button>
+                    <button
+                      onClick={() => setLogoUrl('')}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5"/>
+                    </button>
                   </div>
                 ) : (
-                  <label className="w-32 h-32 flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-gray-100 transition-colors">
-                    {uploadingLogo ? <span className="text-blue-500 font-bold text-sm">送信中...</span> : (
-                      <><ImageIcon className="w-8 h-8 text-gray-400 mb-2" /><span className="text-xs text-gray-500 font-bold">画像を選択</span></>
+                  <label className="w-28 h-28 flex flex-col items-center justify-center rounded-xl cursor-pointer transition-colors border-2 border-dashed" style={{ background: '#12122a', borderColor: '#3d3d60' }} onMouseEnter={e => (e.currentTarget.style.borderColor = '#ff6b35')} onMouseLeave={e => (e.currentTarget.style.borderColor = '#3d3d60')}>
+                    {uploadingLogo ? (
+                      <span className="text-xs font-bold animate-pulse" style={{ color: '#ff6b35' }}>送信中...</span>
+                    ) : (
+                      <>
+                        <ImageIcon className="w-7 h-7 mb-1.5" style={{ color: '#3d3d60' }} />
+                        <span className="text-xs font-bold" style={{ color: '#6b7280' }}>画像を選択</span>
+                      </>
                     )}
                     <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={uploadingLogo} />
                   </label>
                 )}
-                <div className="flex-1 text-xs text-gray-500 leading-relaxed">
-                  PDF出力時、表紙の一番上に表示されるロゴマークです。未設定の場合はデフォルトのロゴが表示されます。
-                </div>
+                <p className="flex-1 text-xs leading-relaxed" style={{ color: '#6b7280' }}>
+                  PDF出力時、表紙の一番上に表示されます。未設定の場合はデフォルトロゴが使われます。
+                </p>
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-bold text-gray-600 mb-2">会社名・屋号</label>
-              <input type="text" value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="例：吉田瓦店" className="w-full p-3 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" />
+            <div className="space-y-3">
+              {[
+                { label: '会社名・屋号', val: companyName, set: setCompanyName, ph: '例：吉田瓦店' },
+                { label: '住所', val: address, set: setAddress, ph: '例：富山県魚津市〇〇1-2-3' },
+                { label: '電話番号', val: phone, set: setPhone, ph: '例：0765-00-0000' },
+              ].map(({ label, val, set, ph }) => (
+                <div key={label}>
+                  <label className="block text-xs font-bold mb-1.5" style={{ color: '#6b7280' }}>{label}</label>
+                  <input
+                    type="text"
+                    value={val}
+                    onChange={e => set(e.target.value)}
+                    placeholder={ph}
+                    className={inputCls}
+                    style={inputStyle}
+                  />
+                </div>
+              ))}
             </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-600 mb-2">住所</label>
-              <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="例：富山県魚津市〇〇1-2-3" className="w-full p-3 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-600 mb-2">電話番号</label>
-              <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="例：0765-00-0000" className="w-full p-3 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" />
-            </div>
-          </div>
+          </Section>
 
-          {/* 工程のカスタマイズ */}
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-            <h2 className="text-xl font-bold text-gray-800 mb-2">写真の「工程」プルダウン項目</h2>
-            <p className="text-sm text-gray-500 mb-5">現場でよく使う工程名を自由に追加・編集できます。</p>
-            <div className="space-y-3 mb-5">
+          {/* 工程プルダウン */}
+          <Section title="写真の「工程」プルダウン項目" icon={<Camera className="w-4 h-4" />} accent="#ff6b35">
+            <p className="text-xs mb-4" style={{ color: '#6b7280' }}>現場でよく使う工程名を自由に追加・編集できます。</p>
+            <div className="space-y-2 mb-4">
               {processes.map((proc, index) => (
                 <div key={index} className="flex gap-2 items-center">
-                  <span className="text-gray-400 font-bold w-6 text-right">{index + 1}.</span>
+                  <span className="text-xs font-bold w-5 text-right shrink-0" style={{ color: '#6b7280' }}>{index + 1}.</span>
                   <input
                     type="text"
                     value={proc}
@@ -207,168 +260,177 @@ export default function SettingsPage() {
                       newArr[index] = e.target.value;
                       setProcesses(newArr);
                     }}
-                    className="flex-1 p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                    className={inputCls}
+                    style={inputStyle}
                   />
-                  <button onClick={() => setProcesses(processes.filter((_, i) => i !== index))} className="p-3 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors">
-                    <Trash2 className="w-5 h-5" />
+                  <button
+                    onClick={() => setProcesses(processes.filter((_, i) => i !== index))}
+                    className="p-2 rounded-xl transition-colors shrink-0"
+                    style={{ color: '#3d3d60' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#3d3d60')}
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               ))}
             </div>
-            <button onClick={() => setProcesses([...processes, "新しい工程"])} className="w-full py-3 bg-gray-50 text-blue-600 font-bold rounded-xl border-2 border-dashed border-blue-200 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2">
-              <Plus className="w-5 h-5" /> 工程項目を追加
-            </button>
-          </div>
+            <AddButton onClick={() => setProcesses([...processes, "新しい工程"])} label="工程項目を追加" />
+          </Section>
 
           {/* 写真テンプレートマスタ */}
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-            <h2 className="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2">
-              <Camera className="w-5 h-5 text-gray-600" /> 写真テンプレートマスタ
-            </h2>
-            <p className="text-sm text-gray-500 mb-5">よく使う工程と説明文の組み合わせを登録しておくと、写真ページでワンタップで自動入力できます。</p>
-            <div className="space-y-4 mb-5">
+          <Section title="写真テンプレートマスタ" icon={<Camera className="w-4 h-4" />} accent="#10b981">
+            <p className="text-xs mb-4" style={{ color: '#6b7280' }}>よく使う工程と説明文の組み合わせを登録しておくと、写真ページでワンタップで自動入力できます。</p>
+            <div className="space-y-3 mb-4">
               {photoMaster.map((m, index) => (
-                <div key={m.id} className="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-2">
+                <div key={m.id} className="p-3 rounded-xl border space-y-2" style={{ background: '#12122a', borderColor: '#2e2e50' }}>
                   <div className="flex items-start gap-2">
-                    <span className="text-xs font-bold text-gray-400 w-4 mt-3">{index + 1}</span>
-                    <div className="flex-1 grid grid-cols-1 gap-2">
+                    <span className="text-xs font-bold w-4 mt-2.5 shrink-0" style={{ color: '#6b7280' }}>{index + 1}</span>
+                    <div className="flex-1 space-y-2">
                       <input
                         type="text"
                         placeholder="テンプレート名（例：着工前確認）"
                         value={m.name}
-                        onChange={(e) => setPhotoMaster((prev) => prev.map((item, i) => i === index ? { ...item, name: e.target.value } : item))}
-                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm font-bold bg-white focus:ring-2 focus:ring-blue-500"
+                        onChange={(e) => setPhotoMaster(prev => prev.map((item, i) => i === index ? { ...item, name: e.target.value } : item))}
+                        className={inputCls}
+                        style={{ ...inputStyle, background: '#1c1c30' }}
                       />
                       <input
                         type="text"
                         placeholder="工程"
                         value={m.process}
-                        onChange={(e) => setPhotoMaster((prev) => prev.map((item, i) => i === index ? { ...item, process: e.target.value } : item))}
-                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
+                        onChange={(e) => setPhotoMaster(prev => prev.map((item, i) => i === index ? { ...item, process: e.target.value } : item))}
+                        className={inputCls}
+                        style={{ ...inputStyle, background: '#1c1c30' }}
                       />
                       <textarea
                         placeholder="説明文"
                         rows={2}
                         value={m.description}
-                        onChange={(e) => setPhotoMaster((prev) => prev.map((item, i) => i === index ? { ...item, description: e.target.value } : item))}
-                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 resize-none"
+                        onChange={(e) => setPhotoMaster(prev => prev.map((item, i) => i === index ? { ...item, description: e.target.value } : item))}
+                        className={`${inputCls} resize-none`}
+                        style={{ ...inputStyle, background: '#1c1c30' }}
                       />
                     </div>
-                    <button onClick={() => setPhotoMaster((prev) => prev.filter((_, i) => i !== index))} className="p-2 mt-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors">
-                      <Trash2 className="w-5 h-5" />
+                    <button
+                      onClick={() => setPhotoMaster(prev => prev.filter((_, i) => i !== index))}
+                      className="p-1.5 mt-1 rounded-lg transition-colors shrink-0"
+                      style={{ color: '#3d3d60' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                      onMouseLeave={e => (e.currentTarget.style.color = '#3d3d60')}
+                    >
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
               ))}
             </div>
-            <button
-              onClick={() => setPhotoMaster((prev) => [...prev, { id: nextId(), name: '', process: '', description: '' }])}
-              className="w-full py-3 bg-gray-50 text-blue-600 font-bold rounded-xl border-2 border-dashed border-blue-200 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
-            >
-              <Plus className="w-5 h-5" /> テンプレートを追加
-            </button>
-          </div>
+            <AddButton onClick={() => setPhotoMaster(prev => [...prev, { id: nextId(), name: '', process: '', description: '' }])} label="テンプレートを追加" accent="#10b981" />
+          </Section>
 
           {/* 材料マスタ */}
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-            <h2 className="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2">
-              <Package className="w-5 h-5 text-gray-600" /> 材料マスタ
-            </h2>
-            <p className="text-sm text-gray-500 mb-5">よく使う材料を登録しておくと、材料ページで品名を入力した際に自動入力できます。</p>
-            <div className="space-y-4 mb-5">
+          <Section title="材料マスタ" icon={<Package className="w-4 h-4" />} accent="#8b5cf6">
+            <p className="text-xs mb-4" style={{ color: '#6b7280' }}>よく使う材料を登録しておくと、材料ページで品名を入力した際に自動入力できます。</p>
+            <div className="space-y-3 mb-4">
               {materialMaster.map((m, index) => (
-                <div key={m.id} className="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-gray-400 w-4">{index + 1}</span>
-                    <div className="flex-1 grid grid-cols-1 gap-2">
-                      <input
-                        type="text"
-                        placeholder="品名"
-                        value={m.name}
-                        onChange={(e) => setMaterialMaster((prev) => prev.map((item, i) => i === index ? { ...item, name: e.target.value } : item))}
-                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm font-bold bg-white focus:ring-2 focus:ring-blue-500"
-                      />
-                      <input
-                        type="text"
-                        placeholder="メーカー"
-                        value={m.manufacturer}
-                        onChange={(e) => setMaterialMaster((prev) => prev.map((item, i) => i === index ? { ...item, manufacturer: e.target.value } : item))}
-                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
-                      />
-                      <input
-                        type="text"
-                        placeholder="規格 / 寸法 / 数量"
-                        value={m.specification}
-                        onChange={(e) => setMaterialMaster((prev) => prev.map((item, i) => i === index ? { ...item, specification: e.target.value } : item))}
-                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
-                      />
-                      <input
-                        type="text"
-                        placeholder="備考"
-                        value={m.remarks}
-                        onChange={(e) => setMaterialMaster((prev) => prev.map((item, i) => i === index ? { ...item, remarks: e.target.value } : item))}
-                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
-                      />
+                <div key={m.id} className="p-3 rounded-xl border space-y-2" style={{ background: '#12122a', borderColor: '#2e2e50' }}>
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs font-bold w-4 mt-2.5 shrink-0" style={{ color: '#6b7280' }}>{index + 1}</span>
+                    <div className="flex-1 space-y-2">
+                      {[
+                        { ph: '品名', key: 'name' as keyof MaterialMaster },
+                        { ph: 'メーカー', key: 'manufacturer' as keyof MaterialMaster },
+                        { ph: '規格 / 寸法 / 数量', key: 'specification' as keyof MaterialMaster },
+                        { ph: '備考', key: 'remarks' as keyof MaterialMaster },
+                      ].map(({ ph, key }) => (
+                        <input
+                          key={key}
+                          type="text"
+                          placeholder={ph}
+                          value={m[key] as string}
+                          onChange={(e) => setMaterialMaster(prev => prev.map((item, i) => i === index ? { ...item, [key]: e.target.value } : item))}
+                          className={inputCls}
+                          style={{ ...inputStyle, background: '#1c1c30' }}
+                        />
+                      ))}
                     </div>
-                    <button onClick={() => setMaterialMaster((prev) => prev.filter((_, i) => i !== index))} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors self-start mt-1">
-                      <Trash2 className="w-5 h-5" />
+                    <button
+                      onClick={() => setMaterialMaster(prev => prev.filter((_, i) => i !== index))}
+                      className="p-1.5 mt-1 rounded-lg transition-colors shrink-0 self-start"
+                      style={{ color: '#3d3d60' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                      onMouseLeave={e => (e.currentTarget.style.color = '#3d3d60')}
+                    >
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
               ))}
             </div>
-            <button
-              onClick={() => setMaterialMaster((prev) => [...prev, { id: nextId(), name: '', manufacturer: '', specification: '', remarks: '' }])}
-              className="w-full py-3 bg-gray-50 text-blue-600 font-bold rounded-xl border-2 border-dashed border-blue-200 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
-            >
-              <Plus className="w-5 h-5" /> 材料を追加
-            </button>
-          </div>
+            <AddButton onClick={() => setMaterialMaster(prev => [...prev, { id: nextId(), name: '', manufacturer: '', specification: '', remarks: '' }])} label="材料を追加" accent="#8b5cf6" />
+          </Section>
 
-          {/* 定型文のカスタマイズ */}
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-            <h2 className="text-xl font-bold text-gray-800 mb-2">説明欄の「ワンタップ定型文」</h2>
-            <p className="text-sm text-gray-500 mb-5">よく使う説明文をボタン一つで入力できるようにします。</p>
-            <div className="space-y-4 mb-5">
+          {/* 定型文 */}
+          <Section title="説明欄の「ワンタップ定型文」" icon={<Settings className="w-4 h-4" />} accent="#f59e0b">
+            <p className="text-xs mb-4" style={{ color: '#6b7280' }}>よく使う説明文をボタン一つで入力できるようにします。</p>
+            <div className="space-y-3 mb-4">
               {templates.map((tmpl, index) => (
-                <div key={index} className="flex gap-3 items-start bg-gray-50 p-4 rounded-2xl border border-gray-200">
-                  <div className="flex-1 space-y-3">
+                <div key={index} className="flex gap-2 items-start p-3 rounded-xl border" style={{ background: '#12122a', borderColor: '#2e2e50' }}>
+                  <div className="flex-1 space-y-2">
                     <div>
-                      <label className="block text-xs font-bold text-gray-500 mb-1">ボタンの名前（短く）</label>
+                      <label className="block text-xs font-bold mb-1" style={{ color: '#6b7280' }}>ボタンの名前（短く）</label>
                       <input
                         type="text"
                         value={tmpl.label}
-                        // ★ バグ修正：オブジェクトの浅いコピー問題を setState の prev で安全に解決
                         onChange={(e) => setTemplates(prev => prev.map((t, i) => i === index ? { ...t, label: e.target.value } : t))}
-                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
+                        className={inputCls}
+                        style={{ ...inputStyle, background: '#1c1c30' }}
                         placeholder="例：基準/実測"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-gray-500 mb-1">ボタンを押した時に挿入される文章</label>
+                      <label className="block text-xs font-bold mb-1" style={{ color: '#6b7280' }}>ボタンを押した時に挿入される文章</label>
                       <textarea
                         value={tmpl.text}
-                        // ★ バグ修正：オブジェクトの浅いコピー問題を setState の prev で安全に解決
                         onChange={(e) => setTemplates(prev => prev.map((t, i) => i === index ? { ...t, text: e.target.value } : t))}
                         rows={2}
-                        className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
+                        className={`${inputCls} resize-none`}
+                        style={{ ...inputStyle, background: '#1c1c30' }}
                         placeholder="例：基準値：&#13;&#10;実測値："
                       />
                     </div>
                   </div>
-                  <button onClick={() => setTemplates(templates.filter((_, i) => i !== index))} className="p-2 mt-4 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                    <Trash2 className="w-5 h-5" />
+                  <button
+                    onClick={() => setTemplates(templates.filter((_, i) => i !== index))}
+                    className="p-1.5 mt-5 rounded-lg transition-colors shrink-0"
+                    style={{ color: '#3d3d60' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#3d3d60')}
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               ))}
             </div>
-            <button onClick={() => setTemplates([...templates, { label: "新規ボタン", text: "新しい説明文" }])} className="w-full py-3 bg-gray-50 text-blue-600 font-bold rounded-xl border-2 border-dashed border-blue-200 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2">
-              <Plus className="w-5 h-5" /> 定型文ボタンを追加
-            </button>
-          </div>
+            <AddButton onClick={() => setTemplates([...templates, { label: "新規ボタン", text: "新しい説明文" }])} label="定型文ボタンを追加" accent="#f59e0b" />
+          </Section>
 
         </div>
       </div>
     </div>
+  );
+}
+
+function AddButton({ onClick, label, accent = '#ff6b35' }: { onClick: () => void; label: string; accent?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full py-4 font-bold text-sm rounded-xl border-2 border-dashed flex items-center justify-center gap-2 transition-all"
+      style={{ borderColor: '#2e2e50', color: '#8b8ba8' }}
+      onMouseEnter={e => { (e.currentTarget.style.borderColor = accent); (e.currentTarget.style.color = accent); }}
+      onMouseLeave={e => { (e.currentTarget.style.borderColor = '#2e2e50'); (e.currentTarget.style.color = '#8b8ba8'); }}
+    >
+      <Plus className="w-4 h-4" /> {label}
+    </button>
   );
 }
