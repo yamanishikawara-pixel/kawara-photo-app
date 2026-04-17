@@ -20,8 +20,8 @@ export function ErrorMessage({ message, onDismiss, className = '' }: Props) {
           onClick={onDismiss}
           className="p-1 rounded transition-colors shrink-0"
           style={{ color: '#f87171' }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,0.15)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+          onPointerEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,0.15)')}
+          onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}
           aria-label="エラーメッセージを閉じる"
         >
           <X className="w-4 h-4" />

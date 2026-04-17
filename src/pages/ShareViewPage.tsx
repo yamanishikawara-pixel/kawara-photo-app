@@ -92,8 +92,8 @@ export default function ShareViewPage() {
             onClick={() => navigate(`/project/${id}`)}
             className="shrink-0 flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg border transition-colors"
             style={{ color: ACCENT, borderColor: `${ACCENT}40`, background: `${ACCENT}12` }}
-            onMouseEnter={e => (e.currentTarget.style.background = `${ACCENT}22`)}
-            onMouseLeave={e => (e.currentTarget.style.background = `${ACCENT}12`)}
+            onPointerEnter={e => (e.currentTarget.style.background = `${ACCENT}22`)}
+            onPointerLeave={e => (e.currentTarget.style.background = `${ACCENT}12`)}
           >
             <Edit3 className="w-3.5 h-3.5" /> 編集に戻る
           </button>

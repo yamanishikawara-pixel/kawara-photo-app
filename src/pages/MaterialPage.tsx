@@ -111,8 +111,8 @@ function NameSuggest({
                     className="w-full text-left px-4 py-3 transition-colors border-b last:border-none"
                     style={{ borderColor: '#2e2e50' }}
                     onMouseDown={(e) => { e.preventDefault(); handleSelect(m); }}
-                    onMouseEnter={e => (e.currentTarget.style.background = '#2e2e50')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    onPointerEnter={e => (e.currentTarget.style.background = '#2e2e50')}
+                    onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}
                   >
                     <div className="font-bold text-sm" style={{ color: '#f0ede8' }}>{m.name}</div>
                     {(m.manufacturer || m.specification) && (
@@ -300,8 +300,8 @@ export default function MaterialPage() {
             onClick={() => navigate(`/project/${id}`)}
             className="flex items-center gap-2 font-bold text-sm transition-colors"
             style={{ color: '#8b8ba8' }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#ff6b35')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+            onPointerEnter={e => (e.currentTarget.style.color = '#ff6b35')}
+            onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
           >
             <ArrowLeft className="w-4 h-4" /> もどる
           </button>
@@ -347,8 +347,8 @@ export default function MaterialPage() {
                     disabled={index === 0}
                     className="p-1.5 rounded-lg transition-colors disabled:opacity-30"
                     style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}
-                    onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')}
-                    onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+                    onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')}
+                    onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
                     title="上へ"
                   >
                     <ArrowUp className="w-4 h-4" />
@@ -358,8 +358,8 @@ export default function MaterialPage() {
                     disabled={index === materials.length - 1}
                     className="p-1.5 rounded-lg transition-colors disabled:opacity-30"
                     style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}
-                    onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')}
-                    onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+                    onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')}
+                    onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
                     title="下へ"
                   >
                     <ArrowDown className="w-4 h-4" />
@@ -392,12 +392,12 @@ export default function MaterialPage() {
                           crossOrigin="anonymous"
                         />
                         <div className="absolute bottom-2 right-2 flex gap-1 p-1.5 rounded-lg z-20" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
-                          <button onClick={() => rotateImage(material.id, material.rotation || 0, -90)} className="p-1.5 rounded transition-colors" style={{ color: '#f0ede8' }} onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}><RotateCcw className="w-4 h-4" /></button>
-                          <button onClick={() => rotateImage(material.id, material.rotation || 0, 90)} className="p-1.5 rounded transition-colors" style={{ color: '#f0ede8' }} onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}><RotateCw className="w-4 h-4" /></button>
+                          <button onClick={() => rotateImage(material.id, material.rotation || 0, -90)} className="p-1.5 rounded transition-colors" style={{ color: '#f0ede8' }} onPointerEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}><RotateCcw className="w-4 h-4" /></button>
+                          <button onClick={() => rotateImage(material.id, material.rotation || 0, 90)} className="p-1.5 rounded transition-colors" style={{ color: '#f0ede8' }} onPointerEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}><RotateCw className="w-4 h-4" /></button>
                         </div>
                       </>
                     ) : (
-                      <label className="flex flex-col items-center justify-center w-full h-full cursor-pointer transition-colors" onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      <label className="flex flex-col items-center justify-center w-full h-full cursor-pointer transition-colors" onPointerEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}>
                         {uploadingId === material.id ? (
                           <span className="text-sm font-bold animate-pulse" style={{ color: '#ff6b35' }}>読込中...</span>
                         ) : (
@@ -414,8 +414,8 @@ export default function MaterialPage() {
                     <label
                       className="text-center w-full py-2 rounded-lg cursor-pointer transition-colors text-xs font-bold"
                       style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}
-                      onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')}
-                      onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+                      onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')}
+                      onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
                     >
                       写真を変更
                       <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(material.id, e)} disabled={uploadingId === material.id} />
@@ -433,8 +433,8 @@ export default function MaterialPage() {
                         onClick={() => saveToMaster(material)}
                         className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg transition-colors"
                         style={{ color: '#10b981' }}
-                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(16,185,129,0.1)')}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        onPointerEnter={e => (e.currentTarget.style.background = 'rgba(16,185,129,0.1)')}
+                        onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}
                         title="マスタに保存"
                       >
                         <BookmarkPlus className="w-3.5 h-3.5" /> マスタに追加
@@ -486,8 +486,8 @@ export default function MaterialPage() {
             onClick={addMaterial}
             className="w-full py-5 font-bold text-sm rounded-2xl border-2 border-dashed flex items-center justify-center gap-2 transition-all"
             style={{ borderColor: '#2e2e50', color: '#8b8ba8', background: 'transparent' }}
-            onMouseEnter={e => { (e.currentTarget.style.borderColor = '#8b5cf6'); (e.currentTarget.style.color = '#8b5cf6'); }}
-            onMouseLeave={e => { (e.currentTarget.style.borderColor = '#2e2e50'); (e.currentTarget.style.color = '#8b8ba8'); }}
+            onPointerEnter={e => { (e.currentTarget.style.borderColor = '#8b5cf6'); (e.currentTarget.style.color = '#8b5cf6'); }}
+            onPointerLeave={e => { (e.currentTarget.style.borderColor = '#2e2e50'); (e.currentTarget.style.color = '#8b8ba8'); }}
           >
             <Plus className="w-5 h-5" />
             材料の枠を追加する

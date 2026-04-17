@@ -291,9 +291,9 @@ function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChan
           }}
           className="absolute z-[1000] flex rounded-xl shadow-2xl overflow-hidden"
         >
-          <button onClick={(e) => { e.stopPropagation(); onSizeChange(Math.min(80, Math.round(size + 5))); }} className="px-4 py-2.5 text-lg font-bold transition-colors" style={{ color: '#f0ede8', borderRight: '1px solid #3d3d60' }} onMouseEnter={e => (e.currentTarget.style.background = '#2e2e50')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>＋</button>
-          <button onClick={(e) => { e.stopPropagation(); onSizeChange(Math.max(5, Math.round(size - 5))); }} className="px-4 py-2.5 text-lg font-bold transition-colors" style={{ color: '#f0ede8', borderRight: '1px solid #3d3d60' }} onMouseEnter={e => (e.currentTarget.style.background = '#2e2e50')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>－</button>
-          <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="px-4 py-2.5 transition-colors" style={{ color: '#ef4444' }} onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,0.15)')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}><Trash2 className="w-4 h-4" /></button>
+          <button onClick={(e) => { e.stopPropagation(); onSizeChange(Math.min(80, Math.round(size + 5))); }} className="px-4 py-2.5 text-lg font-bold transition-colors" style={{ color: '#f0ede8', borderRight: '1px solid #3d3d60' }} onPointerEnter={e => (e.currentTarget.style.background = '#2e2e50')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}>＋</button>
+          <button onClick={(e) => { e.stopPropagation(); onSizeChange(Math.max(5, Math.round(size - 5))); }} className="px-4 py-2.5 text-lg font-bold transition-colors" style={{ color: '#f0ede8', borderRight: '1px solid #3d3d60' }} onPointerEnter={e => (e.currentTarget.style.background = '#2e2e50')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}>－</button>
+          <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="px-4 py-2.5 transition-colors" style={{ color: '#ef4444' }} onPointerEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,0.15)')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}><Trash2 className="w-4 h-4" /></button>
         </div>
       )}
     </>
@@ -309,7 +309,7 @@ function PinSelectModal({ isOpen, onClose, pins, onSelect }: { isOpen: boolean; 
           <h3 className="text-base font-black flex items-center gap-2" style={{ color: '#f0ede8' }}>
             <MapPin className="w-5 h-5" style={{ color: '#ef4444' }} /> 位置図の場所を選択
           </h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg transition-colors" style={{ color: '#8b8ba8' }} onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')} onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}>
+          <button onClick={onClose} className="p-1.5 rounded-lg transition-colors" style={{ color: '#8b8ba8' }} onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')} onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -321,8 +321,8 @@ function PinSelectModal({ isOpen, onClose, pins, onSelect }: { isOpen: boolean; 
                 onClick={() => { onSelect(pin.label); onClose(); }}
                 className="font-black py-3 text-center rounded-xl text-sm transition-all active:scale-95"
                 style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#ef4444'; (e.currentTarget as HTMLButtonElement).style.color = '#ef4444'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#2e2e50'; (e.currentTarget as HTMLButtonElement).style.color = '#f0ede8'; }}
+                onPointerEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#ef4444'; (e.currentTarget as HTMLButtonElement).style.color = '#ef4444'; }}
+                onPointerLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#2e2e50'; (e.currentTarget as HTMLButtonElement).style.color = '#f0ede8'; }}
               >
                 {pin.label}
               </button>
@@ -431,8 +431,8 @@ function PhotoMasterCombobox({
                     className="w-full text-left px-4 py-3 transition-colors border-b last:border-none"
                     style={{ borderColor: '#2e2e50' }}
                     onMouseDown={(e) => { e.preventDefault(); handleSelect(m); }}
-                    onMouseEnter={e => (e.currentTarget.style.background = '#2e2e50')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    onPointerEnter={e => (e.currentTarget.style.background = '#2e2e50')}
+                    onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}
                   >
                     <div className="font-bold text-sm" style={{ color: '#f0ede8' }}>{m.name}</div>
                     {m.process && <div className="text-xs mt-0.5" style={{ color: '#6b7280' }}>{m.process}</div>}
@@ -795,8 +795,8 @@ export default function PhotoPage() {
               onClick={() => navigate(`/project/${id}`)}
               className="flex items-center gap-2 font-bold text-sm transition-colors"
               style={{ color: '#8b8ba8' }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#ff6b35')}
-              onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+              onPointerEnter={e => (e.currentTarget.style.color = '#ff6b35')}
+              onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
             >
               <ArrowLeft className="w-4 h-4" /> もどる
             </button>
@@ -872,8 +872,8 @@ export default function PhotoPage() {
                   onClick={() => setIsSelectMode(true)}
                   className="font-bold px-3 py-2 rounded-lg text-sm flex items-center gap-1.5 transition-colors"
                   style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}
-                  onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')}
-                  onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+                  onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')}
+                  onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
                 >
                   <CheckSquare className="w-4 h-4" /> 複数選択して削除
                 </button>
@@ -935,8 +935,8 @@ export default function PhotoPage() {
                         onClick={() => movePhoto(index, 'up')}
                         className="p-2 rounded-lg transition-colors"
                         style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}
-                        onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')}
-                        onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+                        onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')}
+                        onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
                         title="上へ"
                       >
                         <ArrowUp className="w-4 h-4" />
@@ -945,8 +945,8 @@ export default function PhotoPage() {
                         onClick={() => movePhoto(index, 'down')}
                         className="p-2 rounded-lg transition-colors"
                         style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}
-                        onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')}
-                        onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+                        onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')}
+                        onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
                         title="下へ"
                       >
                         <ArrowDown className="w-4 h-4" />
@@ -969,8 +969,8 @@ export default function PhotoPage() {
                       onClick={() => updatePhoto(photo.id, 'rotation', ((Number(photo.rotation || 0)) + 90) % 360)}
                       className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors"
                       style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}
-                      onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')}
-                      onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+                      onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')}
+                      onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
                     >
                       ↻ 回転
                     </button>
@@ -1073,8 +1073,8 @@ export default function PhotoPage() {
                                 ? { background: '#ef4444', color: '#fff', borderColor: '#ef4444' }
                                 : { background: '#12122a', color: '#8b8ba8', borderColor: '#2e2e50' }
                               }
-                              onMouseEnter={e => { if (!isCircleMode) (e.currentTarget.style.borderColor = '#ef4444'); }}
-                              onMouseLeave={e => { if (!isCircleMode) (e.currentTarget.style.borderColor = '#2e2e50'); }}
+                              onPointerEnter={e => { if (!isCircleMode) (e.currentTarget.style.borderColor = '#ef4444'); }}
+                              onPointerLeave={e => { if (!isCircleMode) (e.currentTarget.style.borderColor = '#2e2e50'); }}
                             >
                               <Edit2 className="w-4 h-4" /> 赤丸を追加
                             </button>
@@ -1085,8 +1085,8 @@ export default function PhotoPage() {
                                 ? { background: '#f0ede8', color: '#0f0f1a', borderColor: '#f0ede8' }
                                 : { background: '#12122a', color: '#8b8ba8', borderColor: '#2e2e50' }
                               }
-                              onMouseEnter={e => { if (!isDimensionMode) (e.currentTarget.style.borderColor = '#8b8ba8'); }}
-                              onMouseLeave={e => { if (!isDimensionMode) (e.currentTarget.style.borderColor = '#2e2e50'); }}
+                              onPointerEnter={e => { if (!isDimensionMode) (e.currentTarget.style.borderColor = '#8b8ba8'); }}
+                              onPointerLeave={e => { if (!isDimensionMode) (e.currentTarget.style.borderColor = '#2e2e50'); }}
                             >
                               <Ruler className="w-4 h-4" /> 寸法記入
                             </button>
@@ -1183,8 +1183,8 @@ export default function PhotoPage() {
                               onClick={() => saveToPhotoMaster(photo)}
                               className="flex items-center gap-1 text-xs font-bold px-2 py-1.5 rounded-lg transition-colors"
                               style={{ color: '#10b981' }}
-                              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(16,185,129,0.1)')}
-                              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                              onPointerEnter={e => (e.currentTarget.style.background = 'rgba(16,185,129,0.1)')}
+                              onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}
                               title="テンプレートとして保存"
                             >
                               <BookmarkPlus className="w-3.5 h-3.5" />
@@ -1241,8 +1241,8 @@ export default function PhotoPage() {
           onClick={addPhotoSlot}
           className="w-full mt-8 mb-16 flex items-center justify-center gap-3 py-5 rounded-2xl font-black text-base transition-all border"
           style={{ background: '#1c1c30', borderColor: '#2e2e50', color: '#f0ede8' }}
-          onMouseEnter={e => { (e.currentTarget.style.borderColor = '#ff6b35'); (e.currentTarget.style.color = '#ff6b35'); }}
-          onMouseLeave={e => { (e.currentTarget.style.borderColor = '#2e2e50'); (e.currentTarget.style.color = '#f0ede8'); }}
+          onPointerEnter={e => { (e.currentTarget.style.borderColor = '#ff6b35'); (e.currentTarget.style.color = '#ff6b35'); }}
+          onPointerLeave={e => { (e.currentTarget.style.borderColor = '#2e2e50'); (e.currentTarget.style.color = '#f0ede8'); }}
         >
           <Plus className="w-5 h-5" /> 写真枠を追加する
         </button>

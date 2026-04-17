@@ -42,10 +42,10 @@ function StorageUsageBar({ used, quota, onClick }: { used: number; quota: number
       onClick={onClick}
       className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all mt-4"
       style={{ background: '#1c1c30', borderColor: '#2e2e50' }}
-      onMouseEnter={(e) => {
+      onPointerEnter={(e) => {
         (e.currentTarget as HTMLButtonElement).style.borderColor = barColor;
       }}
-      onMouseLeave={(e) => {
+      onPointerLeave={(e) => {
         (e.currentTarget as HTMLButtonElement).style.borderColor = '#2e2e50';
       }}
     >
@@ -225,13 +225,13 @@ export function ProjectListPage() {
           </div>
           <div className="flex items-center gap-4">
             <button onClick={() => navigate('/settings')} className="flex items-center gap-1.5 text-sm font-bold transition-colors" style={{ color: '#8b8ba8' }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#ff6b35')}
-              onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}>
+              onPointerEnter={e => (e.currentTarget.style.color = '#ff6b35')}
+              onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}>
               <Settings className="w-4 h-4" /> 設定
             </button>
             <button onClick={handleLogout} className="flex items-center gap-1.5 text-sm font-bold transition-colors" style={{ color: '#8b8ba8' }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')}
-              onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}>
+              onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')}
+              onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}>
               <LogOut className="w-4 h-4" /> ログアウト
             </button>
           </div>
@@ -272,8 +272,8 @@ export function ProjectListPage() {
               onClick={addProject}
               className="flex items-center gap-2 px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl font-bold text-sm transition-all"
               style={{ background: '#ff6b35', color: '#fff', boxShadow: '0 0 16px rgba(255,107,53,0.35)' }}
-              onMouseEnter={e => (e.currentTarget.style.background = '#e85d2a')}
-              onMouseLeave={e => (e.currentTarget.style.background = '#ff6b35')}
+              onPointerEnter={e => (e.currentTarget.style.background = '#e85d2a')}
+              onPointerLeave={e => (e.currentTarget.style.background = '#ff6b35')}
             >
               <Plus className="w-5 h-5" /> 新規現場
             </button>
@@ -311,12 +311,12 @@ export function ProjectListPage() {
                     borderColor: p.isCompleted ? '#1e4035' : '#2e2e50',
                     opacity: p.isCompleted ? 0.7 : 1,
                   }}
-                  onMouseEnter={e => {
+                  onPointerEnter={e => {
                     (e.currentTarget as HTMLDivElement).style.borderColor = '#ff6b35';
                     (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 24px rgba(255,107,53,0.15)';
                     (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
                   }}
-                  onMouseLeave={e => {
+                  onPointerLeave={e => {
                     (e.currentTarget as HTMLDivElement).style.borderColor = p.isCompleted ? '#1e4035' : '#2e2e50';
                     (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
                     (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
@@ -360,8 +360,8 @@ export function ProjectListPage() {
                           onClick={(e) => toggleCompleted(e, p.id, !!p.isCompleted)}
                           className="p-1.5 rounded-lg transition-colors"
                           style={{ color: p.isCompleted ? '#10b981' : '#3d3d60' }}
-                          onMouseEnter={e => (e.currentTarget.style.color = '#10b981')}
-                          onMouseLeave={e => (e.currentTarget.style.color = p.isCompleted ? '#10b981' : '#3d3d60')}
+                          onPointerEnter={e => (e.currentTarget.style.color = '#10b981')}
+                          onPointerLeave={e => (e.currentTarget.style.color = p.isCompleted ? '#10b981' : '#3d3d60')}
                           title={p.isCompleted ? '完了を取り消す' : '完了にする'}
                         >
                           {p.isCompleted ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
@@ -371,8 +371,8 @@ export function ProjectListPage() {
                           onClick={(e) => { e.stopPropagation(); setConfirmDelete({ id: p.id }); }}
                           className="p-1.5 rounded-lg transition-colors"
                           style={{ color: '#3d3d60' }}
-                          onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-                          onMouseLeave={e => (e.currentTarget.style.color = '#3d3d60')}
+                          onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                          onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

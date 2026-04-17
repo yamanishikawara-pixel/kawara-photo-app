@@ -61,8 +61,8 @@ export function ConfirmModal({
             onClick={onCancel}
             className="p-1 rounded transition-colors"
             style={{ color: '#8b8ba8' }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+            onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')}
+            onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
             aria-label="キャンセル"
           >
             <X className="w-5 h-5" />
@@ -79,8 +79,8 @@ export function ConfirmModal({
             onClick={onCancel}
             className="flex-1 py-3 font-bold rounded-xl border transition-colors text-sm"
             style={{ borderColor: '#2e2e50', color: '#8b8ba8', background: 'transparent' }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#f0ede8'; e.currentTarget.style.color = '#f0ede8'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#2e2e50'; e.currentTarget.style.color = '#8b8ba8'; }}
+            onPointerEnter={e => { e.currentTarget.style.borderColor = '#f0ede8'; e.currentTarget.style.color = '#f0ede8'; }}
+            onPointerLeave={e => { e.currentTarget.style.borderColor = '#2e2e50'; e.currentTarget.style.color = '#8b8ba8'; }}
           >
             {cancelLabel}
           </button>
@@ -92,8 +92,8 @@ export function ConfirmModal({
               ? { background: '#ef4444', color: '#fff' }
               : { background: '#ff6b35', color: '#fff' }
             }
-            onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
-            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+            onPointerEnter={e => (e.currentTarget.style.opacity = '0.85')}
+            onPointerLeave={e => (e.currentTarget.style.opacity = '1')}
           >
             {confirmLabel}
           </button>

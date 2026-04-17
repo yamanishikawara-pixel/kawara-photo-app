@@ -146,8 +146,8 @@ export default function SettingsPage() {
             onClick={() => navigate('/')}
             className="flex items-center gap-2 font-bold text-sm transition-colors"
             style={{ color: '#8b8ba8' }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#ff6b35')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+            onPointerEnter={e => (e.currentTarget.style.color = '#ff6b35')}
+            onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
           >
             <ArrowLeft className="w-4 h-4" /> ホームへ
           </button>
@@ -156,8 +156,8 @@ export default function SettingsPage() {
             disabled={saving}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all disabled:opacity-50"
             style={{ background: '#ff6b35', color: '#fff', boxShadow: '0 0 16px rgba(255,107,53,0.35)' }}
-            onMouseEnter={e => !saving && ((e.currentTarget as HTMLButtonElement).style.background = '#e85d2a')}
-            onMouseLeave={e => !saving && ((e.currentTarget as HTMLButtonElement).style.background = '#ff6b35')}
+            onPointerEnter={e => !saving && ((e.currentTarget as HTMLButtonElement).style.background = '#e85d2a')}
+            onPointerLeave={e => !saving && ((e.currentTarget as HTMLButtonElement).style.background = '#ff6b35')}
           >
             <Save className="w-4 h-4" /> {saving ? '保存中...' : '設定を保存'}
           </button>
@@ -210,7 +210,7 @@ export default function SettingsPage() {
                     </button>
                   </div>
                 ) : (
-                  <label className="w-28 h-28 flex flex-col items-center justify-center rounded-xl cursor-pointer transition-colors border-2 border-dashed" style={{ background: '#12122a', borderColor: '#3d3d60' }} onMouseEnter={e => (e.currentTarget.style.borderColor = '#ff6b35')} onMouseLeave={e => (e.currentTarget.style.borderColor = '#3d3d60')}>
+                  <label className="w-28 h-28 flex flex-col items-center justify-center rounded-xl cursor-pointer transition-colors border-2 border-dashed" style={{ background: '#12122a', borderColor: '#3d3d60' }} onPointerEnter={e => (e.currentTarget.style.borderColor = '#ff6b35')} onPointerLeave={e => (e.currentTarget.style.borderColor = '#3d3d60')}>
                     {uploadingLogo ? (
                       <span className="text-xs font-bold animate-pulse" style={{ color: '#ff6b35' }}>送信中...</span>
                     ) : (
@@ -271,8 +271,8 @@ export default function SettingsPage() {
                     onClick={() => setProcesses(processes.filter((_, i) => i !== index))}
                     className="p-2 rounded-xl transition-colors shrink-0"
                     style={{ color: '#3d3d60' }}
-                    onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-                    onMouseLeave={e => (e.currentTarget.style.color = '#3d3d60')}
+                    onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                    onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -320,8 +320,8 @@ export default function SettingsPage() {
                       onClick={() => setPhotoMaster(prev => prev.filter((_, i) => i !== index))}
                       className="p-1.5 mt-1 rounded-lg transition-colors shrink-0"
                       style={{ color: '#3d3d60' }}
-                      onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-                      onMouseLeave={e => (e.currentTarget.style.color = '#3d3d60')}
+                      onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                      onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -362,8 +362,8 @@ export default function SettingsPage() {
                       onClick={() => setMaterialMaster(prev => prev.filter((_, i) => i !== index))}
                       className="p-1.5 mt-1 rounded-lg transition-colors shrink-0 self-start"
                       style={{ color: '#3d3d60' }}
-                      onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-                      onMouseLeave={e => (e.currentTarget.style.color = '#3d3d60')}
+                      onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                      onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -408,8 +408,8 @@ export default function SettingsPage() {
                     onClick={() => setTemplates(templates.filter((_, i) => i !== index))}
                     className="p-1.5 mt-5 rounded-lg transition-colors shrink-0"
                     style={{ color: '#3d3d60' }}
-                    onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-                    onMouseLeave={e => (e.currentTarget.style.color = '#3d3d60')}
+                    onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                    onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -431,8 +431,8 @@ function AddButton({ onClick, label, accent = '#ff6b35' }: { onClick: () => void
       onClick={onClick}
       className="w-full py-4 font-bold text-sm rounded-xl border-2 border-dashed flex items-center justify-center gap-2 transition-all"
       style={{ borderColor: '#2e2e50', color: '#8b8ba8' }}
-      onMouseEnter={e => { (e.currentTarget.style.borderColor = accent); (e.currentTarget.style.color = accent); }}
-      onMouseLeave={e => { (e.currentTarget.style.borderColor = '#2e2e50'); (e.currentTarget.style.color = '#8b8ba8'); }}
+      onPointerEnter={e => { (e.currentTarget.style.borderColor = accent); (e.currentTarget.style.color = accent); }}
+      onPointerLeave={e => { (e.currentTarget.style.borderColor = '#2e2e50'); (e.currentTarget.style.color = '#8b8ba8'); }}
     >
       <Plus className="w-4 h-4" /> {label}
     </button>

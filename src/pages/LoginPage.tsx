@@ -167,10 +167,10 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full font-bold py-4 rounded-xl transition-all disabled:opacity-50 text-base flex items-center justify-center gap-2 mt-2"
             style={{ background: ACCENT, color: '#fff', boxShadow: '0 0 16px rgba(255,107,53,0.35)' }}
-            onMouseEnter={(e) => {
+            onPointerEnter={(e) => {
               if (!loading) e.currentTarget.style.background = '#e85d2a';
             }}
-            onMouseLeave={(e) => (e.currentTarget.style.background = ACCENT)}
+            onPointerLeave={(e) => (e.currentTarget.style.background = ACCENT)}
           >
             {loading ? (
               '通信中...'
@@ -195,8 +195,8 @@ export default function LoginPage() {
             }}
             className="text-sm font-bold block w-full transition-colors"
             style={{ color: TEXT_MUTED }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = ACCENT)}
-            onMouseLeave={(e) => (e.currentTarget.style.color = TEXT_MUTED)}
+            onPointerEnter={(e) => (e.currentTarget.style.color = ACCENT)}
+            onPointerLeave={(e) => (e.currentTarget.style.color = TEXT_MUTED)}
           >
             {isLogin ? '初めての方はこちら（新規登録）' : 'すでにアカウントをお持ちの方（ログイン）'}
           </button>
@@ -210,8 +210,8 @@ export default function LoginPage() {
               }}
               className="text-xs transition-colors"
               style={{ color: TEXT_DIM }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = ACCENT)}
-              onMouseLeave={(e) => (e.currentTarget.style.color = TEXT_DIM)}
+              onPointerEnter={(e) => (e.currentTarget.style.color = ACCENT)}
+              onPointerLeave={(e) => (e.currentTarget.style.color = TEXT_DIM)}
             >
               パスワードをお忘れの方
             </button>
@@ -265,10 +265,10 @@ export default function LoginPage() {
                 disabled={resetLoading}
                 className="w-full font-bold py-3 rounded-xl transition-colors disabled:opacity-50"
                 style={{ background: ACCENT, color: '#fff' }}
-                onMouseEnter={(e) => {
+                onPointerEnter={(e) => {
                   if (!resetLoading) e.currentTarget.style.background = '#e85d2a';
                 }}
-                onMouseLeave={(e) => (e.currentTarget.style.background = ACCENT)}
+                onPointerLeave={(e) => (e.currentTarget.style.background = ACCENT)}
               >
                 {resetLoading ? '送信中...' : 'リセットメールを送信'}
               </button>
@@ -278,8 +278,8 @@ export default function LoginPage() {
               onClick={() => setShowReset(false)}
               className="mt-4 w-full text-xs transition-colors"
               style={{ color: TEXT_DIM }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = TEXT_MUTED)}
-              onMouseLeave={(e) => (e.currentTarget.style.color = TEXT_DIM)}
+              onPointerEnter={(e) => (e.currentTarget.style.color = TEXT_MUTED)}
+              onPointerLeave={(e) => (e.currentTarget.style.color = TEXT_DIM)}
             >
               キャンセル
             </button>

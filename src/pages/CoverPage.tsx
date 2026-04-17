@@ -139,8 +139,8 @@ export function CoverPage() {
             onClick={() => navigate(`/project/${id}`)}
             className="flex items-center gap-2 font-bold text-sm transition-colors"
             style={{ color: '#8b8ba8' }}
-            onMouseEnter={e => (e.currentTarget.style.color = ACCENT)}
-            onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+            onPointerEnter={e => (e.currentTarget.style.color = ACCENT)}
+            onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
           >
             <ArrowLeft className="w-4 h-4" />
             <List className="w-4 h-4" /> 現場メニュー
@@ -261,8 +261,8 @@ export function CoverPage() {
                 onClick={handleAppendixDelete}
                 className="p-1.5 rounded-lg transition-colors"
                 style={{ color: '#6b7280' }}
-                onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-                onMouseLeave={e => (e.currentTarget.style.color = '#6b7280')}
+                onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                onPointerLeave={e => (e.currentTarget.style.color = '#6b7280')}
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -274,11 +274,11 @@ export function CoverPage() {
               disabled={appendixUploading}
               className="w-full flex items-center justify-center gap-2 rounded-xl py-4 border-2 border-dashed transition-colors disabled:opacity-50 text-sm font-bold"
               style={{ borderColor: '#2e2e50', color: '#6b7280' }}
-              onMouseEnter={e => {
+              onPointerEnter={e => {
                 e.currentTarget.style.borderColor = ACCENT;
                 e.currentTarget.style.color = ACCENT;
               }}
-              onMouseLeave={e => {
+              onPointerLeave={e => {
                 e.currentTarget.style.borderColor = '#2e2e50';
                 e.currentTarget.style.color = '#6b7280';
               }}

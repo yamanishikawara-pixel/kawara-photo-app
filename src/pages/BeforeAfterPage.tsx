@@ -152,8 +152,8 @@ export function BeforeAfterPage() {
             onClick={() => step === 'list' ? navigate(`/project/${id}`) : reset()}
             className="flex items-center gap-2 font-bold text-sm transition-colors"
             style={{ color: '#8b8ba8' }}
-            onMouseEnter={e => (e.currentTarget.style.color = ACCENT)}
-            onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+            onPointerEnter={e => (e.currentTarget.style.color = ACCENT)}
+            onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
           >
             <ArrowLeft className="w-4 h-4" />
             <List className="w-4 h-4" />
@@ -177,8 +177,8 @@ export function BeforeAfterPage() {
               onClick={() => setStep('before')}
               className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed font-bold text-sm mb-5 transition-colors"
               style={{ borderColor: '#2e2e50', color: '#6b7280' }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = ACCENT; e.currentTarget.style.color = ACCENT; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#2e2e50'; e.currentTarget.style.color = '#6b7280'; }}
+              onPointerEnter={e => { e.currentTarget.style.borderColor = ACCENT; e.currentTarget.style.color = ACCENT; }}
+              onPointerLeave={e => { e.currentTarget.style.borderColor = '#2e2e50'; e.currentTarget.style.color = '#6b7280'; }}
             >
               <Plus className="w-4 h-4" /> ペアを追加
             </button>
@@ -228,8 +228,8 @@ export function BeforeAfterPage() {
                           onClick={() => deletePair(pair.id)}
                           className="p-2 rounded-lg transition-colors shrink-0"
                           style={{ color: '#4b4b70' }}
-                          onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-                          onMouseLeave={e => (e.currentTarget.style.color = '#4b4b70')}
+                          onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                          onPointerLeave={e => (e.currentTarget.style.color = '#4b4b70')}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
