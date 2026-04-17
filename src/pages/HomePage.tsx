@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Camera, FileDown, MapPin, Wrench, ClipboardList, List, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Camera, FileDown, MapPin, Wrench, ClipboardList, ChevronRight, ArrowLeftRight } from 'lucide-react';
 
 import type { Project } from '../types';
 import { db } from '../firebase';
@@ -38,11 +38,18 @@ const MENU_ITEMS = [
     accent: '#10b981',
   },
   {
+    title: 'ビフォーアフター',
+    subtitle: '施工前後の比較写真登録',
+    icon: ArrowLeftRight,
+    path: 'before-after',
+    accent: '#f59e0b',
+  },
+  {
     title: 'PDF出力',
     subtitle: '印刷・ダウンロード',
     icon: FileDown,
     path: 'pdf',
-    accent: '#f59e0b',
+    accent: '#6366f1',
   },
 ];
 
@@ -84,7 +91,7 @@ export function HomePage() {
       <div className="max-w-md mx-auto px-4 pb-16">
 
         {/* ── ヘッダー ── */}
-        <div className="flex items-center justify-between py-5">
+        <div className="flex items-center py-5">
           <button
             type="button"
             onClick={() => navigate('/')}
@@ -94,7 +101,7 @@ export function HomePage() {
             onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
           >
             <ArrowLeft className="w-4 h-4" />
-            <List className="w-4 h-4" /> 現場一覧
+            現場一覧
           </button>
         </div>
 
@@ -103,7 +110,7 @@ export function HomePage() {
         {/* ── 現場ヒーロー ── */}
         <div className="rounded-2xl overflow-hidden border mb-6" style={{ borderColor: '#2e2e50' }}>
           {/* サムネイル */}
-          <div className="relative w-full" style={{ aspectRatio: '21/9', background: '#12122a' }}>
+          <div className="relative w-full" style={{ aspectRatio: '16/9', background: '#12122a' }}>
             {thumb ? (
               <img src={thumb} alt="現場写真" className="w-full h-full object-cover" />
             ) : (

@@ -112,6 +112,14 @@ export interface WhiteoutBox {
   mapIndex?: number;
 }
 
+export interface BeforeAfterPair {
+  id: number;
+  beforePhotoId: number;
+  afterPhotoId: number;
+  part: string;
+  description: string;
+}
+
 export interface Project {
   projectName: string;
   projectLocation: string;
@@ -134,4 +142,8 @@ export interface Project {
   whiteoutBoxes?: WhiteoutBox[];
   isCompleted?: boolean;
   appendixPdfUrl?: string;
+  beforeAfterPairs?: BeforeAfterPair[];
+  warrantyYears?: string;
+  warrantyStartDate?: string;
+  warrantyNote?: string;
 }

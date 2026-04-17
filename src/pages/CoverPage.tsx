@@ -188,6 +188,47 @@ export function CoverPage() {
           })}
         </div>
 
+        {/* ── 施工保証 ── */}
+        <div className="rounded-2xl border overflow-hidden mb-4" style={{ background: '#1c1c30', borderColor: '#2e2e50' }}>
+          <div className="px-5 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid #2e2e50' }}>
+            <div className="w-1 h-5 rounded-full" style={{ background: ACCENT }} />
+            <span className="text-sm font-bold" style={{ color: '#8b8ba8' }}>施工保証</span>
+          </div>
+          {([
+            { label: '保証期間（年数）', key: 'warrantyYears' as const, placeholder: '例：5年' },
+            { label: '保証開始日',       key: 'warrantyStartDate' as const, placeholder: '例：令和○年○月○日' },
+            { label: '補足事項',         key: 'warrantyNote' as const, placeholder: '例：防水保証・雨漏り保証を含む' },
+          ]).map((f, idx) => {
+            const val = String(project[f.key] ?? '');
+            const isSaved = savedKey === f.key;
+            return (
+              <div key={f.key} className="px-5 py-4" style={{ borderBottom: idx < 2 ? '1px solid #2e2e50' : 'none' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1 h-4 rounded-full" style={{ background: ACCENT }} />
+                    <label className="text-xs font-bold tracking-wide" style={{ color: '#8b8ba8' }}>{f.label}</label>
+                  </div>
+                  {isSaved && (
+                    <div className="flex items-center gap-1 text-xs font-bold" style={{ color: ACCENT }}>
+                      <Check className="w-3 h-3" /> 保存済み
+                    </div>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  value={val}
+                  placeholder={f.placeholder}
+                  onChange={e => update(f.key, e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl text-sm font-medium transition-colors outline-none"
+                  style={{ background: '#12122a', border: '1.5px solid #2e2e50', color: '#f0ede8' }}
+                  onFocus={e => (e.currentTarget.style.borderColor = ACCENT)}
+                  onBlur={e => (e.currentTarget.style.borderColor = '#2e2e50')}
+                />
+              </div>
+            );
+          })}
+        </div>
+
         {/* ── 添付資料PDF ── */}
         <div className="rounded-2xl border p-5" style={{ background: '#1c1c30', borderColor: '#2e2e50' }}>
           <h2 className="flex items-center gap-2 text-sm font-bold mb-4" style={{ color: '#8b8ba8' }}>

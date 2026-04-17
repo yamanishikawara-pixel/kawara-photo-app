@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Download, Printer, FileDown } from 'lucide-react';
+import { ArrowLeft, Download, Printer, FileDown, ChevronUp, ChevronDown } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import type { Circle, MapRow, MapLine, Photo, Project, Material, WhiteoutBox, UserSettings } from '../types';
+import type { Circle, MapRow, MapLine, Photo, Project, Material, WhiteoutBox, UserSettings, BeforeAfterPair } from '../types';
 import kawaraLogo from '../assets/kawara-logo.png';
 import { A4_HEIGHT_PX, A4_WIDTH_PX, getPreviewScale, proxyUrl } from '../shared/utils';
 import { ErrorMessage } from '../shared/ErrorMessage';
@@ -53,7 +53,45 @@ export default function PdfExportPage() {
   const [isCapturingForPdf, setIsCapturingForPdf] = useState(false);
   const [pdfProgress, setPdfProgress] = useState('');
   const [appendixPages, setAppendixPages] = useState<string[]>([]); // 添付PDF→画像
-  
+
+  // ── セクションON/OFF制御 ──
+  const [sections, setSections] = useState({
+    cover: true,
+    map: true,
+    photo: true,
+    beforeAfter: true,
+    completion: false,
+    material: true,
+    appendix: true,
+  });
+  type SectionKey = keyof typeof sections;
+  const DEFAULT_ORDER: SectionKey[] = ['cover', 'map', 'photo', 'beforeAfter', 'completion', 'material', 'appendix'];
+  const [sectionOrder, setSectionOrder] = useState<SectionKey[]>(DEFAULT_ORDER);
+
+  const toggleSection = (key: SectionKey) => {
+    setSections(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+  const moveSection = (key: SectionKey, dir: 'up' | 'down') => {
+    setSectionOrder(prev => {
+      const idx = prev.indexOf(key);
+      const next = dir === 'up' ? idx - 1 : idx + 1;
+      if (next < 0 || next >= prev.length) return prev;
+      const arr = [...prev];
+      [arr[idx], arr[next]] = [arr[next], arr[idx]];
+      return arr;
+    });
+  };
+  const applyPreset = (preset: typeof sections) => {
+    setSections(preset);
+    setSectionOrder(DEFAULT_ORDER);
+  };
+  const PRESETS: { label: string; icon: string; value: typeof sections }[] = [
+    { label: '施主提出用', icon: '🏠', value: { cover: true, map: false, photo: false, beforeAfter: true, completion: true, material: false, appendix: false } },
+    { label: '役所提出用', icon: '🏛️', value: { cover: true, map: true, photo: true, beforeAfter: true, completion: false, material: true, appendix: true } },
+    { label: '写真のみ',   icon: '📷', value: { cover: false, map: false, photo: true, beforeAfter: false, completion: false, material: false, appendix: false } },
+    { label: '全部',       icon: '📋', value: { cover: true, map: true, photo: true, beforeAfter: true, completion: true, material: true, appendix: true } },
+  ];
+
   useEffect(() => {
     if (!id) return;
     setError(null);
@@ -276,16 +314,42 @@ export default function PdfExportPage() {
     }
   }
 
-  const totalPages = 1 + mapCount + photoPages.length + materialPages.length + appendixPages.length;
+  // ビフォーアフター：2ペアずつ1ページ
+  const activePairs: BeforeAfterPair[] = project.beforeAfterPairs ?? [];
+  const beforeAfterPages: BeforeAfterPair[][] = [];
+  for (let i = 0; i < activePairs.length; i += 2) {
+    beforeAfterPages.push(activePairs.slice(i, i + 2));
+  }
+
+  const sectionPageCounts: Record<SectionKey, number> = {
+    cover: 1,
+    map: mapCount,
+    photo: photoPages.length,
+    beforeAfter: beforeAfterPages.length,
+    completion: 1,
+    material: materialPages.length,
+    appendix: appendixPages.length,
+  };
+
+  const totalPages = sectionOrder.reduce((sum, s) => sum + (sections[s] ? sectionPageCounts[s] : 0), 0);
+
+  const pageOffset = (section: SectionKey) => {
+    let offset = 0;
+    for (const s of sectionOrder) {
+      if (s === section) break;
+      if (sections[s]) offset += sectionPageCounts[s];
+    }
+    return offset;
+  };
   const showLegendTable = project.showLegendTable !== false;
-  
+
   return (
     <div className={`min-h-screen font-sans overflow-x-hidden w-full relative ${isPrinting ? 'bg-white p-0 block' : 'pb-12 p-4 sm:p-6 flex flex-col items-center'}`} style={isPrinting ? {} : { background: '#12122a' }}>
-      
+
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap');
         .pdf-container-wrapper * { font-family: ${JP_FONT} !important; }
-        
+
         @media print {
           /* ブラウザ自動ヘッダー・フッター（ページ番号・URL）を非表示 */
           @page {
@@ -295,11 +359,11 @@ export default function PdfExportPage() {
             @top-center { content: ''; }
             @bottom-center { content: ''; }
           }
-          html, body { 
-            -webkit-print-color-adjust: exact !important; 
-            print-color-adjust: exact !important; 
-            background: white !important; 
-            margin: 0 !important; 
+          html, body {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            background: white !important;
+            margin: 0 !important;
             padding: 0 !important;
             width: 100% !important;
             overflow: visible !important;
@@ -337,7 +401,7 @@ export default function PdfExportPage() {
             page-break-inside: avoid !important;
             -webkit-page-break-inside: avoid !important;
           }
-          
+
           .pdf-container-wrapper > .pdf-page-wrapper:first-child {
             break-before: auto !important;
             page-break-before: auto !important;
@@ -430,10 +494,122 @@ export default function PdfExportPage() {
 
       {error && <div className="w-full max-w-2xl mb-4 no-print"><ErrorMessage message={error} onDismiss={() => setError(null)} /></div>}
 
+      {/* ── セクション選択パネル ── */}
+      {!isPrinting && (
+        <div className="w-full max-w-2xl mb-6 no-print">
+          <div className="rounded-2xl border overflow-hidden" style={{ background: '#1c1c30', borderColor: '#2e2e50' }}>
+            {/* ヘッダー */}
+            <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #2e2e50' }}>
+              <div className="flex items-center gap-2">
+                <div className="w-1 h-5 rounded-full" style={{ background: '#f59e0b' }} />
+                <span className="text-sm font-bold" style={{ color: '#f0ede8' }}>出力するセクション</span>
+              </div>
+              <span className="text-xs" style={{ color: '#4b4b70' }}>{totalPages}ページ</span>
+            </div>
+
+            {/* トグル一覧（並び替え可） */}
+            <div className="px-4 py-3 flex flex-col gap-2">
+              {(() => {
+                const meta: Record<SectionKey, { label: string; icon: string }> = {
+                  cover:       { label: '表紙',           icon: '📋' },
+                  map:         { label: '位置図',         icon: '📍' },
+                  photo:       { label: '工事写真',       icon: '📷' },
+                  beforeAfter: { label: 'ビフォーアフター', icon: '🔄' },
+                  completion:  { label: '完了報告書',     icon: '📝' },
+                  material:    { label: '使用材料',       icon: '🔧' },
+                  appendix:    { label: '添付PDF',        icon: '📎' },
+                };
+                return sectionOrder.map((key, idx) => {
+                  const { label, icon } = meta[key];
+                  const count = sectionPageCounts[key];
+                  const on = sections[key];
+                  return (
+                    <div key={key} className="flex items-center gap-1.5">
+                      {/* 上下ボタン */}
+                      <div className="flex flex-col gap-0.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => moveSection(key, 'up')}
+                          disabled={idx === 0}
+                          className="flex items-center justify-center w-6 h-5 rounded transition-colors disabled:opacity-20"
+                          style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#8b8ba8' }}
+                          onMouseEnter={e => { if (idx > 0) e.currentTarget.style.color = '#f0ede8'; }}
+                          onMouseLeave={e => { e.currentTarget.style.color = '#8b8ba8'; }}
+                        >
+                          <ChevronUp className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveSection(key, 'down')}
+                          disabled={idx === sectionOrder.length - 1}
+                          className="flex items-center justify-center w-6 h-5 rounded transition-colors disabled:opacity-20"
+                          style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#8b8ba8' }}
+                          onMouseEnter={e => { if (idx < sectionOrder.length - 1) e.currentTarget.style.color = '#f0ede8'; }}
+                          onMouseLeave={e => { e.currentTarget.style.color = '#8b8ba8'; }}
+                        >
+                          <ChevronDown className="w-3 h-3" />
+                        </button>
+                      </div>
+                      {/* トグル本体 */}
+                      <button
+                        type="button"
+                        onClick={() => toggleSection(key)}
+                        className="flex-1 flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left"
+                        style={{
+                          background: on ? 'rgba(245,158,11,0.08)' : '#12122a',
+                          border: `1.5px solid ${on ? 'rgba(245,158,11,0.3)' : '#2e2e50'}`,
+                        }}
+                      >
+                        <span style={{ fontSize: '16px' }}>{icon}</span>
+                        <span className="flex-1 text-sm font-bold" style={{ color: on ? '#f59e0b' : '#6b7280' }}>{label}</span>
+                        {count > 0 && <span className="text-xs" style={{ color: '#4b4b70' }}>{count}p</span>}
+                        <div className="w-10 h-5 rounded-full relative transition-all" style={{ background: on ? '#f59e0b' : '#2e2e50' }}>
+                          <div className="w-4 h-4 rounded-full absolute top-0.5 transition-all" style={{ background: '#fff', left: on ? '22px' : '2px' }} />
+                        </div>
+                      </button>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* プリセットボタン */}
+            <div className="px-4 pb-4 pt-1 flex gap-2 flex-wrap">
+              {PRESETS.map(p => (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => applyPreset(p.value)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                  style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#8b8ba8' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#f59e0b'; e.currentTarget.style.color = '#f59e0b'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#2e2e50'; e.currentTarget.style.color = '#8b8ba8'; }}
+                >
+                  <span style={{ fontSize: '12px' }}>{p.icon}</span> {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className={`pdf-container-wrapper w-full ${isPrinting ? 'block' : 'flex flex-col items-center gap-8'}`}>
-        
-        {/* ① 表紙ページ */}
-        <div style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+
+        {/* 全セクションOFF時のメッセージ */}
+        {!isPrinting && totalPages === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 gap-3 no-print">
+            <FileDown className="w-10 h-10" style={{ color: '#2e2e50' }} />
+            <p className="text-sm font-bold" style={{ color: '#8b8ba8' }}>出力するセクションを選択してください</p>
+          </div>
+        )}
+
+        {sectionOrder.flatMap(secKey => { switch (secKey) {
+
+        // ① 表紙
+        case 'cover': {
+          if (!sections.cover) return [];
+          return [(
+          <div key="cover" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
           <div className={`pdf-page bg-white text-black overflow-hidden ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, transform: isPrinting ? 'none' : `scale(${scale})`, position: 'relative' }}>
 
             {/* ── メインコンテンツ (タイトル + フィールド) ── */}
@@ -495,12 +671,14 @@ export default function PdfExportPage() {
             </div>
           </div>
         </div>
+        )]; }
 
-        {/* ② 位置図ページ */}
-        {mapUrlsToRender.map((u, mapIndex) => {
+        case 'map': {
+          if (!sections.map) return [];
+          return mapUrlsToRender.map((u, mapIndex) => {
           const userRotation = project.mapRotations?.[mapIndex] ?? 0;
           const totalRotation = userRotation % 360;
-          
+
           const transform = project.mapTransforms?.[mapIndex] || { scale: 1, x: 0, y: 0 };
           const layout = project.mapLayouts?.[mapIndex] || { title: '位置図', x: 15, y: 10, rotation: 0 };
 
@@ -615,7 +793,7 @@ export default function PdfExportPage() {
                       <span className="font-bold text-gray-400 absolute inset-0 flex items-center justify-center">位置図未登録</span>
                     )}
                     <div style={{ position: 'absolute', bottom: '5mm', right: '8mm', zIndex: 50, fontSize: '12px', fontWeight: 'bold', color: '#555' }}>
-                      - {2 + mapIndex} / {totalPages} -
+                      - {pageOffset('map') + mapIndex + 1} / {totalPages} -
                     </div>
                   </div>
                 </div>
@@ -627,7 +805,7 @@ export default function PdfExportPage() {
             <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
               <div className={`pdf-page w-full h-full flex flex-col bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '15mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
                 <div className="w-full h-full flex flex-col border-[3px] border-gray-800 print:border-black p-6 print:p-2">
-                  
+
                   {/* aspectRatio must match MapPage legend container (194/120) exactly.
                       width:100% fills the flex-1 area; height is derived from aspect-ratio.
                       Do NOT use height:100% here — landscape 194/120 would overflow the flex-row
@@ -667,14 +845,15 @@ export default function PdfExportPage() {
                     </div>
                   </div>
                 </div>
-                <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapIndex} / {totalPages} -</div>
+                <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500 shrink-0">- {pageOffset('map') + mapIndex + 1} / {totalPages} -</div>
               </div>
             </div>
           );
-        })}
+        });}
 
-        {/* ③ 写真ページ */}
-        {photoPages.map((chunk, pageIndex) => (
+        case 'photo': {
+          if (!sections.photo) return [];
+          return photoPages.map((chunk, pageIndex) => (
           <div key={`photo-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
             <div className={`pdf-page w-full h-full flex flex-col bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '15mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
               <div className="flex-1 w-full h-full flex flex-col justify-evenly p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black">
@@ -702,19 +881,19 @@ export default function PdfExportPage() {
                               }}
                               alt=""
                             />
-                            
+
                             {(p.circles ?? []).map((circle) => {
                               const size = Number(circle.size || 20);
                               return (
-                                <div 
-                                  key={circle.id} 
-                                  className="absolute aspect-square rounded-full border-[3px] border-red-500 print:border-[2px]" 
-                                  style={{ 
-                                    left: `${circle.x}%`, 
-                                    top: `${circle.y}%`, 
-                                    width: `${size}%`, 
-                                    transform: 'translate(-50%, -50%)' 
-                                  }} 
+                                <div
+                                  key={circle.id}
+                                  className="absolute aspect-square rounded-full border-[3px] border-red-500 print:border-[2px]"
+                                  style={{
+                                    left: `${circle.x}%`,
+                                    top: `${circle.y}%`,
+                                    width: `${size}%`,
+                                    transform: 'translate(-50%, -50%)'
+                                  }}
                                 />
                               );
                             })}
@@ -776,13 +955,203 @@ export default function PdfExportPage() {
                   );
                 })}
               </div>
-              <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapCount + pageIndex} / {totalPages} -</div>
+              <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500 shrink-0">- {pageOffset('photo') + pageIndex + 1} / {totalPages} -</div>
             </div>
           </div>
-        ))}
+        ));}
 
-        {/* ④ 使用材料表 */}
-        {materialPages.map((chunk, pageIndex) => (
+        case 'beforeAfter': {
+          if (!sections.beforeAfter) return [];
+          return beforeAfterPages.map((chunk, pageIndex) => (
+          <div key={`ba-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+            <div className={`pdf-page bg-white text-black overflow-hidden ${isPrinting ? '' : 'absolute top-0 left-0 origin-top-left'}`}
+              style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '15mm', transform: isPrinting ? 'none' : `scale(${scale})`, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+              {/* ページタイトル */}
+              <h2 style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '14pt' : '18px', fontWeight: '900', borderBottom: '2px solid #111', paddingBottom: isPrinting ? '2mm' : '6px', marginBottom: isPrinting ? '4mm' : '12px', flexShrink: 0, color: '#111' }}>施工前後比較</h2>
+              {/* ペア一覧（1ページ最大2ペア） */}
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: isPrinting ? '5mm' : '16px', minHeight: 0 }}>
+                {chunk.map((pair, pairIdx) => {
+                  const beforePhoto = (project.photos ?? []).find(p => p.id === pair.beforePhotoId);
+                  const afterPhoto = (project.photos ?? []).find(p => p.id === pair.afterPhotoId);
+                  return (
+                    <div key={pairIdx} style={{ flex: 1, border: '1.5px solid #ccc', borderRadius: '4px', overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                      {/* 部位・説明ヘッダー */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: isPrinting ? '4mm' : '12px', padding: isPrinting ? '2mm 4mm' : '6px 12px', background: '#f5f5f5', borderBottom: '1px solid #ccc', flexShrink: 0 }}>
+                        {pair.part && (
+                          <span style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '9pt' : '12px', fontWeight: 'bold', background: '#111', color: '#fff', padding: '2px 8px', borderRadius: '2px', whiteSpace: 'nowrap' }}>{pair.part}</span>
+                        )}
+                        {pair.description && (
+                          <span style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '9pt' : '12px', color: '#555', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{pair.description}</span>
+                        )}
+                      </div>
+                      {/* 左右写真エリア */}
+                      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+                        {/* 施工前 */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderRight: '1px solid #ccc', minWidth: 0 }}>
+                          <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', fontWeight: 'bold', textAlign: 'center', padding: isPrinting ? '1mm 0' : '4px 0', background: '#e8e8e8', borderBottom: '1px solid #ccc', flexShrink: 0, color: '#555' }}>施工前</div>
+                          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: '#f9f9f9' }}>
+                            {beforePhoto?.image ? (
+                              <img
+                                src={proxyUrl(beforePhoto.image, `ba_before_${pair.id}_${sessionId}`)}
+                                data-original-src={beforePhoto.image}
+                                crossOrigin="anonymous"
+                                alt="施工前"
+                                style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', transform: `rotate(${beforePhoto.rotation ?? 0}deg)` }}
+                              />
+                            ) : (
+                              <span style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', color: '#999' }}>写真なし</span>
+                            )}
+                          </div>
+                        </div>
+                        {/* 施工後 */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                          <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', fontWeight: 'bold', textAlign: 'center', padding: isPrinting ? '1mm 0' : '4px 0', background: '#dceeff', borderBottom: '1px solid #ccc', flexShrink: 0, color: '#2563eb' }}>施工後</div>
+                          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: '#f9f9f9' }}>
+                            {afterPhoto?.image ? (
+                              <img
+                                src={proxyUrl(afterPhoto.image, `ba_after_${pair.id}_${sessionId}`)}
+                                data-original-src={afterPhoto.image}
+                                crossOrigin="anonymous"
+                                alt="施工後"
+                                style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', transform: `rotate(${afterPhoto.rotation ?? 0}deg)` }}
+                              />
+                            ) : (
+                              <span style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', color: '#999' }}>写真なし</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500 shrink-0">- {pageOffset('beforeAfter') + pageIndex + 1} / {totalPages} -</div>
+            </div>
+          </div>
+        ));}
+
+        case 'completion': {
+          if (!sections.completion) return [];
+          // 主要写真3枚を自動選択（施工前→施工中→施工後、なければ先頭/中間/末尾）
+          const withImg = (project.photos ?? []).filter(p => p.image);
+          const findByKeyword = (kw: string) => withImg.find(p => p.process?.includes(kw) || p.description?.includes(kw));
+          const p0 = findByKeyword('前') ?? withImg[0];
+          const p1 = findByKeyword('中') ?? withImg[Math.floor(withImg.length / 2)];
+          const p2 = findByKeyword('後') ?? withImg[withImg.length - 1];
+          const keyPhotos = [p0, p1, p2].filter(Boolean) as typeof withImg;
+
+          const topMaterials = (project.materials ?? []).filter(m => m.name).slice(0, 4);
+
+          return [(
+            <div key="completion" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+              <div className={`pdf-page bg-white text-black overflow-hidden ${isPrinting ? '' : 'absolute top-0 left-0 origin-top-left'}`}
+                style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm 10mm' : '30px 38px', transform: isPrinting ? 'none' : `scale(${scale})`, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: isPrinting ? '4mm' : '14px', position: 'relative' }}>
+
+                {/* ヘッダー */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '2px solid #111', paddingBottom: isPrinting ? '3mm' : '10px', flexShrink: 0 }}>
+                  <h2 style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '16pt' : '21px', fontWeight: '900', color: '#111', margin: 0 }}>完了報告書</h2>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: isPrinting ? '3mm' : '10px' }}>
+                    {logoUrl ? (
+                      <img src={proxyUrl(logoUrl, `logo_cr_${sessionId}`)} data-original-src={logoUrl} crossOrigin="anonymous" alt="logo" style={{ height: isPrinting ? '8mm' : '30px', width: 'auto', objectFit: 'contain' }} />
+                    ) : (
+                      <img src={kawaraLogo} data-original-src={kawaraLogo} alt="logo" crossOrigin="anonymous" style={{ height: isPrinting ? '7mm' : '26px', width: 'auto', objectFit: 'contain', filter: 'grayscale(1)' }} />
+                    )}
+                    {companyName && (
+                      <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', color: '#555', lineHeight: 1.4 }}>
+                        <div style={{ fontWeight: 'bold', color: '#222' }}>{companyName}</div>
+                        {address && <div>{address}</div>}
+                        {phone && <div>TEL: {phone}</div>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 工事情報テーブル */}
+                <div style={{ flexShrink: 0, border: '1px solid #ccc', borderRadius: '3px', overflow: 'hidden' }}>
+                  {([
+                    ['工事件名', project.projectName],
+                    ['工事場所', project.projectLocation],
+                    ['工　　期', project.constructionPeriod],
+                    ['作成年月日', project.creationDate],
+                  ] as [string, string][]).map(([label, value], i) => (
+                    <div key={i} style={{ display: 'flex', borderBottom: i < 3 ? '1px solid #e0e0e0' : 'none' }}>
+                      <div style={{ width: isPrinting ? '28mm' : '106px', flexShrink: 0, fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', fontWeight: 'bold', color: '#666', background: '#f5f5f5', padding: isPrinting ? '1.5mm 3mm' : '5px 10px', display: 'flex', alignItems: 'center', borderRight: '1px solid #e0e0e0' }}>{label}</div>
+                      <div style={{ flex: 1, fontFamily: JP_FONT, fontSize: isPrinting ? '8.5pt' : '12px', color: '#111', padding: isPrinting ? '1.5mm 3mm' : '5px 10px', display: 'flex', alignItems: 'center' }}>{value || '　'}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 主要写真3枚 */}
+                {keyPhotos.length > 0 && (
+                  <div style={{ flex: keyPhotos.length > 0 ? '1 1 0' : '0', display: 'flex', gap: isPrinting ? '3mm' : '10px', minHeight: 0 }}>
+                    {keyPhotos.map((p, i) => (
+                      <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid #ccc', borderRadius: '3px', overflow: 'hidden', minWidth: 0 }}>
+                        <div style={{ flex: 1, overflow: 'hidden', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <img
+                            src={proxyUrl(p.image!, `cr_photo_${p.id}_${sessionId}`)}
+                            data-original-src={p.image!}
+                            crossOrigin="anonymous"
+                            alt=""
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transform: `rotate(${p.rotation ?? 0}deg)` }}
+                          />
+                        </div>
+                        <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7pt' : '10px', color: '#555', padding: isPrinting ? '1mm 2mm' : '3px 6px', background: '#f9f9f9', borderTop: '1px solid #e8e8e8', flexShrink: 0, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                          {p.process || p.description || `写真${i + 1}`}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 使用材料テーブル */}
+                {topMaterials.length > 0 && (
+                  <div style={{ flexShrink: 0, border: '1px solid #ccc', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', background: '#f0f0f0', borderBottom: '1px solid #ccc' }}>
+                      {(['品名', 'メーカー', '規格・数量', '備考'] as const).map(h => (
+                        <div key={h} style={{ flex: 1, fontFamily: JP_FONT, fontSize: isPrinting ? '7pt' : '10px', fontWeight: 'bold', color: '#555', padding: isPrinting ? '1mm 2mm' : '4px 6px', borderRight: '1px solid #ddd', textAlign: 'center' }}>{h}</div>
+                      ))}
+                    </div>
+                    {topMaterials.map((m, i) => (
+                      <div key={i} style={{ display: 'flex', borderBottom: i < topMaterials.length - 1 ? '1px solid #ebebeb' : 'none' }}>
+                        {[m.name, m.manufacturer, m.specification, m.remarks].map((v, j) => (
+                          <div key={j} style={{ flex: 1, fontFamily: JP_FONT, fontSize: isPrinting ? '7.5pt' : '10px', color: '#333', padding: isPrinting ? '1mm 2mm' : '4px 6px', borderRight: '1px solid #ebebeb', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{v || '　'}</div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 施工保証ボックス */}
+                {(project.warrantyYears || project.warrantyStartDate || project.warrantyNote) && (
+                  <div style={{ flexShrink: 0, border: '1.5px solid #555', borderRadius: '4px', padding: isPrinting ? '2mm 4mm' : '8px 14px', background: '#fafafa' }}>
+                    <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', fontWeight: 'bold', color: '#333', marginBottom: isPrinting ? '1.5mm' : '5px' }}>■ 施工保証</div>
+                    <div style={{ display: 'flex', gap: isPrinting ? '6mm' : '20px', flexWrap: 'wrap' }}>
+                      {project.warrantyYears && <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', color: '#444' }}><span style={{ color: '#888' }}>保証期間：</span>{project.warrantyYears}</div>}
+                      {project.warrantyStartDate && <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', color: '#444' }}><span style={{ color: '#888' }}>開始日：</span>{project.warrantyStartDate}</div>}
+                      {project.warrantyNote && <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', color: '#555', fontStyle: 'italic' }}>{project.warrantyNote}</div>}
+                    </div>
+                  </div>
+                )}
+
+                {/* 署名欄 */}
+                <div style={{ flexShrink: 0, display: 'flex', gap: isPrinting ? '5mm' : '18px', marginTop: 'auto' }}>
+                  {(['施工業者', '施主確認'] as const).map(label => (
+                    <div key={label} style={{ flex: 1, border: '1px solid #ccc', borderRadius: '3px', padding: isPrinting ? '2mm 3mm' : '8px 10px' }}>
+                      <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7pt' : '10px', fontWeight: 'bold', color: '#888', marginBottom: isPrinting ? '5mm' : '18px' }}>{label}</div>
+                      <div style={{ borderBottom: '1px solid #bbb', height: isPrinting ? '8mm' : '30px' }} />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500">- {pageOffset('completion') + 1} / {totalPages} -</div>
+              </div>
+            </div>
+          )];
+        }
+
+        case 'material': {
+          if (!sections.material) return [];
+          return materialPages.map((chunk, pageIndex) => (
           <div key={`material-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
             <div className={`pdf-page w-full h-full flex flex-col bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '15mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
               <h2 className="text-xl font-bold pb-1 mb-2 border-b-2 border-gray-800 shrink-0 print:border-black print:pb-0 print:mb-1">使用材料表</h2>
@@ -808,9 +1177,9 @@ export default function PdfExportPage() {
                                 maxWidth: maxImgWidth,
                                 maxHeight: maxImgHeight,
                                 objectFit: 'contain',
-                                transform: `rotate(${Number(m.rotation) || 0}deg)` 
+                                transform: `rotate(${Number(m.rotation) || 0}deg)`
                               }}
-                              alt="" 
+                              alt=""
                             />
                           </div>
                         ) : <span className="font-bold text-gray-400">写真未登録</span>}
@@ -825,23 +1194,27 @@ export default function PdfExportPage() {
                   );
                 })}
               </div>
-              <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500 shrink-0">- {2 + mapCount + photoPages.length + pageIndex} / {totalPages} -</div>
+              <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500 shrink-0">- {pageOffset('material') + pageIndex + 1} / {totalPages} -</div>
             </div>
           </div>
-        ))}
+        ));}
 
-        {/* 添付PDF ページ */}
-        {appendixPages.map((src, pageIndex) => (
+        case 'appendix': {
+          if (!sections.appendix) return [];
+          return appendixPages.map((src, pageIndex) => (
           <div key={`appendix-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `auto` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
             <div className={`pdf-page bg-white overflow-hidden ${isPrinting ? '' : 'absolute top-0 left-0 origin-top-left'}`}
               style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? 'auto' : `${A4_HEIGHT_PX}px`, transform: isPrinting ? 'none' : `scale(${scale})`, padding: 0 }}>
               <img src={src} alt={`添付資料 ${pageIndex + 1}`} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
               <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500">
-                - {1 + mapCount + photoPages.length + materialPages.length + pageIndex + 1} / {totalPages} -
+                - {pageOffset('appendix') + pageIndex + 1} / {totalPages} -
               </div>
             </div>
           </div>
-        ))}
+          ));}
+
+        default: return [];
+        }})}
       </div>
     </div>
   );
