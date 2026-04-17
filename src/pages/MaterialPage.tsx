@@ -2,14 +2,23 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Camera, RotateCcw, RotateCw, ArrowUp, ArrowDown, BookmarkPlus, ChevronDown } from 'lucide-react';
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { proxyUrl } from '../shared/utils';
-import { canUpload, trackUpload } from '../shared/storageUtils';
+import { canUpload, trackDelete, trackUpload } from '../shared/storageUtils';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import type { Material, MaterialMaster, Project } from '../types';
+
+const getRemoteFileSize = async (url: string): Promise<number> => {
+  try {
+    const res = await fetch(url, { method: 'HEAD' });
+    return Number(res.headers.get('content-length') || 0);
+  } catch {
+    return 0;
+  }
+};
 
 // 品名コンボボックス：▼で全件表示、入力で部分一致絞り込み
 function NameSuggest({
@@ -194,8 +203,21 @@ export default function MaterialPage() {
     saveMaterials(newMaterials);
   };
 
-  const removeMaterial = (materialId: number) => {
+  const removeMaterial = async (materialId: number) => {
     if (!window.confirm('この材料データを削除しますか？')) return;
+    const material = (project?.materials || []).find((m) => m.id === materialId);
+    if (material?.image) {
+      const bytes = await getRemoteFileSize(material.image);
+      try {
+        await deleteObject(ref(storage, material.image));
+        if (uid && bytes > 0) {
+          await trackDelete(uid, bytes);
+          setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
+        }
+      } catch {
+        /* Storage削除失敗は材料データ削除を妨げない */
+      }
+    }
     saveMaterials((project?.materials || []).filter((m) => m.id !== materialId));
   };
 

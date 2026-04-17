@@ -90,7 +90,7 @@ export function HomePage() {
 
   return (
     <div className="min-h-screen font-sans" style={{ background: '#0f0f1a', color: '#f0ede8' }}>
-      <div className="max-w-md md:max-w-4xl lg:max-w-5xl mx-auto px-4 sm:px-6 pb-16">
+      <div className="max-w-md md:max-w-2xl lg:max-w-4xl mx-auto px-4 sm:px-6 pt-4 pb-16">
 
         {/* ── ヘッダー ── */}
         <div className="flex items-center py-5">
@@ -99,8 +99,8 @@ export function HomePage() {
             onClick={() => navigate('/')}
             className="flex items-center gap-2 font-bold text-sm transition-colors"
             style={{ color: '#8b8ba8' }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#ff6b35')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+            onPointerEnter={e => (e.currentTarget.style.color = '#ff6b35')}
+            onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
           >
             <ArrowLeft className="w-4 h-4" />
             現場一覧
@@ -112,11 +112,11 @@ export function HomePage() {
         {/* ── 現場ヒーロー ── */}
         <div className="rounded-2xl overflow-hidden border mb-6" style={{ borderColor: '#2e2e50' }}>
           {/* サムネイル */}
-          <div className="relative w-full" style={{ aspectRatio: '16/9', background: '#12122a' }}>
+          <div className="relative w-full aspect-video" style={{ background: '#12122a' }}>
             {thumb ? (
-              <img src={thumb} alt="現場写真" className="w-full h-full object-cover" />
+              <img src={thumb} alt="現場写真" className="absolute inset-0 object-cover w-full h-full" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center justify-center">
                 <Camera className="w-12 h-12" style={{ color: '#2e2e50' }} />
               </div>
             )}
@@ -129,7 +129,7 @@ export function HomePage() {
               </div>
             )}
             {/* 現場名オーバーレイ */}
-            <div className="absolute bottom-0 left-0 right-0 p-4 min-w-0">
+            <div className="absolute bottom-0 left-0 right-0 p-4">
               <div className="text-xl md:text-2xl font-bold leading-snug break-words" style={{ color: '#f0ede8' }}>
                 {project.projectName || '現場名未入力'}
               </div>
@@ -143,7 +143,7 @@ export function HomePage() {
         </div>
 
         {/* ── メニュー ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
           {MENU_ITEMS.map((item) => {
             const Icon = item.icon;
             return (
@@ -151,14 +151,14 @@ export function HomePage() {
                 key={item.path}
                 type="button"
                 onClick={() => navigate(`/project/${id}/${item.path}`)}
-                className="w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all"
+                className="w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-colors"
                 style={{ background: '#1c1c30', borderColor: '#2e2e50' }}
-                onMouseEnter={e => {
+                onPointerEnter={e => {
                   const el = e.currentTarget;
                   el.style.borderColor = item.accent;
                   el.style.background = '#21213a';
                 }}
-                onMouseLeave={e => {
+                onPointerLeave={e => {
                   const el = e.currentTarget;
                   el.style.borderColor = '#2e2e50';
                   el.style.background = '#1c1c30';

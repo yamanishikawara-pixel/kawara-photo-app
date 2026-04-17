@@ -29,6 +29,7 @@ export function CoverPage() {
   const [appendixUploading, setAppendixUploading] = useState(false);
   const [appendixProgress, setAppendixProgress] = useState(0);
   const appendixInputRef = useRef<HTMLInputElement>(null);
+  const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout> | undefined>>({});
 
   useEffect(() => {
     if (!id) return;
@@ -41,18 +42,29 @@ export function CoverPage() {
       .catch(() => setError('表紙データの読み込みに失敗しました。'));
   }, [id]);
 
-  const update = async (field: keyof Project, value: string) => {
+  useEffect(() => {
+    const timers = debounceTimers.current;
+    return () => {
+      Object.values(timers).forEach((timer) => {
+        if (timer) clearTimeout(timer);
+      });
+    };
+  }, []);
+
+  const update = (field: keyof Project, value: string) => {
     if (!project || !id) return;
-    const previous = project;
-    setProject({ ...project, [field]: value });
-    try {
-      await updateDoc(doc(db, 'projects', id), { [field]: value });
-      setSavedKey(field as string);
-      setTimeout(() => setSavedKey(null), 1500);
-    } catch {
-      setProject(previous);
-      setError('保存に失敗しました。');
-    }
+    const key = field as string;
+    setProject((prev) => prev ? { ...prev, [field]: value } : prev);
+    if (debounceTimers.current[key]) clearTimeout(debounceTimers.current[key]);
+    debounceTimers.current[key] = setTimeout(async () => {
+      try {
+        await updateDoc(doc(db, 'projects', id), { [field]: value });
+        setSavedKey(key);
+        setTimeout(() => setSavedKey(null), 1500);
+      } catch {
+        setError('保存に失敗しました。');
+      }
+    }, 600);
   };
 
   const handleAppendixUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

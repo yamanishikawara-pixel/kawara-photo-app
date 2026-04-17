@@ -6,7 +6,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { db, storage, auth } from '../firebase';
 import type { MapPin as MapPinT, MapRow, Project, DimensionLine, WhiteoutBox } from '../types';
 import { proxyUrl } from '../shared/utils';
-import { canUpload, trackUpload } from '../shared/storageUtils';
+import { canUpload, trackDelete, trackUpload } from '../shared/storageUtils';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
@@ -749,7 +749,25 @@ export default function MapPage() {
 
     const urlToDelete = project.mapUrls?.[mapIndex];
     if (urlToDelete) {
-      try { await deleteObject(ref(storage, urlToDelete)); } catch (err) { logFirebaseError(err, '位置図ファイル削除'); /* Storage削除失敗はDB削除を妨げない */ }
+      let bytes = 0;
+      if (uid) {
+        try {
+          const res = await fetch(urlToDelete, { method: 'HEAD' });
+          bytes = Number(res.headers.get('content-length') || 0);
+        } catch {
+          /* サイズ取得失敗は無視 */
+        }
+      }
+      try {
+        await deleteObject(ref(storage, urlToDelete));
+        if (uid && bytes > 0) {
+          await trackDelete(uid, bytes);
+          setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
+        }
+      } catch (err) {
+        logFirebaseError(err, '位置図ファイル削除');
+        /* Storage削除失敗はDB削除を妨げない */
+      }
     }
 
     const newMapUrls = (project.mapUrls || []).filter((_, i) => i !== mapIndex);
@@ -781,7 +799,7 @@ export default function MapPage() {
       logFirebaseError(err, '位置図削除');
       setError(firebaseErrorMessage(err, '位置図の削除'));
     } finally { setIsSaving(false); }
-  }, [project, id, mapPins, mapRows, mapDimensionLines, whiteoutBoxes, mapRotations, mapTransforms, mapLayouts, currentMapIndex]);
+  }, [project, id, uid, mapPins, mapRows, mapDimensionLines, whiteoutBoxes, mapRotations, mapTransforms, mapLayouts, currentMapIndex]);
 
   const handlePanPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (editingMode !== 'pan') return;

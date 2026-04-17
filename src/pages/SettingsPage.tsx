@@ -6,7 +6,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, auth, storage } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
-import { formatBytes, storageUsageRatio, STORAGE_LIMIT_BYTES } from '../shared/storageUtils';
+import { formatBytes, storageUsageRatio, STORAGE_LIMIT_BYTES, trackUpload } from '../shared/storageUtils';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import type { MaterialMaster, PhotoMaster } from '../types';
 
@@ -101,6 +101,8 @@ export default function SettingsPage() {
       const storageRef = ref(storage, `logos/${uid}_${Date.now()}`);
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
+      await trackUpload(uid, file.size);
+      setStorageUsedBytes((prev) => prev + file.size);
       setLogoUrl(url);
     } catch (err) {
       logFirebaseError(err, 'ロゴアップロード');

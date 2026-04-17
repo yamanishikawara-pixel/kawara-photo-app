@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import type { FirebaseError } from 'firebase/app';
 import { auth } from '../firebase';
+import { logFirebaseError } from '../shared/firebaseError';
 import { Lock, Mail, HardHat, ArrowRight } from 'lucide-react';
 
 // ==========================================
@@ -36,8 +37,8 @@ export default function LoginPage() {
     try {
       await sendPasswordResetEmail(auth, resetEmail);
       setResetMsg('リセットメールを送信しました。メールボックスをご確認ください。');
-    } catch (err: unknown) {
-      const code = (err as Partial<FirebaseError>).code || '';
+    } catch (err) {
+      const code = (err as FirebaseError).code ?? '';
       if (code === 'auth/user-not-found' || code === 'auth/invalid-email') {
         setResetMsg('入力されたメールアドレスは登録されていません。');
       } else {
@@ -60,9 +61,9 @@ export default function LoginPage() {
         await createUserWithEmailAndPassword(auth, email, password);
       }
       navigate('/');
-    } catch (err: unknown) {
-      console.error(err);
-      const code = (err as Partial<FirebaseError>).code || '';
+    } catch (err) {
+      logFirebaseError(err, 'ログイン');
+      const code = (err as FirebaseError).code ?? '';
       if (code === 'auth/invalid-email') setError('メールアドレスの形式が正しくありません。');
       else if (code === 'auth/user-not-found' || code === 'auth/invalid-credential') setError('メールアドレスまたはパスワードが違います。');
       else if (code === 'auth/wrong-password') setError('パスワードが間違っています。');
