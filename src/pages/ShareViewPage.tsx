@@ -36,7 +36,7 @@ export default function ShareViewPage() {
   }, []);
 
   useEffect(() => {
-    if (!id || !token) { setStatus('invalid'); return; }
+    if (!id || !token) return;
     getDoc(doc(db, 'projects', id))
       .then((snap) => {
         if (!snap.exists()) { setStatus('invalid'); return; }
@@ -47,6 +47,16 @@ export default function ShareViewPage() {
       })
       .catch(() => setStatus('invalid'));
   }, [id, token]);
+
+  if (!id || !token) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center font-sans" style={{ background: BG, color: TEXT }}>
+        <div className="text-5xl mb-4">🔒</div>
+        <h1 className="text-xl font-bold mb-2" style={{ color: TEXT }}>リンクが無効です</h1>
+        <p className="text-sm" style={{ color: MUTED }}>このリンクは期限切れか、存在しません。</p>
+      </div>
+    );
+  }
 
   if (status === 'loading') return <LoadingSpinner />;
 

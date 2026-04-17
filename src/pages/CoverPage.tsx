@@ -118,7 +118,7 @@ export function CoverPage() {
 
   return (
     <div className="min-h-screen font-sans" style={{ background: '#0f0f1a', color: '#f0ede8' }}>
-      <div className="max-w-md mx-auto px-4 pb-16">
+      <div className="max-w-md md:max-w-3xl mx-auto px-4 sm:px-6 pb-16">
 
         {/* ── ヘッダー ── */}
         <div className="flex items-center justify-between py-5">
@@ -135,12 +135,12 @@ export function CoverPage() {
           </button>
         </div>
 
-        {error && <ErrorMessage message={error} onDismiss={() => setError(null)} />}
+        {error && <ErrorMessage message={error} onDismiss={() => setError(null)} className="mb-4" />}
 
         {/* ── ページタイトル ── */}
         <div className="flex items-center gap-3 mb-6">
           <div className="w-1 h-7 rounded-full" style={{ background: ACCENT }} />
-          <h1 className="text-2xl font-bold" style={{ color: '#f0ede8' }}>表紙の入力</h1>
+          <h1 className="text-2xl font-bold break-words" style={{ color: '#f0ede8' }}>表紙の入力</h1>
         </div>
 
         {/* ── 入力フィールド ── */}
@@ -155,10 +155,10 @@ export function CoverPage() {
                 style={{ borderBottom: idx < FIELDS.length - 1 ? '1px solid #2e2e50' : 'none' }}
               >
                 {/* ラベル行 */}
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <div className="w-1 h-4 rounded-full" style={{ background: ACCENT }} />
-                    <label className="text-xs font-bold tracking-wide" style={{ color: '#8b8ba8' }}>
+                    <label className="text-xs font-bold tracking-wide break-words" style={{ color: '#8b8ba8' }}>
                       {f.label}
                     </label>
                   </div>
@@ -203,10 +203,10 @@ export function CoverPage() {
             const isSaved = savedKey === f.key;
             return (
               <div key={f.key} className="px-5 py-4" style={{ borderBottom: idx < 2 ? '1px solid #2e2e50' : 'none' }}>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <div className="w-1 h-4 rounded-full" style={{ background: ACCENT }} />
-                    <label className="text-xs font-bold tracking-wide" style={{ color: '#8b8ba8' }}>{f.label}</label>
+                    <label className="text-xs font-bold tracking-wide break-words" style={{ color: '#8b8ba8' }}>{f.label}</label>
                   </div>
                   {isSaved && (
                     <div className="flex items-center gap-1 text-xs font-bold" style={{ color: ACCENT }}>
@@ -231,7 +231,7 @@ export function CoverPage() {
 
         {/* ── 添付資料PDF ── */}
         <div className="rounded-2xl border p-5" style={{ background: '#1c1c30', borderColor: '#2e2e50' }}>
-          <h2 className="flex items-center gap-2 text-sm font-bold mb-4" style={{ color: '#8b8ba8' }}>
+          <h2 className="flex flex-wrap items-center gap-2 text-sm font-bold mb-4" style={{ color: '#8b8ba8' }}>
             <Paperclip className="w-4 h-4" style={{ color: ACCENT }} />
             添付資料PDF
             <span className="ml-auto text-xs font-normal" style={{ color: '#4b4b70' }}>最終ページに追加</span>

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { X } from 'lucide-react';
 
 type Props = {
@@ -21,13 +22,24 @@ export function ConfirmModal({
   onConfirm,
   onCancel,
 }: Props) {
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onCancel();
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onCancel]);
+
   if (!isOpen) return null;
 
   const isDanger = variant === 'danger';
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
       style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
       onClick={onCancel}
       role="dialog"
@@ -36,12 +48,12 @@ export function ConfirmModal({
       aria-describedby="confirm-modal-desc"
     >
       <div
-        className="w-full max-w-sm rounded-2xl p-6"
+        className="w-full max-w-sm rounded-2xl p-5 sm:p-6 text-left"
         style={{ background: '#1c1c30', border: '1px solid #2e2e50', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-4">
-          <h2 id="confirm-modal-title" className="text-lg font-bold" style={{ color: '#f0ede8' }}>
+          <h2 id="confirm-modal-title" className="text-lg font-bold break-words pr-3" style={{ color: '#f0ede8' }}>
             {title}
           </h2>
           <button
@@ -57,7 +69,7 @@ export function ConfirmModal({
           </button>
         </div>
 
-        <p id="confirm-modal-desc" className="text-sm mb-6 whitespace-pre-line" style={{ color: '#8b8ba8' }}>
+        <p id="confirm-modal-desc" className="text-sm mb-6 whitespace-pre-line break-words" style={{ color: '#8b8ba8' }}>
           {message}
         </p>
 
@@ -74,7 +86,7 @@ export function ConfirmModal({
           </button>
           <button
             type="button"
-            onClick={() => { onConfirm(); onCancel(); }}
+            onClick={onConfirm}
             className="flex-1 py-3 font-bold rounded-xl text-sm transition-colors"
             style={isDanger
               ? { background: '#ef4444', color: '#fff' }

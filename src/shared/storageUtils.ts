@@ -39,3 +39,14 @@ export async function trackUpload(uid: string, bytes: number): Promise<void> {
     console.warn('storageUsedBytes の更新に失敗しました:', e);
   }
 }
+
+/** 削除成功後にFirestoreのストレージ使用量を減算する。 */
+export async function trackDelete(uid: string, bytes: number): Promise<void> {
+  try {
+    await updateDoc(doc(db, 'users', uid), {
+      storageUsedBytes: increment(-bytes),
+    });
+  } catch (e) {
+    console.warn('storageUsedBytes の減算に失敗しました:', e);
+  }
+}

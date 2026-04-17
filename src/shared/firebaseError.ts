@@ -85,7 +85,6 @@ export function firebaseErrorMessage(err: unknown, context: string = '操作'): 
 export function logFirebaseError(err: unknown, context: string): void {
   if (import.meta.env.DEV) {
     const code = (err as { code?: string })?.code ?? 'unknown';
-    // eslint-disable-next-line no-console
     console.error(`[${context}] code=${code}`, err);
   }
 }

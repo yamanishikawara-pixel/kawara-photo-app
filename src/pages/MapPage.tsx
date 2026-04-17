@@ -4,7 +4,6 @@ import { ArrowLeft, Plus, Trash2, MapPin, CaseUpper, FileText, LayoutGrid, Ruler
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
-import { onAuthStateChanged } from 'firebase/auth';
 import type { MapPin as MapPinT, MapRow, Project, DimensionLine, WhiteoutBox } from '../types';
 import { proxyUrl } from '../shared/utils';
 import { canUpload, trackUpload } from '../shared/storageUtils';
@@ -17,6 +16,16 @@ import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 const DEFAULT_MAP_PART_NAMES = ['軒先', '袖', 'ケラバ', '谷', '棟', '隅棟', '平'];
+
+type MapLayout = NonNullable<Project['mapLayouts']>[number];
+
+const Btn = ({ onClick, children, className = '' }: { onClick: () => void; children: React.ReactNode; className?: string }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`w-10 h-10 flex items-center justify-center rounded-lg font-bold text-base active:scale-90 transition-all select-none ${className}`}
+  >{children}</button>
+);
 
 const COLOR_PALETTE = [
   { name: "Yellow", value: "#FFD700" },
@@ -46,7 +55,11 @@ const useRotatedDraggable = (initialX: number, initialY: number, rotation: numbe
   const pointerDownRef = useRef(false);
   const isMovedRef = useRef(false);
 
-  useEffect(() => { if (!dragging) setPosition({ x: initialX, y: initialY }); }, [initialX, initialY, dragging]);
+  useEffect(() => {
+    if (dragging) return;
+    const frame = requestAnimationFrame(() => setPosition({ x: initialX, y: initialY }));
+    return () => cancelAnimationFrame(frame);
+  }, [initialX, initialY, dragging]);
 
   const onPointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
@@ -59,8 +72,8 @@ const useRotatedDraggable = (initialX: number, initialY: number, rotation: numbe
   const onPointerMove = (e: React.PointerEvent) => {
     if (!pointerDownRef.current || !containerRef.current) return;
     
-    let dx = e.clientX - startPosRef.current.clientX;
-    let dy = e.clientY - startPosRef.current.clientY;
+    const dx = e.clientX - startPosRef.current.clientX;
+    const dy = e.clientY - startPosRef.current.clientY;
 
     if (!isMovedRef.current) {
       if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
@@ -84,8 +97,8 @@ const useRotatedDraggable = (initialX: number, initialY: number, rotation: numbe
     else if (normAngle === 180) { localDx = -dx; localDy = -dy; }
     else if (normAngle === 270) { localDx = -dy; localDy = dx; w = rect.height; h = rect.width; }
 
-    let newX = startPosRef.current.x + (localDx / w) * 100;
-    let newY = startPosRef.current.y + (localDy / h) * 100;
+    const newX = startPosRef.current.x + (localDx / w) * 100;
+    const newY = startPosRef.current.y + (localDy / h) * 100;
     setPosition({ x: Math.max(0, Math.min(100, newX)), y: Math.max(0, Math.min(100, newY)) });
   };
 
@@ -110,7 +123,7 @@ const useRotatedDraggable = (initialX: number, initialY: number, rotation: numbe
 };
 
 // ★ 追加：自由にドラッグできるタイトルマーカー
-const TitleMarker = React.memo(({ layout, mapRotation, currentScale, isSelected, onDragEnd, onClick, mapCount, mapIndex }: { layout: any; mapRotation: number; currentScale: number; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; mapCount: number; mapIndex: number }) => {
+const TitleMarker = React.memo(({ layout, mapRotation, currentScale, isSelected, onDragEnd, onClick, mapCount, mapIndex }: { layout: MapLayout; mapRotation: number; currentScale: number; isSelected: boolean; onDragEnd: (x: number, y: number) => void; onClick: () => void; mapCount: number; mapIndex: number }) => {
   const { position, onPointerDown, onPointerMove, onPointerUp, dragging, containerRef, handleClick } = useRotatedDraggable(layout.x ?? 15, layout.y ?? 10, mapRotation, onDragEnd);
   const visualScale = 1 / currentScale;
 
@@ -161,7 +174,11 @@ const WhiteoutMarker = React.memo(({ box, rotation, currentScale, isSelected, on
   const moveRef = useRef<{ active: boolean; startClientX: number; startClientY: number; startX: number; startY: number; moved: boolean }>({ active: false, startClientX: 0, startClientY: 0, startX: 0, startY: 0, moved: false });
   const [livePos, setLivePos] = useState({ x: box.x, y: box.y });
 
-  useEffect(() => { if (!moveRef.current.active) setLivePos({ x: box.x, y: box.y }); }, [box.x, box.y]);
+  useEffect(() => {
+    if (moveRef.current.active) return;
+    const frame = requestAnimationFrame(() => setLivePos({ x: box.x, y: box.y }));
+    return () => cancelAnimationFrame(frame);
+  }, [box.x, box.y]);
 
   const getParentRect = (el: Element) => {
     const parent = el.closest('.map-content-wrapper') as HTMLDivElement;
@@ -252,14 +269,6 @@ const WhiteoutControlPanel = React.memo(({ box, onUpdate, onRemove, onDeselect }
     height: Math.max(1, box.height + dh),
   });
 
-  const Btn = ({ onClick, children, className = '' }: { onClick: () => void; children: React.ReactNode; className?: string }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`w-10 h-10 flex items-center justify-center rounded-lg font-bold text-base active:scale-90 transition-all select-none ${className}`}
-    >{children}</button>
-  );
-
   return (
     <div className="fixed bottom-0 left-0 right-0 z-[300] bg-gray-900/95 backdrop-blur text-white shadow-2xl border-t border-gray-700">
       <div className="flex items-center gap-2 px-3 py-2 flex-wrap">
@@ -307,7 +316,12 @@ const DimensionLineMarker = React.memo(({ line, rotation, currentScale, isSelect
   const dragStartPos = useRef({ clientX: 0, clientY: 0, started: false });
 
   useEffect(() => {
-    if (!isDragging) { setLocalStart(line.start); setLocalEnd(line.end); }
+    if (isDragging) return;
+    const frame = requestAnimationFrame(() => {
+      setLocalStart(line.start);
+      setLocalEnd(line.end);
+    });
+    return () => cancelAnimationFrame(frame);
   }, [line.start, line.end, isDragging]);
 
   useEffect(() => {
@@ -324,8 +338,8 @@ const DimensionLineMarker = React.memo(({ line, rotation, currentScale, isSelect
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDragging) return;
     
-    let dx = e.clientX - dragStartPos.current.clientX;
-    let dy = e.clientY - dragStartPos.current.clientY;
+    const dx = e.clientX - dragStartPos.current.clientX;
+    const dy = e.clientY - dragStartPos.current.clientY;
     
     if (!dragStartPos.current.started) {
       if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
@@ -584,16 +598,16 @@ export default function MapPage() {
       }
     };
     fetchData();
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) return;
+    const user = auth.currentUser;
+    if (user) {
       setUid(user.uid);
-      const s = await getDoc(doc(db, 'users', user.uid));
-      if (s.exists()) {
+      getDoc(doc(db, 'users', user.uid)).then((s) => {
+        if (abortController.signal.aborted || !s.exists()) return;
         const data = s.data();
         if (typeof data.storageUsedBytes === 'number') setStorageUsedBytes(data.storageUsedBytes);
-      }
-    });
-    return () => { abortController.abort(); unsub(); };
+      });
+    }
+    return () => { abortController.abort(); };
   }, [id]);
 
   // Firestore は undefined / スパース配列を直列化できないため、ホールをデフォルト値で埋める
@@ -666,7 +680,7 @@ export default function MapPage() {
           canvas.width = viewport.width;
           canvas.height = viewport.height;
           
-          const renderContext: any = { canvasContext: ctx, viewport: viewport };
+          const renderContext = { canvasContext: ctx, viewport, canvas };
           await page.render(renderContext).promise;
           
           const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
@@ -681,7 +695,7 @@ export default function MapPage() {
 
       const newMapUrls = [...(project.mapUrls || [])];
       const newMapLayouts = [...mapLayouts];
-      let insertAt = mode === 'replace' ? currentMapIndex : newMapUrls.length;
+      const insertAt = mode === 'replace' ? currentMapIndex : newMapUrls.length;
 
       for (let i = 0; i < imageFiles.length; i++) {
         setUploadProgress(`アップロード中... (${i + 1}/${imageFiles.length})`);

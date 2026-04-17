@@ -60,15 +60,22 @@ export function useDraggablePin(
   // onDragEndが毎回変わってもuseEffectが再実行されないようにrefで保持
   const onDragEndRef = useRef(onDragEnd);
   const positionRef = useRef({ x: initialX, y: initialY });
-  onDragEndRef.current = onDragEnd;
-  positionRef.current = position;
+
+  useEffect(() => {
+    onDragEndRef.current = onDragEnd;
+  }, [onDragEnd]);
+
+  useEffect(() => {
+    positionRef.current = position;
+  }, [position]);
 
   // 外部からの更新（他のピンを操作した時など）を同期
   useEffect(() => {
     if (dragging) return;
     const next = { x: initialX, y: initialY };
     positionRef.current = next;
-    setPosition(next);
+    const frame = requestAnimationFrame(() => setPosition(next));
+    return () => cancelAnimationFrame(frame);
   }, [initialX, initialY, dragging]);
 
   const handleStart = (clientX: number, clientY: number) => {
@@ -153,7 +160,7 @@ export function useDraggablePin(
       window.removeEventListener('mouseup', onEnd);
       window.removeEventListener('touchend', onEnd);
     };
-  }, [dragging]);
+  }, [dragging, rotation]);
 
   return { position, onMouseDown, onTouchStart, dragging, containerRef };
 }

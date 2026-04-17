@@ -2,12 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus, Edit2, Ruler, Paintbrush, CaseUpper, Copy, CheckSquare, Calendar, ChevronDown, BookmarkPlus } from 'lucide-react';
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
-import { onAuthStateChanged } from 'firebase/auth';
 import imageCompression from 'browser-image-compression';
 import { proxyUrl, useDraggablePin } from '../shared/utils';
-import { canUpload, trackUpload } from '../shared/storageUtils';
+import { canUpload, trackDelete, trackUpload } from '../shared/storageUtils';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import type { Circle, MapPin as MapPinT, Photo, Project, DimensionLine, PhotoMaster } from '../types';
 import type { ChangeEvent, MouseEvent } from 'react';
@@ -35,6 +34,16 @@ const COLOR_PALETTE = [
 ];
 
 const DEFAULT_ROOF_PART_NAMES = ['棟', '袖', 'ケラバ', '谷', '隅棟', '平', '軒先'];
+
+const getRemoteFileSize = async (url: string): Promise<number | null> => {
+  try {
+    const response = await fetch(url, { method: 'HEAD' });
+    const contentLength = response.headers.get('content-length');
+    return contentLength ? Number(contentLength) : null;
+  } catch {
+    return null;
+  }
+};
 
 // 回転済みコンテナ上のスクリーン座標 → ローカル座標（%）変換
 const getLocalPointFromRect = (clientX: number, clientY: number, rect: DOMRect, angle: number) => {
@@ -72,10 +81,12 @@ const DimensionLineMarker = React.memo(function DimensionLineMarker({ line, isSe
   const [isDragging, setIsDragging] = useState<'start' | 'end' | null>(null);
 
   useEffect(() => {
-    if (!isDragging) {
+    if (isDragging) return;
+    const frame = requestAnimationFrame(() => {
       setLocalStart(line.start);
       setLocalEnd(line.end);
-    }
+    });
+    return () => cancelAnimationFrame(frame);
   }, [line.start, line.end, isDragging]);
 
   useEffect(() => {
@@ -465,20 +476,18 @@ export default function PhotoPage() {
   useEffect(() => {
     if (!id) return;
     getDoc(doc(db, "projects", id)).then(d => d.exists() && setProject(d.data() as Project));
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setUid(user.uid);
-        const s = await getDoc(doc(db, 'users', user.uid));
-        if (s.exists()) {
-          const data = s.data();
-          if (data.customProcesses && data.customProcesses.length > 0) setProcessOptions(data.customProcesses);
-          if (data.customDescTemplates && data.customDescTemplates.length > 0) setDescTemplates(data.customDescTemplates);
-          if (Array.isArray(data.photoMaster)) setPhotoMasters(data.photoMaster);
-          if (typeof data.storageUsedBytes === 'number') setStorageUsedBytes(data.storageUsedBytes);
-        }
+    const user = auth.currentUser;
+    if (!user) return;
+    setUid(user.uid);
+    getDoc(doc(db, 'users', user.uid)).then((s) => {
+      if (s.exists()) {
+        const data = s.data();
+        if (data.customProcesses && data.customProcesses.length > 0) setProcessOptions(data.customProcesses);
+        if (data.customDescTemplates && data.customDescTemplates.length > 0) setDescTemplates(data.customDescTemplates);
+        if (Array.isArray(data.photoMaster)) setPhotoMasters(data.photoMaster);
+        if (typeof data.storageUsedBytes === 'number') setStorageUsedBytes(data.storageUsedBytes);
       }
     });
-    return () => unsub();
   }, [id]);
 
   const applyPhotoMaster = async (photoId: number, m: PhotoMaster) => {
@@ -513,6 +522,20 @@ export default function PhotoPage() {
   const deletePhotoSlot = async (photoId: number) => {
     if (!project || !id) return;
     if (window.confirm('この写真枠を完全に削除しますか？')) {
+      const target = project.photos.find((p) => p.id === photoId);
+      if (target?.image) {
+        const bytes = await getRemoteFileSize(target.image);
+        try {
+          await deleteObject(ref(storage, target.image));
+          if (uid && bytes && Number.isFinite(bytes)) {
+            await trackDelete(uid, bytes);
+            setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
+          }
+          // TODO: 既存写真にはfileSizeがないため、HEADでサイズを取得できない環境では使用量を減算できない。
+        } catch (err) {
+          logFirebaseError(err, '写真ファイル削除');
+        }
+      }
       const newPhotos = project.photos.filter((p) => p.id !== photoId);
       const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
       setProject((prev) => prev ? { ...prev, photos: renumbered } : null);
@@ -527,6 +550,21 @@ export default function PhotoPage() {
   const deleteSelectedPhotos = async () => {
     if (!project || !id || selectedPhotoIds.length === 0) return;
     if (window.confirm(`選択した ${selectedPhotoIds.length} 件の写真枠を完全に削除しますか？`)) {
+      const targets = project.photos.filter((p) => selectedPhotoIds.includes(p.id) && p.image);
+      for (const target of targets) {
+        if (!target.image) continue;
+        const bytes = await getRemoteFileSize(target.image);
+        try {
+          await deleteObject(ref(storage, target.image));
+          if (uid && bytes && Number.isFinite(bytes)) {
+            await trackDelete(uid, bytes);
+            setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
+          }
+          // TODO: 既存写真にはfileSizeがないため、HEADでサイズを取得できない環境では使用量を減算できない。
+        } catch (err) {
+          logFirebaseError(err, '写真ファイル削除');
+        }
+      }
       const newPhotos = project.photos.filter((p) => !selectedPhotoIds.includes(p.id));
       const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
       setProject((prev) => prev ? { ...prev, photos: renumbered } : null);
@@ -594,7 +632,7 @@ export default function PhotoPage() {
     const files = Array.from(e.target.files as FileList);
     if (files.length === 0) return;
     setBulkUploading(true);
-    let newPhotos = [...project.photos];
+    const newPhotos = [...project.photos];
     let uploadedCount = 0;
     const todayStr = getTodayStr();
 

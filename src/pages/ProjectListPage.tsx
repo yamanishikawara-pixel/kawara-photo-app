@@ -154,11 +154,18 @@ export function ProjectListPage() {
     setError(null);
     setIsDeleting(true);
     try {
+      const user = auth.currentUser;
       for (const folder of ['maps', 'photos', 'materials']) {
         try {
           const list = await listAll(ref(storage, `${folder}/${id}`));
           await Promise.all(list.items.map((item) => deleteObject(item)));
         } catch { /* 空フォルダは無視 */ }
+      }
+      if (user) {
+        try {
+          const list = await listAll(ref(storage, `users/${user.uid}/projects/${id}`));
+          await Promise.all(list.items.map((item) => deleteObject(item)));
+        } catch { /* 添付資料がない場合は無視 */ }
       }
       await deleteDoc(doc(db, 'projects', id));
       setProjects((prev) => prev.filter((p) => p.id !== id));

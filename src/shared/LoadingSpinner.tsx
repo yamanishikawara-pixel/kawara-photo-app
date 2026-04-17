@@ -1,7 +1,13 @@
-export function LoadingSpinner({ label = '読み込み中...' }: { label?: string }) {
+type LoadingSpinnerProps = {
+  label?: string;
+  fullScreen?: boolean;
+};
+
+export function LoadingSpinner({ label = '読み込み中...', fullScreen = true }: LoadingSpinnerProps) {
   return (
     <div
-      className="flex flex-col items-center justify-center p-10 text-center min-h-[200px]"
+      className={`flex flex-col items-center justify-center p-10 text-center ${fullScreen ? 'min-h-screen' : 'min-h-[200px]'}`}
+      style={fullScreen ? { background: '#0f0f1a', color: '#f0ede8' } : undefined}
       role="status"
       aria-live="polite"
     >

@@ -64,7 +64,11 @@ function NameSuggest({
         {masters.length > 0 && (
           <button
             type="button"
-            onMouseDown={(e) => { e.preventDefault(); open ? setOpen(false) : handleOpen(); }}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              if (open) setOpen(false);
+              else handleOpen();
+            }}
             className="px-3 rounded-r-lg transition-colors"
             style={{ background: '#1c1c30', border: '1px solid #2e2e50', color: '#8b8ba8' }}
             title="マスタから選択"

@@ -25,8 +25,12 @@ export function BeforeAfterPage() {
 
   useEffect(() => {
     if (!id) return;
+    setError(null);
     getDoc(doc(db, 'projects', id))
-      .then(d => { if (d.exists()) setProject(d.data() as Project); })
+      .then(d => {
+        if (d.exists()) setProject(d.data() as Project);
+        else setError('ビフォーアフターデータが見つかりません。');
+      })
       .catch(() => setError('データの読み込みに失敗しました。'));
   }, [id]);
 
@@ -70,9 +74,24 @@ export function BeforeAfterPage() {
     if (!id || !project) return;
     if (!window.confirm('このペアを削除しますか？')) return;
     const updated = pairs.filter(p => p.id !== pairId);
-    await updateDoc(doc(db, 'projects', id), { beforeAfterPairs: updated });
-    setProject(prev => prev ? { ...prev, beforeAfterPairs: updated } : prev);
+    try {
+      await updateDoc(doc(db, 'projects', id), { beforeAfterPairs: updated });
+      setProject(prev => prev ? { ...prev, beforeAfterPairs: updated } : prev);
+    } catch {
+      setError('削除に失敗しました。');
+    }
   };
+
+  if (error && !project) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 font-sans" style={{ background: '#0f0f1a' }}>
+        <ErrorMessage message={error} onDismiss={() => setError(null)} />
+        <button onClick={() => navigate(`/project/${id}`)} className="mt-4 flex items-center gap-2 font-bold" style={{ color: ACCENT }}>
+          <ArrowLeft className="w-4 h-4" /> もどる
+        </button>
+      </div>
+    );
+  }
 
   if (!project) return <LoadingSpinner />;
 
@@ -88,7 +107,7 @@ export function BeforeAfterPage() {
       {photos.length === 0 ? (
         <p className="text-sm text-center py-10" style={{ color: '#8b8ba8' }}>写真が登録されていません。</p>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           {photos.filter(p => p.id !== excludeId).map(photo => {
             const sel = selectedId === photo.id;
             return (
@@ -111,7 +130,7 @@ export function BeforeAfterPage() {
                     {photo.process ? ` · ${photo.process}` : ''}
                   </div>
                   {photo.shootingDate && (
-                    <div className="text-xs" style={{ color: '#6b7280' }}>{photo.shootingDate}</div>
+                    <div className="text-xs truncate" style={{ color: '#6b7280' }}>{photo.shootingDate}</div>
                   )}
                 </div>
               </button>
@@ -124,7 +143,7 @@ export function BeforeAfterPage() {
 
   return (
     <div className="min-h-screen font-sans" style={{ background: '#0f0f1a', color: '#f0ede8' }}>
-      <div className="max-w-md mx-auto px-4 pb-16">
+      <div className="max-w-md md:max-w-4xl lg:max-w-5xl mx-auto px-4 sm:px-6 pb-16">
 
         {/* ヘッダー */}
         <div className="flex items-center justify-between py-5">
@@ -142,14 +161,14 @@ export function BeforeAfterPage() {
           </button>
         </div>
 
-        {error && <ErrorMessage message={error} onDismiss={() => setError(null)} />}
+        {error && <ErrorMessage message={error} onDismiss={() => setError(null)} className="mb-4" />}
 
         {/* ── リスト画面 ── */}
         {step === 'list' && (
           <>
             <div className="flex items-center gap-3 mb-6">
               <div className="w-1 h-7 rounded-full" style={{ background: ACCENT }} />
-              <h1 className="text-2xl font-bold">ビフォーアフター</h1>
+              <h1 className="text-2xl font-bold break-words">ビフォーアフター</h1>
             </div>
 
             {/* 追加ボタン */}
@@ -170,7 +189,7 @@ export function BeforeAfterPage() {
                 施工前後の比較ペアがまだありません
               </p>
             ) : (
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {pairs.map((pair, idx) => {
                   const before = photoById(pair.beforePhotoId);
                   const after = photoById(pair.afterPhotoId);
