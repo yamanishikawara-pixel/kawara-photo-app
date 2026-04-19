@@ -445,8 +445,8 @@ export default function PdfExportPage() {
           onClick={() => navigate(`/project/${id}`)}
           className="flex items-center gap-2 font-bold text-sm transition-colors"
           style={{ color: '#8b8ba8' }}
-          onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')}
-          onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+          onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')}
+          onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
         >
           <ArrowLeft className="w-4 h-4" /> もどる
         </button>
@@ -458,8 +458,8 @@ export default function PdfExportPage() {
             disabled={isZipping || isPrinting || isCapturingForPdf}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm border transition-colors disabled:opacity-40"
             style={{ background: '#1c1c30', borderColor: '#2e2e50', color: '#8b8ba8' }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#f0ede8'; e.currentTarget.style.color = '#f0ede8'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#2e2e50'; e.currentTarget.style.color = '#8b8ba8'; }}
+            onPointerEnter={e => { e.currentTarget.style.borderColor = '#f0ede8'; e.currentTarget.style.color = '#f0ede8'; }}
+            onPointerLeave={e => { e.currentTarget.style.borderColor = '#2e2e50'; e.currentTarget.style.color = '#8b8ba8'; }}
           >
             <Download className="w-4 h-4" /> 写真のみ(Zip)
           </button>
@@ -470,8 +470,8 @@ export default function PdfExportPage() {
             disabled={isZipping || isPrinting || isCapturingForPdf}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-colors disabled:opacity-40"
             style={{ background: '#f59e0b', color: '#000' }}
-            onMouseEnter={e => (e.currentTarget.style.background = '#fbbf24')}
-            onMouseLeave={e => (e.currentTarget.style.background = '#f59e0b')}
+            onPointerEnter={e => (e.currentTarget.style.background = '#fbbf24')}
+            onPointerLeave={e => (e.currentTarget.style.background = '#f59e0b')}
           >
             <FileDown className="w-4 h-4" />
             {isCapturingForPdf ? (pdfProgress || '処理中...') : 'PDFダウンロード'}
@@ -483,8 +483,8 @@ export default function PdfExportPage() {
             disabled={isZipping || isPrinting || isCapturingForPdf}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-colors disabled:opacity-40"
             style={{ background: '#f59e0b', color: '#000', boxShadow: '0 0 14px rgba(245,158,11,0.35)' }}
-            onMouseEnter={e => (e.currentTarget.style.background = '#fbbf24')}
-            onMouseLeave={e => (e.currentTarget.style.background = '#f59e0b')}
+            onPointerEnter={e => (e.currentTarget.style.background = '#fbbf24')}
+            onPointerLeave={e => (e.currentTarget.style.background = '#f59e0b')}
           >
             <Printer className="w-4 h-4" />
             {isPrinting ? (printProgress || '画像処理中...') : 'PDF作成・印刷'}
@@ -533,8 +533,8 @@ export default function PdfExportPage() {
                           disabled={idx === 0}
                           className="flex items-center justify-center w-6 h-5 rounded transition-colors disabled:opacity-20"
                           style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#8b8ba8' }}
-                          onMouseEnter={e => { if (idx > 0) e.currentTarget.style.color = '#f0ede8'; }}
-                          onMouseLeave={e => { e.currentTarget.style.color = '#8b8ba8'; }}
+                          onPointerEnter={e => { if (idx > 0) e.currentTarget.style.color = '#f0ede8'; }}
+                          onPointerLeave={e => { e.currentTarget.style.color = '#8b8ba8'; }}
                         >
                           <ChevronUp className="w-3 h-3" />
                         </button>
@@ -544,8 +544,8 @@ export default function PdfExportPage() {
                           disabled={idx === sectionOrder.length - 1}
                           className="flex items-center justify-center w-6 h-5 rounded transition-colors disabled:opacity-20"
                           style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#8b8ba8' }}
-                          onMouseEnter={e => { if (idx < sectionOrder.length - 1) e.currentTarget.style.color = '#f0ede8'; }}
-                          onMouseLeave={e => { e.currentTarget.style.color = '#8b8ba8'; }}
+                          onPointerEnter={e => { if (idx < sectionOrder.length - 1) e.currentTarget.style.color = '#f0ede8'; }}
+                          onPointerLeave={e => { e.currentTarget.style.color = '#8b8ba8'; }}
                         >
                           <ChevronDown className="w-3 h-3" />
                         </button>
@@ -582,8 +582,8 @@ export default function PdfExportPage() {
                   onClick={() => applyPreset(p.value)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
                   style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#8b8ba8' }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#f59e0b'; e.currentTarget.style.color = '#f59e0b'; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#2e2e50'; e.currentTarget.style.color = '#8b8ba8'; }}
+                  onPointerEnter={e => { e.currentTarget.style.borderColor = '#f59e0b'; e.currentTarget.style.color = '#f59e0b'; }}
+                  onPointerLeave={e => { e.currentTarget.style.borderColor = '#2e2e50'; e.currentTarget.style.color = '#8b8ba8'; }}
                 >
                   <span style={{ fontSize: '12px' }}>{p.icon}</span> {p.label}
                 </button>

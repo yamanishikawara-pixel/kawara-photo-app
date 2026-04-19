@@ -49,7 +49,7 @@ function Section({ title, icon, accent = '#ff6b35', children }: {
 }
 
 // ダークなインプット
-const inputCls = "w-full p-3 rounded-xl text-sm font-bold outline-none transition-all";
+const inputCls = "w-full p-3 rounded-xl text-sm font-bold outline-none transition-colors";
 const inputStyle = { background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' };
 
 export default function SettingsPage() {
@@ -429,7 +429,7 @@ function AddButton({ onClick, label, accent = '#ff6b35' }: { onClick: () => void
   return (
     <button
       onClick={onClick}
-      className="w-full py-4 font-bold text-sm rounded-xl border-2 border-dashed flex items-center justify-center gap-2 transition-all"
+      className="w-full py-4 font-bold text-sm rounded-xl border-2 border-dashed flex items-center justify-center gap-2 transition-colors"
       style={{ borderColor: '#2e2e50', color: '#8b8ba8' }}
       onPointerEnter={e => { (e.currentTarget.style.borderColor = accent); (e.currentTarget.style.color = accent); }}
       onPointerLeave={e => { (e.currentTarget.style.borderColor = '#2e2e50'); (e.currentTarget.style.color = '#8b8ba8'); }}

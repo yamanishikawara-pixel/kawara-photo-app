@@ -64,7 +64,7 @@ function NameSuggest({
         <input
           type="text"
           placeholder="例：改質アスファルトルーフィング"
-          className="flex-1 p-3 rounded-l-lg text-sm font-bold outline-none transition-all"
+          className="flex-1 p-3 rounded-l-lg text-sm font-bold outline-none transition-colors"
           style={{ background: '#12122a', border: '1px solid #2e2e50', borderRight: 'none', color: '#f0ede8' }}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -457,7 +457,7 @@ export default function MaterialPage() {
                       <input
                         type="text"
                         placeholder={placeholder}
-                        className="w-full p-2.5 rounded-lg text-sm outline-none transition-all"
+                        className="w-full p-2.5 rounded-lg text-sm outline-none transition-colors"
                         style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }}
                         value={material[field] as string}
                         onChange={(e) => updateMaterial(material.id, field, e.target.value)}
@@ -470,7 +470,7 @@ export default function MaterialPage() {
                     <textarea
                       placeholder="使用箇所や特記事項など"
                       rows={2}
-                      className="w-full p-2.5 rounded-lg text-sm outline-none transition-all resize-none"
+                      className="w-full p-2.5 rounded-lg text-sm outline-none transition-colors resize-none"
                       style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }}
                       value={material.remarks}
                       onChange={(e) => updateMaterial(material.id, 'remarks', e.target.value)}
@@ -484,7 +484,7 @@ export default function MaterialPage() {
           {/* 追加ボタン */}
           <button
             onClick={addMaterial}
-            className="w-full py-5 font-bold text-sm rounded-2xl border-2 border-dashed flex items-center justify-center gap-2 transition-all"
+            className="w-full py-5 font-bold text-sm rounded-2xl border-2 border-dashed flex items-center justify-center gap-2 transition-colors"
             style={{ borderColor: '#2e2e50', color: '#8b8ba8', background: 'transparent' }}
             onPointerEnter={e => { (e.currentTarget.style.borderColor = '#8b5cf6'); (e.currentTarget.style.color = '#8b5cf6'); }}
             onPointerLeave={e => { (e.currentTarget.style.borderColor = '#2e2e50'); (e.currentTarget.style.color = '#8b8ba8'); }}

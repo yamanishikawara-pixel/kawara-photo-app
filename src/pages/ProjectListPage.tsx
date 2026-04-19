@@ -40,7 +40,7 @@ function StorageUsageBar({ used, quota, onClick }: { used: number; quota: number
     <button
       type="button"
       onClick={onClick}
-      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all mt-4"
+      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors mt-4"
       style={{ background: '#1c1c30', borderColor: '#2e2e50' }}
       onPointerEnter={(e) => {
         (e.currentTarget as HTMLButtonElement).style.borderColor = barColor;
@@ -260,7 +260,7 @@ export function ProjectListPage() {
             <button
               type="button"
               onClick={() => setHideCompleted((v) => !v)}
-              className="text-xs font-bold px-3 py-1.5 rounded-full border transition-all"
+              className="text-xs font-bold px-3 py-1.5 rounded-full border transition-colors"
               style={hideCompleted
                 ? { borderColor: '#2e2e50', color: '#8b8ba8', background: 'transparent' }
                 : { borderColor: '#10b981', color: '#10b981', background: 'rgba(16,185,129,0.08)' }}
@@ -270,7 +270,7 @@ export function ProjectListPage() {
             <button
               type="button"
               onClick={addProject}
-              className="flex items-center gap-2 px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl font-bold text-sm transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl font-bold text-sm transition-colors"
               style={{ background: '#ff6b35', color: '#fff', boxShadow: '0 0 16px rgba(255,107,53,0.35)' }}
               onPointerEnter={e => (e.currentTarget.style.background = '#e85d2a')}
               onPointerLeave={e => (e.currentTarget.style.background = '#ff6b35')}
@@ -322,7 +322,7 @@ export function ProjectListPage() {
                     (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
                   }}
                 >
-                  <div className="relative w-full" style={{ aspectRatio: '16/9', background: '#12122a' }}>
+                  <div className="relative w-full aspect-video" style={{ background: '#12122a' }}>
                     {thumb ? (
                       <img src={thumb} alt="現場写真" className="w-full h-full object-cover" />
                     ) : (

@@ -1,494 +1,188 @@
 # workdir: /Users/yamanishikenta/kawara-photo-app
 
-## 概要
+---
 
-タスク1（ConfirmModal.tsx）・タスク2（ErrorMessage.tsx）は完了済み。
-残るタスク3〜12をこの指示書に従って順番に修正する。
+## 1. 依頼の概要
 
-修正の種類は1つだけ：
-**`onMouseEnter` / `onMouseLeave` → `onPointerEnter` / `onPointerLeave` に置き換える**
+3ファイルに残っている `transition-all` の一部を `transition-colors` に変更する。
 
-加えて MapPage.tsx の `transition-all` → `transition-colors` 置き換えも行う。
+`transition-all` はすべての CSS プロパティ（幅・高さ・位置・色など）にアニメーションを適用する。
+色だけ変化する要素に使うと、無関係なプロパティまで監視してパフォーマンスが落ちる。
+色変化だけの箇所は `transition-colors` に絞ることで効率よく動く。
 
-ロジック・レイアウト・Firestore処理・画像処理には一切触れないこと。
-各ファイルの修正後は最後にまとめて `npm run build` を1回実行する。
+MapPage.tsx では同じ修正をすでに完了済み。
+今回はその残りを3ファイルにまとめて適用する。
 
 ---
 
-## タスク3: src/pages/LoginPage.tsx
+## 2. 原因
 
-`onMouseEnter` / `onMouseLeave` が5カ所ある。すべて `onPointerEnter` / `onPointerLeave` に置き換える。
+`transition-all` は一括指定なので書きやすいが、
+幅・高さ・transformなどのアニメーションがない要素には過剰な指定になる。
+色（`color` / `background-color` / `border-color`）だけが変わる要素には `transition-colors` を使うべき。
 
-### 修正1（170〜173行目）送信ボタン
+---
+
+## 3. 修正対象ファイル
+
+- `src/pages/ProjectListPage.tsx`
+- `src/pages/MaterialPage.tsx`
+- `src/pages/SettingsPage.tsx`
+
+**変更しない理由のある行（以下は今回触らない）:**
+- ProjectListPage.tsx 64行目: ストレージバーの「幅」がアニメーションするため `transition-all` のまま
+- ProjectListPage.tsx 308行目: カードの `translateY` 移動があるため `transition-all` のまま
+- SettingsPage.tsx 157行目: `disabled:opacity-50` の透明度アニメーションがあるため `transition-all` のまま
+- SettingsPage.tsx 185行目: ストレージバーの「幅」がアニメーションするため `transition-all` のまま
+
+---
+
+## 4. 各ファイルの修正内容
+
+---
+
+### src/pages/ProjectListPage.tsx
+
+#### 修正1（43行目）ストレージ使用量バーのボタン
+ホバー時に `borderColor` だけ変わる → `transition-colors` で十分。
+
 ```
-変更前: onMouseEnter={(e) => {
-          if (!loading) e.currentTarget.style.background = '#e85d2a';
-        }}
-        onMouseLeave={(e) => (e.currentTarget.style.background = ACCENT)}
-
-変更後: onPointerEnter={(e) => {
-          if (!loading) e.currentTarget.style.background = '#e85d2a';
-        }}
-        onPointerLeave={(e) => (e.currentTarget.style.background = ACCENT)}
-```
-
-### 修正2（198〜199行目）ログイン↔登録切替ボタン
-```
-変更前: onMouseEnter={(e) => (e.currentTarget.style.color = ACCENT)}
-        onMouseLeave={(e) => (e.currentTarget.style.color = TEXT_MUTED)}
-
-変更後: onPointerEnter={(e) => (e.currentTarget.style.color = ACCENT)}
-        onPointerLeave={(e) => (e.currentTarget.style.color = TEXT_MUTED)}
-```
-
-### 修正3（213〜214行目）パスワードをお忘れの方ボタン
-```
-変更前: onMouseEnter={(e) => (e.currentTarget.style.color = ACCENT)}
-        onMouseLeave={(e) => (e.currentTarget.style.color = TEXT_DIM)}
-
-変更後: onPointerEnter={(e) => (e.currentTarget.style.color = ACCENT)}
-        onPointerLeave={(e) => (e.currentTarget.style.color = TEXT_DIM)}
-```
-
-### 修正4（268〜271行目）パスワードリセット送信ボタン
-```
-変更前: onMouseEnter={(e) => {
-          if (!resetLoading) e.currentTarget.style.background = '#e85d2a';
-        }}
-        onMouseLeave={(e) => (e.currentTarget.style.background = ACCENT)}
-
-変更後: onPointerEnter={(e) => {
-          if (!resetLoading) e.currentTarget.style.background = '#e85d2a';
-        }}
-        onPointerLeave={(e) => (e.currentTarget.style.background = ACCENT)}
+変更前: className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all mt-4"
+変更後: className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors mt-4"
 ```
 
-### 修正5（281〜282行目）パスワードリセットキャンセルボタン
-```
-変更前: onMouseEnter={(e) => (e.currentTarget.style.color = TEXT_MUTED)}
-        onMouseLeave={(e) => (e.currentTarget.style.color = TEXT_DIM)}
+#### 修正2（263行目）「完了済みを表示/非表示」切替ボタン
+状態に応じて `borderColor` / `color` / `background` が変わるだけ → `transition-colors`。
 
-変更後: onPointerEnter={(e) => (e.currentTarget.style.color = TEXT_MUTED)}
-        onPointerLeave={(e) => (e.currentTarget.style.color = TEXT_DIM)}
+```
+変更前: className="text-xs font-bold px-3 py-1.5 rounded-full border transition-all"
+変更後: className="text-xs font-bold px-3 py-1.5 rounded-full border transition-colors"
+```
+
+#### 修正3（273行目）「新規現場」ボタン
+ホバー時に `background` だけ変わる → `transition-colors`。
+
+```
+変更前: className="flex items-center gap-2 px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl font-bold text-sm transition-all"
+変更後: className="flex items-center gap-2 px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl font-bold text-sm transition-colors"
 ```
 
 ---
 
-## タスク4: src/pages/ProjectListPage.tsx
+### src/pages/MaterialPage.tsx
 
-`onMouseEnter` / `onMouseLeave` が7カ所ある。すべて `onPointerEnter` / `onPointerLeave` に置き換える。
+#### 修正4（67行目）品名入力フィールド
+フォーカス時に `borderColor` だけ変わる → `transition-colors`。
 
-### 修正1（45〜50行目）StorageUsageBar ボタン
 ```
-変更前: onMouseEnter={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.borderColor = barColor;
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.borderColor = '#2e2e50';
-        }}
-
-変更後: onPointerEnter={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.borderColor = barColor;
-        }}
-        onPointerLeave={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.borderColor = '#2e2e50';
-        }}
+変更前: className="flex-1 p-3 rounded-l-lg text-sm font-bold outline-none transition-all"
+変更後: className="flex-1 p-3 rounded-l-lg text-sm font-bold outline-none transition-colors"
 ```
 
-### 修正2（228〜229行目）設定ボタン
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.color = '#ff6b35')}
-        onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+#### 修正5（460行目）テキスト入力フィールド
+フォーカス時に `borderColor` だけ変わる → `transition-colors`。
 
-変更後: onPointerEnter={e => (e.currentTarget.style.color = '#ff6b35')}
-        onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
 ```
-
-### 修正3（233〜234行目）ログアウトボタン
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')}
-        onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
-
-変更後: onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')}
-        onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+変更前: className="w-full p-2.5 rounded-lg text-sm outline-none transition-all"
+変更後: className="w-full p-2.5 rounded-lg text-sm outline-none transition-colors"
 ```
 
-### 修正4（275〜276行目）新規現場ボタン
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.background = '#e85d2a')}
-        onMouseLeave={e => (e.currentTarget.style.background = '#ff6b35')}
+#### 修正6（473行目）テキストエリア
+フォーカス時に `borderColor` だけ変わる → `transition-colors`。
 
-変更後: onPointerEnter={e => (e.currentTarget.style.background = '#e85d2a')}
-        onPointerLeave={e => (e.currentTarget.style.background = '#ff6b35')}
 ```
-
-### 修正5（314〜323行目）プロジェクトカード
-```
-変更前: onMouseEnter={e => {
-          (e.currentTarget as HTMLDivElement).style.borderColor = '#ff6b35';
-          (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 24px rgba(255,107,53,0.15)';
-          (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
-        }}
-        onMouseLeave={e => {
-          (e.currentTarget as HTMLDivElement).style.borderColor = p.isCompleted ? '#1e4035' : '#2e2e50';
-          (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
-          (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
-        }}
-
-変更後: onPointerEnter={e => {
-          (e.currentTarget as HTMLDivElement).style.borderColor = '#ff6b35';
-          (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 24px rgba(255,107,53,0.15)';
-          (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
-        }}
-        onPointerLeave={e => {
-          (e.currentTarget as HTMLDivElement).style.borderColor = p.isCompleted ? '#1e4035' : '#2e2e50';
-          (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
-          (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
-        }}
+変更前: className="w-full p-2.5 rounded-lg text-sm outline-none transition-all resize-none"
+変更後: className="w-full p-2.5 rounded-lg text-sm outline-none transition-colors resize-none"
 ```
 
-### 修正6（363〜364行目）完了チェックボタン
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.color = '#10b981')}
-        onMouseLeave={e => (e.currentTarget.style.color = p.isCompleted ? '#10b981' : '#3d3d60')}
+#### 修正7（487行目）「材料を追加」ボタン（破線ボーダー）
+ホバー時に `borderColor` と `color` だけ変わる → `transition-colors`。
 
-変更後: onPointerEnter={e => (e.currentTarget.style.color = '#10b981')}
-        onPointerLeave={e => (e.currentTarget.style.color = p.isCompleted ? '#10b981' : '#3d3d60')}
 ```
-
-### 修正7（374〜375行目）削除ボタン
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-        onMouseLeave={e => (e.currentTarget.style.color = '#3d3d60')}
-
-変更後: onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
-        onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
+変更前: className="w-full py-5 font-bold text-sm rounded-2xl border-2 border-dashed flex items-center justify-center gap-2 transition-all"
+変更後: className="w-full py-5 font-bold text-sm rounded-2xl border-2 border-dashed flex items-center justify-center gap-2 transition-colors"
 ```
 
 ---
 
-## タスク5: src/pages/PhotoPage.tsx
+### src/pages/SettingsPage.tsx
 
-`onMouseEnter` / `onMouseLeave` が15カ所ある。すべて `onPointerEnter` / `onPointerLeave` に置き換える。
-ファイル内の `onMouseEnter` を全件 `onPointerEnter` に、`onMouseLeave` を全件 `onPointerLeave` に一括置換して構わない。
+#### 修正8（52行目）`inputCls` 定数
+ページ内のすべての入力欄に使われている共通クラス文字列。
+フォーカス時に `borderColor` だけ変わる → `transition-colors`。
 
-確認：PhotoPage.tsx 内の onMouseEnter / onMouseLeave はホバー演出のみで使われている。
-onClick など他のイベントハンドラには触れないこと。
-
----
-
-## タスク6: src/pages/MaterialPage.tsx
-
-`onMouseEnter` / `onMouseLeave` が10カ所ある。すべて `onPointerEnter` / `onPointerLeave` に置き換える。
-ファイル内の `onMouseEnter` を全件 `onPointerEnter` に、`onMouseLeave` を全件 `onPointerLeave` に一括置換して構わない。
-
-確認：MaterialPage.tsx 内の onMouseEnter / onMouseLeave はホバー演出のみで使われている。
-onClick など他のイベントハンドラには触れないこと。
-
----
-
-## タスク7: src/pages/CoverPage.tsx
-
-`onMouseEnter` / `onMouseLeave` が3カ所ある。すべて `onPointerEnter` / `onPointerLeave` に置き換える。
-
-### 修正1（142〜143行目）もどるボタン
 ```
-変更前: onMouseEnter={e => (e.currentTarget.style.color = ACCENT)}
-        onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
-
-変更後: onPointerEnter={e => (e.currentTarget.style.color = ACCENT)}
-        onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+変更前: const inputCls = "w-full p-3 rounded-xl text-sm font-bold outline-none transition-all";
+変更後: const inputCls = "w-full p-3 rounded-xl text-sm font-bold outline-none transition-colors";
 ```
 
-### 修正2（264〜265行目）添付PDF削除ボタン
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-        onMouseLeave={e => (e.currentTarget.style.color = '#6b7280')}
+#### 修正9（432行目）`AddButton` コンポーネント内の追加ボタン（破線ボーダー）
+ホバー時に `borderColor` と `color` だけ変わる → `transition-colors`。
 
-変更後: onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
-        onPointerLeave={e => (e.currentTarget.style.color = '#6b7280')}
 ```
-
-### 修正3（277〜282行目）PDF選択ボタン
-```
-変更前: onMouseEnter={e => {
-          e.currentTarget.style.borderColor = ACCENT;
-          e.currentTarget.style.color = ACCENT;
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.borderColor = '#2e2e50';
-          e.currentTarget.style.color = '#6b7280';
-        }}
-
-変更後: onPointerEnter={e => {
-          e.currentTarget.style.borderColor = ACCENT;
-          e.currentTarget.style.color = ACCENT;
-        }}
-        onPointerLeave={e => {
-          e.currentTarget.style.borderColor = '#2e2e50';
-          e.currentTarget.style.color = '#6b7280';
-        }}
+変更前: className="w-full py-4 font-bold text-sm rounded-xl border-2 border-dashed flex items-center justify-center gap-2 transition-all"
+変更後: className="w-full py-4 font-bold text-sm rounded-xl border-2 border-dashed flex items-center justify-center gap-2 transition-colors"
 ```
 
 ---
 
-## タスク8: src/pages/BeforeAfterPage.tsx
+## 5. 実装手順
 
-`onMouseEnter` / `onMouseLeave` が3カ所ある。すべて `onPointerEnter` / `onPointerLeave` に置き換える。
-
-### 修正1（155〜156行目）もどるボタン
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.color = ACCENT)}
-        onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
-
-変更後: onPointerEnter={e => (e.currentTarget.style.color = ACCENT)}
-        onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
-```
-
-### 修正2（180〜181行目）ペア追加ボタン
-```
-変更前: onMouseEnter={e => { e.currentTarget.style.borderColor = ACCENT; e.currentTarget.style.color = ACCENT; }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = '#2e2e50'; e.currentTarget.style.color = '#6b7280'; }}
-
-変更後: onPointerEnter={e => { e.currentTarget.style.borderColor = ACCENT; e.currentTarget.style.color = ACCENT; }}
-        onPointerLeave={e => { e.currentTarget.style.borderColor = '#2e2e50'; e.currentTarget.style.color = '#6b7280'; }}
-```
-
-### 修正3（231〜232行目）ペア削除ボタン
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-        onMouseLeave={e => (e.currentTarget.style.color = '#4b4b70')}
-
-変更後: onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
-        onPointerLeave={e => (e.currentTarget.style.color = '#4b4b70')}
-```
+1. `src/pages/ProjectListPage.tsx` を開き、修正1〜3を適用する
+2. `src/pages/MaterialPage.tsx` を開き、修正4〜7を適用する
+3. `src/pages/SettingsPage.tsx` を開き、修正8〜9を適用する
+4. 各ファイルを保存する
 
 ---
 
-## タスク9: src/pages/SettingsPage.tsx
+## 6. 検証手順
 
-`onMouseEnter` / `onMouseLeave` が8カ所ある。すべて `onPointerEnter` / `onPointerLeave` に置き換える。
+修正後に以下を確認する。
 
-### 修正1（149〜150行目）ホームへボタン
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.color = '#ff6b35')}
-        onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
-
-変更後: onPointerEnter={e => (e.currentTarget.style.color = '#ff6b35')}
-        onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
-```
-
-### 修正2（159〜160行目）設定を保存ボタン
-```
-変更前: onMouseEnter={e => !saving && ((e.currentTarget as HTMLButtonElement).style.background = '#e85d2a')}
-        onMouseLeave={e => !saving && ((e.currentTarget as HTMLButtonElement).style.background = '#ff6b35')}
-
-変更後: onPointerEnter={e => !saving && ((e.currentTarget as HTMLButtonElement).style.background = '#e85d2a')}
-        onPointerLeave={e => !saving && ((e.currentTarget as HTMLButtonElement).style.background = '#ff6b35')}
-```
-
-### 修正3（213行目）ロゴアップロードラベル
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.borderColor = '#ff6b35')}
-        onMouseLeave={e => (e.currentTarget.style.borderColor = '#3d3d60')}
-
-変更後: onPointerEnter={e => (e.currentTarget.style.borderColor = '#ff6b35')}
-        onPointerLeave={e => (e.currentTarget.style.borderColor = '#3d3d60')}
-```
-
-### 修正4（274〜275行目）工程削除ボタン
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-        onMouseLeave={e => (e.currentTarget.style.color = '#3d3d60')}
-
-変更後: onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
-        onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
-```
-
-### 修正5（323〜324行目）テンプレート削除ボタン
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-        onMouseLeave={e => (e.currentTarget.style.color = '#3d3d60')}
-
-変更後: onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
-        onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
-```
-
-### 修正6（365〜366行目）材料削除ボタン
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-        onMouseLeave={e => (e.currentTarget.style.color = '#3d3d60')}
-
-変更後: onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
-        onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
-```
-
-### 修正7（413〜414行目）定型文削除ボタン
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-        onMouseLeave={e => (e.currentTarget.style.color = '#3d3d60')}
-
-変更後: onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
-        onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
-```
-
-### 修正8（434〜435行目）AddButton関数内の追加ボタン
-```
-変更前: onMouseEnter={e => { (e.currentTarget.style.borderColor = accent); (e.currentTarget.style.color = accent); }}
-        onMouseLeave={e => { (e.currentTarget.style.borderColor = '#2e2e50'); (e.currentTarget.style.color = '#8b8ba8'); }}
-
-変更後: onPointerEnter={e => { (e.currentTarget.style.borderColor = accent); (e.currentTarget.style.color = accent); }}
-        onPointerLeave={e => { (e.currentTarget.style.borderColor = '#2e2e50'); (e.currentTarget.style.color = '#8b8ba8'); }}
-```
+- [ ] ProjectListPage.tsx 43, 263, 273行目が `transition-colors` になっていること
+- [ ] ProjectListPage.tsx 64, 308行目は `transition-all` のまま残っていること
+- [ ] MaterialPage.tsx 67, 460, 473, 487行目が `transition-colors` になっていること
+- [ ] SettingsPage.tsx 52, 432行目が `transition-colors` になっていること
+- [ ] SettingsPage.tsx 157, 185行目は `transition-all` のまま残っていること
 
 ---
 
-## タスク10: src/pages/ShareViewPage.tsx
-
-`onMouseEnter` / `onMouseLeave` が1カ所ある。
-
-### 修正1（95〜96行目）編集に戻るボタン
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.background = `${ACCENT}22`)}
-        onMouseLeave={e => (e.currentTarget.style.background = `${ACCENT}12`)}
-
-変更後: onPointerEnter={e => (e.currentTarget.style.background = `${ACCENT}22`)}
-        onPointerLeave={e => (e.currentTarget.style.background = `${ACCENT}12`)}
-```
-
----
-
-## タスク11: src/pages/MapPage.tsx（onMouseEnter/Leave の置き換え）
-
-`onMouseEnter` / `onMouseLeave` が9カ所ある。すべて `onPointerEnter` / `onPointerLeave` に置き換える。
-
-### 修正1（513〜514行目）テーブル行ホバー
-```
-変更前: onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)'; }}
-        onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
-
-変更後: onPointerEnter={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)'; }}
-        onPointerLeave={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
-```
-
-### 修正2（520行目）行削除ボタン
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')} onMouseLeave={e => (e.currentTarget.style.color = '#3d3d60')}
-
-変更後: onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')} onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
-```
-
-### 修正3（1132〜1133行目）もどるボタン
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.color = '#ff6b35')}
-        onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
-
-変更後: onPointerEnter={e => (e.currentTarget.style.color = '#ff6b35')}
-        onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
-```
-
-### 修正4（1168行目）図面削除ボタン
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')} onMouseLeave={e => (e.currentTarget.style.color = '#3d3d60')}
-
-変更後: onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')} onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
-```
-
-### 修正5（1226行目）左回転ボタン
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')} onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
-
-変更後: onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')} onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
-```
-
-### 修正6（1227行目）右回転ボタン
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')} onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
-
-変更後: onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')} onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
-```
-
-### 修正7（1228行目）差し替えラベル
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.color = '#f0ede8')} onMouseLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
-
-変更後: onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')} onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
-```
-
-### 修正8（1345行目）図面アップロードラベル
-```
-変更前: onMouseEnter={e => (e.currentTarget.style.borderColor = '#3b82f6')} onMouseLeave={e => (e.currentTarget.style.borderColor = '#3d3d60')}
-
-変更後: onPointerEnter={e => (e.currentTarget.style.borderColor = '#3b82f6')} onPointerLeave={e => (e.currentTarget.style.borderColor = '#3d3d60')}
-```
-
----
-
-## タスク12: src/pages/MapPage.tsx（transition-all → transition-colors）
-
-MapPage.tsx 内の `transition-all` のうち、**色変化のみ**に使われている箇所を `transition-colors` に変える。
-`active:scale-*` や `scale()` など拡縮アニメーションと一緒に使われている箇所は変えない。
-
-### 変更する箇所（色変化のみ・拡縮なし）
-
-- 428行目: タグボタン群 `className="... transition-all"` → `transition-colors`
-- 1113行目: 回転角度選択ボタン `className="... transition-all"` → `transition-colors`
-- 1118行目: 完了ボタン `className="... transition-all"` → `transition-colors`
-- 1155〜1158行目: 描画モード切替ボタン（pan/pin/dimension/whiteout）各 `transition-all` → `transition-colors`
-- 1167行目: 図面タブボタン `transition-all` → `transition-colors`
-- 1171行目: 図面追加ラベル `transition-all` → `transition-colors`
-
-### 変更しない箇所（拡縮あり・そのまま）
-
-- 26行目: ToolButton（active:scale-90 あり）
-- 303〜304行目: 削除・完了ボタン（active:scale-95 あり）
-- 433行目: ✓完了ボタン
-- 493行目: ピン要素（duration-75・scale あり）
-- 1103行目: タイトル入力欄
-- 1185行目: カラーパレットボタン（scale あり）
-- 1187行目: 自由色ラベル（hover:scale-105 あり）
-- 1251行目: マップdiv（ring アニメーションあり）
-
----
-
-## 実行コマンド
-
-すべての修正が完了したら、以下を1回実行する：
+## 7. 実行コマンド
 
 ```bash
 npm run build
 ```
 
+エラーなく完了することを確認する。
+
 ---
 
-## 完了後に codex_result.md に書く内容
+## 8. 完了後に codex_result.md に書く内容
 
 ```markdown
-# codex_result — タスク3〜12
+# codex_result
 
-## 変更ファイル一覧
-- src/pages/LoginPage.tsx
-- src/pages/ProjectListPage.tsx
-- src/pages/PhotoPage.tsx
-- src/pages/MaterialPage.tsx
-- src/pages/CoverPage.tsx
-- src/pages/BeforeAfterPage.tsx
-- src/pages/SettingsPage.tsx
-- src/pages/ShareViewPage.tsx
-- src/pages/MapPage.tsx（onMouseEnter/Leave × 8）
-- src/pages/MapPage.tsx（transition-all → transition-colors × 8）
+## 変更ファイル
+- src/pages/ProjectListPage.tsx（43, 263, 273行目）
+- src/pages/MaterialPage.tsx（67, 460, 473, 487行目）
+- src/pages/SettingsPage.tsx（52, 432行目）
 
-## タスク別完了状況
-- [x/空] タスク3: LoginPage.tsx（5カ所）
-- [x/空] タスク4: ProjectListPage.tsx（7カ所）
-- [x/空] タスク5: PhotoPage.tsx（15カ所）
-- [x/空] タスク6: MaterialPage.tsx（10カ所）
-- [x/空] タスク7: CoverPage.tsx（3カ所）
-- [x/空] タスク8: BeforeAfterPage.tsx（3カ所）
-- [x/空] タスク9: SettingsPage.tsx（8カ所）
-- [x/空] タスク10: ShareViewPage.tsx（1カ所）
-- [x/空] タスク11: MapPage.tsx onPointer置換（8カ所）
-- [x/空] タスク12: MapPage.tsx transition-colors（8カ所）
+## 実施した修正（9箇所）
+- [x/空] ProjectListPage 修正1: 43行目 transition-all → transition-colors
+- [x/空] ProjectListPage 修正2: 263行目 transition-all → transition-colors
+- [x/空] ProjectListPage 修正3: 273行目 transition-all → transition-colors
+- [x/空] MaterialPage 修正4: 67行目 transition-all → transition-colors
+- [x/空] MaterialPage 修正5: 460行目 transition-all → transition-colors
+- [x/空] MaterialPage 修正6: 473行目 transition-all → transition-colors
+- [x/空] MaterialPage 修正7: 487行目 transition-all → transition-colors
+- [x/空] SettingsPage 修正8: 52行目 inputCls定数 transition-all → transition-colors
+- [x/空] SettingsPage 修正9: 432行目 AddButton transition-all → transition-colors
+
+## 変更しなかった箇所（理由あり）
+- ProjectListPage 64行目: 幅アニメーションのため transition-all のまま
+- ProjectListPage 308行目: translateY アニメーションのため transition-all のまま
+- SettingsPage 157行目: disabled:opacity のため transition-all のまま
+- SettingsPage 185行目: 幅アニメーションのため transition-all のまま
 
 ## npm run build 結果
 - 結果: 成功 / 失敗
@@ -496,4 +190,5 @@ npm run build
 - ビルド時間:
 
 ## 備考
+（気づいた点があれば記載）
 ```
