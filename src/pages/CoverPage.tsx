@@ -8,6 +8,7 @@ import { db, auth, storage } from '../firebase';
 import type { Project } from '../types';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { ErrorMessage } from '../shared/ErrorMessage';
+import { ConfirmModal } from '../shared/ConfirmModal';
 import { canUpload, trackUpload } from '../shared/storageUtils';
 
 const ACCENT = '#10b981';
@@ -28,6 +29,7 @@ export function CoverPage() {
   const [savedKey, setSavedKey] = useState<string | null>(null);
   const [appendixUploading, setAppendixUploading] = useState(false);
   const [appendixProgress, setAppendixProgress] = useState(0);
+  const [confirmDeletePdf, setConfirmDeletePdf] = useState(false);
   const appendixInputRef = useRef<HTMLInputElement>(null);
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout> | undefined>>({});
 
@@ -107,7 +109,6 @@ export function CoverPage() {
 
   const handleAppendixDelete = async () => {
     if (!project?.appendixPdfUrl || !id) return;
-    if (!window.confirm('添付PDFを削除しますか？')) return;
     try {
       await deleteObject(ref(storage, project.appendixPdfUrl));
     } catch { /* 無視 */ }
@@ -258,7 +259,8 @@ export function CoverPage() {
               <span className="text-sm font-bold flex-1 truncate" style={{ color: '#6ee7b7' }}>PDF添付済み</span>
               <button
                 type="button"
-                onClick={handleAppendixDelete}
+                onClick={() => setConfirmDeletePdf(true)}
+                aria-label="削除"
                 className="p-1.5 rounded-lg transition-colors"
                 style={{ color: '#6b7280' }}
                 onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
@@ -272,6 +274,7 @@ export function CoverPage() {
               type="button"
               onClick={() => appendixInputRef.current?.click()}
               disabled={appendixUploading}
+              aria-label="アップロード"
               className="w-full flex items-center justify-center gap-2 rounded-xl py-4 border-2 border-dashed transition-colors disabled:opacity-50 text-sm font-bold"
               style={{ borderColor: '#2e2e50', color: '#6b7280' }}
               onPointerEnter={e => {
@@ -309,6 +312,18 @@ export function CoverPage() {
         </div>
 
       </div>
+      <ConfirmModal
+        isOpen={confirmDeletePdf}
+        title="添付PDFを削除"
+        message="添付PDFを削除しますか？"
+        confirmLabel="削除"
+        variant="danger"
+        onConfirm={async () => {
+          setConfirmDeletePdf(false);
+          await handleAppendixDelete();
+        }}
+        onCancel={() => setConfirmDeletePdf(false)}
+      />
     </div>
   );
 }

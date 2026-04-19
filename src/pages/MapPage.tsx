@@ -10,6 +10,7 @@ import { canUpload, trackDelete, trackUpload } from '../shared/storageUtils';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
+import { ConfirmModal } from '../shared/ConfirmModal';
 
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -420,7 +421,7 @@ const DimensionLineMarker = React.memo(({ line, rotation, currentScale, isSelect
                <span className="text-xs font-bold mx-1" style={{ color: '#8b8ba8' }}>{thickness}</span>
                <button onClick={(e) => { e.stopPropagation(); onUpdate({ size: Math.min(10, thickness + 1) }); }} className="w-7 h-7 flex items-center justify-center rounded font-bold transition-colors mr-1" style={{ background: '#2e2e50', color: '#f0ede8' }}>＋</button>
                <div className="w-px h-5 mx-1" style={{ background: '#2e2e50' }}></div>
-               <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-1.5 rounded-lg transition-colors" style={{ color: '#ef4444', background: 'rgba(239,68,68,0.1)' }}><Trash2 className="w-4 h-4" /></button>
+               <button onClick={(e) => { e.stopPropagation(); onRemove(); }} aria-label="削除" className="p-1.5 rounded-lg transition-colors" style={{ color: '#ef4444', background: 'rgba(239,68,68,0.1)' }}><Trash2 className="w-4 h-4" /></button>
              </div>
           </div>
           <div className="flex flex-wrap gap-1.5 w-full">
@@ -517,7 +518,7 @@ const LegendRow = React.memo(({ row, isSelected, onSelect, onChange, onRemove }:
       <input type="text" value={row.part} placeholder="軒先" onChange={(e) => onChange({ part: e.target.value })} className="col-span-4 py-2.5 px-2 font-bold bg-transparent outline-none border-r" style={{ color: '#f0ede8', borderColor: '#2e2e50' }} />
       <input type="text" value={row.remarks} placeholder="..." onChange={(e) => onChange({ remarks: e.target.value })} className="col-span-5 py-2.5 px-2 font-bold bg-transparent outline-none border-r" style={{ color: '#f0ede8', borderColor: '#2e2e50' }} />
       <div className="col-span-1 flex items-center justify-center">
-        <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-1.5 rounded-lg transition-colors" style={{ color: '#3d3d60' }} onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')} onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}><Trash2 className="w-4 h-4"/></button>
+        <button onClick={(e) => { e.stopPropagation(); onRemove(); }} aria-label="削除" className="p-1.5 rounded-lg transition-colors" style={{ color: '#3d3d60' }} onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')} onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}><Trash2 className="w-4 h-4"/></button>
       </div>
     </div>
   );
@@ -550,8 +551,10 @@ export default function MapPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
+  const [confirmDeleteMapIndex, setConfirmDeleteMapIndex] = useState<number | null>(null);
   const addInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
   const [currentMapIndex, setCurrentMapIndex] = useState(0);
@@ -745,7 +748,6 @@ export default function MapPage() {
 
   const deleteMapPhoto = useCallback(async (mapIndex: number) => {
     if (!project || !id) return;
-    if (!window.confirm('この位置図を削除しますか？ピンや凡例データも削除されます。')) return;
 
     const urlToDelete = project.mapUrls?.[mapIndex];
     if (urlToDelete) {
@@ -1165,7 +1167,7 @@ export default function MapPage() {
           {project?.mapUrls?.map((_, idx) => (
             <div key={idx} className="flex items-center gap-1">
               <button onClick={() => setCurrentMapIndex(idx)} className="px-5 py-2.5 rounded-xl text-sm font-black transition-colors" style={currentMapIndex === idx ? { background: '#12122a', color: '#3b82f6', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' } : { color: '#8b8ba8' }}>図面 {idx + 1}</button>
-              <button onClick={() => deleteMapPhoto(idx)} className="p-1.5 rounded-lg transition-colors" style={{ color: '#3d3d60' }} onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')} onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')} title="削除"><Trash2 className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setConfirmDeleteMapIndex(idx)} aria-label="削除" className="p-1.5 rounded-lg transition-colors" style={{ color: '#3d3d60' }} onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')} onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')} title="削除"><Trash2 className="w-3.5 h-3.5" /></button>
             </div>
           ))}
           <label className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-black cursor-pointer transition-colors border-2 border-dashed" style={{ color: '#8b8ba8', borderColor: '#3d3d60' }} title="図面を追加">
@@ -1223,8 +1225,8 @@ export default function MapPage() {
                 </div>
 
                 <div className="flex-1 flex justify-end gap-2 w-full lg:w-auto">
-                  <button onClick={() => rotateCurrentMap(-90)} className="p-2 rounded-xl transition-colors" style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }} onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')} onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')} title="左に90°回転"><RotateCcw className="w-4 h-4" /></button>
-                  <button onClick={() => rotateCurrentMap(90)} className="p-2 rounded-xl transition-colors" style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }} onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')} onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')} title="右に90°回転"><RotateCw className="w-4 h-4" /></button>
+                  <button onClick={() => rotateCurrentMap(-90)} aria-label="左回転" className="p-2 rounded-xl transition-colors" style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }} onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')} onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')} title="左に90°回転"><RotateCcw className="w-4 h-4" /></button>
+                  <button onClick={() => rotateCurrentMap(90)} aria-label="右回転" className="p-2 rounded-xl transition-colors" style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }} onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')} onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')} title="右に90°回転"><RotateCw className="w-4 h-4" /></button>
                   <label className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl cursor-pointer transition-colors" style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }} onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')} onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')} title="この図面を差し替え">
                     <UploadCloud className="w-4 h-4" /> 差し替え
                     <input ref={replaceInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => uploadMapImage(e, 'replace')} disabled={isSaving} />
@@ -1435,9 +1437,28 @@ export default function MapPage() {
           )}
         </div>
 
-        <button onClick={() => saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts).then(() => alert('保存しました'))} disabled={isSaving} className="fixed bottom-6 right-6 z-50 font-black px-6 py-4 rounded-2xl shadow-2xl transition-all active:scale-95 flex items-center gap-2 disabled:opacity-50 text-sm" style={{ background: '#ff6b35', color: '#fff', boxShadow: '0 0 24px rgba(255,107,53,0.4)' }}><Save className="w-5 h-5"/> {isSaving ? '保存中...' : '位置図を保存'}</button>
+        <button onClick={() => saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts).then(() => { setSaveSuccess('保存しました'); setTimeout(() => setSaveSuccess(null), 3000); })} disabled={isSaving} className="fixed bottom-6 right-6 z-50 font-black px-6 py-4 rounded-2xl shadow-2xl transition-all active:scale-95 flex items-center gap-2 disabled:opacity-50 text-sm" style={{ background: '#ff6b35', color: '#fff', boxShadow: '0 0 24px rgba(255,107,53,0.4)' }}><Save className="w-5 h-5"/> {isSaving ? '保存中...' : '位置図を保存'}</button>
 
       </div>
+      {saveSuccess && (
+        <div className="fixed bottom-4 right-4 z-50 px-4 py-2 rounded-lg text-sm font-bold" style={{ background: '#10b981', color: '#fff' }}>
+          {saveSuccess}
+        </div>
+      )}
+      <ConfirmModal
+        isOpen={confirmDeleteMapIndex !== null}
+        title="位置図を削除"
+        message="この位置図を削除しますか？ピンや凡例データも削除されます。"
+        confirmLabel="削除"
+        variant="danger"
+        onConfirm={async () => {
+          if (confirmDeleteMapIndex !== null) {
+            await deleteMapPhoto(confirmDeleteMapIndex);
+            setConfirmDeleteMapIndex(null);
+          }
+        }}
+        onCancel={() => setConfirmDeleteMapIndex(null)}
+      />
     </div>
   );
 }

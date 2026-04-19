@@ -10,6 +10,7 @@ import { canUpload, trackDelete, trackUpload } from '../shared/storageUtils';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import type { Circle, MapPin as MapPinT, Photo, Project, DimensionLine, PhotoMaster } from '../types';
 import type { ChangeEvent, MouseEvent } from 'react';
+import { ConfirmModal } from '../shared/ConfirmModal';
 
 const DEFAULT_PROCESS_OPTIONS = [
   "着工前", "下地・下葺き", "防水ルーフィング施工", "瓦桟施工",
@@ -293,7 +294,7 @@ function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChan
         >
           <button onClick={(e) => { e.stopPropagation(); onSizeChange(Math.min(80, Math.round(size + 5))); }} className="px-4 py-2.5 text-lg font-bold transition-colors" style={{ color: '#f0ede8', borderRight: '1px solid #3d3d60' }} onPointerEnter={e => (e.currentTarget.style.background = '#2e2e50')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}>＋</button>
           <button onClick={(e) => { e.stopPropagation(); onSizeChange(Math.max(5, Math.round(size - 5))); }} className="px-4 py-2.5 text-lg font-bold transition-colors" style={{ color: '#f0ede8', borderRight: '1px solid #3d3d60' }} onPointerEnter={e => (e.currentTarget.style.background = '#2e2e50')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}>－</button>
-          <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="px-4 py-2.5 transition-colors" style={{ color: '#ef4444' }} onPointerEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,0.15)')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}><Trash2 className="w-4 h-4" /></button>
+          <button onClick={(e) => { e.stopPropagation(); onRemove(); }} aria-label="削除" className="px-4 py-2.5 transition-colors" style={{ color: '#ef4444' }} onPointerEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,0.15)')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}><Trash2 className="w-4 h-4" /></button>
         </div>
       )}
     </>
@@ -388,10 +389,7 @@ function PhotoMasterCombobox({
 
   const handleSelect = (m: PhotoMaster) => {
     setOpen(false);
-    const detail = [m.process, m.description ? m.description.slice(0, 30) + (m.description.length > 30 ? '…' : '') : ''].filter(Boolean).join('　/　');
-    if (window.confirm(`「${m.name}」を自動入力しますか？${detail ? '\n' + detail : ''}`)) {
-      onApply(m);
-    }
+    onApply(m);
   };
 
   if (masters.length === 0) return null;
@@ -472,6 +470,12 @@ export default function PhotoPage() {
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<number[]>([]);
   const [batchDate, setBatchDate] = useState("");
+  const [confirmDeletePhotoId, setConfirmDeletePhotoId] = useState<number | null>(null);
+  const [confirmDeleteSelectedPhotos, setConfirmDeleteSelectedPhotos] = useState(false);
+  const [confirmBatchDate, setConfirmBatchDate] = useState(false);
+  const [confirmOverwritePhotoMaster, setConfirmOverwritePhotoMaster] = useState<{ name: string; photo: Photo } | null>(null);
+  const [masterSaveSuccess, setMasterSaveSuccess] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -500,16 +504,24 @@ export default function PhotoPage() {
   };
 
   const saveToPhotoMaster = async (photo: Photo) => {
-    if (!uid) { alert('マスタに保存するにはログインが必要です。'); return; }
+    if (!uid) { setUploadError('マスタに保存するにはログインが必要です。'); return; }
     const name = prompt('テンプレート名を入力してください:', photo.process || '');
     if (!name?.trim()) return;
     const existing = photoMasters.find((m) => m.name === name.trim());
-    if (existing && !window.confirm(`「${name.trim()}」はすでに存在します。上書きしますか？`)) return;
-    const entry: PhotoMaster = { id: existing?.id ?? Date.now(), name: name.trim(), process: photo.process, description: photo.description };
+    if (existing) {
+      setConfirmOverwritePhotoMaster({ name: name.trim(), photo });
+      return;
+    }
+    await doSaveToPhotoMaster(name.trim(), photo, undefined);
+  };
+
+  const doSaveToPhotoMaster = async (name: string, photo: Photo, existing: PhotoMaster | undefined) => {
+    const entry: PhotoMaster = { id: existing?.id ?? Date.now(), name, process: photo.process, description: photo.description };
     const newMasters = existing ? photoMasters.map((m) => m.id === existing.id ? entry : m) : [...photoMasters, entry];
     setPhotoMasters(newMasters);
-    await setDoc(doc(db, 'users', uid), { photoMaster: newMasters }, { merge: true });
-    alert(`「${entry.name}」をマスタに保存しました。`);
+    await setDoc(doc(db, 'users', uid!), { photoMaster: newMasters }, { merge: true });
+    setMasterSaveSuccess(`「${entry.name}」をマスタに保存しました。`);
+    setTimeout(() => setMasterSaveSuccess(null), 3000);
   };
 
   const updatePhoto = async (photoId: number, field: keyof Photo, value: Photo[keyof Photo]) => {
@@ -521,26 +533,23 @@ export default function PhotoPage() {
 
   const deletePhotoSlot = async (photoId: number) => {
     if (!project || !id) return;
-    if (window.confirm('この写真枠を完全に削除しますか？')) {
-      const target = project.photos.find((p) => p.id === photoId);
-      if (target?.image) {
-        const bytes = await getRemoteFileSize(target.image);
-        try {
-          await deleteObject(ref(storage, target.image));
-          if (uid && bytes && Number.isFinite(bytes)) {
-            await trackDelete(uid, bytes);
-            setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
-          }
-          // TODO: 既存写真にはfileSizeがないため、HEADでサイズを取得できない環境では使用量を減算できない。
-        } catch (err) {
-          logFirebaseError(err, '写真ファイル削除');
+    const target = project.photos.find((p) => p.id === photoId);
+    if (target?.image) {
+      const bytes = await getRemoteFileSize(target.image);
+      try {
+        await deleteObject(ref(storage, target.image));
+        if (uid && bytes && Number.isFinite(bytes)) {
+          await trackDelete(uid, bytes);
+          setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
         }
+      } catch (err) {
+        logFirebaseError(err, '写真ファイル削除');
       }
-      const newPhotos = project.photos.filter((p) => p.id !== photoId);
-      const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
-      setProject((prev) => prev ? { ...prev, photos: renumbered } : null);
-      await updateDoc(doc(db, "projects", id), { photos: renumbered });
     }
+    const newPhotos = project.photos.filter((p) => p.id !== photoId);
+    const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
+    setProject((prev) => prev ? { ...prev, photos: renumbered } : null);
+    await updateDoc(doc(db, "projects", id), { photos: renumbered });
   };
 
   const toggleSelectPhoto = (photoId: number) => {
@@ -549,41 +558,35 @@ export default function PhotoPage() {
 
   const deleteSelectedPhotos = async () => {
     if (!project || !id || selectedPhotoIds.length === 0) return;
-    if (window.confirm(`選択した ${selectedPhotoIds.length} 件の写真枠を完全に削除しますか？`)) {
-      const targets = project.photos.filter((p) => selectedPhotoIds.includes(p.id) && p.image);
-      for (const target of targets) {
-        if (!target.image) continue;
-        const bytes = await getRemoteFileSize(target.image);
-        try {
-          await deleteObject(ref(storage, target.image));
-          if (uid && bytes && Number.isFinite(bytes)) {
-            await trackDelete(uid, bytes);
-            setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
-          }
-          // TODO: 既存写真にはfileSizeがないため、HEADでサイズを取得できない環境では使用量を減算できない。
-        } catch (err) {
-          logFirebaseError(err, '写真ファイル削除');
+    const targets = project.photos.filter((p) => selectedPhotoIds.includes(p.id) && p.image);
+    for (const target of targets) {
+      if (!target.image) continue;
+      const bytes = await getRemoteFileSize(target.image);
+      try {
+        await deleteObject(ref(storage, target.image));
+        if (uid && bytes && Number.isFinite(bytes)) {
+          await trackDelete(uid, bytes);
+          setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
         }
+      } catch (err) {
+        logFirebaseError(err, '写真ファイル削除');
       }
-      const newPhotos = project.photos.filter((p) => !selectedPhotoIds.includes(p.id));
-      const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
-      setProject((prev) => prev ? { ...prev, photos: renumbered } : null);
-      await updateDoc(doc(db, "projects", id), { photos: renumbered });
-      setSelectedPhotoIds([]);
-      setIsSelectMode(false);
     }
+    const newPhotos = project.photos.filter((p) => !selectedPhotoIds.includes(p.id));
+    const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
+    setProject((prev) => prev ? { ...prev, photos: renumbered } : null);
+    await updateDoc(doc(db, "projects", id), { photos: renumbered });
+    setSelectedPhotoIds([]);
+    setIsSelectMode(false);
   };
 
   const applyBatchDate = async () => {
     if (!project || !id || !batchDate) return;
-    if (window.confirm(`すべての写真の撮影日を ${batchDate.replace(/-/g, '/')} に統一しますか？`)) {
-      const formatted = formatToYMDSlash(batchDate);
-      const newPhotos = project.photos.map(p => ({ ...p, shootingDate: formatted }));
-      setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-      await updateDoc(doc(db, "projects", id), { photos: newPhotos });
-      setBatchDate("");
-      alert('撮影日を一括設定しました！');
-    }
+    const formatted = formatToYMDSlash(batchDate);
+    const newPhotos = project.photos.map(p => ({ ...p, shootingDate: formatted }));
+    setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
+    await updateDoc(doc(db, "projects", id), { photos: newPhotos });
+    setBatchDate("");
   };
 
   const addPhotoSlot = async () => {
@@ -646,7 +649,7 @@ export default function PhotoPage() {
       try {
         const compressedFile = await compressPhotoWithQuality(files[i]);
         if (!canUpload(storageUsedBytes, compressedFile.size)) {
-          alert('ストレージ容量が上限（500MB）に達しています。不要な写真を削除してください。');
+          setUploadError('ストレージ容量が上限（500MB）に達しています。不要な写真を削除してください。');
           break;
         }
         const r = ref(storage, `photos/${id}/${Date.now()}_bulk_${i}.jpg`);
@@ -661,7 +664,7 @@ export default function PhotoPage() {
         await updateDoc(doc(db, "projects", id), { photos: newPhotos });
       } catch (error) {
         logFirebaseError(error, `写真一括アップロード(${i + 1}枚目)`);
-        alert(`${i + 1}枚目：${firebaseErrorMessage(error, 'アップロード')}`);
+        setUploadError(`${i + 1}枚目：${firebaseErrorMessage(error, 'アップロード')}`);
       }
 
       uploadedCount++;
@@ -681,7 +684,7 @@ export default function PhotoPage() {
     try {
       const compressedFile = await compressPhotoWithQuality(f);
       if (!canUpload(storageUsedBytes, compressedFile.size)) {
-        alert('ストレージ容量が上限（500MB）に達しています。不要な写真を削除してください。');
+        setUploadError('ストレージ容量が上限（500MB）に達しています。不要な写真を削除してください。');
         return;
       }
       const r = ref(storage, `photos/${id}/${Date.now()}.jpg`);
@@ -696,7 +699,7 @@ export default function PhotoPage() {
       await updateDoc(doc(db, "projects", id), { photos: newPhotos });
     } catch (err) {
       logFirebaseError(err, '写真アップロード');
-      alert(firebaseErrorMessage(err, '写真のアップロード'));
+      setUploadError(firebaseErrorMessage(err, '写真のアップロード'));
     } finally {
       setLoadingId(null);
     }
@@ -839,7 +842,7 @@ export default function PhotoPage() {
                 style={{ background: '#12122a', border: '1px solid #3d3d60', color: '#f0ede8', colorScheme: 'dark' }}
               />
               <button
-                onClick={applyBatchDate}
+                onClick={() => setConfirmBatchDate(true)}
                 disabled={!batchDate}
                 className="font-bold px-3 py-2 rounded-lg text-sm transition-colors disabled:opacity-40"
                 style={{ background: 'rgba(255,107,53,0.15)', color: '#ff6b35', border: '1px solid rgba(255,107,53,0.3)' }}
@@ -859,7 +862,7 @@ export default function PhotoPage() {
                     取消
                   </button>
                   <button
-                    onClick={deleteSelectedPhotos}
+                    onClick={() => setConfirmDeleteSelectedPhotos(true)}
                     disabled={selectedPhotoIds.length === 0}
                     className="font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-1.5 transition-all disabled:opacity-40"
                     style={{ background: '#ef4444', color: '#fff' }}
@@ -975,7 +978,7 @@ export default function PhotoPage() {
                       ↻ 回転
                     </button>
                     <button
-                      onClick={() => deletePhotoSlot(photo.id)}
+                      onClick={() => setConfirmDeletePhotoId(photo.id)}
                       className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors"
                       style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}
                     >
@@ -1181,6 +1184,7 @@ export default function PhotoPage() {
                             <button
                               type="button"
                               onClick={() => saveToPhotoMaster(photo)}
+                              aria-label="テンプレートに保存"
                               className="flex items-center gap-1 text-xs font-bold px-2 py-1.5 rounded-lg transition-colors"
                               style={{ color: '#10b981' }}
                               onPointerEnter={e => (e.currentTarget.style.background = 'rgba(16,185,129,0.1)')}
@@ -1254,6 +1258,70 @@ export default function PhotoPage() {
         onClose={() => setModalOpen(false)}
         pins={project?.mapPins}
         onSelect={(label) => currentPhotoId && updatePhoto(currentPhotoId, "locationMap", label)}
+      />
+      {masterSaveSuccess && (
+        <div className="fixed bottom-4 right-4 z-50 px-4 py-2 rounded-lg text-sm font-bold" style={{ background: '#10b981', color: '#fff' }}>
+          {masterSaveSuccess}
+        </div>
+      )}
+      {uploadError && (
+        <div className="fixed bottom-4 right-4 z-50 px-4 py-2 rounded-lg text-sm font-bold" style={{ background: '#ef4444', color: '#fff' }}>
+          {uploadError}
+          <button onClick={() => setUploadError(null)} className="ml-2">×</button>
+        </div>
+      )}
+      <ConfirmModal
+        isOpen={confirmDeletePhotoId !== null}
+        title="写真枠を削除"
+        message="この写真枠を完全に削除しますか？"
+        confirmLabel="削除"
+        variant="danger"
+        onConfirm={async () => {
+          if (confirmDeletePhotoId !== null) {
+            await deletePhotoSlot(confirmDeletePhotoId);
+            setConfirmDeletePhotoId(null);
+          }
+        }}
+        onCancel={() => setConfirmDeletePhotoId(null)}
+      />
+      <ConfirmModal
+        isOpen={confirmDeleteSelectedPhotos}
+        title="選択写真を削除"
+        message={`選択した ${selectedPhotoIds.length} 件の写真枠を完全に削除しますか？`}
+        confirmLabel="削除"
+        variant="danger"
+        onConfirm={async () => {
+          setConfirmDeleteSelectedPhotos(false);
+          await deleteSelectedPhotos();
+        }}
+        onCancel={() => setConfirmDeleteSelectedPhotos(false)}
+      />
+      <ConfirmModal
+        isOpen={confirmBatchDate}
+        title="撮影日を一括設定"
+        message={`すべての写真の撮影日を ${batchDate.replace(/-/g, '/')} に統一しますか？`}
+        confirmLabel="設定する"
+        variant="default"
+        onConfirm={async () => {
+          setConfirmBatchDate(false);
+          await applyBatchDate();
+        }}
+        onCancel={() => setConfirmBatchDate(false)}
+      />
+      <ConfirmModal
+        isOpen={confirmOverwritePhotoMaster !== null}
+        title="テンプレートを上書き"
+        message={`「${confirmOverwritePhotoMaster?.name}」はすでに存在します。上書きしますか？`}
+        confirmLabel="上書き"
+        variant="default"
+        onConfirm={async () => {
+          if (confirmOverwritePhotoMaster) {
+            const existing = photoMasters.find((m) => m.name === confirmOverwritePhotoMaster.name);
+            await doSaveToPhotoMaster(confirmOverwritePhotoMaster.name, confirmOverwritePhotoMaster.photo, existing);
+            setConfirmOverwritePhotoMaster(null);
+          }
+        }}
+        onCancel={() => setConfirmOverwritePhotoMaster(null)}
       />
     </div>
   );

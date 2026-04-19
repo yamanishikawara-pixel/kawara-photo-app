@@ -10,6 +10,8 @@ import { proxyUrl } from '../shared/utils';
 import { canUpload, trackDelete, trackUpload } from '../shared/storageUtils';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import type { Material, MaterialMaster, Project } from '../types';
+import { ConfirmModal } from '../shared/ConfirmModal';
+import { ErrorMessage } from '../shared/ErrorMessage';
 
 const getRemoteFileSize = async (url: string): Promise<number> => {
   try {
@@ -52,10 +54,7 @@ function NameSuggest({
 
   const handleSelect = (m: MaterialMaster) => {
     setOpen(false);
-    const detail = [m.manufacturer, m.specification, m.remarks].filter(Boolean).join('　/　');
-    if (window.confirm(`「${m.name}」のデータを自動入力しますか？${detail ? '\n' + detail : ''}`)) {
-      onApply(m);
-    }
+    onApply(m);
   };
 
   return (
@@ -140,6 +139,11 @@ export default function MaterialPage() {
   const [uid, setUid] = useState<string | null>(null);
   const [storageUsedBytes, setStorageUsedBytes] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDeleteMaterialId, setConfirmDeleteMaterialId] = useState<number | null>(null);
+  const [confirmOverwriteMasterMaterial, setConfirmOverwriteMasterMaterial] = useState<Material | null>(null);
+  const [masterSaveSuccess, setMasterSaveSuccess] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -204,7 +208,6 @@ export default function MaterialPage() {
   };
 
   const removeMaterial = async (materialId: number) => {
-    if (!window.confirm('この材料データを削除しますか？')) return;
     const material = (project?.materials || []).find((m) => m.id === materialId);
     if (material?.image) {
       const bytes = await getRemoteFileSize(material.image);
@@ -232,15 +235,21 @@ export default function MaterialPage() {
   };
 
   const saveToMaster = async (material: Material) => {
-    if (!uid) { alert('マスタに保存するにはログインが必要です。'); return; }
+    if (!uid) { setSaveError('マスタに保存するにはログインが必要です。'); return; }
     const trimmedName = material.name.trim();
-    if (!trimmedName) { alert('品名を入力してください。'); return; }
+    if (!trimmedName) { setSaveError('品名を入力してください。'); return; }
 
     const existing = masters.find((m) => m.name === trimmedName);
     if (existing) {
-      if (!window.confirm(`「${material.name}」はすでにマスタにあります。上書きしますか？`)) return;
+      setConfirmOverwriteMasterMaterial(material);
+      return;
     }
 
+    await doSaveToMaster(material, undefined);
+  };
+
+  const doSaveToMaster = async (material: Material, existing: MaterialMaster | undefined) => {
+    const trimmedName = material.name.trim();
     const newEntry: MaterialMaster = {
       id: existing?.id ?? Date.now(),
       name: trimmedName,
@@ -253,8 +262,10 @@ export default function MaterialPage() {
       : [...masters, newEntry];
 
     setMasters(newMasters);
-    await setDoc(doc(db, 'users', uid), { materialMaster: newMasters }, { merge: true });
-    alert(`「${newEntry.name}」をマスタに保存しました。`);
+    await setDoc(doc(db, 'users', uid!), { materialMaster: newMasters }, { merge: true });
+    setSaveError(null);
+    setMasterSaveSuccess(`「${newEntry.name}」をマスタに保存しました。`);
+    setTimeout(() => setMasterSaveSuccess(null), 3000);
   };
 
   const handleImageUpload = async (materialId: number, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -263,7 +274,7 @@ export default function MaterialPage() {
     setUploadingId(materialId);
     try {
       if (!canUpload(storageUsedBytes, file.size)) {
-        alert('ストレージ容量が上限（500MB）に達しています。不要な画像を削除してください。');
+        setUploadError('ストレージ容量が上限（500MB）に達しています。不要な画像を削除してください。');
         return;
       }
       const storageRef = ref(storage, `materials/${id}/${Date.now()}_${file.name}`);
@@ -276,7 +287,7 @@ export default function MaterialPage() {
       updateMaterial(materialId, 'image', url);
     } catch (err) {
       logFirebaseError(err, '材料画像アップロード');
-      alert(firebaseErrorMessage(err, '画像のアップロード'));
+      setUploadError(firebaseErrorMessage(err, '画像のアップロード'));
     } finally {
       setUploadingId(null);
     }
@@ -318,12 +329,7 @@ export default function MaterialPage() {
           </div>
         </div>
 
-        {error && (
-          <div className="mb-4 p-3 rounded-xl flex justify-between items-center text-sm font-bold" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' }}>
-            {error}
-            <button type="button" onClick={() => setError(null)} className="ml-2 opacity-70 hover:opacity-100">✕</button>
-          </div>
-        )}
+        {error && <ErrorMessage message={error} onDismiss={() => setError(null)} className="mb-4" />}
 
         {/* ヒントバナー */}
         <div className="p-4 rounded-xl border mb-6" style={{ background: 'rgba(139,92,246,0.08)', borderColor: 'rgba(139,92,246,0.25)' }}>
@@ -345,6 +351,7 @@ export default function MaterialPage() {
                   <button
                     onClick={() => moveMaterial(index, 'up')}
                     disabled={index === 0}
+                    aria-label="上へ移動"
                     className="p-1.5 rounded-lg transition-colors disabled:opacity-30"
                     style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}
                     onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')}
@@ -356,6 +363,7 @@ export default function MaterialPage() {
                   <button
                     onClick={() => moveMaterial(index, 'down')}
                     disabled={index === materials.length - 1}
+                    aria-label="下へ移動"
                     className="p-1.5 rounded-lg transition-colors disabled:opacity-30"
                     style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}
                     onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')}
@@ -365,7 +373,8 @@ export default function MaterialPage() {
                     <ArrowDown className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => removeMaterial(material.id)}
+                    onClick={() => setConfirmDeleteMaterialId(material.id)}
+                    aria-label="削除"
                     className="p-1.5 rounded-lg transition-colors"
                     style={{ color: '#ef4444', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}
                     title="削除"
@@ -392,8 +401,8 @@ export default function MaterialPage() {
                           crossOrigin="anonymous"
                         />
                         <div className="absolute bottom-2 right-2 flex gap-1 p-1.5 rounded-lg z-20" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
-                          <button onClick={() => rotateImage(material.id, material.rotation || 0, -90)} className="p-1.5 rounded transition-colors" style={{ color: '#f0ede8' }} onPointerEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}><RotateCcw className="w-4 h-4" /></button>
-                          <button onClick={() => rotateImage(material.id, material.rotation || 0, 90)} className="p-1.5 rounded transition-colors" style={{ color: '#f0ede8' }} onPointerEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}><RotateCw className="w-4 h-4" /></button>
+                          <button onClick={() => rotateImage(material.id, material.rotation || 0, -90)} aria-label="左回転" className="p-1.5 rounded transition-colors" style={{ color: '#f0ede8' }} onPointerEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}><RotateCcw className="w-4 h-4" /></button>
+                          <button onClick={() => rotateImage(material.id, material.rotation || 0, 90)} aria-label="右回転" className="p-1.5 rounded transition-colors" style={{ color: '#f0ede8' }} onPointerEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}><RotateCw className="w-4 h-4" /></button>
                         </div>
                       </>
                     ) : (
@@ -431,6 +440,7 @@ export default function MaterialPage() {
                       <button
                         type="button"
                         onClick={() => saveToMaster(material)}
+                        aria-label="マスタに保存"
                         className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg transition-colors"
                         style={{ color: '#10b981' }}
                         onPointerEnter={e => (e.currentTarget.style.background = 'rgba(16,185,129,0.1)')}
@@ -494,6 +504,46 @@ export default function MaterialPage() {
           </button>
         </div>
       </div>
+      {masterSaveSuccess && (
+        <div className="fixed bottom-4 right-4 px-4 py-2 rounded-lg text-sm font-bold" style={{ background: '#10b981', color: '#fff' }}>
+          {masterSaveSuccess}
+        </div>
+      )}
+      {(uploadError || saveError) && (
+        <div className="fixed bottom-4 right-4 px-4 py-2 rounded-lg text-sm font-bold" style={{ background: '#ef4444', color: '#fff' }}>
+          {uploadError || saveError}
+          <button onClick={() => { setUploadError(null); setSaveError(null); }} className="ml-2">×</button>
+        </div>
+      )}
+      <ConfirmModal
+        isOpen={confirmDeleteMaterialId !== null}
+        title="材料データを削除"
+        message="この材料データを削除しますか？"
+        confirmLabel="削除"
+        variant="danger"
+        onConfirm={async () => {
+          if (confirmDeleteMaterialId !== null) {
+            await removeMaterial(confirmDeleteMaterialId);
+            setConfirmDeleteMaterialId(null);
+          }
+        }}
+        onCancel={() => setConfirmDeleteMaterialId(null)}
+      />
+      <ConfirmModal
+        isOpen={confirmOverwriteMasterMaterial !== null}
+        title="マスタを上書き"
+        message={`「${confirmOverwriteMasterMaterial?.name}」はすでにマスタにあります。上書きしますか？`}
+        confirmLabel="上書き"
+        variant="default"
+        onConfirm={async () => {
+          if (confirmOverwriteMasterMaterial) {
+            const existing = masters.find((m) => m.name === confirmOverwriteMasterMaterial.name.trim());
+            await doSaveToMaster(confirmOverwriteMasterMaterial, existing);
+            setConfirmOverwriteMasterMaterial(null);
+          }
+        }}
+        onCancel={() => setConfirmOverwriteMasterMaterial(null)}
+      />
     </div>
   );
 }

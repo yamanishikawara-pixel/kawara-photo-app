@@ -85,6 +85,7 @@ export function ProjectListPage() {
   const [companyName, setCompanyName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [storageUsed, setStorageUsed] = useState(0);
+  const [confirmLogout, setConfirmLogout] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -189,15 +190,17 @@ export function ProjectListPage() {
     }
   };
 
-  const handleLogout = async () => {
-    if (window.confirm('ログアウトしますか？')) {
-      try {
-        await signOut(auth);
-        navigate('/login');
-      } catch (err) {
-        logFirebaseError(err, 'ログアウト');
-        setError(firebaseErrorMessage(err, 'ログアウト'));
-      }
+  const handleLogout = () => {
+    setConfirmLogout(true);
+  };
+
+  const doLogout = async () => {
+    try {
+      await signOut(auth);
+      navigate('/login');
+    } catch (err) {
+      logFirebaseError(err, 'ログアウト');
+      setError(firebaseErrorMessage(err, 'ログアウト'));
     }
   };
 
@@ -399,6 +402,15 @@ export function ProjectListPage() {
         confirmLabel="完全に削除する"
         onConfirm={() => confirmDelete && deleteProject(confirmDelete.id)}
         onCancel={() => setConfirmDelete(null)}
+      />
+      <ConfirmModal
+        isOpen={confirmLogout}
+        title="ログアウト"
+        message="ログアウトしますか？"
+        confirmLabel="ログアウト"
+        variant="default"
+        onConfirm={doLogout}
+        onCancel={() => setConfirmLogout(false)}
       />
     </div>
   );

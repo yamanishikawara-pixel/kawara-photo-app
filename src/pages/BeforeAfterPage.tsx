@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, List, Plus, Trash2, ArrowRight, Check } from 'lucide-react';
+import { ArrowLeft, List, Plus, Trash2, ArrowRight, Check, Pencil } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import type { BeforeAfterPair, Photo, Project } from '../types';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { ErrorMessage } from '../shared/ErrorMessage';
+import { ConfirmModal } from '../shared/ConfirmModal';
 
 const ACCENT = '#f59e0b';
 
@@ -22,6 +23,8 @@ export function BeforeAfterPage() {
   const [part, setPart] = useState('');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
+  const [editingPairId, setEditingPairId] = useState<number | null>(null);
+  const [confirmDeletePairId, setConfirmDeletePairId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -46,20 +49,30 @@ export function BeforeAfterPage() {
     setPendingAfter(null);
     setPart('');
     setDescription('');
+    setEditingPairId(null);
   };
 
   const savePair = async () => {
     if (!project || !id || pendingBefore === null || pendingAfter === null) return;
     setSaving(true);
     try {
-      const newPair: BeforeAfterPair = {
-        id: Date.now(),
-        beforePhotoId: pendingBefore,
-        afterPhotoId: pendingAfter,
-        part: part.trim(),
-        description: description.trim(),
-      };
-      const updated = [...pairs, newPair];
+      let updated: BeforeAfterPair[];
+      if (editingPairId !== null) {
+        updated = pairs.map(p =>
+          p.id === editingPairId
+            ? { ...p, beforePhotoId: pendingBefore, afterPhotoId: pendingAfter, part: part.trim(), description: description.trim() }
+            : p
+        );
+      } else {
+        const newPair: BeforeAfterPair = {
+          id: Date.now(),
+          beforePhotoId: pendingBefore,
+          afterPhotoId: pendingAfter,
+          part: part.trim(),
+          description: description.trim(),
+        };
+        updated = [...pairs, newPair];
+      }
       await updateDoc(doc(db, 'projects', id), { beforeAfterPairs: updated });
       setProject(prev => prev ? { ...prev, beforeAfterPairs: updated } : prev);
       reset();
@@ -72,7 +85,6 @@ export function BeforeAfterPage() {
 
   const deletePair = async (pairId: number) => {
     if (!id || !project) return;
-    if (!window.confirm('このペアを削除しますか？')) return;
     const updated = pairs.filter(p => p.id !== pairId);
     try {
       await updateDoc(doc(db, 'projects', id), { beforeAfterPairs: updated });
@@ -80,6 +92,15 @@ export function BeforeAfterPage() {
     } catch {
       setError('削除に失敗しました。');
     }
+  };
+
+  const startEdit = (pair: BeforeAfterPair) => {
+    setEditingPairId(pair.id);
+    setPendingBefore(pair.beforePhotoId);
+    setPendingAfter(pair.afterPhotoId);
+    setPart(pair.part);
+    setDescription(pair.description);
+    setStep('before');
   };
 
   if (error && !project) {
@@ -223,16 +244,30 @@ export function BeforeAfterPage() {
                             <div className="text-xs truncate mt-0.5" style={{ color: '#6b7280' }}>{pair.description}</div>
                           )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => deletePair(pair.id)}
-                          className="p-2 rounded-lg transition-colors shrink-0"
-                          style={{ color: '#4b4b70' }}
-                          onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
-                          onPointerLeave={e => (e.currentTarget.style.color = '#4b4b70')}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex gap-0.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => startEdit(pair)}
+                            aria-label="編集"
+                            className="p-2 rounded-lg transition-colors shrink-0"
+                            style={{ color: '#4b4b70' }}
+                            onPointerEnter={e => (e.currentTarget.style.color = ACCENT)}
+                            onPointerLeave={e => (e.currentTarget.style.color = '#4b4b70')}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeletePairId(pair.id)}
+                            aria-label="削除"
+                            className="p-2 rounded-lg transition-colors shrink-0"
+                            style={{ color: '#4b4b70' }}
+                            onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                            onPointerLeave={e => (e.currentTarget.style.color = '#4b4b70')}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -348,12 +383,26 @@ export function BeforeAfterPage() {
               style={{ background: ACCENT, color: '#000', boxShadow: `0 0 16px rgba(245,158,11,0.3)` }}
             >
               <Check className="w-4 h-4" />
-              {saving ? '保存中...' : 'ペアを保存'}
+              {saving ? '保存中...' : editingPairId !== null ? 'ペアを更新' : 'ペアを保存'}
             </button>
           </>
         )}
 
       </div>
+      <ConfirmModal
+        isOpen={confirmDeletePairId !== null}
+        title="ペアを削除"
+        message="このペアを削除しますか？"
+        confirmLabel="削除"
+        variant="danger"
+        onConfirm={async () => {
+          if (confirmDeletePairId !== null) {
+            await deletePair(confirmDeletePairId);
+            setConfirmDeletePairId(null);
+          }
+        }}
+        onCancel={() => setConfirmDeletePairId(null)}
+      />
     </div>
   );
 }

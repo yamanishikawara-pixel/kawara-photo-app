@@ -36,7 +36,7 @@ export async function trackUpload(uid: string, bytes: number): Promise<void> {
       storageUsedBytes: increment(bytes),
     });
   } catch (e) {
-    console.warn('storageUsedBytes の更新に失敗しました:', e);
+    import.meta.env.DEV && console.warn('storageUsedBytes の更新に失敗しました:', e);
   }
 }
 
@@ -47,6 +47,6 @@ export async function trackDelete(uid: string, bytes: number): Promise<void> {
       storageUsedBytes: increment(-bytes),
     });
   } catch (e) {
-    console.warn('storageUsedBytes の減算に失敗しました:', e);
+    import.meta.env.DEV && console.warn('storageUsedBytes の減算に失敗しました:', e);
   }
 }
