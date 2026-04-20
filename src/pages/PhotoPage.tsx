@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, X, Plus, Edit2, Ruler, Paintbrush, CaseUpper, Copy, CheckSquare, Calendar, ChevronDown, BookmarkPlus } from 'lucide-react';
+import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, Plus, Edit2, Ruler, Paintbrush, CaseUpper, Copy, CheckSquare, Calendar, BookmarkPlus } from 'lucide-react';
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
@@ -8,9 +8,11 @@ import imageCompression from 'browser-image-compression';
 import { proxyUrl, useDraggablePin } from '../shared/utils';
 import { canUpload, trackDelete, trackUpload } from '../shared/storageUtils';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
-import type { Circle, MapPin as MapPinT, Photo, Project, DimensionLine, PhotoMaster } from '../types';
+import type { Circle, Photo, Project, DimensionLine, PhotoMaster } from '../types';
 import type { ChangeEvent, MouseEvent } from 'react';
 import { ConfirmModal } from '../shared/ConfirmModal';
+import { PinSelectModal } from './photo/PinSelectModal';
+import { PhotoMasterCombobox } from './photo/PhotoMasterCombobox';
 
 const DEFAULT_PROCESS_OPTIONS = [
   "着工前", "下地・下葺き", "防水ルーフィング施工", "瓦桟施工",
@@ -69,7 +71,7 @@ const compressPhotoWithQuality = async (file: File) => {
   try {
     return await imageCompression(file, options);
   } catch (error) {
-    console.warn("画像の圧縮に失敗しました。元のファイルで続行します。", error);
+    import.meta.env.DEV && console.warn("画像の圧縮に失敗しました。元のファイルで続行します。", error);
     return file;
   }
 };
@@ -301,49 +303,6 @@ function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChan
   );
 }
 
-function PinSelectModal({ isOpen, onClose, pins, onSelect }: { isOpen: boolean; onClose: () => void; pins: MapPinT[] | undefined; onSelect: (label: string) => void; }) {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.7)' }} onClick={onClose}>
-      <div className="w-full max-w-sm p-6 rounded-2xl shadow-2xl space-y-5" style={{ background: '#1c1c30', border: '1px solid #2e2e50' }} onClick={e => e.stopPropagation()}>
-        <div className="flex justify-between items-center pb-3 border-b" style={{ borderColor: '#2e2e50' }}>
-          <h3 className="text-base font-black flex items-center gap-2" style={{ color: '#f0ede8' }}>
-            <MapPin className="w-5 h-5" style={{ color: '#ef4444' }} /> 位置図の場所を選択
-          </h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg transition-colors" style={{ color: '#8b8ba8' }} onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')} onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}>
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        {pins && pins.length > 0 ? (
-          <div className="grid grid-cols-3 gap-2.5 max-h-[60vh] overflow-y-auto pr-1">
-            {pins.map((pin) => (
-              <button
-                key={pin.id}
-                onClick={() => { onSelect(pin.label); onClose(); }}
-                className="font-black py-3 text-center rounded-xl text-sm transition-all active:scale-95"
-                style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }}
-                onPointerEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#ef4444'; (e.currentTarget as HTMLButtonElement).style.color = '#ef4444'; }}
-                onPointerLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#2e2e50'; (e.currentTarget as HTMLButtonElement).style.color = '#f0ede8'; }}
-              >
-                {pin.label}
-              </button>
-            ))}
-            <button onClick={() => { onSelect(""); onClose(); }} className="col-span-3 font-bold py-2.5 rounded-xl mt-1 transition-colors text-sm" style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}>
-              選択を解除
-            </button>
-          </div>
-        ) : (
-          <div className="text-center py-10 px-4 rounded-2xl border-2 border-dashed" style={{ borderColor: '#2e2e50' }}>
-            <p className="font-bold text-sm leading-relaxed" style={{ color: '#6b7280' }}>
-              先に位置図画面で<br /><span style={{ color: '#ef4444' }}>マーカー（符号）</span>を<br />打ってください
-            </p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 const formatToYMD = (dateString: string) => {
   if (!dateString) return '';
   const parts = dateString.split(/[-/]/);
@@ -363,88 +322,6 @@ const getTodayStr = () => {
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
 };
 
-// 写真テンプレートのコンボボックス
-function PhotoMasterCombobox({
-  masters,
-  onApply,
-}: {
-  masters: PhotoMaster[];
-  onApply: (m: PhotoMaster) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const wrapRef = useRef<HTMLDivElement>(null);
-
-  const filtered = query.trim()
-    ? masters.filter((m) => m.name.includes(query.trim()) || m.process.includes(query.trim()))
-    : masters;
-
-  useEffect(() => {
-    const handler = (e: globalThis.MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  const handleSelect = (m: PhotoMaster) => {
-    setOpen(false);
-    onApply(m);
-  };
-
-  if (masters.length === 0) return null;
-
-  return (
-    <div ref={wrapRef} className="relative">
-      <button
-        type="button"
-        onMouseDown={(e) => { e.preventDefault(); setQuery(''); setOpen((o) => !o); }}
-        className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
-        style={{ color: '#ff6b35', background: 'rgba(255,107,53,0.1)', border: '1px solid rgba(255,107,53,0.25)' }}
-      >
-        テンプレート <ChevronDown className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-
-      {open && (
-        <div className="absolute z-50 left-0 top-full mt-1 w-64 rounded-xl shadow-xl overflow-hidden" style={{ background: '#1c1c30', border: '1px solid #2e2e50' }}>
-          <div className="p-2 border-b" style={{ borderColor: '#2e2e50' }}>
-            <input
-              type="text"
-              placeholder="絞り込み..."
-              className="w-full px-3 py-2 text-sm rounded-lg outline-none"
-              style={{ background: '#12122a', border: '1px solid #3d3d60', color: '#f0ede8' }}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              autoFocus
-            />
-          </div>
-          <ul className="max-h-56 overflow-y-auto">
-            {filtered.length === 0 ? (
-              <li className="px-4 py-3 text-sm text-center" style={{ color: '#6b7280' }}>該当なし</li>
-            ) : (
-              filtered.map((m) => (
-                <li key={m.id}>
-                  <button
-                    type="button"
-                    className="w-full text-left px-4 py-3 transition-colors border-b last:border-none"
-                    style={{ borderColor: '#2e2e50' }}
-                    onMouseDown={(e) => { e.preventDefault(); handleSelect(m); }}
-                    onPointerEnter={e => (e.currentTarget.style.background = '#2e2e50')}
-                    onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <div className="font-bold text-sm" style={{ color: '#f0ede8' }}>{m.name}</div>
-                    {m.process && <div className="text-xs mt-0.5" style={{ color: '#6b7280' }}>{m.process}</div>}
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function PhotoPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -452,6 +329,7 @@ export default function PhotoPage() {
   const [loadingId, setLoadingId] = useState<number | null>(null);
   const [bulkUploading, setBulkUploading] = useState(false);
   const [bulkProgress, setBulkProgress] = useState(0);
+  const [bulkTotal, setBulkTotal] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [currentPhotoId, setCurrentPhotoId] = useState<number | null>(null);
   const [selectedCircleId, setSelectedCircleId] = useState<number | null>(null);
@@ -476,6 +354,8 @@ export default function PhotoPage() {
   const [confirmOverwritePhotoMaster, setConfirmOverwritePhotoMaster] = useState<{ name: string; photo: Photo } | null>(null);
   const [masterSaveSuccess, setMasterSaveSuccess] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [templateNameTarget, setTemplateNameTarget] = useState<Photo | null>(null);
+  const [templateNameInput, setTemplateNameInput] = useState('');
 
   useEffect(() => {
     if (!id) return;
@@ -503,16 +383,10 @@ export default function PhotoPage() {
     await updateDoc(doc(db, 'projects', id), { photos: newPhotos });
   };
 
-  const saveToPhotoMaster = async (photo: Photo) => {
+  const saveToPhotoMaster = (photo: Photo) => {
     if (!uid) { setUploadError('マスタに保存するにはログインが必要です。'); return; }
-    const name = prompt('テンプレート名を入力してください:', photo.process || '');
-    if (!name?.trim()) return;
-    const existing = photoMasters.find((m) => m.name === name.trim());
-    if (existing) {
-      setConfirmOverwritePhotoMaster({ name: name.trim(), photo });
-      return;
-    }
-    await doSaveToPhotoMaster(name.trim(), photo, undefined);
+    setTemplateNameInput(photo.process || '');
+    setTemplateNameTarget(photo);
   };
 
   const doSaveToPhotoMaster = async (name: string, photo: Photo, existing: PhotoMaster | undefined) => {
@@ -635,6 +509,8 @@ export default function PhotoPage() {
     const files = Array.from(e.target.files as FileList);
     if (files.length === 0) return;
     setBulkUploading(true);
+    setBulkTotal(files.length);
+    setBulkProgress(0);
     const newPhotos = [...project.photos];
     let uploadedCount = 0;
     const todayStr = getTodayStr();
@@ -661,7 +537,6 @@ export default function PhotoPage() {
         }
         newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: newPhotos[targetIndex].shootingDate || todayStr };
         setProject((prev) => prev ? { ...prev, photos: [...newPhotos] } : null);
-        await updateDoc(doc(db, "projects", id), { photos: newPhotos });
       } catch (error) {
         logFirebaseError(error, `写真一括アップロード(${i + 1}枚目)`);
         setUploadError(`${i + 1}枚目：${firebaseErrorMessage(error, 'アップロード')}`);
@@ -669,6 +544,9 @@ export default function PhotoPage() {
 
       uploadedCount++;
       setBulkProgress(uploadedCount);
+    }
+    if (newPhotos.some(p => p.image)) {
+      await updateDoc(doc(db, "projects", id), { photos: newPhotos });
     }
     setBulkUploading(false);
   };
@@ -822,9 +700,25 @@ export default function PhotoPage() {
               }}
             >
               <UploadCloud className="w-5 h-5" />
-              {bulkUploading ? `アップロード中... (${bulkProgress}枚)` : "複数写真を一括追加する"}
+              {bulkUploading ? `アップロード中... ${bulkProgress} / ${bulkTotal}枚` : "複数写真を一括追加する"}
               <input type="file" multiple accept="image/*" className="hidden" onChange={handleBulkUpload} disabled={bulkUploading} />
             </label>
+            {bulkUploading && bulkTotal > 0 && (
+              <div className="mt-3">
+                <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: '#12122a' }}>
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{
+                      width: `${Math.round((bulkProgress / bulkTotal) * 100)}%`,
+                      background: '#ff6b35',
+                    }}
+                  />
+                </div>
+                <div className="text-right mt-1 text-xs font-bold" style={{ color: '#8b8ba8' }}>
+                  {Math.round((bulkProgress / bulkTotal) * 100)}%
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 日付一括 + 複数選択削除 */}
@@ -1323,6 +1217,54 @@ export default function PhotoPage() {
         }}
         onCancel={() => setConfirmOverwritePhotoMaster(null)}
       />
+      {templateNameTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }}>
+          <div className="rounded-2xl p-6 w-80 space-y-4" style={{ background: '#1c1c30', border: '1px solid #2e2e50' }}>
+            <h3 className="text-sm font-black" style={{ color: '#f0ede8' }}>テンプレート名を入力</h3>
+            <input
+              type="text"
+              value={templateNameInput}
+              onChange={(e) => setTemplateNameInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur();
+              }}
+              placeholder="テンプレート名"
+              autoFocus
+              className="w-full p-3 rounded-xl text-sm font-bold outline-none"
+              style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }}
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => { setTemplateNameTarget(null); setTemplateNameInput(''); }}
+                className="px-4 py-2 rounded-xl text-sm font-bold transition-colors"
+                style={{ background: '#2e2e50', color: '#8b8ba8' }}
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={async () => {
+                  const name = templateNameInput.trim();
+                  if (!name) return;
+                  const photo = templateNameTarget;
+                  setTemplateNameTarget(null);
+                  setTemplateNameInput('');
+                  const existing = photoMasters.find((m) => m.name === name);
+                  if (existing) {
+                    setConfirmOverwritePhotoMaster({ name, photo });
+                    return;
+                  }
+                  await doSaveToPhotoMaster(name, photo, undefined);
+                }}
+                disabled={!templateNameInput.trim()}
+                className="px-4 py-2 rounded-xl text-sm font-bold transition-colors disabled:opacity-40"
+                style={{ background: '#ff6b35', color: '#fff' }}
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -83,7 +83,7 @@ export function CoverPage() {
     setAppendixProgress(0);
     try {
       if (project?.appendixPdfUrl) {
-        try { await deleteObject(ref(storage, project.appendixPdfUrl)); } catch { /* 無視 */ }
+        try { await deleteObject(ref(storage, project.appendixPdfUrl)); } catch (e) { import.meta.env.DEV && console.warn('旧PDF削除失敗:', e); }
       }
       const storageRef = ref(storage, `users/${uid}/projects/${id}/appendix.pdf`);
       await new Promise<void>((resolve, reject) => {
@@ -111,7 +111,7 @@ export function CoverPage() {
     if (!project?.appendixPdfUrl || !id) return;
     try {
       await deleteObject(ref(storage, project.appendixPdfUrl));
-    } catch { /* 無視 */ }
+    } catch (e) { import.meta.env.DEV && console.warn('添付PDF削除失敗:', e); }
     await updateDoc(doc(db, 'projects', id), { appendixPdfUrl: null });
     setProject((prev) => prev ? { ...prev, appendixPdfUrl: undefined } : prev);
   };

@@ -37,40 +37,54 @@ function StorageUsageBar({ used, quota, onClick }: { used: number; quota: number
   const warningMsg = percent >= 90 ? ' ⚠ 容量不足です' : percent >= 75 ? ' ⚠ まもなく上限' : '';
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors mt-4"
-      style={{ background: '#1c1c30', borderColor: '#2e2e50' }}
-      onPointerEnter={(e) => {
-        (e.currentTarget as HTMLButtonElement).style.borderColor = barColor;
-      }}
-      onPointerLeave={(e) => {
-        (e.currentTarget as HTMLButtonElement).style.borderColor = '#2e2e50';
-      }}
-    >
-      <Database className="w-4 h-4 shrink-0" style={{ color: barColor }} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-xs font-bold tracking-wide" style={{ color: textColor }}>
-            ストレージ{warningMsg}
-          </span>
-          <span className="text-xs font-bold" style={{ color: textColor }}>
-            {formatBytes(used)} / {formatBytes(quota)} <span style={{ opacity: 0.7 }}>({percent}%)</span>
-          </span>
+    <>
+      <button
+        type="button"
+        onClick={onClick}
+        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors mt-4"
+        style={{ background: '#1c1c30', borderColor: '#2e2e50' }}
+        onPointerEnter={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.borderColor = barColor;
+        }}
+        onPointerLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.borderColor = '#2e2e50';
+        }}
+      >
+        <Database className="w-4 h-4 shrink-0" style={{ color: barColor }} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-bold tracking-wide" style={{ color: textColor }}>
+              ストレージ{warningMsg}
+            </span>
+            <span className="text-xs font-bold" style={{ color: textColor }}>
+              {formatBytes(used)} / {formatBytes(quota)} <span style={{ opacity: 0.7 }}>({percent}%)</span>
+            </span>
+          </div>
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: '#12122a' }}>
+            <div
+              className="h-full rounded-full transition-all"
+              style={{
+                width: `${percent}%`,
+                background: barColor,
+                boxShadow: percent >= 60 ? `0 0 8px ${barColor}66` : 'none',
+              }}
+            />
+          </div>
         </div>
-        <div className="h-1.5 rounded-full overflow-hidden" style={{ background: '#12122a' }}>
-          <div
-            className="h-full rounded-full transition-all"
-            style={{
-              width: `${percent}%`,
-              background: barColor,
-              boxShadow: percent >= 60 ? `0 0 8px ${barColor}66` : 'none',
-            }}
-          />
+      </button>
+      {percent >= 80 && (
+        <div
+          className="mt-2 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold"
+          style={{
+            background: percent >= 90 ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)',
+            border: `1px solid ${percent >= 90 ? '#ef4444' : '#f59e0b'}`,
+            color: percent >= 90 ? '#f87171' : '#fbbf24',
+          }}
+        >
+          <span>{percent >= 90 ? '⚠️ ストレージが残りわずかです。不要な写真を削除してください。' : '⚠️ ストレージ使用量が80%を超えました。'}</span>
         </div>
-      </div>
-    </button>
+      )}
+    </>
   );
 }
 
@@ -160,13 +174,13 @@ export function ProjectListPage() {
         try {
           const list = await listAll(ref(storage, `${folder}/${id}`));
           await Promise.all(list.items.map((item) => deleteObject(item)));
-        } catch { /* 空フォルダは無視 */ }
+        } catch (e) { import.meta.env.DEV && console.warn('Storageフォルダ削除失敗:', e); }
       }
       if (user) {
         try {
           const list = await listAll(ref(storage, `users/${user.uid}/projects/${id}`));
           await Promise.all(list.items.map((item) => deleteObject(item)));
-        } catch { /* 添付資料がない場合は無視 */ }
+        } catch (e) { import.meta.env.DEV && console.warn('添付資料削除失敗:', e); }
       }
       await deleteDoc(doc(db, 'projects', id));
       setProjects((prev) => prev.filter((p) => p.id !== id));
@@ -310,9 +324,9 @@ export function ProjectListPage() {
                   onClick={() => navigate(`/project/${p.id}`)}
                   className="group cursor-pointer rounded-2xl border overflow-hidden transition-all"
                   style={{
-                    background: '#1c1c30',
-                    borderColor: p.isCompleted ? '#1e4035' : '#2e2e50',
-                    opacity: p.isCompleted ? 0.7 : 1,
+                    background: p.isCompleted ? '#141422' : '#1c1c30',
+                    borderColor: p.isCompleted ? '#2e2e50' : '#2e2e50',
+                    opacity: p.isCompleted ? 0.65 : 1,
                   }}
                   onPointerEnter={e => {
                     (e.currentTarget as HTMLDivElement).style.borderColor = '#ff6b35';
@@ -320,7 +334,7 @@ export function ProjectListPage() {
                     (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
                   }}
                   onPointerLeave={e => {
-                    (e.currentTarget as HTMLDivElement).style.borderColor = p.isCompleted ? '#1e4035' : '#2e2e50';
+                    (e.currentTarget as HTMLDivElement).style.borderColor = p.isCompleted ? '#2e2e50' : '#2e2e50';
                     (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
                     (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
                   }}
@@ -339,9 +353,12 @@ export function ProjectListPage() {
                       </div>
                     )}
                     {p.isCompleted && (
-                      <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
-                        <span className="text-xs font-bold px-3 py-1 rounded-full" style={{ background: 'rgba(16,185,129,0.85)', color: '#fff' }}>完了</span>
-                      </div>
+                      <>
+                        <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.35)' }} />
+                        <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold" style={{ background: '#10b981', color: '#fff' }}>
+                          <span>✓</span> 完了
+                        </div>
+                      </>
                     )}
                   </div>
 

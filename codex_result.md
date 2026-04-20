@@ -1,17 +1,17 @@
-完了しました。
+# codex_result — 表紙レイアウト黄金比改善
 
-指定 7 タスクを実施し、結果を [codex_result.md](/Users/yamanishikenta/kawara-photo-app/codex_result.md) に記録しました。対象ファイル内の `window.confirm` / `alert(` / 該当 TODO コメントが残っていないことも確認済みです。
+## 変更ファイル
+- src/pages/PdfExportPage.tsx
 
-検証:
-- `npm run build`: 成功
-- ビルド時間: `2.44s`
+## 実施した修正
+- [x] 修正1: タイトル 32pt / letterSpacing 0.20em
+- [x] 修正2: アクセントバー 0.7mm × 90mm
+- [x] 修正3: タイトルブロック marginBottom 16mm
+- [x] 修正4: ラベル text-align justify（flex+span廃止）
+- [x] 修正5: 値フォント 14pt / 18px
+- [x] 修正6: 施工保証ラベル同様に変更（3箇所）
+- [x] 修正7: 施工保証値フォント 14pt（3箇所）
 
-変更した主なファイル:
-- [BeforeAfterPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/BeforeAfterPage.tsx)
-- [CoverPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/CoverPage.tsx)
-- [MapPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/MapPage.tsx)
-- [MaterialPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/MaterialPage.tsx)
-- [PhotoPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/PhotoPage.tsx)
-- [codex_result.md](/Users/yamanishikenta/kawara-photo-app/codex_result.md)
-
-補足: `git status` では今回対象外の `.claude/.last_codex_task_hash`、`codex_task.md`、`src/pages/ProjectListPage.tsx`、`src/shared/storageUtils.ts` にも未コミット変更が見えています。これらは今回の task-03〜09 では触っていません。
+## npm run build 結果
+- 結果: 成功
+- ビルド時間: 2.44s

@@ -217,8 +217,8 @@ export default function MaterialPage() {
           await trackDelete(uid, bytes);
           setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
         }
-      } catch {
-        /* Storage削除失敗は材料データ削除を妨げない */
+      } catch (e) {
+        import.meta.env.DEV && console.warn('材料画像Storage削除失敗:', e);
       }
     }
     saveMaterials((project?.materials || []).filter((m) => m.id !== materialId));

@@ -9,6 +9,7 @@ import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { formatBytes, storageUsageRatio, STORAGE_LIMIT_BYTES, trackUpload } from '../shared/storageUtils';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import type { MaterialMaster, PhotoMaster } from '../types';
+import { ErrorMessage } from '../shared/ErrorMessage';
 
 let _idCounter = 0;
 const nextId = () => Date.now() + (++_idCounter);
@@ -37,8 +38,9 @@ function Section({ title, icon, accent = '#ff6b35', children }: {
 }) {
   return (
     <div className="rounded-2xl border" style={{ background: '#1c1c30', borderColor: '#2e2e50' }}>
-      <div className="flex items-center gap-3 px-5 py-4 border-b" style={{ borderColor: '#2e2e50' }}>
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${accent}18` }}>
+      <div className="flex items-center gap-3 px-5 py-4 border-b" style={{ borderColor: '#3d3d60' }}>
+        <div className="w-1 h-5 rounded-full shrink-0" style={{ background: accent }} />
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${accent}20` }}>
           <span style={{ color: accent }}>{icon}</span>
         </div>
         <h2 className="text-sm font-black tracking-wide" style={{ color: '#f0ede8' }}>{title}</h2>
@@ -69,6 +71,8 @@ export default function SettingsPage() {
   const [materialMaster, setMaterialMaster] = useState<MaterialMaster[]>([]);
   const [photoMaster, setPhotoMaster] = useState<PhotoMaster[]>([]);
   const [storageUsedBytes, setStorageUsedBytes] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -106,14 +110,14 @@ export default function SettingsPage() {
       setLogoUrl(url);
     } catch (err) {
       logFirebaseError(err, 'ロゴアップロード');
-      alert(firebaseErrorMessage(err, 'ロゴのアップロード'));
+      setError(firebaseErrorMessage(err, 'ロゴのアップロード'));
     } finally {
       setUploadingLogo(false);
     }
   };
 
   const handleSave = async () => {
-    if (!uid) { alert('設定を保存するにはログインが必要です。'); return; }
+    if (!uid) { setError('設定を保存するにはログインが必要です。'); return; }
     setSaving(true);
     try {
       await setDoc(doc(db, 'users', uid), {
@@ -123,10 +127,11 @@ export default function SettingsPage() {
         materialMaster,
         photoMaster,
       }, { merge: true });
-      alert('設定を保存しました！\n（現場の写真入力画面やPDF出力に反映されます）');
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
       logFirebaseError(err, '設定保存');
-      alert(firebaseErrorMessage(err, '設定の保存'));
+      setError(firebaseErrorMessage(err, '設定の保存'));
     } finally {
       setSaving(false);
     }
@@ -162,6 +167,20 @@ export default function SettingsPage() {
             <Save className="w-4 h-4" /> {saving ? '保存中...' : '設定を保存'}
           </button>
         </div>
+
+        {error && (
+          <div className="mt-4">
+            <ErrorMessage message={error} />
+          </div>
+        )}
+        {saveSuccess && (
+          <div
+            className="fixed bottom-4 right-4 z-50 px-4 py-3 rounded-xl text-sm font-bold shadow-xl"
+            style={{ background: '#10b981', color: '#fff' }}
+          >
+            設定を保存しました
+          </div>
+        )}
 
         {/* タイトル */}
         <div className="mt-6 mb-7">

@@ -514,9 +514,9 @@ const LegendRow = React.memo(({ row, isSelected, onSelect, onChange, onRemove }:
       onPointerEnter={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)'; }}
       onPointerLeave={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
     >
-      <input type="text" value={row.symbol} onChange={(e) => onChange({ symbol: e.target.value })} className="col-span-2 py-2.5 text-center font-black bg-transparent outline-none border-r" style={{ color: '#ef4444', borderColor: '#2e2e50' }} />
-      <input type="text" value={row.part} placeholder="軒先" onChange={(e) => onChange({ part: e.target.value })} className="col-span-4 py-2.5 px-2 font-bold bg-transparent outline-none border-r" style={{ color: '#f0ede8', borderColor: '#2e2e50' }} />
-      <input type="text" value={row.remarks} placeholder="..." onChange={(e) => onChange({ remarks: e.target.value })} className="col-span-5 py-2.5 px-2 font-bold bg-transparent outline-none border-r" style={{ color: '#f0ede8', borderColor: '#2e2e50' }} />
+      <input type="text" value={row.symbol} onChange={(e) => onChange({ symbol: e.target.value })} className="col-span-2 py-2.5 text-xs sm:text-sm text-center font-black bg-transparent outline-none border-r" style={{ color: '#ef4444', borderColor: '#2e2e50' }} />
+      <input type="text" value={row.part} placeholder="軒先" onChange={(e) => onChange({ part: e.target.value })} className="col-span-4 py-2.5 px-2 text-xs sm:text-sm font-bold bg-transparent outline-none border-r" style={{ color: '#f0ede8', borderColor: '#2e2e50' }} />
+      <input type="text" value={row.remarks} placeholder="..." onChange={(e) => onChange({ remarks: e.target.value })} className="col-span-5 py-2.5 px-2 text-xs sm:text-sm font-bold bg-transparent outline-none border-r" style={{ color: '#f0ede8', borderColor: '#2e2e50' }} />
       <div className="col-span-1 flex items-center justify-center">
         <button onClick={(e) => { e.stopPropagation(); onRemove(); }} aria-label="削除" className="p-1.5 rounded-lg transition-colors" style={{ color: '#3d3d60' }} onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')} onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}><Trash2 className="w-4 h-4"/></button>
       </div>
@@ -539,6 +539,7 @@ export default function MapPage() {
   
   const [mapLayouts, setMapLayouts] = useState<{ title: string; x?: number; y?: number; rotation?: number }[]>([]);
   const [editingTitle, setEditingTitle] = useState(false);
+  const [editingTitleSnapshot, setEditingTitleSnapshot] = useState<string>('');
   // Natural aspect ratio (w/h) of each map image, captured on load, used for safe-zone accuracy
   const [mapImageAspects, setMapImageAspects] = useState<Record<number, number>>({});
   
@@ -756,8 +757,8 @@ export default function MapPage() {
         try {
           const res = await fetch(urlToDelete, { method: 'HEAD' });
           bytes = Number(res.headers.get('content-length') || 0);
-        } catch {
-          /* サイズ取得失敗は無視 */
+        } catch (e) {
+          import.meta.env.DEV && console.warn('マップ画像サイズ取得失敗:', e);
         }
       }
       try {
@@ -1117,9 +1118,25 @@ export default function MapPage() {
                 </div>
              </div>
 
-             <button onClick={() => setEditingTitle(false)} className="mt-1 w-full font-black py-3 rounded-xl shadow-lg transition-colors" style={{ background: '#ff6b35', color: '#fff' }}>
-                ✓ 完了
-             </button>
+             <div className="flex gap-2 mt-1">
+               <button
+                 onClick={() => {
+                   updateMapLayout({ title: editingTitleSnapshot });
+                   setEditingTitle(false);
+                 }}
+                 className="flex-1 font-black py-3 rounded-xl transition-colors"
+                 style={{ background: '#2e2e50', color: '#8b8ba8' }}
+               >
+                 キャンセル
+               </button>
+               <button
+                 onClick={() => setEditingTitle(false)}
+                 className="flex-1 font-black py-3 rounded-xl shadow-lg transition-colors"
+                 style={{ background: '#ff6b35', color: '#fff' }}
+               >
+                 ✓ 完了
+               </button>
+             </div>
           </div>
         </div>
       )}
@@ -1154,10 +1171,12 @@ export default function MapPage() {
 
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="font-bold text-xs w-full sm:w-auto" style={{ color: '#6b7280' }}>描画:</span>
-              <button onClick={() => { setEditingMode('pan'); setDrawingStartPoint(null); }} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs transition-colors" style={editingMode === 'pan' ? { background: '#4f46e5', color: '#fff' } : { background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}><Move className="w-4 h-4"/> 印刷枠</button>
-              <button onClick={() => { setEditingMode('pin'); setDrawingStartPoint(null); }} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs transition-colors" style={editingMode === 'pin' ? { background: '#ef4444', color: '#fff' } : { background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}><MapPin className="w-4 h-4"/> ピン</button>
-              <button onClick={() => { setEditingMode('dimension'); setDrawingStartPoint(null); }} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs transition-colors" style={editingMode === 'dimension' ? { background: '#f0ede8', color: '#0f0f1a' } : { background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}><Ruler className="w-4 h-4"/> 寸法</button>
-              <button onClick={() => { setEditingMode('whiteout'); setDrawingStartPoint(null); }} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs transition-colors" style={editingMode === 'whiteout' ? { background: '#eab308', color: '#0f0f1a' } : { background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}><Eraser className="w-4 h-4"/> 消し</button>
+              <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5 w-full sm:w-auto">
+                <button onClick={() => { setEditingMode('pan'); setDrawingStartPoint(null); }} className="flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs transition-colors" style={editingMode === 'pan' ? { background: '#4f46e5', color: '#fff' } : { background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}><Move className="w-4 h-4"/> 印刷枠</button>
+                <button onClick={() => { setEditingMode('pin'); setDrawingStartPoint(null); }} className="flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs transition-colors" style={editingMode === 'pin' ? { background: '#ef4444', color: '#fff' } : { background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}><MapPin className="w-4 h-4"/> ピン</button>
+                <button onClick={() => { setEditingMode('dimension'); setDrawingStartPoint(null); }} className="flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs transition-colors" style={editingMode === 'dimension' ? { background: '#f0ede8', color: '#0f0f1a' } : { background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}><Ruler className="w-4 h-4"/> 寸法</button>
+                <button onClick={() => { setEditingMode('whiteout'); setDrawingStartPoint(null); }} className="flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs transition-colors" style={editingMode === 'whiteout' ? { background: '#eab308', color: '#0f0f1a' } : { background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}><Eraser className="w-4 h-4"/> 消し</button>
+              </div>
             </div>
           </div>
         </div>
@@ -1304,7 +1323,10 @@ export default function MapPage() {
                            mapRotation={currentRotation}
                            currentScale={currentTransform.scale}
                            isSelected={editingTitle}
-                           onClick={() => setEditingTitle(true)}
+                           onClick={() => {
+                             setEditingTitleSnapshot(mapLayouts[currentMapIndex]?.title ?? '');
+                             setEditingTitle(true);
+                           }}
                            onDragEnd={(x, y) => updateMapLayout({ x, y })}
                            mapCount={mapCount}
                            mapIndex={currentMapIndex}

@@ -152,7 +152,7 @@ export default function PdfExportPage() {
           pages.push(canvas.toDataURL('image/jpeg', 0.92));
         }
         if (!cancelled) setAppendixPages(pages);
-      } catch { /* 読み込み失敗は無視 */ }
+      } catch (e) { import.meta.env.DEV && console.warn('PDF読み込み失敗:', e); }
     })();
     return () => { cancelled = true; };
   }, [project?.appendixPdfUrl]);
@@ -180,7 +180,7 @@ export default function PdfExportPage() {
           const processName = p.process ? `_${p.process}` : '';
           const filename = `${p.photoNumber.padStart(2, '0')}${processName}.jpg`;
           imgFolder.file(filename, blob);
-        } catch { failedCount++; }
+        } catch (e) { failedCount++; import.meta.env.DEV && console.warn('写真取得失敗:', e); }
       });
       await Promise.all(promises);
       if (failedCount > 0) setError(`${failedCount}枚の写真の取得に失敗しました。他の写真はZIPに含まれています。`);
@@ -242,7 +242,7 @@ export default function PdfExportPage() {
           const dataUrl = await optimizeImageForPrint(img as HTMLImageElement);
           img.setAttribute('src', dataUrl);
           img.removeAttribute('crossorigin');
-        } catch { /* スキップ */ }
+        } catch (e) { import.meta.env.DEV && console.warn('画像最適化失敗:', e); }
       }));
       await yieldToUI();
     }
@@ -455,7 +455,7 @@ export default function PdfExportPage() {
           <button
             type="button"
             onClick={handleZipExport}
-            disabled={isZipping || isPrinting || isCapturingForPdf}
+            disabled={isZipping || isPrinting || isCapturingForPdf || totalPages === 0}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm border transition-colors disabled:opacity-40"
             style={{ background: '#1c1c30', borderColor: '#2e2e50', color: '#8b8ba8' }}
             onPointerEnter={e => { e.currentTarget.style.borderColor = '#f0ede8'; e.currentTarget.style.color = '#f0ede8'; }}
@@ -467,7 +467,7 @@ export default function PdfExportPage() {
           <button
             type="button"
             onClick={handlePdfDownload}
-            disabled={isZipping || isPrinting || isCapturingForPdf}
+            disabled={isZipping || isPrinting || isCapturingForPdf || totalPages === 0}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-colors disabled:opacity-40"
             style={{ background: '#f59e0b', color: '#000' }}
             onPointerEnter={e => (e.currentTarget.style.background = '#fbbf24')}
@@ -480,7 +480,7 @@ export default function PdfExportPage() {
           <button
             type="button"
             onClick={handlePrint}
-            disabled={isZipping || isPrinting || isCapturingForPdf}
+            disabled={isZipping || isPrinting || isCapturingForPdf || totalPages === 0}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-colors disabled:opacity-40"
             style={{ background: '#f59e0b', color: '#000', boxShadow: '0 0 14px rgba(245,158,11,0.35)' }}
             onPointerEnter={e => (e.currentTarget.style.background = '#fbbf24')}
@@ -563,8 +563,8 @@ export default function PdfExportPage() {
                         <span style={{ fontSize: '16px' }}>{icon}</span>
                         <span className="flex-1 text-sm font-bold" style={{ color: on ? '#f59e0b' : '#6b7280' }}>{label}</span>
                         {count > 0 && <span className="text-xs" style={{ color: '#4b4b70' }}>{count}p</span>}
-                        <div className="w-10 h-5 rounded-full relative transition-all" style={{ background: on ? '#f59e0b' : '#2e2e50' }}>
-                          <div className="w-4 h-4 rounded-full absolute top-0.5 transition-all" style={{ background: '#fff', left: on ? '22px' : '2px' }} />
+                        <div className="w-12 h-6 rounded-full relative transition-all shrink-0" style={{ background: on ? '#f59e0b' : '#2e2e50' }}>
+                          <div className="w-5 h-5 rounded-full absolute top-0.5 transition-all" style={{ background: '#fff', left: on ? '26px' : '2px' }} />
                         </div>
                       </button>
                     </div>
@@ -614,36 +614,75 @@ export default function PdfExportPage() {
 
             {/* ── メインコンテンツ (タイトル + フィールド) ── */}
             {/* 下部会社情報エリア26mmを除いた領域で縦中央 */}
-            <div style={{ position: 'absolute', top: 0, bottom: isPrinting ? '26mm' : '98px', left: 0, right: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingBottom: isPrinting ? '6mm' : '23px' }}>
+            <div style={{ position: 'absolute', top: 0, bottom: isPrinting ? '26mm' : '98px', left: 0, right: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingTop: isPrinting ? '10mm' : '38px', paddingBottom: isPrinting ? '4mm' : '15px' }}>
 
               {/* タイトルブロック */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: isPrinting ? '21mm' : '79px' }}>
-                <h1 style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '28pt' : '37px', fontWeight: '900', letterSpacing: '0.28em', textAlign: 'center', color: '#111', margin: 0, lineHeight: 1.15 }}>工事写真報告書</h1>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: isPrinting ? '16mm' : '60px' }}>
+                <h1 style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '32pt' : '42px', fontWeight: '900', letterSpacing: '0.20em', textAlign: 'center', color: '#111', margin: 0, lineHeight: 1.15 }}>工事写真報告書</h1>
                 {/* 黒のアクセントライン — 1本 */}
-                <div style={{ width: isPrinting ? '120mm' : '454px', height: isPrinting ? '2mm' : '7px', background: '#111', borderRadius: '1px', marginTop: isPrinting ? '5mm' : '19px' }} />
+                <div style={{ width: isPrinting ? '95mm' : '359px', height: isPrinting ? '0.7mm' : '2.5px', background: '#2a2a2a', borderRadius: '1px', marginTop: isPrinting ? '5mm' : '19px' }} />
               </div>
 
               {/* フィールドリスト */}
-              <div style={{ width: isPrinting ? '168mm' : '635px', display: 'flex', flexDirection: 'column', gap: isPrinting ? '8mm' : '30px' }}>
+              <div style={{ width: isPrinting ? '168mm' : '635px', display: 'flex', flexDirection: 'column', gap: isPrinting ? '10mm' : '38px' }}>
                 {COVER_FIELDS.map((item, idx) => {
                   let value = String(project[item.key] ?? '　');
                   if (item.key === 'contractorName' && companyName) value = companyName;
                   return (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'flex-end', borderBottom: '1px solid #e5e5e5', paddingBottom: isPrinting ? '3mm' : '11px' }}>
-                      <div style={{ width: isPrinting ? '52mm' : '197px', flexShrink: 0, display: 'flex', justifyContent: 'space-between', paddingRight: isPrinting ? '8mm' : '30px', fontFamily: JP_FONT, fontSize: isPrinting ? '10pt' : '13px', fontWeight: 'bold', color: '#777', lineHeight: 1 }}>
-                        {item.label.split('').map((c: string, i: number) => <span key={i}>{c}</span>)}
+                    <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', borderBottom: `${isPrinting ? '0.2mm' : '1px'} solid #ebebeb`, paddingBottom: isPrinting ? '4mm' : '15px', paddingTop: isPrinting ? '2mm' : '8px' }}>
+                      <div style={{ width: isPrinting ? '52mm' : '197px', flexShrink: 0, paddingRight: isPrinting ? '6mm' : '23px', fontFamily: JP_FONT, fontSize: isPrinting ? '10.5pt' : '14px', fontWeight: 'bold', color: '#555', lineHeight: 1.4, letterSpacing: '-0.01em', textAlign: 'justify', textAlignLast: 'justify' }}>
+                        {item.label}
                       </div>
-                      <div style={{ flex: 1, fontFamily: JP_FONT, fontSize: isPrinting ? '15pt' : '20px', fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', color: '#111', lineHeight: 1 }}>{value}</div>
+                      <div style={{ flex: 1, fontFamily: JP_FONT, fontSize: isPrinting ? '14pt' : '18px', fontWeight: 'bold', wordBreak: 'break-all', color: '#0d0d0d', lineHeight: 1.4 }}>{value}</div>
                     </div>
                   );
                 })}
               </div>
 
+              {/* 施工保証セクション（値がある場合のみ表示） */}
+              {(project.warrantyYears || project.warrantyStartDate || project.warrantyNote) && (
+                <div style={{ width: isPrinting ? '168mm' : '635px', marginTop: isPrinting ? '8mm' : '30px' }}>
+                  {/* セパレーター + ラベル */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: isPrinting ? '3mm' : '11px', marginBottom: isPrinting ? '5mm' : '19px' }}>
+                    <div style={{ flex: 1, height: isPrinting ? '0.3mm' : '1px', background: '#e0e0e0' }} />
+                    <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', fontWeight: 'bold', color: '#999', letterSpacing: '0.1em', whiteSpace: 'nowrap' }}>施工保証</div>
+                    <div style={{ flex: 1, height: isPrinting ? '0.3mm' : '1px', background: '#e0e0e0' }} />
+                  </div>
+                  {/* 保証フィールド */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: isPrinting ? '8mm' : '30px' }}>
+                    {project.warrantyYears && (
+                      <div style={{ display: 'flex', alignItems: 'flex-start', borderBottom: `${isPrinting ? '0.2mm' : '1px'} solid #ebebeb`, paddingBottom: isPrinting ? '4mm' : '15px', paddingTop: isPrinting ? '2mm' : '8px' }}>
+                        <div style={{ width: isPrinting ? '52mm' : '197px', flexShrink: 0, paddingRight: isPrinting ? '6mm' : '23px', fontFamily: JP_FONT, fontSize: isPrinting ? '10.5pt' : '14px', fontWeight: 'bold', color: '#555', lineHeight: 1.4, letterSpacing: '-0.01em', textAlign: 'justify', textAlignLast: 'justify' }}>
+                          保証期間
+                        </div>
+                        <div style={{ flex: 1, fontFamily: JP_FONT, fontSize: isPrinting ? '14pt' : '18px', fontWeight: 'bold', wordBreak: 'break-all', color: '#0d0d0d', lineHeight: 1.4 }}>{project.warrantyYears}</div>
+                      </div>
+                    )}
+                    {project.warrantyStartDate && (
+                      <div style={{ display: 'flex', alignItems: 'flex-start', borderBottom: `${isPrinting ? '0.2mm' : '1px'} solid #ebebeb`, paddingBottom: isPrinting ? '4mm' : '15px', paddingTop: isPrinting ? '2mm' : '8px' }}>
+                        <div style={{ width: isPrinting ? '52mm' : '197px', flexShrink: 0, paddingRight: isPrinting ? '6mm' : '23px', fontFamily: JP_FONT, fontSize: isPrinting ? '10.5pt' : '14px', fontWeight: 'bold', color: '#555', lineHeight: 1.4, letterSpacing: '-0.01em', textAlign: 'justify', textAlignLast: 'justify' }}>
+                          保証開始日
+                        </div>
+                        <div style={{ flex: 1, fontFamily: JP_FONT, fontSize: isPrinting ? '14pt' : '18px', fontWeight: 'bold', wordBreak: 'break-all', color: '#0d0d0d', lineHeight: 1.4 }}>{project.warrantyStartDate}</div>
+                      </div>
+                    )}
+                    {project.warrantyNote && (
+                      <div style={{ display: 'flex', alignItems: 'flex-start', borderBottom: `${isPrinting ? '0.2mm' : '1px'} solid #ebebeb`, paddingBottom: isPrinting ? '4mm' : '15px', paddingTop: isPrinting ? '2mm' : '8px' }}>
+                        <div style={{ width: isPrinting ? '52mm' : '197px', flexShrink: 0, paddingRight: isPrinting ? '6mm' : '23px', fontFamily: JP_FONT, fontSize: isPrinting ? '10.5pt' : '14px', fontWeight: 'bold', color: '#555', lineHeight: 1.4, letterSpacing: '-0.01em', textAlign: 'justify', textAlignLast: 'justify' }}>
+                          補足事項
+                        </div>
+                        <div style={{ flex: 1, fontFamily: JP_FONT, fontSize: isPrinting ? '14pt' : '18px', fontWeight: 'bold', wordBreak: 'break-all', color: '#0d0d0d', lineHeight: 1.4 }}>{project.warrantyNote}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
             </div>
 
             {/* ── 下部: ロゴ + 会社情報 + ページ番号 ── */}
             {/* ロゴwidth : 情報width ≈ 1 : φ の黄金比配置 */}
-            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: isPrinting ? '26mm' : '98px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: isPrinting ? '0 21mm' : '0 79px', borderTop: `${isPrinting ? '0.3mm' : '1px'} solid #e8e8e8` }}>
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: isPrinting ? '26mm' : '98px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: isPrinting ? '0 21mm' : '0 79px', borderTop: `${isPrinting ? '0.2mm' : '1px'} solid #eeeeee` }}>
 
               {/* ロゴ + 縦セパレーター + 会社情報 */}
               <div style={{ display: 'flex', alignItems: 'center', gap: isPrinting ? '5mm' : '19px', minWidth: 0 }}>
@@ -657,7 +696,7 @@ export default function PdfExportPage() {
                   {/* 縦セパレーター */}
                   <div style={{ width: isPrinting ? '0.3mm' : '1px', height: isPrinting ? '10mm' : '38px', background: '#d0d0d0', flexShrink: 0 }} />
                   {/* 会社情報: flex-1 でロゴとの比率が自然な黄金比に */}
-                  <div style={{ lineHeight: 1.45, minWidth: 0 }}>
+                  <div style={{ lineHeight: 1.45, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                     {companyName && <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '10pt' : '13px', fontWeight: 'bold', color: '#222', whiteSpace: 'nowrap', overflow: 'hidden' }}>{companyName}</div>}
                     {address && <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7.5pt' : '10px', color: '#666', whiteSpace: 'nowrap', overflow: 'hidden' }}>{address}</div>}
                     {phone && <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7.5pt' : '10px', color: '#666', whiteSpace: 'nowrap' }}>TEL: {phone}</div>}
@@ -666,7 +705,7 @@ export default function PdfExportPage() {
               </div>
 
               {/* ページ番号 */}
-              <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8.5pt' : '11px', fontWeight: 'bold', color: '#999', whiteSpace: 'nowrap', flexShrink: 0, paddingLeft: isPrinting ? '5mm' : '19px' }}>- 1 / {totalPages} -</div>
+              <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8.5pt' : '11px', fontWeight: 'normal', color: '#aaa', whiteSpace: 'nowrap', flexShrink: 0, paddingLeft: isPrinting ? '5mm' : '19px' }}>- 1 / {totalPages} -</div>
 
             </div>
           </div>
