@@ -1,441 +1,371 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, List, Plus, Trash2, ArrowRight, Check, Pencil } from 'lucide-react';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { ArrowLeft, Plus, Trash2, Save, GripVertical } from 'lucide-react';
 import { db } from '../firebase';
-import type { BeforeAfterPair, Photo, Project } from '../types';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
-import { ErrorMessage } from '../shared/ErrorMessage';
-import { ConfirmModal } from '../shared/ConfirmModal';
 
-const ACCENT = '#f59e0b';
+// ── 定数 ────────────────────────────────────────────
+const W = 595, H = 842;
+const SERIF = "'Noto Serif JP', serif";
+const SANS  = "'Noto Sans JP', sans-serif";
 
-type Step = 'list' | 'before' | 'after' | 'form';
+// ── 型 ──────────────────────────────────────────────
+export interface BeforeAfterItem {
+  id: string;
+  title: string;          // 工事箇所名
+  beforeImage: string;    // base64 or URL
+  afterImage: string;
+  beforeDesc: string;     // 施工前の説明
+  afterDesc: string;      // 施工後の説明
+}
 
-export function BeforeAfterPage() {
-  const { id } = useParams();
-  const navigate = useNavigate();
-  const [project, setProject] = useState<Project | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [step, setStep] = useState<Step>('list');
-  const [pendingBefore, setPendingBefore] = useState<number | null>(null);
-  const [pendingAfter, setPendingAfter] = useState<number | null>(null);
-  const [part, setPart] = useState('');
-  const [description, setDescription] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [editingPairId, setEditingPairId] = useState<number | null>(null);
-  const [confirmDeletePairId, setConfirmDeletePairId] = useState<number | null>(null);
+// ── A4プレビュー（C案：1ページ2箇所）────────────────
+function A4Page({
+  items,
+  pageIndex,
+  totalPages,
+  projectName,
+  contractor,
+}: {
+  items: BeforeAfterItem[];   // 最大2件
+  pageIndex: number;
+  totalPages: number;
+  projectName: string;
+  contractor: string;
+}) {
+  const headerH = 60;
+  const footerH = 52;
+  const available = H - headerH - footerH - 32;
+  const itemH = Math.floor(available / 2);
+  const photoH = itemH - 36 - 68 - 28;  // itemH - titleH - descH - gaps
+  const photoW = (W - 80 - 4) / 2;
 
-  useEffect(() => {
-    if (!id) return;
-    setError(null);
-    getDoc(doc(db, 'projects', id))
-      .then(d => {
-        if (d.exists()) setProject(d.data() as Project);
-        else setError('ビフォーアフターデータが見つかりません。');
-      })
-      .catch(() => setError('データの読み込みに失敗しました。'));
-  }, [id]);
+  return (
+    <div style={{ width: W, height: H, background: '#fff', fontFamily: SANS, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
 
-  const photos = (project?.photos ?? []).filter(p => p.image);
-  const pairs = project?.beforeAfterPairs ?? [];
+      {/* ヘッダー */}
+      <div style={{ height: headerH, borderBottom: '2px solid #1a1a1a', padding: '0 40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: '0.2em', fontFamily: SERIF, color: '#111' }}>施工前後比較</div>
+        </div>
+        <div style={{ fontSize: 10, color: '#aaa', letterSpacing: '0.15em' }}>{pageIndex + 1} / {totalPages}</div>
+      </div>
 
-  const photoById = (pid: number): Photo | undefined =>
-    photos.find(p => p.id === pid);
+      {/* 2箇所ループ */}
+      {items.map((item, idx) => {
+        const num = pageIndex * 2 + idx + 1;
+        return (
+          <div key={item.id} style={{
+            height: itemH,
+            borderBottom: idx === 0 ? '1.5px solid #e0e0e0' : 'none',
+            padding: '14px 40px 0',
+            display: 'flex', flexDirection: 'column', gap: 8,
+          }}>
+            {/* タイトル */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 3, height: 16, background: '#e55a2b', borderRadius: 2, flexShrink: 0 }} />
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#111', letterSpacing: '0.08em' }}>
+                {`⑤`.replace('5', String(num)).replace('⑤', `${'①②③④⑤⑥⑦⑧⑨⑩'[num - 1] ?? num}`)} {item.title || '工事箇所'}
+              </div>
+            </div>
 
-  const reset = () => {
-    setStep('list');
-    setPendingBefore(null);
-    setPendingAfter(null);
-    setPart('');
-    setDescription('');
-    setEditingPairId(null);
+            {/* ラベルバー */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
+              <div style={{ background: '#555', color: '#fff', textAlign: 'center', padding: '5px 0', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', fontFamily: SERIF }}>施　工　前</div>
+              <div style={{ background: '#2a7a4b', color: '#fff', textAlign: 'center', padding: '5px 0', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', fontFamily: SERIF }}>施　工　後</div>
+            </div>
+
+            {/* 写真 */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
+              {[item.beforeImage, item.afterImage].map((src, pi) => (
+                <div key={pi} style={{ width: photoW, height: photoH, background: '#ddd', overflow: 'hidden', flexShrink: 0 }}>
+                  {src ? (
+                    <img src={src} alt={pi === 0 ? '施工前' : '施工後'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, background: pi === 0 ? '#c8d0d8' : '#a8c4b2' }}>
+                      <div style={{ fontSize: 28, opacity: 0.5 }}>📷</div>
+                      <div style={{ fontSize: 9, color: 'rgba(0,0,0,0.4)', fontFamily: SANS, letterSpacing: '0.08em' }}>{pi === 0 ? '施工前' : '施工後'}</div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* 説明 */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
+              <div style={{ background: '#f4f4f4', padding: '8px 10px', borderTop: '2px solid #888' }}>
+                <div style={{ fontSize: 9.5, color: '#444', lineHeight: 1.8, letterSpacing: '0.03em' }}>{item.beforeDesc || '施工前の状況を記入してください。'}</div>
+              </div>
+              <div style={{ background: '#eef6f1', padding: '8px 10px', borderTop: '2px solid #2a7a4b' }}>
+                <div style={{ fontSize: 9.5, color: '#1a4a2e', lineHeight: 1.8, letterSpacing: '0.03em' }}>{item.afterDesc || '施工後の状況を記入してください。'}</div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* 2件目が空の場合のパディング */}
+      {items.length < 2 && <div style={{ height: itemH }} />}
+
+      <div style={{ flex: 1 }} />
+
+      {/* フッター */}
+      <div style={{ height: footerH, borderTop: '1px solid #e0e0e0', padding: '0 40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ fontSize: 10, color: '#aaa', fontFamily: SERIF, letterSpacing: '0.1em' }}>{contractor}</div>
+        <div style={{ fontSize: 10, color: '#aaa', letterSpacing: '0.1em' }}>{projectName}</div>
+      </div>
+    </div>
+  );
+}
+
+// ── 入力フォームカード（1箇所分）─────────────────────
+function ItemCard({
+  item,
+  index,
+  onChange,
+  onDelete,
+  onImageUpload,
+}: {
+  item: BeforeAfterItem;
+  index: number;
+  onChange: (field: keyof BeforeAfterItem, value: string) => void;
+  onDelete: () => void;
+  onImageUpload: (side: 'before' | 'after', dataUrl: string) => void;
+}) {
+  const num = '①②③④⑤⑥⑦⑧⑨⑩'[index] ?? index + 1;
+
+  const handleFile = (side: 'before' | 'after') => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => onImageUpload(side, ev.target?.result as string);
+    reader.readAsDataURL(file);
   };
 
-  const savePair = async () => {
-    if (!project || !id || pendingBefore === null || pendingAfter === null) return;
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '9px 12px',
+    background: '#12122a', border: '1px solid #2e2e50',
+    borderRadius: 8, color: '#f0ede8', fontSize: 13,
+    outline: 'none', fontFamily: 'inherit',
+  };
+  const textareaStyle: React.CSSProperties = {
+    ...inputStyle, resize: 'vertical', minHeight: 72, lineHeight: 1.7,
+  };
+
+  return (
+    <div style={{ background: '#1c1c30', border: '1px solid #2e2e50', borderRadius: 14, padding: '16px', marginBottom: 12 }}>
+      {/* カードヘッダー */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        <GripVertical size={16} style={{ color: '#3d3d60', cursor: 'grab' }} />
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#ff6b35', letterSpacing: '0.05em', flex: 1 }}>{num} 工事箇所</div>
+        <button
+          type="button"
+          onClick={onDelete}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', padding: 4, borderRadius: 6 }}
+          title="削除"
+        >
+          <Trash2 size={15} />
+        </button>
+      </div>
+
+      {/* タイトル */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: 'block', fontSize: 10, color: '#6b7280', marginBottom: 5, letterSpacing: '0.08em' }}>工事箇所名</label>
+        <input
+          type="text"
+          value={item.title}
+          onChange={e => onChange('title', e.target.value)}
+          placeholder="例：下地板取替え・屋根下 化粧板"
+          style={inputStyle}
+        />
+      </div>
+
+      {/* 写真アップロード */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+        {(['before', 'after'] as const).map(side => (
+          <div key={side}>
+            <label style={{ display: 'block', fontSize: 10, color: side === 'before' ? '#aaa' : '#4ade80', marginBottom: 5, letterSpacing: '0.08em', fontWeight: 600 }}>
+              {side === 'before' ? '📷 施工前' : '📷 施工後'}
+            </label>
+            <label style={{ display: 'block', cursor: 'pointer' }}>
+              <input type="file" accept="image/*" onChange={handleFile(side)} style={{ display: 'none' }} />
+              <div style={{
+                height: 90, borderRadius: 8, overflow: 'hidden',
+                border: `1.5px dashed ${side === 'before' ? '#3d3d60' : '#1a5e38'}`,
+                background: side === 'before' ? '#12122a' : '#0f1f15',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {(side === 'before' ? item.beforeImage : item.afterImage) ? (
+                  <img
+                    src={side === 'before' ? item.beforeImage : item.afterImage}
+                    alt=""
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 22, marginBottom: 4, opacity: 0.4 }}>+</div>
+                    <div style={{ fontSize: 9, color: '#4b5563' }}>タップして選択</div>
+                  </div>
+                )}
+              </div>
+            </label>
+          </div>
+        ))}
+      </div>
+
+      {/* 説明テキスト */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div>
+          <label style={{ display: 'block', fontSize: 10, color: '#6b7280', marginBottom: 5, letterSpacing: '0.08em' }}>施工前の状況</label>
+          <textarea value={item.beforeDesc} onChange={e => onChange('beforeDesc', e.target.value)} placeholder="劣化・損傷の状態を記入" style={textareaStyle} />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: 10, color: '#6b7280', marginBottom: 5, letterSpacing: '0.08em' }}>施工後の状態</label>
+          <textarea value={item.afterDesc} onChange={e => onChange('afterDesc', e.target.value)} placeholder="修繕内容・効果を記入" style={textareaStyle} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── メインコンポーネント ──────────────────────────────
+export function BeforeAfterPage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [projectName, setProjectName] = useState('');
+  const [contractor, setContractor] = useState('');
+  const [items, setItems] = useState<BeforeAfterItem[]>([
+    { id: crypto.randomUUID(), title: '', beforeImage: '', afterImage: '', beforeDesc: '', afterDesc: '' },
+  ]);
+
+  // Firestoreロード
+  useEffect(() => {
+    if (!id) return;
+    getDoc(doc(db, 'projects', id))
+      .then(d => {
+        if (d.exists()) {
+          const p = d.data();
+          setProjectName(p.projectName ?? '');
+          setContractor(p.contractor ?? '');
+          if (p.beforeAfterItems?.length) setItems(p.beforeAfterItems);
+        }
+      })
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  const addItem = () =>
+    setItems(prev => [...prev, { id: crypto.randomUUID(), title: '', beforeImage: '', afterImage: '', beforeDesc: '', afterDesc: '' }]);
+
+  const deleteItem = (idx: number) =>
+    setItems(prev => prev.filter((_, i) => i !== idx));
+
+  const updateItem = (idx: number, field: keyof BeforeAfterItem, value: string) =>
+    setItems(prev => prev.map((it, i) => i === idx ? { ...it, [field]: value } : it));
+
+  const uploadImage = (idx: number, side: 'before' | 'after', dataUrl: string) =>
+    setItems(prev => prev.map((it, i) => i === idx ? { ...it, [side === 'before' ? 'beforeImage' : 'afterImage']: dataUrl } : it));
+
+  const handleSave = async () => {
+    if (!id) return;
     setSaving(true);
     try {
-      let updated: BeforeAfterPair[];
-      if (editingPairId !== null) {
-        updated = pairs.map(p =>
-          p.id === editingPairId
-            ? { ...p, beforePhotoId: pendingBefore, afterPhotoId: pendingAfter, part: part.trim(), description: description.trim() }
-            : p
-        );
-      } else {
-        const newPair: BeforeAfterPair = {
-          id: Date.now(),
-          beforePhotoId: pendingBefore,
-          afterPhotoId: pendingAfter,
-          part: part.trim(),
-          description: description.trim(),
-        };
-        updated = [...pairs, newPair];
-      }
-      await updateDoc(doc(db, 'projects', id), { beforeAfterPairs: updated });
-      setProject(prev => prev ? { ...prev, beforeAfterPairs: updated } : prev);
-      reset();
-    } catch {
-      setError('保存に失敗しました。');
+      await updateDoc(doc(db, 'projects', id), { beforeAfterItems: items });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
     } finally {
       setSaving(false);
     }
   };
 
-  const deletePair = async (pairId: number) => {
-    if (!id || !project) return;
-    const updated = pairs.filter(p => p.id !== pairId);
-    try {
-      await updateDoc(doc(db, 'projects', id), { beforeAfterPairs: updated });
-      setProject(prev => prev ? { ...prev, beforeAfterPairs: updated } : prev);
-    } catch {
-      setError('削除に失敗しました。');
-    }
-  };
+  // ページ分割（1ページ2箇所）
+  const pages: BeforeAfterItem[][] = [];
+  for (let i = 0; i < items.length; i += 2) pages.push(items.slice(i, i + 2));
 
-  const startEdit = (pair: BeforeAfterPair) => {
-    setEditingPairId(pair.id);
-    setPendingBefore(pair.beforePhotoId);
-    setPendingAfter(pair.afterPhotoId);
-    setPart(pair.part);
-    setDescription(pair.description);
-    setStep('before');
-  };
-
-  if (error && !project) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 font-sans" style={{ background: '#0f0f1a' }}>
-        <ErrorMessage message={error} onDismiss={() => setError(null)} />
-        <button onClick={() => navigate(`/project/${id}`)} className="mt-4 flex items-center gap-2 font-bold" style={{ color: ACCENT }}>
-          <ArrowLeft className="w-4 h-4" /> もどる
-        </button>
-      </div>
-    );
-  }
-
-  if (!project) return <LoadingSpinner />;
-
-  // ── 写真選択グリッド ──
-  const PhotoGrid = ({
-    title, selectedId, onSelect, excludeId,
-  }: { title: string; selectedId: number | null; onSelect: (id: number) => void; excludeId?: number | null }) => (
-    <div>
-      <div className="flex items-center gap-3 mb-5">
-        <div className="w-1 h-6 rounded-full" style={{ background: ACCENT }} />
-        <h2 className="text-lg font-bold" style={{ color: '#f0ede8' }}>{title}</h2>
-      </div>
-      {photos.length === 0 ? (
-        <p className="text-sm text-center py-10" style={{ color: '#8b8ba8' }}>写真が登録されていません。</p>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          {photos.filter(p => p.id !== excludeId).map(photo => {
-            const sel = selectedId === photo.id;
-            return (
-              <button
-                key={photo.id}
-                type="button"
-                onClick={() => onSelect(photo.id)}
-                className="relative rounded-xl overflow-hidden border-2 transition-all text-left"
-                style={{ borderColor: sel ? ACCENT : '#2e2e50', background: '#1c1c30' }}
-              >
-                <img src={photo.image!} alt="" className="w-full aspect-video object-cover" />
-                {sel && (
-                  <div className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center" style={{ background: ACCENT }}>
-                    <Check className="w-3.5 h-3.5 text-white" />
-                  </div>
-                )}
-                <div className="px-2 py-1.5">
-                  <div className="text-xs font-bold truncate" style={{ color: sel ? ACCENT : '#f0ede8' }}>
-                    {photo.photoNumber ? `No.${photo.photoNumber}` : '番号なし'}
-                    {photo.process ? ` · ${photo.process}` : ''}
-                  </div>
-                  {photo.shootingDate && (
-                    <div className="text-xs truncate" style={{ color: '#6b7280' }}>{photo.shootingDate}</div>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
+  if (loading) return <LoadingSpinner />;
 
   return (
     <div className="min-h-screen font-sans" style={{ background: '#0f0f1a', color: '#f0ede8' }}>
-      <div className="max-w-md md:max-w-4xl lg:max-w-5xl mx-auto px-4 sm:px-6 pb-16">
+      <div className="max-w-screen-xl mx-auto px-4 sm:px-6 pt-4 pb-16">
 
         {/* ヘッダー */}
         <div className="flex items-center justify-between py-5">
           <button
             type="button"
-            onClick={() => step === 'list' ? navigate(`/project/${id}`) : reset()}
-            className="flex items-center gap-2 font-bold text-sm transition-colors"
+            onClick={() => navigate(`/project/${id}`)}
+            className="flex items-center gap-2 text-sm font-bold"
             style={{ color: '#8b8ba8' }}
-            onPointerEnter={e => (e.currentTarget.style.color = ACCENT)}
+            onPointerEnter={e => (e.currentTarget.style.color = '#ff6b35')}
             onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
           >
             <ArrowLeft className="w-4 h-4" />
-            <List className="w-4 h-4" />
-            {step === 'list' ? '現場メニュー' : 'キャンセル'}
+            現場ホーム
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold"
+            style={{ background: saved ? '#10b981' : '#ff6b35', color: '#fff', opacity: saving ? 0.7 : 1 }}
+          >
+            <Save className="w-4 h-4" />
+            {saving ? '保存中…' : saved ? '保存済み ✓' : '保存'}
           </button>
         </div>
 
-        {error && <ErrorMessage message={error} onDismiss={() => setError(null)} className="mb-4" />}
+        <div className="mb-6">
+          <h1 className="text-xl font-bold">施工前後比較</h1>
+          <p className="text-sm mt-1" style={{ color: '#6b7280' }}>1ページに2箇所 / A4出力対応</p>
+        </div>
 
-        {/* ── リスト画面 ── */}
-        {step === 'list' && (
-          <>
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-1 h-7 rounded-full" style={{ background: ACCENT }} />
-              <h1 className="text-2xl font-bold break-words">ビフォーアフター</h1>
-            </div>
+        {/* 左右レイアウト */}
+        <div className="flex gap-8 items-start">
 
-            {/* 追加ボタン */}
+          {/* 左：入力フォーム */}
+          <div className="w-full lg:w-96 shrink-0 flex flex-col gap-0">
+            {items.map((item, idx) => (
+              <ItemCard
+                key={item.id}
+                item={item}
+                index={idx}
+                onChange={(f, v) => updateItem(idx, f, v)}
+                onDelete={() => deleteItem(idx)}
+                onImageUpload={(side, dataUrl) => uploadImage(idx, side, dataUrl)}
+              />
+            ))}
             <button
               type="button"
-              onClick={() => setStep('before')}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed font-bold text-sm mb-5 transition-colors"
+              onClick={addItem}
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-bold border-2 border-dashed transition-colors"
               style={{ borderColor: '#2e2e50', color: '#6b7280' }}
-              onPointerEnter={e => { e.currentTarget.style.borderColor = ACCENT; e.currentTarget.style.color = ACCENT; }}
+              onPointerEnter={e => { e.currentTarget.style.borderColor = '#ff6b35'; e.currentTarget.style.color = '#ff6b35'; }}
               onPointerLeave={e => { e.currentTarget.style.borderColor = '#2e2e50'; e.currentTarget.style.color = '#6b7280'; }}
             >
-              <Plus className="w-4 h-4" /> ペアを追加
+              <Plus className="w-4 h-4" />
+              工事箇所を追加
             </button>
-
-            {/* ペア一覧 */}
-            {pairs.length === 0 ? (
-              <p className="text-center text-sm py-12" style={{ color: '#4b4b70' }}>
-                施工前後の比較ペアがまだありません
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {pairs.map((pair, idx) => {
-                  const before = photoById(pair.beforePhotoId);
-                  const after = photoById(pair.afterPhotoId);
-                  return (
-                    <div key={pair.id} className="rounded-2xl border overflow-hidden" style={{ background: '#1c1c30', borderColor: '#2e2e50' }}>
-                      {/* サムネイル行 */}
-                      <div className="grid grid-cols-2 gap-0">
-                        <div className="relative">
-                          {before?.image
-                            ? <img src={before.image} alt="before" className="w-full aspect-video object-cover" />
-                            : <div className="w-full aspect-video flex items-center justify-center text-xs" style={{ background: '#12122a', color: '#4b4b70' }}>写真なし</div>
-                          }
-                          <div className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded text-xs font-bold" style={{ background: 'rgba(0,0,0,0.7)', color: '#f0ede8' }}>施工前</div>
-                        </div>
-                        <div className="relative">
-                          {after?.image
-                            ? <img src={after.image} alt="after" className="w-full aspect-video object-cover" />
-                            : <div className="w-full aspect-video flex items-center justify-center text-xs" style={{ background: '#12122a', color: '#4b4b70' }}>写真なし</div>
-                          }
-                          <div className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded text-xs font-bold" style={{ background: 'rgba(0,0,0,0.7)', color: ACCENT }}>施工後</div>
-                        </div>
-                      </div>
-                      {/* 情報行 */}
-                      <div className="px-4 py-3 flex items-center gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-bold" style={{ color: '#8b8ba8' }}>#{idx + 1}</div>
-                          <div className="font-bold text-sm truncate" style={{ color: '#f0ede8' }}>
-                            {pair.part || '（部位名なし）'}
-                          </div>
-                          {pair.description && (
-                            <div className="text-xs truncate mt-0.5" style={{ color: '#6b7280' }}>{pair.description}</div>
-                          )}
-                        </div>
-                        <div className="flex gap-0.5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => startEdit(pair)}
-                            aria-label="編集"
-                            className="p-2 rounded-lg transition-colors shrink-0"
-                            style={{ color: '#4b4b70' }}
-                            onPointerEnter={e => (e.currentTarget.style.color = ACCENT)}
-                            onPointerLeave={e => (e.currentTarget.style.color = '#4b4b70')}
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setConfirmDeletePairId(pair.id)}
-                            aria-label="削除"
-                            className="p-2 rounded-lg transition-colors shrink-0"
-                            style={{ color: '#4b4b70' }}
-                            onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
-                            onPointerLeave={e => (e.currentTarget.style.color = '#4b4b70')}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ── 施工前選択 ── */}
-        {step === 'before' && (
-          <>
-            {/* ステップインジケーター */}
-            <StepIndicator current={1} />
-            <PhotoGrid
-              title="施工前の写真を選択"
-              selectedId={pendingBefore}
-              onSelect={id => setPendingBefore(id)}
-            />
-            <button
-              type="button"
-              onClick={() => pendingBefore !== null && setStep('after')}
-              disabled={pendingBefore === null}
-              className="w-full mt-6 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-30"
-              style={{ background: ACCENT, color: '#000' }}
-            >
-              次へ：施工後を選択 <ArrowRight className="w-4 h-4" />
-            </button>
-          </>
-        )}
-
-        {/* ── 施工後選択 ── */}
-        {step === 'after' && (
-          <>
-            <StepIndicator current={2} />
-            <PhotoGrid
-              title="施工後の写真を選択"
-              selectedId={pendingAfter}
-              onSelect={id => setPendingAfter(id)}
-              excludeId={pendingBefore}
-            />
-            <button
-              type="button"
-              onClick={() => pendingAfter !== null && setStep('form')}
-              disabled={pendingAfter === null}
-              className="w-full mt-6 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-30"
-              style={{ background: ACCENT, color: '#000' }}
-            >
-              次へ：部位情報を入力 <ArrowRight className="w-4 h-4" />
-            </button>
-          </>
-        )}
-
-        {/* ── 部位情報入力 ── */}
-        {step === 'form' && (
-          <>
-            <StepIndicator current={3} />
-
-            {/* 選択写真プレビュー */}
-            <div className="grid grid-cols-2 gap-3 mb-6">
-              {[
-                { label: '施工前', photo: photoById(pendingBefore!) },
-                { label: '施工後', photo: photoById(pendingAfter!) },
-              ].map(({ label, photo }) => (
-                <div key={label} className="rounded-xl overflow-hidden border" style={{ borderColor: '#2e2e50' }}>
-                  {photo?.image && <img src={photo.image} alt={label} className="w-full aspect-video object-cover" />}
-                  <div className="px-2 py-1.5 text-center text-xs font-bold" style={{ color: label === '施工後' ? ACCENT : '#8b8ba8', background: '#1c1c30' }}>{label}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* 部位名 */}
-            <div className="mb-4">
-              <label className="flex items-center gap-2 text-xs font-bold mb-2" style={{ color: '#8b8ba8' }}>
-                <div className="w-1 h-3.5 rounded-full" style={{ background: ACCENT }} />
-                部位名
-              </label>
-              <input
-                type="text"
-                value={part}
-                onChange={e => setPart(e.target.value)}
-                placeholder="例：屋根南面、外壁東面"
-                className="w-full px-4 py-3 rounded-xl text-sm font-medium outline-none transition-colors"
-                style={{ background: '#12122a', border: '1.5px solid #2e2e50', color: '#f0ede8' }}
-                onFocus={e => (e.currentTarget.style.borderColor = ACCENT)}
-                onBlur={e => (e.currentTarget.style.borderColor = '#2e2e50')}
-              />
-            </div>
-
-            {/* 説明 */}
-            <div className="mb-6">
-              <label className="flex items-center gap-2 text-xs font-bold mb-2" style={{ color: '#8b8ba8' }}>
-                <div className="w-1 h-3.5 rounded-full" style={{ background: ACCENT }} />
-                説明文（任意）
-              </label>
-              <input
-                type="text"
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                placeholder="例：劣化状況と補修後の状態"
-                className="w-full px-4 py-3 rounded-xl text-sm font-medium outline-none transition-colors"
-                style={{ background: '#12122a', border: '1.5px solid #2e2e50', color: '#f0ede8' }}
-                onFocus={e => (e.currentTarget.style.borderColor = ACCENT)}
-                onBlur={e => (e.currentTarget.style.borderColor = '#2e2e50')}
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={savePair}
-              disabled={saving}
-              className="w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-40"
-              style={{ background: ACCENT, color: '#000', boxShadow: `0 0 16px rgba(245,158,11,0.3)` }}
-            >
-              <Check className="w-4 h-4" />
-              {saving ? '保存中...' : editingPairId !== null ? 'ペアを更新' : 'ペアを保存'}
-            </button>
-          </>
-        )}
-
-      </div>
-      <ConfirmModal
-        isOpen={confirmDeletePairId !== null}
-        title="ペアを削除"
-        message="このペアを削除しますか？"
-        confirmLabel="削除"
-        variant="danger"
-        onConfirm={async () => {
-          if (confirmDeletePairId !== null) {
-            await deletePair(confirmDeletePairId);
-            setConfirmDeletePairId(null);
-          }
-        }}
-        onCancel={() => setConfirmDeletePairId(null)}
-      />
-    </div>
-  );
-}
-
-function StepIndicator({ current }: { current: 1 | 2 | 3 }) {
-  const steps = ['施工前', '施工後', '部位情報'];
-  return (
-    <div className="flex items-center gap-2 mb-6">
-      {steps.map((label, i) => {
-        const n = i + 1;
-        const done = n < current;
-        const active = n === current;
-        return (
-          <div key={n} className="flex items-center gap-2" style={{ flex: n < steps.length ? 1 : 'none' }}>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <div
-                className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
-                style={{
-                  background: done ? '#2e2e50' : active ? ACCENT : '#12122a',
-                  color: done ? '#6b7280' : active ? '#000' : '#4b4b70',
-                  border: `1.5px solid ${done ? '#2e2e50' : active ? ACCENT : '#2e2e50'}`,
-                }}
-              >
-                {done ? <Check className="w-3 h-3" /> : n}
-              </div>
-              <span className="text-xs font-bold" style={{ color: active ? ACCENT : '#4b4b70' }}>{label}</span>
-            </div>
-            {n < steps.length && (
-              <div className="flex-1 h-px" style={{ background: done ? '#2e2e50' : '#1c1c30' }} />
-            )}
           </div>
-        );
-      })}
+
+          {/* 右：A4プレビュー */}
+          <div className="hidden lg:flex flex-col gap-6 flex-1 min-w-0 items-center">
+            <div style={{ fontSize: 11, color: '#4b5563', letterSpacing: '0.1em' }}>A4 プレビュー（{pages.length}ページ）</div>
+            {pages.map((pageItems, pi) => (
+              <div key={pi} style={{ transform: 'scale(0.7)', transformOrigin: 'top center', marginBottom: `calc(${H}px * 0.7 - ${H}px)` }}>
+                <A4Page
+                  items={pageItems}
+                  pageIndex={pi}
+                  totalPages={pages.length}
+                  projectName={projectName}
+                  contractor={contractor}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
