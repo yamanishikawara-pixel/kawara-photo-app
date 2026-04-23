@@ -1,3 +1,17 @@
-`BeforeAfterItem` モデルへ統一しました。[src/types.ts](/Users/yamanishikenta/kawara-photo-app/src/types.ts:105) で `BeforeAfterPair` を削除して `BeforeAfterItem` を追加し、`Project` の参照先を `beforeAfterItems` に変更しています。[src/pages/PdfExportPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/PdfExportPage.tsx:8) では import を切り替え、ページ分割を 2 件/ページに変更し、`case 'beforeAfter'` を `BeforeAfterPage.tsx` に合わせた新レイアウトへ差し替えました。
+対応完了しました。編集対象は [src/pages/BeforeAfterPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/BeforeAfterPage.tsx) のみです。
 
-結果は [codex_result.md](/Users/yamanishikenta/kawara-photo-app/codex_result.md:1) に記録済みです。`npm run build` は成功しました。
+適用内容:
+- `label` 不正ネスト解消
+- `uuid()` フォールバック追加と置換
+- Storage 削除時の `getMetadata` + `trackUpload(uid, -meta.size)`
+- FileReader/Image の `onerror` 追加
+- `onImageUpload` の `await`
+- cleanup 失敗ログ追加
+- 保存済み表示タイマーの多重発火防止
+- 写真 `objectFit: contain` 化と `alt` 追加
+- `htmlFor` / `id` 追加
+- 削除確認ダイアログ追加
+- focus 時のプロジェクト情報再取得追加
+
+検証:
+- `npm run build` 成功済みです。

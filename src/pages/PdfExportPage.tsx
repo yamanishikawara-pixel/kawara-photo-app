@@ -12,8 +12,7 @@ import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 
-const JP_FONT = "'BIZ UDPGothic', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', Meiryo, sans-serif";
-const JP_SERIF = "'BIZ UDMincho', '游明朝', 'Yu Mincho', 'Hiragino Mincho ProN', serif";
+const JP_FONT = "'Noto Sans JP', 'BIZ UDPGothic', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif";
 
 function safeStyleLine(val: string | number | undefined | null, defaultUnit: string): string {
   if (val == null || val === '') return `0${defaultUnit}`;
@@ -21,12 +20,11 @@ function safeStyleLine(val: string | number | undefined | null, defaultUnit: str
   return String(val);
 }
 
-
 const COVER_FIELDS: { label: string; key: keyof Project }[] = [
-  { label: '工事件名', key: 'projectName' },
-  { label: '工事場所', key: 'projectLocation' },
-  { label: '工期', key: 'constructionPeriod' },
-  { label: '施工業者', key: 'contractorName' },
+  { label: '工事件名',   key: 'projectName' },
+  { label: '工事場所',   key: 'projectLocation' },
+  { label: '工期',       key: 'constructionPeriod' },
+  { label: '施工業者',   key: 'contractorName' },
   { label: '作成年月日', key: 'creationDate' },
 ];
 
@@ -413,6 +411,10 @@ export default function PdfExportPage() {
             padding: 0 !important;
           }
 
+          .pdf-page.pdf-cover-page {
+            padding: 12mm !important;
+          }
+
           .pdf-page {
             position: relative !important;
             top: auto !important;
@@ -613,172 +615,68 @@ export default function PdfExportPage() {
           <div key="cover" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
           <div className={`pdf-page bg-white text-black overflow-hidden ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, transform: isPrinting ? 'none' : `scale(${scale})`, position: 'relative' }}>
 
-            {/* ── メインコンテンツ: 外枠スタイル ── */}
-            <div style={{
-              position: 'absolute',
-              top: isPrinting ? '10mm' : '38px',
-              bottom: isPrinting ? '30mm' : '113px',
-              left: isPrinting ? '10mm' : '38px',
-              right: isPrinting ? '10mm' : '38px',
-              border: `${isPrinting ? '0.7mm' : '2.5px'} solid #111`,
-              display: 'flex',
-              flexDirection: 'column',
-            }}>
+            <div style={{ position: 'absolute', top: 0, bottom: isPrinting ? '26mm' : '98px', left: 0, right: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingTop: isPrinting ? '10mm' : '38px', paddingBottom: isPrinting ? '4mm' : '15px' }}>
 
-              {/* タイトルエリア（上部 42%） */}
-              <div style={{
-                flex: '0 0 42%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderBottom: `${isPrinting ? '0.5mm' : '2px'} solid #111`,
-                padding: isPrinting ? '0 10mm' : '0 38px',
-              }}>
-                <h1 style={{
-                  fontFamily: JP_SERIF,
-                  fontSize: isPrinting ? '28pt' : '37px',
-                  fontWeight: '900',
-                  letterSpacing: '0.35em',
-                  textAlign: 'center',
-                  color: '#111',
-                  margin: 0,
-                  lineHeight: 1.2,
-                }}>工事写真報告書</h1>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: isPrinting ? '16mm' : '60px' }}>
+                <h1 style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '32pt' : '42px', fontWeight: '900', letterSpacing: '0.20em', textAlign: 'center', color: '#111', margin: 0, lineHeight: 1.15 }}>工事写真報告書</h1>
+                <div style={{ width: isPrinting ? '95mm' : '359px', height: isPrinting ? '0.7mm' : '2.5px', background: '#2a2a2a', borderRadius: '1px', marginTop: isPrinting ? '5mm' : '19px' }} />
               </div>
 
-              {/* フィールドテーブルエリア（下部 58%） */}
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                {(() => {
-                  const fields = COVER_FIELDS.map(item => {
-                    let value = String(project[item.key] ?? '');
-                    if (item.key === 'contractorName' && companyName) value = companyName;
-                    return { label: item.label, value };
-                  });
-                  return fields.map((field, idx) => (
-                    <div key={idx} style={{
-                      flex: 1,
-                      display: 'flex',
-                      borderBottom: idx < fields.length - 1 ? `${isPrinting ? '0.3mm' : '1px'} solid #ccc` : 'none',
-                      minHeight: 0,
-                    }}>
-                      <div style={{
-                        width: isPrinting ? '42mm' : '159px',
-                        flexShrink: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderRight: `${isPrinting ? '0.3mm' : '1px'} solid #ccc`,
-                        background: '#f5f5f5',
-                        fontFamily: JP_FONT,
-                        fontSize: isPrinting ? '9pt' : '12px',
-                        fontWeight: 'bold',
-                        color: '#555',
-                        padding: isPrinting ? '0 4mm' : '0 15px',
-                        textAlign: 'justify',
-                        textAlignLast: 'justify',
-                        letterSpacing: '-0.01em',
-                      }}>
-                        {field.label}
+              <div style={{ width: isPrinting ? '168mm' : '635px', display: 'flex', flexDirection: 'column', gap: isPrinting ? '10mm' : '38px' }}>
+                {COVER_FIELDS.map((item, idx) => {
+                  let value = String(project[item.key] ?? '　');
+                  if (item.key === 'contractorName' && companyName) value = companyName;
+                  return (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'baseline', borderBottom: `${isPrinting ? '0.2mm' : '1px'} solid #ebebeb`, paddingBottom: isPrinting ? '4mm' : '15px', paddingTop: isPrinting ? '2mm' : '8px' }}>
+                      <div style={{ width: isPrinting ? '52mm' : '197px', flexShrink: 0, paddingRight: isPrinting ? '30mm' : '113px', fontFamily: JP_FONT, fontSize: isPrinting ? '10.5pt' : '14px', fontWeight: 'bold', color: '#555', lineHeight: 1.4, letterSpacing: '-0.28em', textAlign: 'justify', textAlignLast: 'justify' }}>
+                        {item.label}
                       </div>
-                      <div style={{
-                        flex: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        padding: isPrinting ? '2mm 5mm' : '8px 19px',
-                        fontFamily: JP_FONT,
-                        fontSize: isPrinting ? '12pt' : '16px',
-                        fontWeight: 'bold',
-                        color: '#0d0d0d',
-                        wordBreak: 'break-all',
-                        lineHeight: 1.4,
-                      }}>
-                        {field.value || '　'}
-                      </div>
+                      <div style={{ flex: 1, fontFamily: JP_FONT, fontSize: isPrinting ? '14pt' : '18px', fontWeight: 'bold', wordBreak: 'break-all', color: '#0d0d0d', lineHeight: 1.4 }}>{value}</div>
                     </div>
-                  ));
-                })()}
-
-                {/* 施工保証セクション（値がある場合のみ） */}
-                {(project.warrantyYears || project.warrantyStartDate || project.warrantyNote) && (
-                  <>
-                    <div style={{
-                      borderTop: `${isPrinting ? '0.5mm' : '2px'} solid #555`,
-                      background: '#f0f0f0',
-                      padding: isPrinting ? '1mm 5mm' : '4px 19px',
-                      fontFamily: JP_FONT,
-                      fontSize: isPrinting ? '8pt' : '11px',
-                      fontWeight: 'bold',
-                      color: '#444',
-                      letterSpacing: '0.1em',
-                      flexShrink: 0,
-                    }}>■ 施工保証</div>
-                    {([
-                      project.warrantyYears     ? { label: '保証期間',  value: project.warrantyYears }     : null,
-                      project.warrantyStartDate ? { label: '保証開始日', value: project.warrantyStartDate } : null,
-                      project.warrantyNote      ? { label: '補足事項',  value: project.warrantyNote }      : null,
-                    ] as ({ label: string; value: string } | null)[]).filter((f): f is { label: string; value: string } => f !== null).map((f, idx, arr) => (
-                      <div key={idx} style={{
-                        flex: 1,
-                        display: 'flex',
-                        borderBottom: idx < arr.length - 1 ? `${isPrinting ? '0.3mm' : '1px'} solid #ccc` : 'none',
-                        minHeight: 0,
-                      }}>
-                        <div style={{
-                          width: isPrinting ? '42mm' : '159px',
-                          flexShrink: 0,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          borderRight: `${isPrinting ? '0.3mm' : '1px'} solid #ccc`,
-                          background: '#f5f5f5',
-                          fontFamily: JP_FONT,
-                          fontSize: isPrinting ? '9pt' : '12px',
-                          fontWeight: 'bold',
-                          color: '#555',
-                          padding: isPrinting ? '0 4mm' : '0 15px',
-                          textAlign: 'justify',
-                          textAlignLast: 'justify',
-                        }}>
-                          {f.label}
-                        </div>
-                        <div style={{
-                          flex: 1,
-                          display: 'flex',
-                          alignItems: 'center',
-                          padding: isPrinting ? '2mm 5mm' : '8px 19px',
-                          fontFamily: JP_FONT,
-                          fontSize: isPrinting ? '11pt' : '15px',
-                          fontWeight: 'bold',
-                          color: '#0d0d0d',
-                          wordBreak: 'break-all',
-                          lineHeight: 1.4,
-                        }}>
-                          {f.value}
-                        </div>
-                      </div>
-                    ))}
-                  </>
-                )}
+                  );
+                })}
               </div>
 
+              {(project.warrantyYears || project.warrantyStartDate || project.warrantyNote) && (
+                <div style={{ width: isPrinting ? '168mm' : '635px', marginTop: isPrinting ? '8mm' : '30px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: isPrinting ? '3mm' : '11px', marginBottom: isPrinting ? '5mm' : '19px' }}>
+                    <div style={{ flex: 1, height: isPrinting ? '0.3mm' : '1px', background: '#e0e0e0' }} />
+                    <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', fontWeight: 'bold', color: '#999', letterSpacing: '0.1em', whiteSpace: 'nowrap' }}>施工保証</div>
+                    <div style={{ flex: 1, height: isPrinting ? '0.3mm' : '1px', background: '#e0e0e0' }} />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: isPrinting ? '8mm' : '30px' }}>
+                    {project.warrantyYears && (
+                      <div style={{ display: 'flex', alignItems: 'baseline', borderBottom: `${isPrinting ? '0.2mm' : '1px'} solid #ebebeb`, paddingBottom: isPrinting ? '4mm' : '15px', paddingTop: isPrinting ? '2mm' : '8px' }}>
+                        <div style={{ width: isPrinting ? '52mm' : '197px', flexShrink: 0, paddingRight: isPrinting ? '30mm' : '113px', fontFamily: JP_FONT, fontSize: isPrinting ? '10.5pt' : '14px', fontWeight: 'bold', color: '#555', lineHeight: 1.4, letterSpacing: '-0.28em' }}>保証期間</div>
+                        <div style={{ flex: 1, fontFamily: JP_FONT, fontSize: isPrinting ? '14pt' : '18px', fontWeight: 'bold', wordBreak: 'break-all', color: '#0d0d0d', lineHeight: 1.4 }}>{project.warrantyYears}</div>
+                      </div>
+                    )}
+                    {project.warrantyStartDate && (
+                      <div style={{ display: 'flex', alignItems: 'baseline', borderBottom: `${isPrinting ? '0.2mm' : '1px'} solid #ebebeb`, paddingBottom: isPrinting ? '4mm' : '15px', paddingTop: isPrinting ? '2mm' : '8px' }}>
+                        <div style={{ width: isPrinting ? '52mm' : '197px', flexShrink: 0, paddingRight: isPrinting ? '30mm' : '113px', fontFamily: JP_FONT, fontSize: isPrinting ? '10.5pt' : '14px', fontWeight: 'bold', color: '#555', lineHeight: 1.4, letterSpacing: '-0.28em' }}>保証開始日</div>
+                        <div style={{ flex: 1, fontFamily: JP_FONT, fontSize: isPrinting ? '14pt' : '18px', fontWeight: 'bold', wordBreak: 'break-all', color: '#0d0d0d', lineHeight: 1.4 }}>{project.warrantyStartDate}</div>
+                      </div>
+                    )}
+                    {project.warrantyNote && (
+                      <div style={{ display: 'flex', alignItems: 'baseline', borderBottom: `${isPrinting ? '0.2mm' : '1px'} solid #ebebeb`, paddingBottom: isPrinting ? '4mm' : '15px', paddingTop: isPrinting ? '2mm' : '8px' }}>
+                        <div style={{ width: isPrinting ? '52mm' : '197px', flexShrink: 0, paddingRight: isPrinting ? '30mm' : '113px', fontFamily: JP_FONT, fontSize: isPrinting ? '10.5pt' : '14px', fontWeight: 'bold', color: '#555', lineHeight: 1.4, letterSpacing: '-0.28em' }}>補足事項</div>
+                        <div style={{ flex: 1, fontFamily: JP_FONT, fontSize: isPrinting ? '14pt' : '18px', fontWeight: 'bold', wordBreak: 'break-all', color: '#0d0d0d', lineHeight: 1.4 }}>{project.warrantyNote}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* ── 下部: ロゴ + 会社情報 + ページ番号 ── */}
-            {/* ロゴwidth : 情報width ≈ 1 : φ の黄金比配置 */}
             <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: isPrinting ? '26mm' : '98px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: isPrinting ? '0 21mm' : '0 79px', borderTop: `${isPrinting ? '0.2mm' : '1px'} solid #eeeeee` }}>
-
-              {/* ロゴ + 縦セパレーター + 会社情報 */}
               <div style={{ display: 'flex', alignItems: 'center', gap: isPrinting ? '5mm' : '19px', minWidth: 0 }}>
-                {/* ロゴ: maxWidth ≈ 28mm → 会社情報エリア ≈ 28×φ≈45mm (黄金比) */}
                 {logoUrl ? (
                   <img src={proxyUrl(logoUrl, `logo_${sessionId}`)} data-original-src={logoUrl} alt="自社ロゴ" style={{ height: isPrinting ? '12mm' : '45px', width: 'auto', maxWidth: isPrinting ? '28mm' : '106px', objectFit: 'contain', flexShrink: 0 }} crossOrigin="anonymous" />
                 ) : (
                   <img src={kawaraLogo} data-original-src={kawaraLogo} alt="標準ロゴ" style={{ height: isPrinting ? '10mm' : '38px', width: 'auto', maxWidth: isPrinting ? '25mm' : '95px', objectFit: 'contain', flexShrink: 0, filter: 'grayscale(1)' }} crossOrigin="anonymous" />
                 )}
                 {userSettings && (companyName || address || phone) && (<>
-                  {/* 縦セパレーター */}
                   <div style={{ width: isPrinting ? '0.3mm' : '1px', height: isPrinting ? '10mm' : '38px', background: '#d0d0d0', flexShrink: 0 }} />
-                  {/* 会社情報: flex-1 でロゴとの比率が自然な黄金比に */}
                   <div style={{ lineHeight: 1.45, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                     {companyName && <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '10pt' : '13px', fontWeight: 'bold', color: '#222', whiteSpace: 'nowrap', overflow: 'hidden' }}>{companyName}</div>}
                     {address && <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7.5pt' : '10px', color: '#666', whiteSpace: 'nowrap', overflow: 'hidden' }}>{address}</div>}
@@ -786,14 +684,11 @@ export default function PdfExportPage() {
                   </div>
                 </>)}
               </div>
-
-              {/* ページ番号 */}
               <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8.5pt' : '11px', fontWeight: 'normal', color: '#aaa', whiteSpace: 'nowrap', flexShrink: 0, paddingLeft: isPrinting ? '5mm' : '19px' }}>- 1 / {totalPages} -</div>
-
             </div>
           </div>
-        </div>
-        )]; }
+          </div>
+          )]; }
 
         case 'map': {
           if (!sections.map) return [];
@@ -1091,7 +986,9 @@ export default function PdfExportPage() {
 
                 {/* ヘッダー */}
                 <div style={{ flexShrink: 0, borderBottom: `${isPrinting ? '1.5px' : '2px'} solid #1a1a1a`, padding: isPrinting ? '0 14mm' : '0 40px', height: isPrinting ? '21mm' : '60px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '12pt' : '16px', fontWeight: 700, letterSpacing: '0.2em', color: '#111' }}>施工前後比較</div>
+                  {pageIndex === 0 && (
+                    <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '12pt' : '16px', fontWeight: 700, letterSpacing: '0.2em', color: '#111' }}>施工前後比較</div>
+                  )}
                   <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7.5pt' : '10px', color: '#aaa', letterSpacing: '0.15em' }}>{pageIndex + 1} / {beforeAfterPages.length}</div>
                 </div>
 
@@ -1122,11 +1019,11 @@ export default function PdfExportPage() {
                       </div>
 
                       {/* 写真エリア */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: isPrinting ? '1mm' : '3px', flex: 1, minHeight: 0 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: isPrinting ? '1mm' : '3px', flexShrink: 0 }}>
                         {[item.beforeImage, item.afterImage].map((src, pi) => (
-                          <div key={pi} style={{ overflow: 'hidden', background: pi === 0 ? '#c8d0d8' : '#a8c4b2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <div key={pi} style={{ width: '100%', height: isPrinting ? '65mm' : '289px', overflow: 'hidden', background: pi === 0 ? '#c8d0d8' : '#a8c4b2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             {src ? (
-                              <img src={src} alt={pi === 0 ? '施工前' : '施工後'} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                              <img src={src} alt={pi === 0 ? '施工前' : '施工後'} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                             ) : (
                               <div style={{ textAlign: 'center', opacity: 0.5 }}>
                                 <div style={{ fontSize: isPrinting ? '14pt' : '28px', marginBottom: 4 }}>📷</div>
@@ -1157,8 +1054,8 @@ export default function PdfExportPage() {
 
                 {/* フッター */}
                 <div style={{ flexShrink: 0, borderTop: `1px solid #e0e0e0`, padding: isPrinting ? '0 14mm' : '0 40px', height: isPrinting ? '18mm' : '52px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7.5pt' : '10px', color: '#aaa', letterSpacing: '0.1em' }}>{companyName || ''}</div>
-                  <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7.5pt' : '10px', color: '#aaa', letterSpacing: '0.1em' }}>- {pageOffset('beforeAfter') + pageIndex + 1} / {totalPages} -</div>
+                  <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7.5pt' : '10px', color: '#aaa', letterSpacing: '0.1em' }}>{project.contractor ?? ''}</div>
+                  <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7.5pt' : '10px', color: '#aaa', letterSpacing: '0.1em' }}>{project.projectName ?? ''}</div>
                 </div>
 
               </div>
@@ -1204,7 +1101,7 @@ export default function PdfExportPage() {
                     ['工事件名', project.projectName],
                     ['工事場所', project.projectLocation],
                     ['工　　期', project.constructionPeriod],
-                    ['作成年月日', project.creationDate],
+                    ['作成年月日', project.reportDate ?? project.creationDate ?? ''],
                   ] as [string, string][]).map(([label, value], i) => (
                     <div key={i} style={{ display: 'flex', borderBottom: i < 3 ? '1px solid #e0e0e0' : 'none' }}>
                       <div style={{ width: isPrinting ? '28mm' : '106px', flexShrink: 0, fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', fontWeight: 'bold', color: '#666', background: '#f5f5f5', padding: isPrinting ? '1.5mm 3mm' : '5px 10px', display: 'flex', alignItems: 'center', borderRight: '1px solid #e0e0e0' }}>{label}</div>

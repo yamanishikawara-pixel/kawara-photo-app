@@ -127,6 +127,8 @@ export interface Project {
   constructionPeriod: string;
   contractorName: string;
   creationDate: string;
+  contractor?: string;
+  reportDate?: string;
   photos: Photo[];
   mapUrls: string[];
   mapRows: MapRow[];

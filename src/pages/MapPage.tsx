@@ -157,7 +157,7 @@ const TitleMarker = React.memo(({ layout, mapRotation, currentScale, isSelected,
       title="ドラッグで移動 / タップで編集"
     >
       {layout.title}{mapCount > 1 ? ` (${mapIndex + 1}/${mapCount})` : ''}
-    </div>
+        </div>
   );
 });
 
@@ -248,7 +248,7 @@ const WhiteoutMarker = React.memo(({ box, rotation, currentScale, isSelected, on
       <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }} preserveAspectRatio="none">
         <rect x="0" y="0" width="100%" height="100%" fill="white" />
       </svg>
-    </div>
+        </div>
   );
 });
 
@@ -282,7 +282,7 @@ const WhiteoutControlPanel = React.memo(({ box, onUpdate, onRemove, onDeselect }
           <Btn onClick={() => nudge(0, 1)}  className="bg-gray-700 hover:bg-gray-600 text-lg">↓</Btn>
           <Btn onClick={() => nudge(-1, 0)} className="bg-gray-700 hover:bg-gray-600 text-lg">←</Btn>
           <Btn onClick={() => nudge(1, 0)}  className="bg-gray-700 hover:bg-gray-600 text-lg">→</Btn>
-        </div>
+    </div>
 
         {/* 幅 */}
         <div className="flex items-center gap-1">
@@ -422,8 +422,8 @@ const DimensionLineMarker = React.memo(({ line, rotation, currentScale, isSelect
                <button onClick={(e) => { e.stopPropagation(); onUpdate({ size: Math.min(10, thickness + 1) }); }} className="w-7 h-7 flex items-center justify-center rounded font-bold transition-colors mr-1" style={{ background: '#2e2e50', color: '#f0ede8' }}>＋</button>
                <div className="w-px h-5 mx-1" style={{ background: '#2e2e50' }}></div>
                <button onClick={(e) => { e.stopPropagation(); onRemove(); }} aria-label="削除" className="p-1.5 rounded-lg transition-colors" style={{ color: '#ef4444', background: 'rgba(239,68,68,0.1)' }}><Trash2 className="w-4 h-4" /></button>
-             </div>
-          </div>
+        </div>
+        </div>
           <div className="flex flex-wrap gap-1.5 w-full">
             {DEFAULT_MAP_PART_NAMES.map(name => (
               <button key={name} onClick={() => addPartName(name)} className="text-xs font-bold px-2.5 py-1.5 rounded-lg transition-colors" style={{ color: '#ff6b35', background: 'rgba(255,107,53,0.12)', border: '1px solid rgba(255,107,53,0.25)' }}>＋{name}</button>
@@ -432,8 +432,8 @@ const DimensionLineMarker = React.memo(({ line, rotation, currentScale, isSelect
           <div className="flex gap-2 w-full">
             <input ref={inputRef} type="text" value={line.text} onChange={(e) => onTextChange(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onDeselect(); } }} className="flex-1 p-2.5 text-sm font-bold rounded-xl outline-none text-center" style={{ background: '#12122a', border: '1px solid #3d3d60', color: '#f0ede8' }} placeholder="例: 軒先 5.5m" />
             <button type="button" onClick={(e) => { e.stopPropagation(); onDeselect(); }} className="px-3 py-2 font-black rounded-xl shadow transition-all whitespace-nowrap" style={{ background: '#ff6b35', color: '#fff' }}>✓ 完了</button>
-          </div>
         </div>
+            </div>
       )}
 
       {isSelected && (
@@ -471,8 +471,8 @@ const DimensionLineMarker = React.memo(({ line, rotation, currentScale, isSelect
           className={`absolute font-bold px-2 py-0.5 rounded pointer-events-none whitespace-nowrap border border-white/20 shadow-sm ${isSelected ? 'z-40' : 'z-20'}`}
         >
           {line.text}
-        </div>
-      )}
+          </div>
+        )}
     </>
   );
 });
@@ -519,7 +519,7 @@ const LegendRow = React.memo(({ row, isSelected, onSelect, onChange, onRemove }:
       <input type="text" value={row.remarks} placeholder="..." onChange={(e) => onChange({ remarks: e.target.value })} className="col-span-5 py-2.5 px-2 text-xs sm:text-sm font-bold bg-transparent outline-none border-r" style={{ color: '#f0ede8', borderColor: '#2e2e50' }} />
       <div className="col-span-1 flex items-center justify-center">
         <button onClick={(e) => { e.stopPropagation(); onRemove(); }} aria-label="削除" className="p-1.5 rounded-lg transition-colors" style={{ color: '#3d3d60' }} onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')} onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}><Trash2 className="w-4 h-4"/></button>
-      </div>
+    </div>
     </div>
   );
 });
@@ -1081,8 +1081,8 @@ export default function MapPage() {
 
   if (loading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={error} />;
-
-  return (
+                
+                return (
     <div className="min-h-screen p-4 lg:p-6 font-sans pb-40 select-none overflow-x-hidden" style={{ background: '#0f0f1a', color: '#f0ede8' }}>
 
       {/* 保存エラートースト */}
@@ -1114,9 +1114,9 @@ export default function MapPage() {
                 <div className="grid grid-cols-4 gap-2">
                    {[0, 90, 180, 270].map(deg => (
                      <button key={deg} onClick={() => updateMapLayout({ rotation: deg })} className="p-3 rounded-xl font-black border transition-colors" style={currentLayout.rotation === deg ? { background: '#3b82f6', color: '#fff', borderColor: '#3b82f6' } : { background: '#12122a', color: '#8b8ba8', borderColor: '#2e2e50' }}>{deg}°</button>
-                   ))}
-                </div>
-             </div>
+                      ))}
+                    </div>
+                  </div>
 
              <div className="flex gap-2 mt-1">
                <button
@@ -1136,7 +1136,7 @@ export default function MapPage() {
                >
                  ✓ 完了
                </button>
-             </div>
+                          </div>
           </div>
         </div>
       )}
@@ -1187,13 +1187,13 @@ export default function MapPage() {
             <div key={idx} className="flex items-center gap-1">
               <button onClick={() => setCurrentMapIndex(idx)} className="px-5 py-2.5 rounded-xl text-sm font-black transition-colors" style={currentMapIndex === idx ? { background: '#12122a', color: '#3b82f6', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' } : { color: '#8b8ba8' }}>図面 {idx + 1}</button>
               <button onClick={() => setConfirmDeleteMapIndex(idx)} aria-label="削除" className="p-1.5 rounded-lg transition-colors" style={{ color: '#3d3d60' }} onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')} onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')} title="削除"><Trash2 className="w-3.5 h-3.5" /></button>
-            </div>
-          ))}
+                        </div>
+                      ))}
           <label className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-black cursor-pointer transition-colors border-2 border-dashed" style={{ color: '#8b8ba8', borderColor: '#3d3d60' }} title="図面を追加">
             <Plus className="w-4 h-4" /> 追加
             <input ref={addInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => uploadMapImage(e, 'add')} disabled={isSaving} />
           </label>
-        </div>
+                    </div>
 
         <div className={`grid ${showLegendTable ? 'grid-cols-1 lg:grid-cols-12' : 'grid-cols-1'} gap-6 items-start`}>
 
@@ -1208,14 +1208,14 @@ export default function MapPage() {
                 <label className="w-7 h-7 rounded-full cursor-pointer overflow-hidden flex items-center justify-center transition-all hover:scale-105" style={{ background: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)', border: !COLOR_PALETTE.some(c => c.value === activeColor) ? '3px solid #ff6b35' : '2px solid #2e2e50' }} title="自由色">
                   <input type="color" value={activeColor} onChange={(e) => setActiveColor(e.target.value)} className="opacity-0 absolute w-px h-px" />
                 </label>
-              </div>
+                  </div>
             )}
 
             {uploadProgress && (
               <div className="mt-2 mb-2 flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold" style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', color: '#60a5fa' }}>
                 <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin shrink-0" style={{ borderColor: '#3b82f6', borderTopColor: 'transparent' }} />
                 {uploadProgress}
-              </div>
+                </div>
             )}
 
             {currentMapUrl && (
@@ -1364,8 +1364,8 @@ export default function MapPage() {
                       </div>
                     </div>
                   </div>
-                </div>
-              ) : (
+            </div>
+          ) : (
                 <label className="flex flex-col items-center justify-center cursor-pointer w-full h-72 rounded-2xl border-2 border-dashed group transition-colors" style={{ borderColor: '#3d3d60' }} onPointerEnter={e => (e.currentTarget.style.borderColor = '#3b82f6')} onPointerLeave={e => (e.currentTarget.style.borderColor = '#3d3d60')}>
                   <UploadCloud className="w-14 h-14 mb-3 transition-transform group-hover:scale-110" style={{ color: '#3b82f6' }} />
                   <span className="text-lg font-black block mb-1" style={{ color: '#3b82f6' }}>図面・位置図をアップロード</span>
@@ -1452,10 +1452,10 @@ export default function MapPage() {
                   />
                 )) : (
                   <div className="text-center py-8 text-sm font-bold" style={{ background: '#12122a', color: '#6b7280' }}>ピンを追加すると<br/>ここに行が追加されます</div>
-                )}
-              </div>
+          )}
+        </div>
               <button onClick={() => { const newRows = [...mapRows, { id: Date.now(), symbol: '', part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }]; setMapRows(newRows); saveProjectMapData(mapPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts); }} className="w-full font-black py-3 px-4 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-colors text-sm" style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }} onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')} onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}><Plus className="w-4 h-4"/> 行を手動追加</button>
-            </div>
+      </div>
           )}
         </div>
 
