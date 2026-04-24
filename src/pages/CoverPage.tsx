@@ -13,6 +13,7 @@ import type { Project } from '../types';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { ConfirmModal } from '../shared/ConfirmModal';
+import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import {
   canUpload,
   trackUpload,
@@ -103,10 +104,9 @@ export function CoverPage() {
           setError('表紙データが見つかりません。');
         }
       } catch (err) {
-        console.error('[CoverPage] load failed:', err);
-        if (!aborted && mountedRef.current) {
-          setError('表紙データの読み込みに失敗しました。');
-        }
+        if (aborted || !mountedRef.current) return;
+        logFirebaseError(err, '表紙データの読み込み');
+        setError(firebaseErrorMessage(err, '表紙データの読み込み'));
       }
     })();
     return () => { aborted = true; };
@@ -142,10 +142,10 @@ export function CoverPage() {
           }
         }, SAVED_FLASH_MS);
       } catch (err) {
-        console.error('[CoverPage] field save failed:', field, err);
+        logFirebaseError(err, 'フィールド保存');
         if (mountedRef.current) {
           setSavingKey(prev => prev === key ? null : prev);
-          setError('保存に失敗しました。');
+          setError(firebaseErrorMessage(err, '保存'));
         }
       }
     }, DEBOUNCE_MS);
@@ -184,8 +184,8 @@ export function CoverPage() {
         return;
       }
     } catch (err) {
-      console.error('[CoverPage] quota check failed:', err);
-      setError('容量チェックに失敗しました。もう一度お試しください。');
+      logFirebaseError(err, '容量チェック');
+      setError(firebaseErrorMessage(err, '容量チェック'));
       return;
     }
 
@@ -235,11 +235,11 @@ export function CoverPage() {
       uploadTaskRef.current = null;
       const code = (err as { code?: string })?.code;
       if (code === 'storage/canceled') {
-        if (import.meta.env.DEV) console.info('[CoverPage] upload canceled');
         // キャンセル時はエラー表示しない
+        if (import.meta.env.DEV) console.info('[CoverPage] upload canceled');
       } else {
-        console.error('[CoverPage] PDF upload failed:', err);
-        if (mountedRef.current) setError('PDFのアップロードに失敗しました。');
+        logFirebaseError(err, 'PDFアップロード');
+        if (mountedRef.current) setError(firebaseErrorMessage(err, 'PDFアップロード'));
       }
     } finally {
       if (mountedRef.current) {
@@ -281,8 +281,8 @@ export function CoverPage() {
         return next;
       });
     } catch (err) {
-      console.error('[CoverPage] appendix delete failed:', err);
-      if (mountedRef.current) setError('添付PDFの削除に失敗しました。');
+      logFirebaseError(err, '添付PDFの削除');
+      if (mountedRef.current) setError(firebaseErrorMessage(err, '添付PDFの削除'));
     }
   };
 

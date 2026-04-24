@@ -7,6 +7,7 @@ import {
 import { auth, db, storage } from '../firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
+import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import {
   canUpload, trackUpload,
   genId, storagePathFromUrl, isStorageUrl,
@@ -225,7 +226,7 @@ const ItemCard = React.memo(function ItemCard({
   const processFile = (side: 'before' | 'after', file: File) => {
     const reader = new FileReader();
     reader.onerror = () => {
-      console.error('[ItemCard] FileReader error:', reader.error);
+      if (import.meta.env.DEV) console.error('[ItemCard] FileReader error:', reader.error);
       alert('ファイルの読み込みに失敗しました');
     };
     reader.onload = ev => {
@@ -236,7 +237,7 @@ const ItemCard = React.memo(function ItemCard({
       }
       const img = new Image();
       img.onerror = () => {
-        console.error('[ItemCard] Image decode failed (unsupported format?)');
+        if (import.meta.env.DEV) console.error('[ItemCard] Image decode failed (unsupported format?)');
         alert('画像の処理に失敗しました。HEIC 等の未対応形式の可能性があります。JPEG/PNG でお試しください。');
       };
       img.onload = () => {
@@ -251,7 +252,7 @@ const ItemCard = React.memo(function ItemCard({
           const dataUrl = canvas.toDataURL('image/jpeg', IMG_QUALITY);
           void onImageUpload(side, dataUrl);
         } catch (err) {
-          console.error('[ItemCard] processFile failed:', err);
+          if (import.meta.env.DEV) console.error('[ItemCard] processFile failed:', err);
           alert('画像の処理に失敗しました');
         }
       };
@@ -276,8 +277,8 @@ const ItemCard = React.memo(function ItemCard({
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onerror = () => {
-      console.error('[ItemCard] rotateImage: img load failed');
-      alert('画像の読み込みに失敗しました（Firebase Storage の CORS 設定をご確認ください）');
+      if (import.meta.env.DEV) console.error('[ItemCard] rotateImage: img load failed');
+      alert('画像の読み込みに失敗しました(Firebase Storage の CORS 設定をご確認ください)');
     };
     img.onload = () => {
       try {
@@ -292,8 +293,8 @@ const ItemCard = React.memo(function ItemCard({
         const dataUrl = canvas.toDataURL('image/jpeg', IMG_QUALITY);
         void onImageUpload(side, dataUrl);
       } catch (err) {
-        console.error('[ItemCard] rotateImage failed:', err);
-        alert('画像の回転に失敗しました（CORS エラーの可能性があります）');
+        if (import.meta.env.DEV) console.error('[ItemCard] rotateImage failed:', err);
+        alert('画像の回転に失敗しました(CORS エラーの可能性があります)');
       }
     };
     img.src = src;
@@ -538,8 +539,8 @@ export function BeforeAfterPage() {
           }
         }
       } catch (err) {
-        console.error('[BeforeAfterPage] load failed:', err);
-        if (mountedRef.current) setError('プロジェクトの読み込みに失敗しました');
+        logFirebaseError(err, 'プロジェクト読み込み');
+        if (mountedRef.current) setError(firebaseErrorMessage(err, 'プロジェクト読み込み'));
       } finally {
         if (!aborted && mountedRef.current) setLoading(false);
       }
@@ -670,8 +671,8 @@ export function BeforeAfterPage() {
       ));
       isDirty.current = true;
     } catch (err) {
-      console.error('[BeforeAfterPage] upload failed:', err);
-      if (mountedRef.current) setError('画像のアップロードに失敗しました');
+      logFirebaseError(err, '画像アップロード');
+      if (mountedRef.current) setError(firebaseErrorMessage(err, '画像アップロード'));
     } finally {
       if (mountedRef.current) {
         setUploadingKeys(prev => { const n = new Set(prev); n.delete(key); return n; });
@@ -702,7 +703,7 @@ export function BeforeAfterPage() {
             sessionUploadedPaths.current.add(r.fullPath);
             beforeImage = await getDownloadURL(r);
           } catch (err) {
-            console.error('[BeforeAfterPage] migrate beforeImage failed:', item.id, err);
+            logFirebaseError(err, `画像移行(施工前 / item=${item.id})`);
             migrationFailed = true;
           }
         }
@@ -715,7 +716,7 @@ export function BeforeAfterPage() {
             sessionUploadedPaths.current.add(r.fullPath);
             afterImage = await getDownloadURL(r);
           } catch (err) {
-            console.error('[BeforeAfterPage] migrate afterImage failed:', item.id, err);
+            logFirebaseError(err, `画像移行(施工後 / item=${item.id})`);
             migrationFailed = true;
           }
         }
@@ -759,10 +760,9 @@ export function BeforeAfterPage() {
           setError('一部の画像で問題が発生しました（ログをご確認ください）');
         }
       }
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : '不明なエラー';
-      console.error('[BeforeAfterPage] save failed:', e);
-      if (mountedRef.current) setError('保存に失敗しました: ' + msg);
+    } catch (err) {
+      logFirebaseError(err, '保存');
+      if (mountedRef.current) setError(firebaseErrorMessage(err, '保存'));
     } finally {
       if (mountedRef.current) setSaving(false);
     }
