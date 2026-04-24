@@ -1,3 +1,7 @@
+// ============================================================================
+// Geometry / Drawing primitives
+// ============================================================================
+
 export interface Circle {
   id: number;
   x: number;
@@ -15,6 +19,11 @@ export interface DimensionLine {
   mapIndex?: number;
   textRotation?: number;
 }
+
+// ============================================================================
+// Photo / Material
+// ============================================================================
+
 export interface Photo {
   id: number;
   image: string | null;
@@ -27,6 +36,20 @@ export interface Photo {
   rotation?: number;
   dimensionLines?: DimensionLine[];
 }
+
+export interface Material {
+  id: number;
+  image: string | null;
+  name: string;
+  manufacturer: string;
+  specification: string;
+  remarks: string;
+  rotation: number;
+}
+
+// ============================================================================
+// Map overlays
+// ============================================================================
 
 export interface MapRow {
   id: number;
@@ -66,15 +89,18 @@ export interface MapLine {
   rotation: number;
 }
 
-export interface Material {
+export interface WhiteoutBox {
   id: number;
-  image: string | null;
-  name: string;
-  manufacturer: string;
-  specification: string;
-  remarks: string;
-  rotation: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  mapIndex?: number;
 }
+
+// ============================================================================
+// Master data (user-level templates)
+// ============================================================================
 
 export interface MaterialMaster {
   id: number;
@@ -103,14 +129,9 @@ export interface UserSettings {
   storageUsedBytes?: number;
 }
 
-export interface WhiteoutBox {
-  id: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  mapIndex?: number;
-}
+// ============================================================================
+// Before / After
+// ============================================================================
 
 export interface BeforeAfterItem {
   id: string;
@@ -121,32 +142,90 @@ export interface BeforeAfterItem {
   afterDesc: string;
 }
 
+// ============================================================================
+// Project (top-level Firestore document)
+// ============================================================================
+
 export interface Project {
+  // ── 基本情報（必須） ─────────────────────────────────────────
   projectName: string;
   projectLocation: string;
   constructionPeriod: string;
+
+  /**
+   * 施工業者名（canonical）。
+   * 表示・保存は常にこのフィールドを使用すること。
+   */
   contractorName: string;
+
+  /**
+   * 表紙の「作成年月日」（canonical）。
+   */
   creationDate: string;
+
+  // ── レガシー互換（読み取り専用・新規書き込み禁止） ──────────
+  /**
+   * @deprecated 旧フィールド。読み出し時のみ互換目的で参照する。
+   * 新規保存時は `contractorName` のみを使用。
+   * 参照例: `project.contractorName ?? project.contractor ?? ''`
+   */
   contractor?: string;
+
+  /**
+   * 完了報告書用の「報告書作成日」。
+   * `creationDate` とは用途が異なる（表紙＝企画時、report＝完了時）。
+   * 未指定時は完了報告書側で `creationDate` をフォールバック。
+   */
   reportDate?: string;
+
+  // ── 写真・材料 ──────────────────────────────────────────────
   photos: Photo[];
+  materials?: Material[];
+
+  // ── 位置図関連 ──────────────────────────────────────────────
   mapUrls: string[];
   mapRows: MapRow[];
   mapPins: MapPin[];
   mapLines?: MapLine[];
-  materials?: Material[];
-  createdAt?: string;
   mapDimensionLines?: DimensionLine[];
-  showLegendTable?: boolean;
   mapRotations?: number[];
   mapTransforms?: { scale: number; x: number; y: number }[];
   mapLayouts?: { title: string; x?: number; y?: number; rotation?: number }[];
-  shareToken?: string;
   whiteoutBoxes?: WhiteoutBox[];
-  isCompleted?: boolean;
-  appendixPdfUrl?: string;
+  showLegendTable?: boolean;
+
+  // ── ビフォーアフター ────────────────────────────────────────
   beforeAfterItems?: BeforeAfterItem[];
+
+  // ── 施工保証 ────────────────────────────────────────────────
   warrantyYears?: string;
   warrantyStartDate?: string;
   warrantyNote?: string;
+
+  // ── 添付PDF ────────────────────────────────────────────────
+  appendixPdfUrl?: string;
+  /**
+   * 添付PDFのバイト数。
+   * Storage 使用量カウンタの減算時に `getMetadata()` を呼ばず済むよう
+   * アップロード時に記録しておく。
+   */
+  appendixPdfSize?: number;
+
+  // ── メタ情報 ────────────────────────────────────────────────
+  createdAt?: string;
+  shareToken?: string;
+  isCompleted?: boolean;
 }
+
+// ============================================================================
+// Helper accessors（読み出しの canonical フォールバック）
+// ----------------------------------------------------------------------------
+// 表示側コードでは常にこれらを経由して読むことで、
+// レガシーフィールドが残る Firestore ドキュメントにも透過対応する。
+// ============================================================================
+
+export const getContractorName = (p: Pick<Project, 'contractorName' | 'contractor'>): string =>
+  p.contractorName || p.contractor || '';
+
+export const getReportDate = (p: Pick<Project, 'reportDate' | 'creationDate'>): string =>
+  p.reportDate || p.creationDate || '';

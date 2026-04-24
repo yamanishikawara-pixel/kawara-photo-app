@@ -2,12 +2,17 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Save, GripVertical } from 'lucide-react';
 import {
-  ref, uploadBytes, getDownloadURL, deleteObject, getMetadata,
+  ref, uploadBytes, getDownloadURL,
 } from 'firebase/storage';
 import { auth, db, storage } from '../firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
-import { canUpload, trackUpload } from '../shared/storageUtils';
+import {
+  canUpload, trackUpload,
+  genId, storagePathFromUrl, isStorageUrl,
+  deleteStorageFileWithAccounting,
+} from '../shared/storageUtils';
+import type { BeforeAfterItem } from '../types';
 
 // ── 定数 ────────────────────────────────────────────
 const W = 595, H = 842;
@@ -35,68 +40,12 @@ const IMG_QUALITY = 0.75;
 type PhotoFit = 'cover' | 'contain';
 const PHOTO_FIT = 'cover' as PhotoFit;
 
-// ── 型 ──────────────────────────────────────────────
-export interface BeforeAfterItem {
-  id: string;
-  title: string;
-  beforeImage: string;
-  afterImage: string;
-  beforeDesc: string;
-  afterDesc: string;
-}
-
-// ── ユーティリティ ───────────────────────────────────
-// Safari 15.4 未満で crypto.randomUUID() が無い端末向けフォールバック
-const genId = (): string => {
-  try {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-      return crypto.randomUUID();
-    }
-  } catch { /* noop */ }
-  return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-};
-
+// ── BeforeAfterItem 型は ../types から import 済み ──
+// 空アイテム生成ファクトリ
 const makeEmptyItem = (): BeforeAfterItem => ({
   id: genId(),
   title: '', beforeImage: '', afterImage: '', beforeDesc: '', afterDesc: '',
 });
-
-function storagePathFromUrl(url: string): string | null {
-  try {
-    const u = new URL(url);
-    const encoded = u.pathname.split('/o/')[1];
-    return encoded ? decodeURIComponent(encoded.split('?')[0]) : null;
-  } catch { return null; }
-}
-
-// ドメイン変更（firebasestorage.app 等）に追従できる堅牢版
-const isStorageUrl = (url: string): boolean => {
-  if (!url || !url.startsWith('http')) return false;
-  return storagePathFromUrl(url) !== null;
-};
-
-// Storage ファイルを削除しつつ usedBytes も減算する
-async function deleteStorageFileWithAccounting(path: string, uid: string | undefined): Promise<void> {
-  try {
-    const r = ref(storage, path);
-    let size = 0;
-    try {
-      const meta = await getMetadata(r);
-      size = meta.size ?? 0;
-    } catch (err) {
-      // メタデータ取得失敗でも削除は試みる
-      console.warn('[BeforeAfterPage] getMetadata failed:', path, err);
-    }
-    await deleteObject(r);
-    if (uid && size > 0) {
-      // trackUpload が加算関数前提。負値で相殺。
-      try { await trackUpload(uid, -size); }
-      catch (err) { console.error('[BeforeAfterPage] trackUpload(-) failed:', err); }
-    }
-  } catch (err) {
-    console.error('[BeforeAfterPage] deleteObject failed:', path, err);
-  }
-}
 
 // ── A4プレビュー（1ページ2箇所）─────────────────────
 interface A4PageProps {

@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Download, Printer, FileDown, ChevronUp, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Download, Printer, FileDown, ChevronUp, ChevronDown, AlertTriangle } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import type { Circle, MapRow, MapLine, Photo, Project, Material, WhiteoutBox, UserSettings, BeforeAfterItem } from '../types';
+import { getContractorName, getReportDate } from '../types';
 import kawaraLogo from '../assets/kawara-logo.png';
 import { A4_HEIGHT_PX, A4_WIDTH_PX, getPreviewScale, proxyUrl } from '../shared/utils';
 import { ErrorMessage } from '../shared/ErrorMessage';
@@ -28,13 +29,38 @@ const COVER_FIELDS: { label: string; key: keyof Project }[] = [
   { label: '作成年月日', key: 'creationDate' },
 ];
 
-let _emptyIdCounter = 0;
-function createEmptyPhoto(): Photo & { circles?: Circle[] } {
-  return { id: -(++_emptyIdCounter), image: null, photoNumber: '', shootingDate: '', locationMap: '', process: '', description: '', circles: [] };
+// ── セクション定義（モジュールスコープ）────────────────
+// Hooks や order の比較で参照が安定している必要があるため、モジュール直下で定義する。
+const SECTION_KEYS = ['cover', 'map', 'photo', 'beforeAfter', 'completion', 'material', 'appendix'] as const;
+type SectionKey = (typeof SECTION_KEYS)[number];
+const DEFAULT_ORDER: readonly SectionKey[] = SECTION_KEYS;
+
+const SECTION_META: Record<SectionKey, { label: string; icon: string }> = {
+  cover:       { label: '表紙',             icon: '📋' },
+  map:         { label: '位置図',           icon: '📍' },
+  photo:       { label: '工事写真',         icon: '📷' },
+  beforeAfter: { label: 'ビフォーアフター', icon: '🔄' },
+  completion:  { label: '完了報告書',       icon: '📝' },
+  material:    { label: '使用材料',         icon: '🔧' },
+  appendix:    { label: '添付PDF',          icon: '📎' },
+};
+
+// ── 定数 ─────────────────────────────────────────
+const APPENDIX_PAGE_LIMIT = 20;             // 添付PDFの取り込み最大ページ数
+const APPENDIX_RENDER_WIDTH = 794;          // A4 150DPI 相当
+const APPENDIX_RENDER_QUALITY = 0.92;
+const IMG_MAX_PRINT_PX = 1600;              // 印刷用圧縮の最大辺
+const IMG_PRINT_QUALITY = 0.92;
+const IMG_BATCH_SIZE = 2;                   // 画像最適化のバッチ並列度
+
+// ── 空行プレースホルダ生成（React 内で state として保持する）──
+// ストリーク不定の負数 ID を返す。idRef を通してコンポーネント間で安定化する。
+function createEmptyPhoto(id: number): Photo & { circles?: Circle[] } {
+  return { id, image: null, photoNumber: '', shootingDate: '', locationMap: '', process: '', description: '', circles: [] };
 }
 
-function createEmptyMaterial(): Material {
-  return { id: -(++_emptyIdCounter), image: null, name: '', manufacturer: '', specification: '', remarks: '', rotation: 0 };
+function createEmptyMaterial(id: number): Material {
+  return { id, image: null, name: '', manufacturer: '', specification: '', remarks: '', rotation: 0 };
 }
 
 
@@ -51,10 +77,23 @@ export default function PdfExportPage() {
   const [printProgress, setPrintProgress] = useState('');
   const [isCapturingForPdf, setIsCapturingForPdf] = useState(false);
   const [pdfProgress, setPdfProgress] = useState('');
-  const [appendixPages, setAppendixPages] = useState<string[]>([]); // 添付PDF→画像
+  const [appendixPages, setAppendixPages] = useState<string[]>([]);    // 添付PDF→画像
+  const [appendixTruncated, setAppendixTruncated] = useState(false);   // 20ページ超での打ち切り検知
+
+  // ── マウント管理 ──
+  const mountedRef = useRef(true);
+
+  // ── 空カードID生成（負数カウンタ）──
+  // ref に閉じ込めることでモジュールグローバル汚染を避けつつ、
+  // 同一コンポーネントインスタンス内では安定した ID を維持する。
+  const emptyIdCounterRef = useRef(0);
+  const nextEmptyId = useCallback(() => {
+    emptyIdCounterRef.current += 1;
+    return -emptyIdCounterRef.current;
+  }, []);
 
   // ── セクションON/OFF制御 ──
-  const [sections, setSections] = useState({
+  const [sections, setSections] = useState<Record<SectionKey, boolean>>({
     cover: true,
     map: true,
     photo: true,
@@ -63,14 +102,13 @@ export default function PdfExportPage() {
     material: true,
     appendix: true,
   });
-  type SectionKey = keyof typeof sections;
-  const DEFAULT_ORDER: SectionKey[] = ['cover', 'map', 'photo', 'beforeAfter', 'completion', 'material', 'appendix'];
-  const [sectionOrder, setSectionOrder] = useState<SectionKey[]>(DEFAULT_ORDER);
+  const [sectionOrder, setSectionOrder] = useState<SectionKey[]>([...DEFAULT_ORDER]);
 
-  const toggleSection = (key: SectionKey) => {
+  const toggleSection = useCallback((key: SectionKey) => {
     setSections(prev => ({ ...prev, [key]: !prev[key] }));
-  };
-  const moveSection = (key: SectionKey, dir: 'up' | 'down') => {
+  }, []);
+
+  const moveSection = useCallback((key: SectionKey, dir: 'up' | 'down') => {
     setSectionOrder(prev => {
       const idx = prev.indexOf(key);
       const next = dir === 'up' ? idx - 1 : idx + 1;
@@ -79,56 +117,100 @@ export default function PdfExportPage() {
       [arr[idx], arr[next]] = [arr[next], arr[idx]];
       return arr;
     });
-  };
-  const applyPreset = (preset: typeof sections) => {
+  }, []);
+
+  // プリセット適用:セクションのON/OFF のみ変更し、**並び順は維持する**。
+  // （以前は DEFAULT_ORDER に常にリセットしていたため、ユーザー操作が無言で消えていた）
+  const applyPreset = useCallback((preset: Record<SectionKey, boolean>) => {
     setSections(preset);
-    setSectionOrder(DEFAULT_ORDER);
-  };
-  const PRESETS: { label: string; icon: string; value: typeof sections }[] = [
+  }, []);
+
+  const PRESETS: { label: string; icon: string; value: Record<SectionKey, boolean> }[] = useMemo(() => [
     { label: '施主提出用', icon: '🏠', value: { cover: true, map: false, photo: false, beforeAfter: true, completion: true, material: false, appendix: false } },
     { label: '役所提出用', icon: '🏛️', value: { cover: true, map: true, photo: true, beforeAfter: true, completion: false, material: true, appendix: true } },
     { label: '写真のみ',   icon: '📷', value: { cover: false, map: false, photo: true, beforeAfter: false, completion: false, material: false, appendix: false } },
     { label: '全部',       icon: '📋', value: { cover: true, map: true, photo: true, beforeAfter: true, completion: true, material: true, appendix: true } },
-  ];
+  ], []);
 
+  // ── マウントフラグ ──
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // ── エラー自動消去(8秒) ──
+  useEffect(() => {
+    if (!error) return;
+    const t = window.setTimeout(() => {
+      if (mountedRef.current) setError(null);
+    }, 8000);
+    return () => clearTimeout(t);
+  }, [error]);
+
+  // ── プロジェクト/ユーザー設定ロード ──
   useEffect(() => {
     if (!id) return;
+    let aborted = false;
     setError(null);
-    const fetchData = async () => {
+    (async () => {
       try {
         const d = await getDoc(doc(db, 'projects', id));
+        if (aborted || !mountedRef.current) return;
         if (d.exists()) setProject(d.data() as Project);
         const user = auth.currentUser;
         if (user) {
           const s = await getDoc(doc(db, 'users', user.uid));
+          if (aborted || !mountedRef.current) return;
           if (s.exists()) setUserSettings(s.data() as UserSettings);
         }
       } catch (err) {
+        if (aborted || !mountedRef.current) return;
         logFirebaseError(err, 'PDF出力用データ読込');
         setError(firebaseErrorMessage(err, 'データの読み込み'));
       }
-    };
-    fetchData();
+    })();
+    return () => { aborted = true; };
   }, [id]);
 
   useEffect(() => {
-    const updateScale = () => setScale(getPreviewScale(32));
+    const updateScale = () => {
+      if (mountedRef.current) setScale(getPreviewScale(32));
+    };
     updateScale();
     window.addEventListener('resize', updateScale);
     return () => window.removeEventListener('resize', updateScale);
   }, []);
 
+  // ── 印刷後の状態リセット:両フラグを確実にクリア ──
   useEffect(() => {
-    const handleAfterPrint = () => { setIsPrinting(false); setPrintProgress(''); };
+    const handleAfterPrint = () => {
+      if (!mountedRef.current) return;
+      setIsPrinting(false);
+      setPrintProgress('');
+      setIsCapturingForPdf(false);  // 以前未対応 → キャンセル時に永久 disabled 状態になる致命バグ
+      setPdfProgress('');
+    };
     window.addEventListener('afterprint', handleAfterPrint);
     return () => window.removeEventListener('afterprint', handleAfterPrint);
   }, []);
 
-  // 添付PDFをページ画像に変換
+  // ── 添付PDFをページ画像に変換 ──
   useEffect(() => {
     const url = project?.appendixPdfUrl;
-    if (!url) { setAppendixPages([]); return; }
+    if (!url) {
+      setAppendixPages([]);
+      setAppendixTruncated(false);
+      return;
+    }
     let cancelled = false;
+    // pdfjs-dist の型は ReturnType から推論させる(公式型 import を避けて依存を減らす)
+    type PdfjsLib = typeof import('pdfjs-dist');
+    type LoadingTask = ReturnType<PdfjsLib['getDocument']>;
+    type PdfDocument = Awaited<LoadingTask['promise']>;
+
+    let loadingTask: LoadingTask | null = null;
+    let pdfDoc: PdfDocument | null = null;
+
     (async () => {
       try {
         const pdfjsLib = await import('pdfjs-dist');
@@ -136,26 +218,51 @@ export default function PdfExportPage() {
           'pdfjs-dist/build/pdf.worker.min.mjs',
           import.meta.url,
         ).href;
-        const pdfDoc = await pdfjsLib.getDocument(url).promise;
+        loadingTask = pdfjsLib.getDocument(url);
+        pdfDoc = await loadingTask.promise;
+        if (cancelled) return;
+
+        const totalPages = pdfDoc.numPages;
+        const renderCount = Math.min(totalPages, APPENDIX_PAGE_LIMIT);
+        if (mountedRef.current) setAppendixTruncated(totalPages > APPENDIX_PAGE_LIMIT);
+
         const pages: string[] = [];
-        for (let i = 1; i <= Math.min(pdfDoc.numPages, 20); i++) {
+        for (let i = 1; i <= renderCount; i++) {
           if (cancelled) return;
           const page = await pdfDoc.getPage(i);
-          // A4 150DPI 相当（794px幅）
-          const viewport = page.getViewport({ scale: 794 / page.getViewport({ scale: 1 }).width });
+          const baseViewport = page.getViewport({ scale: 1 });
+          const viewport = page.getViewport({ scale: APPENDIX_RENDER_WIDTH / baseViewport.width });
           const canvas = document.createElement('canvas');
           canvas.width = Math.round(viewport.width);
           canvas.height = Math.round(viewport.height);
-          const ctx = canvas.getContext('2d')!;
-          await page.render({ canvasContext: ctx, viewport, canvas }).promise;
-          pages.push(canvas.toDataURL('image/jpeg', 0.92));
+          const ctx = canvas.getContext('2d');
+          if (!ctx) continue;
+          // pdfjs-dist のバージョンによって render の引数型が異なるため
+          // 必要最小限のオブジェクトを渡す(canvas プロパティは v4+ で要求される)
+          await page.render({ canvasContext: ctx, viewport, canvas } as Parameters<typeof page.render>[0]).promise;
+          if (cancelled) {
+            canvas.width = 0;
+            canvas.height = 0;
+            return;
+          }
+          pages.push(canvas.toDataURL('image/jpeg', APPENDIX_RENDER_QUALITY));
+          // canvas 解放(大きなビットマップのメモリを即座に戻す)
+          canvas.width = 0;
+          canvas.height = 0;
         }
-        if (!cancelled) setAppendixPages(pages);
-      } catch (e) { import.meta.env.DEV && console.warn('PDF読み込み失敗:', e); }
+        if (!cancelled && mountedRef.current) setAppendixPages(pages);
+      } catch (e) {
+        if (import.meta.env.DEV) console.warn('[PdfExport] PDF読み込み失敗:', e);
+      } finally {
+        // pdfDoc / loadingTask を確実に破棄(メモリリーク防止)
+        try { await pdfDoc?.destroy?.(); } catch { /* noop */ }
+        try { await loadingTask?.destroy?.(); } catch { /* noop */ }
+      }
     })();
     return () => { cancelled = true; };
   }, [project?.appendixPdfUrl]);
 
+  // ── ZIPエクスポート ──
   const handleZipExport = async () => {
     if (!project) return;
     try {
@@ -165,42 +272,79 @@ export default function PdfExportPage() {
       const folderName = project.projectName || '現場写真';
       const imgFolder = zip.folder(folderName);
       if (!imgFolder) throw new Error('フォルダ作成失敗');
-      const activePhotos = (project.photos ?? []).filter((p) => p.image);
-      if (activePhotos.length === 0) {
-        setError('ダウンロードする写真がありません。'); setIsZipping(false); return;
+
+      // 写真は image のあるものだけに絞る(ZIPは画像のみが意味を持つ)
+      const photosWithImage = (project.photos ?? []).filter((p) => p.image);
+      if (photosWithImage.length === 0) {
+        if (mountedRef.current) setError('ダウンロードする写真がありません。');
+        return;
       }
+
+      // 同名回避のための Set
+      const usedNames = new Set<string>();
+      const makeUniqueName = (base: string): string => {
+        if (!usedNames.has(base)) {
+          usedNames.add(base);
+          return base;
+        }
+        const dot = base.lastIndexOf('.');
+        const stem = dot > 0 ? base.slice(0, dot) : base;
+        const ext  = dot > 0 ? base.slice(dot) : '';
+        for (let idx = 2; idx < 10000; idx++) {
+          const candidate = `${stem}_${idx}${ext}`;
+          if (!usedNames.has(candidate)) {
+            usedNames.add(candidate);
+            return candidate;
+          }
+        }
+        // 通常到達しない。念のため時刻サフィックス
+        return `${stem}_${Date.now()}${ext}`;
+      };
+
       let failedCount = 0;
-      const promises = activePhotos.map(async (p) => {
+      const promises = photosWithImage.map(async (p) => {
         if (!p.image) return;
         try {
           const response = await fetch(p.image);
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const blob = await response.blob();
           const processName = p.process ? `_${p.process}` : '';
-          const filename = `${p.photoNumber.padStart(2, '0')}${processName}.jpg`;
+          const baseName = `${(p.photoNumber || '00').padStart(2, '0')}${processName}.jpg`;
+          const filename = makeUniqueName(baseName);
           imgFolder.file(filename, blob);
-        } catch (e) { failedCount++; import.meta.env.DEV && console.warn('写真取得失敗:', e); }
+        } catch (e) {
+          failedCount++;
+          if (import.meta.env.DEV) console.warn('[PdfExport] 写真取得失敗:', e);
+        }
       });
       await Promise.all(promises);
-      if (failedCount > 0) setError(`${failedCount}枚の写真の取得に失敗しました。他の写真はZIPに含まれています。`);
+      if (!mountedRef.current) return;
+      if (failedCount > 0) {
+        setError(`${failedCount}枚の写真の取得に失敗しました。他の写真はZIPに含まれています。`);
+      }
       const content = await zip.generateAsync({ type: 'blob' });
+      if (!mountedRef.current) return;
       saveAs(content, `${folderName}.zip`);
     } catch (err) {
       logFirebaseError(err, 'ZIP作成');
-      setError(firebaseErrorMessage(err, 'ZIPファイルの作成'));
-    } finally { setIsZipping(false); }
+      if (mountedRef.current) setError(firebaseErrorMessage(err, 'ZIPファイルの作成'));
+    } finally {
+      if (mountedRef.current) setIsZipping(false);
+    }
   };
 
+  // ── 印刷用に画像を圧縮（base64 化）──
+  // - data-original-src は消さない(再実行時も元URLから再読込できるように)
+  // - crossorigin は消さない(再実行時の CORS 保持)
   const optimizeImageForPrint = (imgEl: HTMLImageElement): Promise<string> => {
     return new Promise((resolve) => {
+      const origSrc = imgEl.getAttribute('data-original-src') || imgEl.src;
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
-        // A4 300DPI 印刷品質：写真欄幅 ≈ 120mm → 300DPI で約 1417px
-        const MAX_PRINT_PX = 1600;
         let { width, height } = img;
-        if (width > MAX_PRINT_PX || height > MAX_PRINT_PX) {
-          const ratio = Math.min(MAX_PRINT_PX / width, MAX_PRINT_PX / height);
+        if (width > IMG_MAX_PRINT_PX || height > IMG_MAX_PRINT_PX) {
+          const ratio = Math.min(IMG_MAX_PRINT_PX / width, IMG_MAX_PRINT_PX / height);
           width = Math.round(width * ratio);
           height = Math.round(height * ratio);
         }
@@ -208,23 +352,26 @@ export default function PdfExportPage() {
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
-        if (!ctx) { resolve(img.src); return; }
+        if (!ctx) { resolve(origSrc); return; }
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+        const dataUrl = canvas.toDataURL('image/jpeg', IMG_PRINT_QUALITY);
         canvas.width = 0;
         canvas.height = 0;
         resolve(dataUrl);
       };
-      img.onerror = () => resolve(imgEl.src);
-      img.src = imgEl.getAttribute('data-original-src') || imgEl.src;
+      img.onerror = () => {
+        if (import.meta.env.DEV) console.warn('[PdfExport] optimizeImageForPrint: load failed', origSrc);
+        resolve(origSrc);
+      };
+      img.src = origSrc;
     });
   };
 
   const yieldToUI = () => new Promise<void>((r) => setTimeout(r, 0));
 
-  // ── 印刷 / PDFダウンロード共通：window.print() で統一 ──
+  // ── 印刷 / PDFダウンロード共通:window.print() で統一 ──
   const executePrint = async (progressSetter: (msg: string) => void) => {
     const images = Array.from(document.querySelectorAll('.pdf-page img'));
     const needsConversion = images.filter((img) => {
@@ -232,16 +379,18 @@ export default function PdfExportPage() {
       return src && !src.startsWith('data:');
     });
     const total = needsConversion.length;
-    const BATCH_SIZE = 2;
-    for (let i = 0; i < total; i += BATCH_SIZE) {
-      const batch = needsConversion.slice(i, i + BATCH_SIZE);
-      progressSetter(`画像を最適化中... (${Math.min(i + BATCH_SIZE, total)}/${total})`);
+    for (let i = 0; i < total; i += IMG_BATCH_SIZE) {
+      const batch = needsConversion.slice(i, i + IMG_BATCH_SIZE);
+      progressSetter(`画像を最適化中... (${Math.min(i + IMG_BATCH_SIZE, total)}/${total})`);
       await Promise.all(batch.map(async (img) => {
         try {
           const dataUrl = await optimizeImageForPrint(img as HTMLImageElement);
           img.setAttribute('src', dataUrl);
-          img.removeAttribute('crossorigin');
-        } catch (e) { import.meta.env.DEV && console.warn('画像最適化失敗:', e); }
+          // crossorigin 属性は残す(再印刷時にも CORS 要件を保つため)
+          // data-original-src も残す(再印刷時は元URLから再取得できる)
+        } catch (e) {
+          if (import.meta.env.DEV) console.warn('[PdfExport] 画像最適化失敗:', e);
+        }
       }));
       await yieldToUI();
     }
@@ -259,11 +408,14 @@ export default function PdfExportPage() {
     setTimeout(async () => {
       try {
         await executePrint(setPrintProgress);
-      } catch {
-        setError('印刷の準備中にエラーが発生しました。');
-        setIsPrinting(false);
+      } catch (err) {
+        if (import.meta.env.DEV) console.warn('[PdfExport] print failed:', err);
+        if (mountedRef.current) {
+          setError('印刷の準備中にエラーが発生しました。');
+          setIsPrinting(false);
+        }
       } finally {
-        setPrintProgress('');
+        if (mountedRef.current) setPrintProgress('');
       }
     }, 500);
   };
@@ -277,50 +429,91 @@ export default function PdfExportPage() {
         await executePrint(setPdfProgress);
       } catch (err) {
         logFirebaseError(err, 'PDF生成');
-        setError(firebaseErrorMessage(err, 'PDFの生成'));
+        if (mountedRef.current) setError(firebaseErrorMessage(err, 'PDFの生成'));
       } finally {
-        setIsCapturingForPdf(false);
-        setPdfProgress('');
+        if (mountedRef.current) {
+          setIsCapturingForPdf(false);
+          setPdfProgress('');
+        }
       }
     }, 500);
   };
 
-  if (!project) return <LoadingSpinner />;
-
+  // ─── 派生値の算出(useMemo で再計算を抑制)─────────────────
+  // 早期リターン用の簡易値は以下で定義し、実際の UI 用は useMemo でメモ化
   const logoUrl = userSettings?.logoUrl;
   const companyName = userSettings?.companyName;
   const address = userSettings?.address;
   const phone = userSettings?.phone;
 
-  const mapUrlsToRender = project.mapUrls?.length ? project.mapUrls.slice(0, 3) : [''];
+  // 位置図(最大3枚)
+  const mapUrlsToRender = useMemo(
+    () => (project?.mapUrls?.length ? project.mapUrls.slice(0, 3) : ['']),
+    [project?.mapUrls],
+  );
   const mapCount = mapUrlsToRender.length;
 
-  const activePhotos = (project.photos ?? []).filter((p) => p.image || p.process || p.description);
-  const photoPages: (Photo & { circles?: Circle[] })[][] = [];
-  for (let i = 0; i < Math.max(activePhotos.length, 3); i += 3) {
-    const chunk = activePhotos.slice(i, i + 3);
-    while (chunk.length < 3) chunk.push(createEmptyPhoto());
-    photoPages.push(chunk);
-  }
+  // 写真フィルタ基準: 画像あり OR テキスト(工程・説明)あり
+  // → PDF本体(photo)、完了報告書(completion)、ZIP(画像のみ)で3種類の基準が
+  //    散らばっていた問題を統一
+  const activePhotos = useMemo(
+    () => (project?.photos ?? []).filter((p) => p.image || p.process || p.description),
+    [project?.photos],
+  );
 
-  const activeMaterials = (project.materials ?? []).filter(m => m.image || m.name || m.manufacturer || m.specification || m.remarks);
-  const materialPages: Material[][] = [];
-  if (activeMaterials.length > 0) {
+  const photoPages: (Photo & { circles?: Circle[] })[][] = useMemo(() => {
+    const pages: (Photo & { circles?: Circle[] })[][] = [];
+    for (let i = 0; i < Math.max(activePhotos.length, 3); i += 3) {
+      const chunk = activePhotos.slice(i, i + 3);
+      while (chunk.length < 3) chunk.push(createEmptyPhoto(nextEmptyId()));
+      pages.push(chunk);
+    }
+    return pages;
+    // nextEmptyId は stable(useCallback)なので依存不要だが、lint に合わせて入れる
+  }, [activePhotos, nextEmptyId]);
+
+  // 材料フィルタ: 画像 OR いずれかのテキスト
+  const activeMaterials = useMemo(
+    () => (project?.materials ?? []).filter(
+      (m) => m.image || m.name || m.manufacturer || m.specification || m.remarks,
+    ),
+    [project?.materials],
+  );
+
+  const materialPages: Material[][] = useMemo(() => {
+    const pages: Material[][] = [];
+    if (activeMaterials.length === 0) return pages;
     for (let i = 0; i < Math.max(activeMaterials.length, 3); i += 3) {
       const chunk = activeMaterials.slice(i, i + 3);
-      while (chunk.length < 3) chunk.push(createEmptyMaterial());
-      materialPages.push(chunk);
+      while (chunk.length < 3) chunk.push(createEmptyMaterial(nextEmptyId()));
+      pages.push(chunk);
     }
-  }
+    return pages;
+  }, [activeMaterials, nextEmptyId]);
 
-  // ビフォーアフター：2箇所ずつ1ページ
-  const activeItems: BeforeAfterItem[] = project.beforeAfterItems ?? [];
-  const beforeAfterPages: BeforeAfterItem[][] = [];
-  for (let i = 0; i < activeItems.length; i += 2) {
-    beforeAfterPages.push(activeItems.slice(i, i + 2));
-  }
+  // ビフォーアフター:2箇所ずつ1ページ
+  const beforeAfterPages: BeforeAfterItem[][] = useMemo(() => {
+    const items = project?.beforeAfterItems ?? [];
+    const pages: BeforeAfterItem[][] = [];
+    for (let i = 0; i < items.length; i += 2) {
+      pages.push(items.slice(i, i + 2));
+    }
+    return pages;
+  }, [project?.beforeAfterItems]);
 
-  const sectionPageCounts: Record<SectionKey, number> = {
+  // 完了報告書用:画像のある写真(最大9枚)
+  const keyPhotos = useMemo(
+    () => (project?.photos ?? []).filter((p) => p.image).slice(0, 9),
+    [project?.photos],
+  );
+
+  // 完了報告書用:品名のある材料(最大4)
+  const topMaterials = useMemo(
+    () => (project?.materials ?? []).filter((m) => m.name).slice(0, 4),
+    [project?.materials],
+  );
+
+  const sectionPageCounts: Record<SectionKey, number> = useMemo(() => ({
     cover: 1,
     map: mapCount,
     photo: photoPages.length,
@@ -328,19 +521,29 @@ export default function PdfExportPage() {
     completion: 1,
     material: materialPages.length,
     appendix: appendixPages.length,
-  };
+  }), [mapCount, photoPages.length, beforeAfterPages.length, materialPages.length, appendixPages.length]);
 
-  const totalPages = sectionOrder.reduce((sum, s) => sum + (sections[s] ? sectionPageCounts[s] : 0), 0);
+  const totalPages = useMemo(
+    () => sectionOrder.reduce((sum, s) => sum + (sections[s] ? sectionPageCounts[s] : 0), 0),
+    [sectionOrder, sections, sectionPageCounts],
+  );
 
-  const pageOffset = (section: SectionKey) => {
+  const pageOffset = useCallback((section: SectionKey) => {
     let offset = 0;
     for (const s of sectionOrder) {
       if (s === section) break;
       if (sections[s]) offset += sectionPageCounts[s];
     }
     return offset;
-  };
+  }, [sectionOrder, sections, sectionPageCounts]);
+
+  if (!project) return <LoadingSpinner />;
+
   const showLegendTable = project.showLegendTable !== false;
+  // 表示用:施工業者名(canonical優先、legacy fallback)
+  const displayContractor = getContractorName(project);
+  // 表示用:完了報告書の日付(reportDate 優先、creationDate フォールバック)
+  const displayReportDate = getReportDate(project);
 
   return (
     <div className={`min-h-screen font-sans overflow-x-hidden w-full relative ${isPrinting ? 'bg-white p-0 block' : 'pb-12 p-4 sm:p-6 flex flex-col items-center'}`} style={isPrinting ? {} : { background: '#12122a' }}>
@@ -430,6 +633,10 @@ export default function PdfExportPage() {
             -webkit-transform-origin: unset !important;
           }
 
+          /* :has() は Firefox 121以降でのみサポート。
+             Firefox旧版向けフォールバックとして body 直接指定も併記。
+             DOM 側で print 時に data-printing 属性をつければ確実だが、
+             :has が効かない場合のみ body が汚れる程度で実害は少ない。 */
           :has(> .pdf-container-wrapper) {
             min-height: 0 !important;
             padding: 0 !important;
@@ -512,68 +719,73 @@ export default function PdfExportPage() {
 
             {/* トグル一覧（並び替え可） */}
             <div className="px-4 py-3 flex flex-col gap-2">
-              {(() => {
-                const meta: Record<SectionKey, { label: string; icon: string }> = {
-                  cover:       { label: '表紙',           icon: '📋' },
-                  map:         { label: '位置図',         icon: '📍' },
-                  photo:       { label: '工事写真',       icon: '📷' },
-                  beforeAfter: { label: 'ビフォーアフター', icon: '🔄' },
-                  completion:  { label: '完了報告書',     icon: '📝' },
-                  material:    { label: '使用材料',       icon: '🔧' },
-                  appendix:    { label: '添付PDF',        icon: '📎' },
-                };
-                return sectionOrder.map((key, idx) => {
-                  const { label, icon } = meta[key];
-                  const count = sectionPageCounts[key];
-                  const on = sections[key];
-                  return (
-                    <div key={key} className="flex items-center gap-1.5">
-                      {/* 上下ボタン */}
-                      <div className="flex flex-col gap-0.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => moveSection(key, 'up')}
-                          disabled={idx === 0}
-                          className="flex items-center justify-center w-6 h-5 rounded transition-colors disabled:opacity-20"
-                          style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#8b8ba8' }}
-                          onPointerEnter={e => { if (idx > 0) e.currentTarget.style.color = '#f0ede8'; }}
-                          onPointerLeave={e => { e.currentTarget.style.color = '#8b8ba8'; }}
-                        >
-                          <ChevronUp className="w-3 h-3" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveSection(key, 'down')}
-                          disabled={idx === sectionOrder.length - 1}
-                          className="flex items-center justify-center w-6 h-5 rounded transition-colors disabled:opacity-20"
-                          style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#8b8ba8' }}
-                          onPointerEnter={e => { if (idx < sectionOrder.length - 1) e.currentTarget.style.color = '#f0ede8'; }}
-                          onPointerLeave={e => { e.currentTarget.style.color = '#8b8ba8'; }}
-                        >
-                          <ChevronDown className="w-3 h-3" />
-                        </button>
-                      </div>
-                      {/* トグル本体 */}
+              {sectionOrder.map((key, idx) => {
+                const { label, icon } = SECTION_META[key];
+                const count = sectionPageCounts[key];
+                const on = sections[key];
+                const showTruncateWarn = key === 'appendix' && appendixTruncated && on;
+                return (
+                  <div key={key} className="flex items-center gap-1.5">
+                    {/* 上下ボタン */}
+                    <div className="flex flex-col gap-0.5 shrink-0">
                       <button
                         type="button"
-                        onClick={() => toggleSection(key)}
-                        className="flex-1 flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left"
-                        style={{
-                          background: on ? 'rgba(245,158,11,0.08)' : '#12122a',
-                          border: `1.5px solid ${on ? 'rgba(245,158,11,0.3)' : '#2e2e50'}`,
-                        }}
+                        onClick={() => moveSection(key, 'up')}
+                        disabled={idx === 0}
+                        aria-label={`${label}を上に移動`}
+                        className="flex items-center justify-center w-6 h-5 rounded transition-colors disabled:opacity-20"
+                        style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#8b8ba8' }}
+                        onPointerEnter={e => { if (idx > 0) e.currentTarget.style.color = '#f0ede8'; }}
+                        onPointerLeave={e => { e.currentTarget.style.color = '#8b8ba8'; }}
                       >
-                        <span style={{ fontSize: '16px' }}>{icon}</span>
-                        <span className="flex-1 text-sm font-bold" style={{ color: on ? '#f59e0b' : '#6b7280' }}>{label}</span>
-                        {count > 0 && <span className="text-xs" style={{ color: '#4b4b70' }}>{count}p</span>}
-                        <div className="w-12 h-6 rounded-full relative transition-all shrink-0" style={{ background: on ? '#f59e0b' : '#2e2e50' }}>
-                          <div className="w-5 h-5 rounded-full absolute top-0.5 transition-all" style={{ background: '#fff', left: on ? '26px' : '2px' }} />
-                        </div>
+                        <ChevronUp className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveSection(key, 'down')}
+                        disabled={idx === sectionOrder.length - 1}
+                        aria-label={`${label}を下に移動`}
+                        className="flex items-center justify-center w-6 h-5 rounded transition-colors disabled:opacity-20"
+                        style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#8b8ba8' }}
+                        onPointerEnter={e => { if (idx < sectionOrder.length - 1) e.currentTarget.style.color = '#f0ede8'; }}
+                        onPointerLeave={e => { e.currentTarget.style.color = '#8b8ba8'; }}
+                      >
+                        <ChevronDown className="w-3 h-3" />
                       </button>
                     </div>
-                  );
-                });
-              })()}
+                    {/* トグル本体 */}
+                    <button
+                      type="button"
+                      onClick={() => toggleSection(key)}
+                      aria-pressed={on}
+                      className="flex-1 flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left"
+                      style={{
+                        background: on ? 'rgba(245,158,11,0.08)' : '#12122a',
+                        border: `1.5px solid ${on ? 'rgba(245,158,11,0.3)' : '#2e2e50'}`,
+                      }}
+                    >
+                      <span style={{ fontSize: '16px' }}>{icon}</span>
+                      <span className="flex-1 text-sm font-bold" style={{ color: on ? '#f59e0b' : '#6b7280' }}>
+                        {label}
+                        {showTruncateWarn && (
+                          <span
+                            className="ml-2 inline-flex items-center gap-1 text-xs font-normal"
+                            style={{ color: '#f87171' }}
+                            title={`添付PDFは${APPENDIX_PAGE_LIMIT}ページまでに制限されました`}
+                          >
+                            <AlertTriangle className="w-3 h-3" />
+                            {APPENDIX_PAGE_LIMIT}p超は省略
+                          </span>
+                        )}
+                      </span>
+                      {count > 0 && <span className="text-xs" style={{ color: '#4b4b70' }}>{count}p</span>}
+                      <div className="w-12 h-6 rounded-full relative transition-all shrink-0" style={{ background: on ? '#f59e0b' : '#2e2e50' }}>
+                        <div className="w-5 h-5 rounded-full absolute top-0.5 transition-all" style={{ background: '#fff', left: on ? '26px' : '2px' }} />
+                      </div>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
 
             {/* プリセットボタン */}
@@ -624,8 +836,13 @@ export default function PdfExportPage() {
 
               <div style={{ width: isPrinting ? '168mm' : '635px', display: 'flex', flexDirection: 'column', gap: isPrinting ? '10mm' : '38px' }}>
                 {COVER_FIELDS.map((item, idx) => {
-                  let value = String(project[item.key] ?? '　');
-                  if (item.key === 'contractorName' && companyName) value = companyName;
+                  // 施工業者は優先順位: userSettings.companyName > contractorName > contractor(legacy)
+                  let value: string;
+                  if (item.key === 'contractorName') {
+                    value = companyName || displayContractor || '　';
+                  } else {
+                    value = String(project[item.key] ?? '　');
+                  }
                   return (
                     <div key={idx} style={{ display: 'flex', alignItems: 'baseline', borderBottom: `${isPrinting ? '0.2mm' : '1px'} solid #ebebeb`, paddingBottom: isPrinting ? '4mm' : '15px', paddingTop: isPrinting ? '2mm' : '8px' }}>
                       <div style={{ width: isPrinting ? '52mm' : '197px', flexShrink: 0, paddingRight: isPrinting ? '30mm' : '113px', fontFamily: JP_FONT, fontSize: isPrinting ? '10.5pt' : '14px', fontWeight: 'bold', color: '#555', lineHeight: 1.4, letterSpacing: '-0.28em', textAlign: 'justify', textAlignLast: 'justify' }}>
@@ -1054,7 +1271,7 @@ export default function PdfExportPage() {
 
                 {/* フッター */}
                 <div style={{ flexShrink: 0, borderTop: `1px solid #e0e0e0`, padding: isPrinting ? '0 14mm' : '0 40px', height: isPrinting ? '18mm' : '52px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7.5pt' : '10px', color: '#aaa', letterSpacing: '0.1em' }}>{project.contractor ?? ''}</div>
+                  <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7.5pt' : '10px', color: '#aaa', letterSpacing: '0.1em' }}>{displayContractor}</div>
                   <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7.5pt' : '10px', color: '#aaa', letterSpacing: '0.1em' }}>{project.projectName ?? ''}</div>
                 </div>
 
@@ -1065,12 +1282,7 @@ export default function PdfExportPage() {
 
         case 'completion': {
           if (!sections.completion) return [];
-          // 主要写真9枚を自動選択（先頭から最大9枚）
-          const withImg = (project.photos ?? []).filter(p => p.image);
-          const keyPhotos = withImg.slice(0, 9);
-
-          const topMaterials = (project.materials ?? []).filter(m => m.name).slice(0, 4);
-
+          // keyPhotos / topMaterials は useMemo で計算済み
           return [(
             <div key="completion" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
               <div className={`pdf-page bg-white text-black overflow-hidden ${isPrinting ? '' : 'absolute top-0 left-0 origin-top-left'}`}
@@ -1101,7 +1313,7 @@ export default function PdfExportPage() {
                     ['工事件名', project.projectName],
                     ['工事場所', project.projectLocation],
                     ['工　　期', project.constructionPeriod],
-                    ['作成年月日', project.reportDate ?? project.creationDate ?? ''],
+                    ['作成年月日', displayReportDate],
                   ] as [string, string][]).map(([label, value], i) => (
                     <div key={i} style={{ display: 'flex', borderBottom: i < 3 ? '1px solid #e0e0e0' : 'none' }}>
                       <div style={{ width: isPrinting ? '28mm' : '106px', flexShrink: 0, fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', fontWeight: 'bold', color: '#666', background: '#f5f5f5', padding: isPrinting ? '1.5mm 3mm' : '5px 10px', display: 'flex', alignItems: 'center', borderRight: '1px solid #e0e0e0' }}>{label}</div>
