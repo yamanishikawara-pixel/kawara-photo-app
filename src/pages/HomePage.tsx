@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Camera, FileDown, MapPin, Wrench, ClipboardList, ChevronRight, ArrowLeftRight } from 'lucide-react';
+import { ArrowLeft, Camera, FileDown, MapPin, Wrench, ClipboardList, ChevronRight, ArrowLeftRight, Calculator } from 'lucide-react';
 
 import type { Project } from '../types';
 import { db } from '../firebase';
@@ -8,7 +8,16 @@ import { doc, getDoc } from 'firebase/firestore';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { ErrorMessage } from '../shared/ErrorMessage';
 
-const MENU_ITEMS = [
+type MenuItem = {
+  title: string;
+  subtitle: string;
+  icon: typeof Camera;
+  path: string;
+  accent: string;
+  external?: boolean;
+};
+
+const MENU_ITEMS: MenuItem[] = [
   {
     title: '写真',
     subtitle: '赤丸・寸法線付き写真の登録',
@@ -50,6 +59,14 @@ const MENU_ITEMS = [
     icon: FileDown,
     path: 'pdf',
     accent: '#6366f1',
+  },
+  {
+    title: '実行予算書',
+    subtitle: '原価・見積・粗利の管理',
+    icon: Calculator,
+    path: '__budget__',
+    accent: '#10b981',
+    external: true,
   },
 ];
 
@@ -146,11 +163,27 @@ export function HomePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
           {MENU_ITEMS.map((item) => {
             const Icon = item.icon;
+            const handleClick = () => {
+              if (item.external && item.path === '__budget__') {
+                const projectName = project?.projectName?.trim();
+                if (!projectName) {
+                  alert('現場名が未入力です。先に「表紙」で現場名を登録してください。');
+                  return;
+                }
+                window.open(
+                  `https://kawara-budget.web.app/?project=${encodeURIComponent(projectName)}`,
+                  '_blank',
+                  'noopener,noreferrer'
+                );
+                return;
+              }
+              navigate(`/project/${id}/${item.path}`);
+            };
             return (
               <button
                 key={item.path}
                 type="button"
-                onClick={() => navigate(`/project/${id}/${item.path}`)}
+                onClick={handleClick}
                 className="w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-colors"
                 style={{ background: '#1c1c30', borderColor: '#2e2e50' }}
                 onPointerEnter={e => {
@@ -170,7 +203,12 @@ export function HomePage() {
                 </div>
                 {/* テキスト */}
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-sm break-words" style={{ color: '#f0ede8' }}>{item.title}</div>
+                  <div className="font-bold text-sm break-words" style={{ color: '#f0ede8' }}>
+                    {item.title}
+                    {item.external && (
+                      <span className="ml-1.5 text-xs font-normal" style={{ color: '#6b7280' }}>↗</span>
+                    )}
+                  </div>
                   <div className="text-xs mt-0.5 truncate" style={{ color: '#6b7280' }}>{item.subtitle}</div>
                 </div>
                 <ChevronRight className="w-4 h-4 shrink-0" style={{ color: '#3d3d60' }} />

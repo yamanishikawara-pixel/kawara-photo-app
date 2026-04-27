@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Trash2, LogOut, Settings, CheckCircle2, Circle, HardHat, Database } from 'lucide-react';
 import { collection, addDoc, deleteDoc, doc, getDoc, getDocs, query, where, orderBy, updateDoc } from 'firebase/firestore';
 import { ref, listAll, deleteObject } from 'firebase/storage';
@@ -90,6 +90,7 @@ function StorageUsageBar({ used, quota, onClick }: { used: number; quota: number
 
 export function ProjectListPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState<ProjectWithId[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,6 +101,7 @@ export function ProjectListPage() {
   const [logoUrl, setLogoUrl] = useState('');
   const [storageUsed, setStorageUsed] = useState(0);
   const [confirmLogout, setConfirmLogout] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -133,6 +135,17 @@ export function ProjectListPage() {
       }
     };
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    const term = searchParams.get('search');
+    if (term) {
+      setSearchQuery(decodeURIComponent(term).trim());
+      const next = new URLSearchParams(searchParams);
+      next.delete('search');
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const addProject = async () => {
@@ -218,9 +231,22 @@ export function ProjectListPage() {
     }
   };
 
-  if (loading || isDeleting) return <LoadingSpinner />;
+  const filteredProjects = useMemo(() => {
+    if (!searchQuery.trim()) return projects;
+    const q = searchQuery.toLowerCase();
+    return projects.filter(p =>
+      (p.projectName || '').toLowerCase().includes(q) ||
+      (p.projectLocation || '').toLowerCase().includes(q) ||
+      (p.contractorName || '').toLowerCase().includes(q)
+    );
+  }, [projects, searchQuery]);
 
-  const visibleProjects = projects.filter((p) => !hideCompleted || !p.isCompleted);
+  const visibleProjects = useMemo(() => {
+    if (hideCompleted) return filteredProjects.filter(p => !p.isCompleted);
+    return filteredProjects;
+  }, [filteredProjects, hideCompleted]);
+
+  if (loading || isDeleting) return <LoadingSpinner />;
 
   return (
     <div className="min-h-screen font-sans" style={{ background: '#0f0f1a', color: '#f0ede8' }}>
@@ -297,25 +323,73 @@ export function ProjectListPage() {
           </div>
         </div>
 
+        {/* 検索ボックス */}
+        <div className="mb-6 relative">
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+            <svg className="w-4 h-4" fill="none" stroke="#6b7280" strokeWidth="2" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.35-4.35" strokeLinecap="round" />
+            </svg>
+          </div>
+          <input
+            type="search"
+            placeholder="現場名・住所・請負先で検索..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full py-2.5 pl-10 pr-10 rounded-xl border text-sm transition-colors"
+            style={{
+              background: '#1c1c30',
+              borderColor: '#2e2e50',
+              color: '#f0ede8',
+              outline: 'none',
+            }}
+            onFocus={(e) => (e.currentTarget.style.borderColor = '#ff6b35')}
+            onBlur={(e) => (e.currentTarget.style.borderColor = '#2e2e50')}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md"
+              style={{ color: '#6b7280' }}
+              onPointerEnter={(e) => (e.currentTarget.style.color = '#f0ede8')}
+              onPointerLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path d="M18 6 6 18M6 6l12 12" strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
+        </div>
+
         {/* ── プロジェクト一覧 ── */}
         {visibleProjects.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: '#1c1c30' }}>
               <HardHat className="w-8 h-8" style={{ color: '#ff6b35' }} />
             </div>
-            <p className="font-bold" style={{ color: '#8b8ba8' }}>現場がまだありません</p>
-            <button
-              type="button"
-              onClick={addProject}
-              className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm"
-              style={{ background: '#ff6b35', color: '#fff' }}
-            >
-              <Plus className="w-4 h-4" /> 最初の現場を作成
-            </button>
+            <p className="font-bold" style={{ color: '#8b8ba8' }}>
+              {searchQuery
+                ? `「${searchQuery}」に一致する現場がありません`
+                : projects.length === 0
+                  ? '現場がまだありません'
+                  : '完了済みのみで、表示する現場がありません'}
+            </p>
+            {!searchQuery && projects.length === 0 && (
+              <button
+                type="button"
+                onClick={addProject}
+                className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm"
+                style={{ background: '#ff6b35', color: '#fff' }}
+              >
+                <Plus className="w-4 h-4" /> 最初の現場を作成
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5">
             {visibleProjects.map((p) => {
+              const isExactMatch = !!searchQuery && p.projectName === searchQuery;
               const thumb = p.photos?.find(ph => ph.image)?.image ?? null;
               const photoCount = p.photos?.filter(ph => ph.image).length ?? 0;
               return (
@@ -325,7 +399,8 @@ export function ProjectListPage() {
                   className="group cursor-pointer rounded-2xl border overflow-hidden transition-all"
                   style={{
                     background: p.isCompleted ? '#141422' : '#1c1c30',
-                    borderColor: p.isCompleted ? '#2e2e50' : '#2e2e50',
+                    borderColor: isExactMatch ? '#ff6b35' : '#2e2e50',
+                    boxShadow: isExactMatch ? '0 0 0 2px rgba(255,107,53,0.3)' : 'none',
                     opacity: p.isCompleted ? 0.65 : 1,
                   }}
                   onPointerEnter={e => {
@@ -334,8 +409,8 @@ export function ProjectListPage() {
                     (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
                   }}
                   onPointerLeave={e => {
-                    (e.currentTarget as HTMLDivElement).style.borderColor = p.isCompleted ? '#2e2e50' : '#2e2e50';
-                    (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
+                    (e.currentTarget as HTMLDivElement).style.borderColor = isExactMatch ? '#ff6b35' : '#2e2e50';
+                    (e.currentTarget as HTMLDivElement).style.boxShadow = isExactMatch ? '0 0 0 2px rgba(255,107,53,0.3)' : 'none';
                     (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
                   }}
                 >
@@ -407,7 +482,9 @@ export function ProjectListPage() {
 
         {visibleProjects.length > 0 && (
           <p className="mt-6 text-xs text-center" style={{ color: '#3d3d60' }}>
-            {visibleProjects.length} 件の現場
+            {searchQuery
+              ? `${visibleProjects.length} / ${projects.length} 件（検索: "${searchQuery}"）`
+              : `${visibleProjects.length} 件の現場`}
           </p>
         )}
       </div>
