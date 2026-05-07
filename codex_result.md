@@ -1,5 +1,3 @@
-`HomePage` と `ProjectListPage` に指定の変更を反映しました。`HomePage` では `Calculator` アイコン付きの「実行予算書」メニューを追加し、現場名未入力時の警告つきで `https://kawara-budget.web.app/?project=...` を別タブで開く分岐を入れています。外部リンク表示として `↗` も付けました。
+`src/pages/PdfExportPage.tsx` の表紙を指定どおり差し替え、`logoRed` のインポートも追加しました。[PdfExportPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/PdfExportPage.tsx:10) と [表紙ブロック](/Users/yamanishikenta/kawara-photo-app/src/pages/PdfExportPage.tsx:821) に反映されています。内容は、44px の中央タイトル、タイトル下の水平線、5行の均等割付フィールド、赤ロゴ付きフッターです。
 
-`ProjectListPage` では `?search=` の初期取り込み、検索ボックス、`useMemo` による検索＋完了非表示フィルタ、空状態メッセージ分岐、件数表示の検索モード対応、完全一致カードのオレンジ強調を追加しています。
-
-検証は `npm run build` で完了し、TypeScript エラーなしで通過しました。
+`npm run build` は成功しました。`firebase deploy` は失敗しており、失敗日は 2026-05-07、原因は Firebase CLI 側の設定解決エラーです。主なメッセージは `resolving hosting target of a site with no site name or target name` で、`.firebaserc` は `default: "kawara-photo-app"` のみ、`firebase.json` も通常の単一 hosting 構成でした。現状はデプロイ設定または CLI 状態の確認が必要です。
