@@ -855,14 +855,14 @@ export default function PdfExportPage() {
             }}>工事写真報告書</div>
 
             <div style={{
-              position: 'absolute', left: '50%', top: 162,
+              position: 'absolute', left: '50%', top: 210,
               transform: 'translateX(-50%)',
               width: 620, height: 1, background: '#111',
             }} />
 
             <div style={{
-              position: 'absolute', left: '50%', top: 200,
-              bottom: 260,
+              position: 'absolute', left: '50%', top: 280,
+              bottom: 300,
               transform: 'translateX(-50%)',
               width: 620,
               display: 'flex',
@@ -874,8 +874,8 @@ export default function PdfExportPage() {
                   display: 'grid',
                   gridTemplateColumns: '148px 40px 1fr',
                   alignItems: 'start',
-                  paddingTop: 8,
-                  paddingBottom: 8,
+                  paddingTop: 18,
+                  paddingBottom: 18,
                   borderBottom: row.last ? 'none' : '1px solid #111',
                 }}>
                   <div className="cover-lbl" style={{
