@@ -876,7 +876,7 @@ export default function PdfExportPage() {
                   alignItems: 'start',
                   paddingTop: 18,
                   paddingBottom: 18,
-                  borderBottom: row.last ? 'none' : '1px solid #111',
+                  borderBottom: '1px solid #111',
                 }}>
                   <div className="cover-lbl" style={{
                     fontSize: '16pt',
