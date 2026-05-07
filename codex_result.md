@@ -1,3 +1,5 @@
-`src/pages/PdfExportPage.tsx` の表紙を指定どおり差し替え、`logoRed` のインポートも追加しました。[PdfExportPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/PdfExportPage.tsx:10) と [表紙ブロック](/Users/yamanishikenta/kawara-photo-app/src/pages/PdfExportPage.tsx:821) に反映されています。内容は、44px の中央タイトル、タイトル下の水平線、5行の均等割付フィールド、赤ロゴ付きフッターです。
+`src/pages/PdfExportPage.tsx` の `case 'cover'` に、指定どおり黄金比ベースの4階層を反映しました。対象は [PdfExportPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/PdfExportPage.tsx:825) です。
 
-`npm run build` は成功しました。`firebase deploy` は失敗しており、失敗日は 2026-05-07、原因は Firebase CLI 側の設定解決エラーです。主なメッセージは `resolving hosting target of a site with no site name or target name` で、`.firebaserc` は `default: "kawara-photo-app"` のみ、`firebase.json` も通常の単一 hosting 構成でした。現状はデプロイ設定または CLI 状態の確認が必要です。
+変更内容は、コメント更新、`coverFields` の `valPt` 調整、タイトルを `42pt`、水平線 `top: 178`、フィールド群 `top: 230`、行高 `72`、ラベル `10pt`、各 `paddingBottom: 8`、フッター社名 `9pt`、ページ番号 `8pt` です。ラベル文言、値の表示ロジック、`isPrinting` 分岐、`gridTemplateColumns: '148px 1fr'` は変更していません。
+
+検証は差分確認まで実施しました。画面レンダリングや PDF 出力の実表示確認はまだです。
