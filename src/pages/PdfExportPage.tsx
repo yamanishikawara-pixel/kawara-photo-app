@@ -824,15 +824,12 @@ export default function PdfExportPage() {
         // ① 表紙
         case 'cover': {
           if (!sections.cover) return [];
-          // 黄金比(φ≈1.618)による文字階層:
-          //   ラベル 10pt × φ ≈ 補助値 16pt × φ ≈ 件名値 26pt × φ ≈ タイトル 42pt
-          // 工事件名=26pt（主役）、他=16pt（補助情報）
           const coverFields = [
-            { chars: ['工','事','件','名'], value: project.projectName ?? '',                     valPt: '26pt', last: false },
-            { chars: ['工','事','場','所'], value: project.projectLocation ?? '',                  valPt: '16pt', last: false },
-            { chars: ['工','　','　','期'], value: project.constructionPeriod ?? '',               valPt: '16pt', last: false },
-            { chars: ['施','工','業','者'], value: displayContractor,                              valPt: '16pt', last: false },
-            { chars: ['作','成','年','月','日'], value: project.creationDate ?? displayReportDate, valPt: '16pt', last: true  },
+            { chars: ['工','事','件','名'], value: project.projectName ?? '',                     valPt: '18pt', last: false },
+            { chars: ['工','事','場','所'], value: project.projectLocation ?? '',                  valPt: '18pt', last: false },
+            { chars: ['工','　','　','期'], value: project.constructionPeriod ?? '',               valPt: '18pt', last: false },
+            { chars: ['施','工','業','者'], value: displayContractor,                              valPt: '18pt', last: false },
+            { chars: ['作','成','年','月','日'], value: project.creationDate ?? displayReportDate, valPt: '18pt', last: true  },
           ];
           return [(
           <div key="cover" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
@@ -845,8 +842,6 @@ export default function PdfExportPage() {
               overflow: 'hidden',
             }}>
 
-            {/* ① タイトル — 42pt / Shippori Mincho 800 / 中央揃え均等配字 */}
-            {/*   42pt は 26pt の上位階層として十分な存在感を保つ     */}
             <div className="cover-title" style={{
               position: 'absolute', left: 0, right: 0, top: 96,
               textAlign: 'center',
@@ -859,53 +854,57 @@ export default function PdfExportPage() {
               fontFamily: "'Shippori Mincho', 'Noto Serif JP', serif",
             }}>工事写真報告書</div>
 
-            {/* ② タイトル下水平線 — 黒統一 */}
             <div style={{
-              position: 'absolute', left: '50%', top: 178,
+              position: 'absolute', left: '50%', top: 162,
               transform: 'translateX(-50%)',
-              width: 540, height: 1, background: '#111',
+              width: 620, height: 1, background: '#111',
             }} />
 
-            {/* ③ フィールド群 — 上端 top:230、行高 72px（26pt/16pt 階層に合わせて圧縮） */}
             <div style={{
-              position: 'absolute', left: '50%', top: 230,
+              position: 'absolute', left: '50%', top: 200,
+              bottom: 260,
               transform: 'translateX(-50%)',
               width: 620,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
             }}>
               {coverFields.map((row, i) => (
                 <div key={i} style={{
                   display: 'grid',
-                  gridTemplateColumns: '148px 1fr',
-                  alignItems: 'end',
-                  height: 72,
+                  gridTemplateColumns: '148px 40px 1fr',
+                  alignItems: 'start',
+                  paddingTop: 8,
+                  paddingBottom: 8,
                   borderBottom: row.last ? 'none' : '1px solid #111',
                 }}>
-                  {/* ラベル: 10pt / Noto Sans JP / 均等割付（justify-content: space-between） */}
                   <div className="cover-lbl" style={{
-                    fontSize: '10pt',
+                    fontSize: '16pt',
                     fontWeight: 400,
-                    color: '#666',
+                    color: '#111',
                     fontFamily: "'Noto Sans JP', sans-serif",
                     width: '6em',
                     display: 'inline-flex',
                     justifyContent: 'space-between',
-                    paddingBottom: 8,
                     letterSpacing: 0,
                   }}>
                     {row.chars.map((c, j) => <span key={j}>{c}</span>)}
                   </div>
-                  {/* 値: 工事件名=26pt、他=16pt / Noto Serif JP 500 */}
+                  <div style={{
+                    fontSize: '16pt',
+                    fontWeight: 400,
+                    color: '#111',
+                    fontFamily: "'Noto Sans JP', sans-serif",
+                    textAlign: 'center',
+                    lineHeight: 1.5,
+                  }}>—</div>
                   <div className="cover-val" style={{
                     fontSize: row.valPt,
                     fontWeight: 500,
                     color: '#111',
                     letterSpacing: '0.06em',
                     fontFamily: "'Noto Serif JP', serif",
-                    paddingBottom: 8,
-                    lineHeight: 1,
-                    overflow: 'hidden',
-                    whiteSpace: 'nowrap',
-                    textOverflow: 'ellipsis',
+                    lineHeight: 1.6,
                   }}>{row.value}</div>
                 </div>
               ))}
@@ -920,7 +919,7 @@ export default function PdfExportPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <img src={logoRed} alt="logo" style={{ width: 26, height: 26, objectFit: 'contain' }} />
                 <div className="cover-footer-name" style={{
-                  fontSize: '9pt',
+                  fontSize: '10pt',
                   fontWeight: 500,
                   color: '#333',
                   letterSpacing: '0.08em',
@@ -929,7 +928,7 @@ export default function PdfExportPage() {
               </div>
               <div style={{ flex: 1 }} />
               <div className="cover-pnum" style={{
-                fontSize: '8pt',
+                fontSize: '10pt',
                 color: '#888',
                 letterSpacing: '0.25em',
                 fontFamily: "'Noto Sans JP', sans-serif",
