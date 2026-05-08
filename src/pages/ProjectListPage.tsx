@@ -183,6 +183,17 @@ export function ProjectListPage() {
     setIsDeleting(true);
     try {
       const user = auth.currentUser;
+      if (!user) { setError('ログインが必要です。'); return; }
+
+      // 所有権を再確認（多重防御）
+      const snap = await getDoc(doc(db, 'projects', id));
+      if (snap.exists()) {
+        const owner = (snap.data() as { userId?: string }).userId;
+        if (owner && owner !== user.uid) {
+          setError('この現場を削除する権限がありません。');
+          return;
+        }
+      }
       let totalBytes = 0;
 
       // フォルダ内ファイルを削除しバイト数を集計するヘルパー
@@ -208,15 +219,13 @@ export function ProjectListPage() {
       for (const folder of ['maps', 'photos', 'materials']) {
         await deleteFolder(`${folder}/${id}`);
       }
-      if (user) {
-        await deleteFolder(`users/${user.uid}/projects/${id}`);
-      }
+      await deleteFolder(`users/${user.uid}/projects/${id}`);
 
       await deleteDoc(doc(db, 'projects', id));
       setProjects((prev) => prev.filter((p) => p.id !== id));
 
       // Firestore カウンタ減算 + ローカル表示更新
-      if (user && totalBytes > 0) {
+      if (totalBytes > 0) {
         await trackDelete(user.uid, totalBytes);
         setStorageUsed((prev) => Math.max(0, prev - totalBytes));
       }

@@ -4,10 +4,10 @@ import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, Plu
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, getMetadata } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
-import imageCompression from 'browser-image-compression';
 import { proxyUrl, useDraggablePin, nextId } from '../shared/utils';
 import { canUpload, trackUpload, deleteStorageFileWithAccounting, storagePathFromUrl } from '../shared/storageUtils';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
+import { compressPhotoWithQuality } from '../shared/imageUtils';
 import type { Circle, Photo, Project, DimensionLine, PhotoMaster } from '../types';
 import type { ChangeEvent, MouseEvent } from 'react';
 import { ConfirmModal } from '../shared/ConfirmModal';
@@ -48,22 +48,6 @@ const getLocalPointFromRect = (clientX: number, clientY: number, rect: DOMRect, 
   else if (normAngle === 180) { localX = rect.right - clientX; localY = rect.bottom - clientY; }
   else if (normAngle === 270) { localX = rect.bottom - clientY; localY = clientX - rect.left; w = rect.height; h = rect.width; }
   return { x: Math.max(0, Math.min(100, (localX / w) * 100)), y: Math.max(0, Math.min(100, (localY / h) * 100)) };
-};
-
-const compressPhotoWithQuality = async (file: File) => {
-  const options = {
-    maxSizeMB: 1,
-    maxWidthOrHeight: 1920,
-    useWebWorker: true,
-    fileType: 'image/jpeg',
-    initialQuality: 0.8,
-  };
-  try {
-    return await imageCompression(file, options);
-  } catch (error) {
-    import.meta.env.DEV && console.warn("画像の圧縮に失敗しました。元のファイルで続行します。", error);
-    return file;
-  }
 };
 
 const DimensionLineMarker = React.memo(function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChange, onUpdate, onDeselect, rotation }: { line: DimensionLine; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; onUpdate: (props: Partial<DimensionLine>) => void; onDeselect: () => void; rotation: number; }) {
@@ -399,7 +383,8 @@ export default function PhotoPage() {
   };
 
   const doSaveToPhotoMaster = async (name: string, photo: Photo, existing: PhotoMaster | undefined) => {
-    const entry: PhotoMaster = { id: existing?.id ?? nextId(), name, process: photo.process, description: photo.description };
+    const trimmedName = name.trim();
+    const entry: PhotoMaster = { id: existing?.id ?? nextId(), name: trimmedName, process: photo.process, description: photo.description };
     const newMasters = existing ? photoMasters.map((m) => m.id === existing.id ? entry : m) : [...photoMasters, entry];
     setPhotoMasters(newMasters);
     await setDoc(doc(db, 'users', uid!), { photoMaster: newMasters }, { merge: true });
@@ -454,17 +439,28 @@ export default function PhotoPage() {
   const deleteSelectedPhotos = async () => {
     if (!project || !id || selectedPhotoIds.length === 0) return;
     const targets = project.photos.filter((p) => selectedPhotoIds.includes(p.id) && p.image);
-    for (const target of targets) {
-      if (!target.image) continue;
-      let bytes = 0;
-      try {
-        const path = storagePathFromUrl(target.image) ?? target.image;
-        const meta = await getMetadata(ref(storage, path));
-        bytes = meta.size ?? 0;
-      } catch { /* noop */ }
-      await deleteStorageFileWithAccounting(target.image, uid ?? undefined, bytes || undefined);
-      if (bytes > 0) setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
-    }
+
+    // メタデータ取得と削除を並列実行
+    const results = await Promise.allSettled(
+      targets.map(async (target) => {
+        if (!target.image) return 0;
+        let bytes = 0;
+        try {
+          const path = storagePathFromUrl(target.image) ?? target.image;
+          const meta = await getMetadata(ref(storage, path));
+          bytes = meta.size ?? 0;
+        } catch { /* noop */ }
+        await deleteStorageFileWithAccounting(target.image, uid ?? undefined, bytes || undefined);
+        return bytes;
+      })
+    );
+
+    // 削除成功分のバイト数を合算して state を1回更新
+    const totalDeleted = results.reduce((sum, r) => {
+      return sum + (r.status === 'fulfilled' ? (r.value ?? 0) : 0);
+    }, 0);
+    if (totalDeleted > 0) setStorageUsedBytes((prev) => Math.max(0, prev - totalDeleted));
+
     const newPhotos = project.photos.filter((p) => !selectedPhotoIds.includes(p.id));
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
     setProject((prev) => prev ? { ...prev, photos: renumbered } : null);
@@ -1231,7 +1227,7 @@ export default function PhotoPage() {
         variant="default"
         onConfirm={async () => {
           if (confirmOverwritePhotoMaster) {
-            const existing = photoMasters.find((m) => m.name === confirmOverwritePhotoMaster.name);
+            const existing = photoMasters.find((m) => (m.name ?? '').trim() === confirmOverwritePhotoMaster.name);
             await doSaveToPhotoMaster(confirmOverwritePhotoMaster.name, confirmOverwritePhotoMaster.photo, existing);
             setConfirmOverwritePhotoMaster(null);
           }
@@ -1269,7 +1265,7 @@ export default function PhotoPage() {
                   const photo = templateNameTarget;
                   setTemplateNameTarget(null);
                   setTemplateNameInput('');
-                  const existing = photoMasters.find((m) => m.name === name);
+                  const existing = photoMasters.find((m) => (m.name ?? '').trim() === name);
                   if (existing) {
                     setConfirmOverwritePhotoMaster({ name, photo });
                     return;

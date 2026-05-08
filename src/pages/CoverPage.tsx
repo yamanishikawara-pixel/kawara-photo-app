@@ -193,14 +193,9 @@ export function CoverPage() {
     setAppendixProgress(0);
 
     try {
-      // 旧PDFを削除(カウンタ減算込み)
-      const oldUrl = project?.appendixPdfUrl;
-      const oldSize = project?.appendixPdfSize;
-      if (oldUrl) {
-        await deleteStorageFileWithAccounting(oldUrl, uid, oldSize);
-      }
+      const oldSize = project?.appendixPdfSize ?? 0;
 
-      // 新規アップロード(キャンセル可能)
+      // 新規アップロード(同パスに上書き → 旧ファイルは自動で置換される)
       const storageRef = ref(storage, `users/${uid}/projects/${id}/appendix.pdf`);
       const task = uploadBytesResumable(storageRef, file);
       uploadTaskRef.current = task;
@@ -225,7 +220,12 @@ export function CoverPage() {
         appendixPdfUrl: url,
         appendixPdfSize: file.size,
       });
-      await trackUpload(uid, file.size);
+
+      // カウンタは純増分だけ加算（旧ファイルと差分）
+      const netDelta = file.size - oldSize;
+      if (netDelta !== 0) {
+        await trackUpload(uid, netDelta);
+      }
 
       if (!mountedRef.current) return;
       setProject(prev =>

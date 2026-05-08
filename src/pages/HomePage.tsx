@@ -5,6 +5,7 @@ import { ArrowLeft, Camera, FileDown, MapPin, Wrench, ClipboardList, ChevronRigh
 import type { Project } from '../types';
 import { db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { ErrorMessage } from '../shared/ErrorMessage';
 
@@ -78,15 +79,24 @@ export function HomePage() {
 
   useEffect(() => {
     if (!id) return;
-    getDoc(doc(db, 'projects', id))
-      .then((d) => {
+    let aborted = false;
+    (async () => {
+      try {
+        const d = await getDoc(doc(db, 'projects', id));
+        if (aborted) return;
         if (d.exists()) {
           setError(null);
           setProject(d.data() as Project);
+        } else {
+          setError('現場データが見つかりません。');
         }
-        else setError('現場データが見つかりません。');
-      })
-      .catch(() => setError('現場データの読み込みに失敗しました。'));
+      } catch (err) {
+        if (aborted) return;
+        logFirebaseError(err, '現場ホーム読込');
+        setError(firebaseErrorMessage(err, '現場データの読み込み'));
+      }
+    })();
+    return () => { aborted = true; };
   }, [id]);
 
   if (error && !project) {

@@ -9,6 +9,7 @@ import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { proxyUrl, nextId } from '../shared/utils';
 import { canUpload, trackUpload, deleteStorageFileWithAccounting, storagePathFromUrl } from '../shared/storageUtils';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
+import { compressPhotoWithQuality } from '../shared/imageUtils';
 import type { Material, MaterialMaster, Project } from '../types';
 import { ConfirmModal } from '../shared/ConfirmModal';
 import { ErrorMessage } from '../shared/ErrorMessage';
@@ -259,14 +260,15 @@ export default function MaterialPage() {
 
   const handleImageUpload = async (materialId: number, e: React.ChangeEvent<HTMLInputElement>) => {
     if (!project || !id || !e.target.files || e.target.files.length === 0) return;
-    const file = e.target.files[0];
+    const rawFile = e.target.files[0];
     setUploadingId(materialId);
     try {
+      const file = await compressPhotoWithQuality(rawFile);
       if (!canUpload(storageUsedBytes, file.size)) {
         setUploadError('ストレージ容量が上限（500MB）に達しています。不要な画像を削除してください。');
         return;
       }
-      const storageRef = ref(storage, `materials/${id}/${Date.now()}_${file.name}`);
+      const storageRef = ref(storage, `materials/${id}/${Date.now()}_${rawFile.name}`);
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
       if (uid) {
