@@ -14,6 +14,7 @@ import {
   deleteStorageFileWithAccounting,
 } from '../shared/storageUtils';
 import type { BeforeAfterItem } from '../types';
+import { getContractorName } from '../types';
 
 // ── 定数 ────────────────────────────────────────────
 const W = 595, H = 842;
@@ -533,7 +534,7 @@ export function BeforeAfterPage() {
         if (d.exists()) {
           const p = d.data();
           setProjectName(p.projectName ?? '');
-          setContractor(p.contractor ?? '');
+          setContractor(getContractorName(p));
           if (Array.isArray(p.beforeAfterItems) && p.beforeAfterItems.length) {
             setItems(p.beforeAfterItems);
           }

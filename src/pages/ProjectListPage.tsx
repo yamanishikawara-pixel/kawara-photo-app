@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Trash2, LogOut, Settings, CheckCircle2, Circle, HardHat, Database } from 'lucide-react';
 import { collection, addDoc, deleteDoc, doc, getDoc, getDocs, query, where, orderBy, updateDoc } from 'firebase/firestore';
-import { ref, listAll, deleteObject } from 'firebase/storage';
+import { ref, listAll, deleteObject, getMetadata } from 'firebase/storage';
 import { signOut } from 'firebase/auth';
 
 import { db, auth, storage } from '../firebase';
@@ -11,7 +11,7 @@ import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { ConfirmModal } from '../shared/ConfirmModal';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
-import { formatBytes, STORAGE_LIMIT_BYTES } from '../shared/storageUtils';
+import { formatBytes, STORAGE_LIMIT_BYTES, trackDelete } from '../shared/storageUtils';
 
 interface ProjectWithId extends Project {
   id: string;
@@ -183,20 +183,43 @@ export function ProjectListPage() {
     setIsDeleting(true);
     try {
       const user = auth.currentUser;
-      for (const folder of ['maps', 'photos', 'materials']) {
+      let totalBytes = 0;
+
+      // フォルダ内ファイルを削除しバイト数を集計するヘルパー
+      const deleteFolder = async (folderPath: string) => {
         try {
-          const list = await listAll(ref(storage, `${folder}/${id}`));
-          await Promise.all(list.items.map((item) => deleteObject(item)));
-        } catch (e) { import.meta.env.DEV && console.warn('Storageフォルダ削除失敗:', e); }
+          const list = await listAll(ref(storage, folderPath));
+          await Promise.all(list.items.map(async (item) => {
+            try {
+              const meta = await getMetadata(item);
+              totalBytes += meta.size ?? 0;
+            } catch { /* サイズ取得失敗は無視して削除継続 */ }
+            try {
+              await deleteObject(item);
+            } catch (e) {
+              import.meta.env.DEV && console.warn('Storageファイル削除失敗:', item.fullPath, e);
+            }
+          }));
+        } catch (e) {
+          import.meta.env.DEV && console.warn('Storageフォルダ一覧取得失敗:', folderPath, e);
+        }
+      };
+
+      for (const folder of ['maps', 'photos', 'materials']) {
+        await deleteFolder(`${folder}/${id}`);
       }
       if (user) {
-        try {
-          const list = await listAll(ref(storage, `users/${user.uid}/projects/${id}`));
-          await Promise.all(list.items.map((item) => deleteObject(item)));
-        } catch (e) { import.meta.env.DEV && console.warn('添付資料削除失敗:', e); }
+        await deleteFolder(`users/${user.uid}/projects/${id}`);
       }
+
       await deleteDoc(doc(db, 'projects', id));
       setProjects((prev) => prev.filter((p) => p.id !== id));
+
+      // Firestore カウンタ減算 + ローカル表示更新
+      if (user && totalBytes > 0) {
+        await trackDelete(user.uid, totalBytes);
+        setStorageUsed((prev) => Math.max(0, prev - totalBytes));
+      }
     } catch (err) {
       logFirebaseError(err, '現場削除');
       setError(firebaseErrorMessage(err, '現場の削除'));

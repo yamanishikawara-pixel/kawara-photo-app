@@ -2,11 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, Plus, Edit2, Ruler, Paintbrush, CaseUpper, Copy, CheckSquare, Calendar, BookmarkPlus } from 'lucide-react';
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, getMetadata } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
 import imageCompression from 'browser-image-compression';
-import { proxyUrl, useDraggablePin } from '../shared/utils';
-import { canUpload, trackDelete, trackUpload } from '../shared/storageUtils';
+import { proxyUrl, useDraggablePin, nextId } from '../shared/utils';
+import { canUpload, trackUpload, deleteStorageFileWithAccounting, storagePathFromUrl } from '../shared/storageUtils';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import type { Circle, Photo, Project, DimensionLine, PhotoMaster } from '../types';
 import type { ChangeEvent, MouseEvent } from 'react';
@@ -37,16 +37,6 @@ const COLOR_PALETTE = [
 ];
 
 const DEFAULT_ROOF_PART_NAMES = ['棟', '袖', 'ケラバ', '谷', '隅棟', '平', '軒先'];
-
-const getRemoteFileSize = async (url: string): Promise<number | null> => {
-  try {
-    const response = await fetch(url, { method: 'HEAD' });
-    const contentLength = response.headers.get('content-length');
-    return contentLength ? Number(contentLength) : null;
-  } catch {
-    return null;
-  }
-};
 
 // 回転済みコンテナ上のスクリーン座標 → ローカル座標（%）変換
 const getLocalPointFromRect = (clientX: number, clientY: number, rect: DOMRect, angle: number) => {
@@ -356,6 +346,25 @@ export default function PhotoPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [templateNameTarget, setTemplateNameTarget] = useState<Photo | null>(null);
   const [templateNameInput, setTemplateNameInput] = useState('');
+  const mountedRef = useRef(true);
+  const pendingPhotosRef = useRef<Photo[] | null>(null);
+  const photoSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (photoSaveTimer.current) {
+        clearTimeout(photoSaveTimer.current);
+        photoSaveTimer.current = undefined;
+        // アンマウント時に未保存データがあれば即時フラッシュ
+        const photos = pendingPhotosRef.current;
+        if (photos && id) {
+          updateDoc(doc(db, 'projects', id), { photos }).catch(() => {});
+        }
+      }
+    };
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -390,7 +399,7 @@ export default function PhotoPage() {
   };
 
   const doSaveToPhotoMaster = async (name: string, photo: Photo, existing: PhotoMaster | undefined) => {
-    const entry: PhotoMaster = { id: existing?.id ?? Date.now(), name, process: photo.process, description: photo.description };
+    const entry: PhotoMaster = { id: existing?.id ?? nextId(), name, process: photo.process, description: photo.description };
     const newMasters = existing ? photoMasters.map((m) => m.id === existing.id ? entry : m) : [...photoMasters, entry];
     setPhotoMasters(newMasters);
     await setDoc(doc(db, 'users', uid!), { photoMaster: newMasters }, { merge: true });
@@ -398,27 +407,39 @@ export default function PhotoPage() {
     setTimeout(() => setMasterSaveSuccess(null), 3000);
   };
 
-  const updatePhoto = async (photoId: number, field: keyof Photo, value: Photo[keyof Photo]) => {
+  const updatePhoto = (photoId: number, field: keyof Photo, value: Photo[keyof Photo]) => {
     if (!project || !id) return;
     const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, [field]: value } : p);
+
     setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-    await updateDoc(doc(db, "projects", id), { photos: newPhotos });
+
+    pendingPhotosRef.current = newPhotos;
+    if (photoSaveTimer.current) clearTimeout(photoSaveTimer.current);
+    photoSaveTimer.current = setTimeout(async () => {
+      photoSaveTimer.current = undefined;
+      const photos = pendingPhotosRef.current;
+      if (!photos || !mountedRef.current) return;
+      try {
+        await updateDoc(doc(db, 'projects', id), { photos });
+        if (mountedRef.current) pendingPhotosRef.current = null;
+      } catch (err) {
+        logFirebaseError(err, '写真データ保存');
+      }
+    }, 600);
   };
 
   const deletePhotoSlot = async (photoId: number) => {
     if (!project || !id) return;
     const target = project.photos.find((p) => p.id === photoId);
     if (target?.image) {
-      const bytes = await getRemoteFileSize(target.image);
+      let bytes = 0;
       try {
-        await deleteObject(ref(storage, target.image));
-        if (uid && bytes && Number.isFinite(bytes)) {
-          await trackDelete(uid, bytes);
-          setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
-        }
-      } catch (err) {
-        logFirebaseError(err, '写真ファイル削除');
-      }
+        const path = storagePathFromUrl(target.image) ?? target.image;
+        const meta = await getMetadata(ref(storage, path));
+        bytes = meta.size ?? 0;
+      } catch { /* noop */ }
+      await deleteStorageFileWithAccounting(target.image, uid ?? undefined, bytes || undefined);
+      if (bytes > 0) setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
     }
     const newPhotos = project.photos.filter((p) => p.id !== photoId);
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
@@ -435,16 +456,14 @@ export default function PhotoPage() {
     const targets = project.photos.filter((p) => selectedPhotoIds.includes(p.id) && p.image);
     for (const target of targets) {
       if (!target.image) continue;
-      const bytes = await getRemoteFileSize(target.image);
+      let bytes = 0;
       try {
-        await deleteObject(ref(storage, target.image));
-        if (uid && bytes && Number.isFinite(bytes)) {
-          await trackDelete(uid, bytes);
-          setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
-        }
-      } catch (err) {
-        logFirebaseError(err, '写真ファイル削除');
-      }
+        const path = storagePathFromUrl(target.image) ?? target.image;
+        const meta = await getMetadata(ref(storage, path));
+        bytes = meta.size ?? 0;
+      } catch { /* noop */ }
+      await deleteStorageFileWithAccounting(target.image, uid ?? undefined, bytes || undefined);
+      if (bytes > 0) setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
     }
     const newPhotos = project.photos.filter((p) => !selectedPhotoIds.includes(p.id));
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
@@ -465,7 +484,7 @@ export default function PhotoPage() {
 
   const addPhotoSlot = async () => {
     if (!project || !id) return;
-    const newPhotos: Photo[] = [...project.photos, { id: Date.now(), image: null, photoNumber: String(project.photos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], dimensionLines: [], rotation: 0 }];
+    const newPhotos: Photo[] = [...project.photos, { id: nextId(), image: null, photoNumber: String(project.photos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], dimensionLines: [], rotation: 0 }];
     setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
     await updateDoc(doc(db, "projects", id), { photos: newPhotos });
   };
@@ -475,7 +494,7 @@ export default function PhotoPage() {
     if (index < 0 || index >= project.photos.length) return;
     const source = project.photos[index];
     const newPhoto: Photo = {
-      id: Date.now(),
+      id: nextId(),
       image: null,
       photoNumber: '',
       shootingDate: source.shootingDate,
@@ -514,17 +533,18 @@ export default function PhotoPage() {
     const newPhotos = [...project.photos];
     let uploadedCount = 0;
     const todayStr = getTodayStr();
+    let virtualUsed = storageUsedBytes;
 
     for (let i = 0; i < files.length; i++) {
       let targetIndex = newPhotos.findIndex(p => !p.image);
       if (targetIndex === -1) {
-        newPhotos.push({ id: Date.now() + i, image: null, photoNumber: String(newPhotos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], dimensionLines: [], rotation: 0 });
+        newPhotos.push({ id: nextId(), image: null, photoNumber: String(newPhotos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], dimensionLines: [], rotation: 0 });
         targetIndex = newPhotos.length - 1;
       }
 
       try {
         const compressedFile = await compressPhotoWithQuality(files[i]);
-        if (!canUpload(storageUsedBytes, compressedFile.size)) {
+        if (!canUpload(virtualUsed, compressedFile.size)) {
           setUploadError('ストレージ容量が上限（500MB）に達しています。不要な写真を削除してください。');
           break;
         }
@@ -533,7 +553,8 @@ export default function PhotoPage() {
         const url = await getDownloadURL(r);
         if (uid) {
           await trackUpload(uid, compressedFile.size);
-          setStorageUsedBytes((prev) => prev + compressedFile.size);
+          virtualUsed += compressedFile.size;
+          setStorageUsedBytes(virtualUsed);
         }
         newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: newPhotos[targetIndex].shootingDate || todayStr };
         setProject((prev) => prev ? { ...prev, photos: [...newPhotos] } : null);
@@ -602,7 +623,7 @@ export default function PhotoPage() {
 
     if (mode === 'circle') {
       if (selectedCircleId !== null) { setSelectedCircleId(null); return; }
-      const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: [...(p.circles || []), { id: Date.now(), x, y, size: 20 }] } : p);
+      const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: [...(p.circles || []), { id: nextId(), x, y, size: 20 }] } : p);
       setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
       await updateDoc(doc(db, "projects", id), { photos: newPhotos });
     } else if (mode === 'dimension') {
@@ -610,7 +631,7 @@ export default function PhotoPage() {
       if (!drawingStartPoint) {
         setDrawingStartPoint({ x, y });
       } else {
-        const newLineId = Date.now();
+        const newLineId = nextId();
         const newPhotos = project.photos.map((p) => p.id === photoId ? {
           ...p,
           dimensionLines: [...(p.dimensionLines || []), { id: newLineId, start: drawingStartPoint, end: { x, y }, text: "", size: 2, color: activeColor }]

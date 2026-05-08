@@ -312,6 +312,10 @@ export default function PdfExportPage() {
       });
       await Promise.all(promises);
       if (!mountedRef.current) return;
+      if (failedCount > 0 && failedCount === photosWithImage.length) {
+        setError('すべての写真の取得に失敗しました。ネットワーク接続を確認して再試行してください。');
+        return;
+      }
       if (failedCount > 0) {
         setError(`${failedCount}枚の写真の取得に失敗しました。他の写真はZIPに含まれています。`);
       }
@@ -918,13 +922,15 @@ export default function PdfExportPage() {
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <img src={logoRed} alt="logo" style={{ width: 26, height: 26, objectFit: 'contain' }} />
-                <div className="cover-footer-name" style={{
-                  fontSize: '10pt',
-                  fontWeight: 500,
-                  color: '#333',
-                  letterSpacing: '0.08em',
-                  fontFamily: "'Noto Serif JP', serif",
-                }}>有限会社山西瓦店</div>
+                {companyName && (
+                  <div className="cover-footer-name" style={{
+                    fontSize: '10pt',
+                    fontWeight: 500,
+                    color: '#333',
+                    letterSpacing: '0.08em',
+                    fontFamily: "'Noto Serif JP', serif",
+                  }}>{companyName}</div>
+                )}
               </div>
               <div style={{ flex: 1 }} />
               <div className="cover-pnum" style={{

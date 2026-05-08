@@ -2,25 +2,16 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Camera, RotateCcw, RotateCw, ArrowUp, ArrowDown, BookmarkPlus, ChevronDown } from 'lucide-react';
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, getMetadata } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
-import { proxyUrl } from '../shared/utils';
-import { canUpload, trackDelete, trackUpload } from '../shared/storageUtils';
+import { proxyUrl, nextId } from '../shared/utils';
+import { canUpload, trackUpload, deleteStorageFileWithAccounting, storagePathFromUrl } from '../shared/storageUtils';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import type { Material, MaterialMaster, Project } from '../types';
 import { ConfirmModal } from '../shared/ConfirmModal';
 import { ErrorMessage } from '../shared/ErrorMessage';
-
-const getRemoteFileSize = async (url: string): Promise<number> => {
-  try {
-    const res = await fetch(url, { method: 'HEAD' });
-    return Number(res.headers.get('content-length') || 0);
-  } catch {
-    return 0;
-  }
-};
 
 // 品名コンボボックス：▼で全件表示、入力で部分一致絞り込み
 function NameSuggest({
@@ -180,7 +171,7 @@ export default function MaterialPage() {
 
   const addMaterial = () => {
     const newMaterial: Material = {
-      id: Date.now(),
+      id: nextId(),
       image: null,
       name: '',
       manufacturer: '',
@@ -210,16 +201,14 @@ export default function MaterialPage() {
   const removeMaterial = async (materialId: number) => {
     const material = (project?.materials || []).find((m) => m.id === materialId);
     if (material?.image) {
-      const bytes = await getRemoteFileSize(material.image);
+      let bytes = 0;
       try {
-        await deleteObject(ref(storage, material.image));
-        if (uid && bytes > 0) {
-          await trackDelete(uid, bytes);
-          setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
-        }
-      } catch (e) {
-        import.meta.env.DEV && console.warn('材料画像Storage削除失敗:', e);
-      }
+        const path = storagePathFromUrl(material.image) ?? material.image;
+        const meta = await getMetadata(ref(storage, path));
+        bytes = meta.size ?? 0;
+      } catch { /* noop */ }
+      await deleteStorageFileWithAccounting(material.image, uid ?? undefined, bytes || undefined);
+      if (bytes > 0) setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
     }
     saveMaterials((project?.materials || []).filter((m) => m.id !== materialId));
   };
@@ -251,7 +240,7 @@ export default function MaterialPage() {
   const doSaveToMaster = async (material: Material, existing: MaterialMaster | undefined) => {
     const trimmedName = material.name.trim();
     const newEntry: MaterialMaster = {
-      id: existing?.id ?? Date.now(),
+      id: existing?.id ?? nextId(),
       name: trimmedName,
       manufacturer: material.manufacturer,
       specification: material.specification,

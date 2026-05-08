@@ -4,6 +4,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from '../firebase';
 import type { Circle, MapLine, MapRow, Photo, Project } from '../types';
+import { getContractorName } from '../types';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import kawaraLogo from '../assets/kawara-logo.png';
 import { Edit3 } from 'lucide-react';
@@ -112,7 +113,7 @@ export default function ShareViewPage() {
               { label: '工事件名',   value: project.projectName },
               { label: '工事場所',   value: project.projectLocation },
               { label: '工期',       value: project.constructionPeriod },
-              { label: '施工業者',   value: project.contractorName },
+              { label: '施工業者',   value: getContractorName(project) },
               { label: '作成年月日', value: project.creationDate },
             ].map(({ label, value }) => (
               <div key={label} className="flex gap-3 text-sm pb-3 border-b last:border-0 last:pb-0" style={{ borderColor: BORDER }}>

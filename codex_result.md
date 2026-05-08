@@ -1,3 +1,3 @@
-`src/pages/PdfExportPage.tsx` の表紙余白を指定どおり調整しました。変更は水平線 `top: 210`、フィールドコンテナ `top: 280 / bottom: 300`、各行の `paddingTop / paddingBottom: 18` のみです。
+`src/pages/ProjectListPage.tsx` に指定どおり反映しました。`getMetadata` と `trackDelete` を追加し、`deleteProject` は削除前にファイルサイズを集計して、削除後に `trackDelete(user.uid, totalBytes)` と `setStorageUsed(...)` で使用量を減算する実装へ差し替えています。
 
-差分確認済みで、タイトルやフォントサイズ、グリッド構造、フッター、条件分岐には触れていません。必要なら次にPDF見た目の最終確認用に該当部分のスクリーンショット観点も整理できます。
+編集対象は [ProjectListPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/ProjectListPage.tsx:1) のみです。テストやビルド確認は今回は実行していません。

@@ -2,11 +2,11 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, MapPin, CaseUpper, FileText, LayoutGrid, Ruler, Paintbrush, Save, UploadCloud, RotateCcw, RotateCw, Eraser, Move } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, getMetadata } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
 import type { MapPin as MapPinT, MapRow, Project, DimensionLine, WhiteoutBox } from '../types';
-import { proxyUrl } from '../shared/utils';
-import { canUpload, trackDelete, trackUpload } from '../shared/storageUtils';
+import { proxyUrl, nextId } from '../shared/utils';
+import { canUpload, trackUpload, deleteStorageFileWithAccounting, storagePathFromUrl } from '../shared/storageUtils';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
@@ -701,10 +701,11 @@ export default function MapPage() {
       const newMapLayouts = [...mapLayouts];
       const insertAt = mode === 'replace' ? currentMapIndex : newMapUrls.length;
 
+      let virtualUsed = storageUsedBytes;
       for (let i = 0; i < imageFiles.length; i++) {
         setUploadProgress(`アップロード中... (${i + 1}/${imageFiles.length})`);
         const f = imageFiles[i];
-        if (!canUpload(storageUsedBytes, f.size)) {
+        if (!canUpload(virtualUsed, f.size)) {
           setError('ストレージ容量が上限（500MB）に達しています。不要な図面を削除してください。');
           break;
         }
@@ -713,7 +714,8 @@ export default function MapPage() {
         const url = await getDownloadURL(storageRef);
         if (uid) {
           await trackUpload(uid, f.size);
-          setStorageUsedBytes((prev) => prev + f.size);
+          virtualUsed += f.size;
+          setStorageUsedBytes(virtualUsed);
         }
         if (mode === 'replace' && i === 0) {
           newMapUrls[insertAt] = url;
@@ -753,24 +755,13 @@ export default function MapPage() {
     const urlToDelete = project.mapUrls?.[mapIndex];
     if (urlToDelete) {
       let bytes = 0;
-      if (uid) {
-        try {
-          const res = await fetch(urlToDelete, { method: 'HEAD' });
-          bytes = Number(res.headers.get('content-length') || 0);
-        } catch (e) {
-          import.meta.env.DEV && console.warn('マップ画像サイズ取得失敗:', e);
-        }
-      }
       try {
-        await deleteObject(ref(storage, urlToDelete));
-        if (uid && bytes > 0) {
-          await trackDelete(uid, bytes);
-          setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
-        }
-      } catch (err) {
-        logFirebaseError(err, '位置図ファイル削除');
-        /* Storage削除失敗はDB削除を妨げない */
-      }
+        const path = storagePathFromUrl(urlToDelete) ?? urlToDelete;
+        const meta = await getMetadata(ref(storage, path));
+        bytes = meta.size ?? 0;
+      } catch { /* noop */ }
+      await deleteStorageFileWithAccounting(urlToDelete, uid ?? undefined, bytes || undefined);
+      if (bytes > 0) setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
     }
 
     const newMapUrls = (project.mapUrls || []).filter((_, i) => i !== mapIndex);
@@ -879,7 +870,7 @@ export default function MapPage() {
       if (width > 1 && height > 1) {
         const centerX = Math.min(whiteoutStart.x, whiteoutCurrent.x) + width / 2;
         const centerY = Math.min(whiteoutStart.y, whiteoutCurrent.y) + height / 2;
-        const newBox: WhiteoutBox = { id: Date.now(), x: centerX, y: centerY, width, height, mapIndex: currentMapIndex };
+        const newBox: WhiteoutBox = { id: nextId(), x: centerX, y: centerY, width, height, mapIndex: currentMapIndex };
         const newBoxes = [...whiteoutBoxes, newBox];
         setWhiteoutBoxes(newBoxes);
         saveProjectMapData(mapPins, mapRows, mapDimensionLines, newBoxes, showLegendTable, mapTransforms, mapLayouts);
@@ -910,9 +901,9 @@ export default function MapPage() {
           let nextNum = 1;
           while (existingNums.has(nextNum)) nextNum++;
           const newLabel = String(nextNum);
-          const newPins: MapPinT[] = [...mapPins, { id: Date.now(), x, y, label: newLabel, type: 'circle', size: 1, rotation: 0, mapIndex: currentMapIndex, textRotation: -(mapRotations[currentMapIndex] || 0) }];
+          const newPins: MapPinT[] = [...mapPins, { id: nextId(), x, y, label: newLabel, type: 'circle', size: 1, rotation: 0, mapIndex: currentMapIndex, textRotation: -(mapRotations[currentMapIndex] || 0) }];
           setMapPins(newPins);
-          const newRows: MapRow[] = [...mapRows, { id: Date.now(), symbol: newLabel, part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }];
+          const newRows: MapRow[] = [...mapRows, { id: nextId(), symbol: newLabel, part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }];
           setMapRows(newRows);
           saveProjectMapData(newPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts);
 
@@ -920,7 +911,7 @@ export default function MapPage() {
           if (!drawingStartPoint) {
             setDrawingStartPoint({ x, y }); 
           } else {
-            const newLineId = Date.now();
+            const newLineId = nextId();
             const newDimLines: DimensionLine[] = [...mapDimensionLines, {
               id: newLineId, start: drawingStartPoint, end: { x, y }, text: "", size: 2, color: activeColor, mapIndex: currentMapIndex, textRotation: -(mapRotations[currentMapIndex] || 0)
             }];
@@ -1454,7 +1445,7 @@ export default function MapPage() {
                   <div className="text-center py-8 text-sm font-bold" style={{ background: '#12122a', color: '#6b7280' }}>ピンを追加すると<br/>ここに行が追加されます</div>
           )}
         </div>
-              <button onClick={() => { const newRows = [...mapRows, { id: Date.now(), symbol: '', part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }]; setMapRows(newRows); saveProjectMapData(mapPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts); }} className="w-full font-black py-3 px-4 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-colors text-sm" style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }} onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')} onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}><Plus className="w-4 h-4"/> 行を手動追加</button>
+              <button onClick={() => { const newRows = [...mapRows, { id: nextId(), symbol: '', part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }]; setMapRows(newRows); saveProjectMapData(mapPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts); }} className="w-full font-black py-3 px-4 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-colors text-sm" style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }} onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')} onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}><Plus className="w-4 h-4"/> 行を手動追加</button>
       </div>
           )}
         </div>

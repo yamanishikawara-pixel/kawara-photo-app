@@ -164,3 +164,17 @@ export function useDraggablePin(
 
   return { position, onMouseDown, onTouchStart, dragging, containerRef };
 }
+
+// ============================================================================
+// ID生成（エンティティID用）
+// ============================================================================
+
+/**
+ * 衝突しない数値IDを生成する。
+ * Date.now() + モジュールスコープの単調増加カウンタで構成する。
+ * 同一ミリ秒に複数回呼んでも衝突しない。
+ */
+let _idCounter = 0;
+export function nextId(): number {
+  return Date.now() + (++_idCounter);
+}
