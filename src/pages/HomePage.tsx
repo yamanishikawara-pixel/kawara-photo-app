@@ -9,6 +9,18 @@ import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError'
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { ErrorMessage } from '../shared/ErrorMessage';
 
+// 予算書アプリ側 validateProjectSlug と同等のルール
+// kawara-budget/src/projectStorage.js を変更した場合はここも合わせて更新すること
+function validateBudgetProjectName(name: string): string | null {
+  if (!name || !name.trim()) return '工事名を入力してください';
+  const s = name.trim();
+  if (s.includes('/') || s.includes('\\')) return '工事名にスラッシュ（/ ¥）は使えません';
+  if (s === '.' || s === '..') return '工事名に「.」「..」は使えません';
+  if (/^__.*__$/.test(s)) return '工事名の先頭末尾の二重アンダースコアは使えません';
+  if (s.length > 100) return '工事名は100文字以下にしてください';
+  return null;
+}
+
 type MenuItem = {
   title: string;
   subtitle: string;
@@ -178,6 +190,11 @@ export function HomePage() {
                 const projectName = project?.projectName?.trim();
                 if (!projectName) {
                   alert('現場名が未入力です。先に「表紙」で現場名を登録してください。');
+                  return;
+                }
+                const slugErr = validateBudgetProjectName(projectName);
+                if (slugErr) {
+                  alert(`実行予算書を開けません: ${slugErr}\n「表紙」画面で現場名を修正してから再度お試しください。`);
                   return;
                 }
                 window.open(

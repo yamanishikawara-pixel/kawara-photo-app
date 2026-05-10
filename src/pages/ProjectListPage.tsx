@@ -140,7 +140,7 @@ export function ProjectListPage() {
   useEffect(() => {
     const term = searchParams.get('search');
     if (term) {
-      setSearchQuery(decodeURIComponent(term).trim());
+      setSearchQuery(term.trim());
       const next = new URLSearchParams(searchParams);
       next.delete('search');
       setSearchParams(next, { replace: true });

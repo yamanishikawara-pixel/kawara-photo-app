@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import type { CSSProperties } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Download, Printer, FileDown, ChevronUp, ChevronDown, AlertTriangle } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
@@ -15,6 +16,12 @@ import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 
 const JP_FONT = "'Noto Sans JP', 'BIZ UDPGothic', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif";
+const SYMBOL_COLORS = ['#16a34a', '#2563eb', '#92400e', '#7c3aed', '#db2777', '#065f46'];
+const colorForSymbol = (symbol: string): string => {
+  const s = (symbol ?? '').trim();
+  if (!s) return SYMBOL_COLORS[0];
+  return SYMBOL_COLORS[s.charCodeAt(0) % SYMBOL_COLORS.length];
+};
 
 function safeStyleLine(val: string | number | undefined | null, defaultUnit: string): string {
   if (val == null || val === '') return `0${defaultUnit}`;
@@ -536,7 +543,6 @@ export default function PdfExportPage() {
 
   if (!project) return <LoadingSpinner />;
 
-  const showLegendTable = project.showLegendTable !== false;
   // 表示用:施工業者名(canonical優先、legacy fallback)
   const displayContractor = getContractorName(project);
   // 表示用:完了報告書の日付(reportDate 優先、creationDate フォールバック)
@@ -611,10 +617,6 @@ export default function PdfExportPage() {
             break-before: auto !important;
             page-break-before: auto !important;
             -webkit-page-break-before: auto !important;
-          }
-
-          .pdf-map-fullbleed {
-            padding: 0 !important;
           }
 
           .pdf-page.pdf-cover-page {
@@ -950,42 +952,30 @@ export default function PdfExportPage() {
           return mapUrlsToRender.map((u, mapIndex) => {
           const userRotation = project.mapRotations?.[mapIndex] ?? 0;
           const totalRotation = userRotation % 360;
-
           const transform = project.mapTransforms?.[mapIndex] || { scale: 1, x: 0, y: 0 };
-          const layout = project.mapLayouts?.[mapIndex] || { title: '位置図', x: 15, y: 10, rotation: 0 };
-
           const whiteoutBoxesForMap = (project.whiteoutBoxes ?? []).filter((b: WhiteoutBox) => b.mapIndex === mapIndex);
+          const currentRows = (project.mapRows ?? []).filter(
+            (r) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0)
+          );
 
           const mapOverlays = (
             <>
-              {/* ★ タイトル札 */}
-              <div style={{
-                position: 'absolute',
-                left: `${layout.x ?? 15}%`,
-                top: `${layout.y ?? 10}%`,
-                transform: `translate(-50%, -50%) rotate(${layout.rotation || 0}deg) scale(${1 / transform.scale})`,
-                zIndex: 60,
-                background: 'rgba(255,255,255,0.95)',
-                padding: '6px 16px',
-                borderRadius: '4px',
-                fontWeight: 'bold',
-                fontSize: '24px',
-                color: '#111',
-                border: '2px solid #333',
-                whiteSpace: 'nowrap'
-              }}>
-                {layout.title}{mapCount > 1 ? ` (${mapIndex + 1}/${mapCount})` : ''}
-              </div>
-
               {(project.mapPins ?? []).filter(p => p.mapIndex === mapIndex).map(pin => {
+                const pinColor = colorForSymbol(pin.label);
                 const visualScale = (pin.size ?? 1) / transform.scale;
                 return (
                   <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: `translate(-50%, -50%) scale(${visualScale})`, zIndex: 10 }} className="absolute">
                     <div style={{ transform: `rotate(${pin.textRotation ?? 0}deg)` }}>
                       {pin.type === 'arrow' ? (
-                        <div className="flex items-center gap-1 px-1 rounded bg-white/70 border border-red-200"><span className="font-bold text-[24px] text-red-600" style={{ transform: `rotate(${pin.rotation ?? 0}deg)` }}>➡</span><span className="font-bold text-[20px] text-red-600">{pin.label}</span></div>
+                        <div className="flex items-center gap-1 px-1 rounded bg-white/70" style={{ border: `1px solid ${pinColor}` }}>
+                          <span className="font-bold text-[24px]" style={{ color: pinColor, transform: `rotate(${pin.rotation ?? 0}deg)` }}>➡</span>
+                          <span className="font-bold text-[20px]" style={{ color: pinColor }}>{pin.label}</span>
+                        </div>
                       ) : (
-                        <div className="relative flex items-center justify-center"><div className="w-[14mm] h-[14mm] rounded-full border-[4px] border-red-600 bg-red-600/10" /><span className="absolute font-bold text-[18px] px-1 rounded text-red-600 bg-white/70">{pin.label}</span></div>
+                        <div className="relative flex items-center justify-center">
+                          <div className="w-[14mm] h-[14mm] rounded-full border-[4px]" style={{ borderColor: pinColor, backgroundColor: `${pinColor}22` }} />
+                          <span className="absolute font-bold text-[18px] px-1 rounded bg-white/70" style={{ color: pinColor }}>{pin.label}</span>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -995,7 +985,7 @@ export default function PdfExportPage() {
                 <div key={`line-${line.id}`} className="absolute" style={{ left: safeStyleLine(line.x, '%'), top: safeStyleLine(line.y, '%'), width: safeStyleLine(line.length, '%'), height: safeStyleLine(line.thickness, 'px'), backgroundColor: line.color || '#000000', transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`, transformOrigin: 'center center', zIndex: 15 }} />
               ))}
               {(project.mapDimensionLines ?? []).filter(l => (l.mapIndex || 0) === mapIndex).map((line) => {
-                const color = line.color || "#FFFFFF";
+                const color = line.color || '#FFFFFF';
                 const thickness = Number(line.size || 2);
                 const midX = (line.start.x + line.end.x) / 2;
                 const midY = (line.start.y + line.end.y) / 2;
@@ -1012,116 +1002,84 @@ export default function PdfExportPage() {
                       <line x1={`${line.start.x}%`} y1={`${line.start.y}%`} x2={`${line.end.x}%`} y2={`${line.end.y}%`} stroke={color} strokeWidth={thickness} fill="none" markerStart={`url(#cad-tick-pdf-map-${line.id})`} markerEnd={`url(#cad-tick-pdf-map-${line.id})`} />
                     </svg>
                     {line.text && (
-                      <div style={{ left: `${midX}%`, top: `${midY}%`, color, backgroundColor: 'rgba(0,0,0,0.5)', fontSize: `${dynamicFontSize}px`, transform: `translate(-50%,-50%) rotate(${line.textRotation ?? 0}deg) scale(${1 / transform.scale})` }} className="absolute z-20 font-bold px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap">
+                      <div style={{ left: `${midX}%`, top: `${midY}%`, color, fontSize: `${dynamicFontSize}px`, transform: `translate(-50%,-50%) rotate(${line.textRotation ?? 0}deg) scale(${1 / transform.scale})`, paintOrder: 'stroke fill', WebkitTextStroke: '4px white' } as CSSProperties} className="absolute z-20 font-bold px-1.5 py-0.5 pointer-events-none whitespace-nowrap">
                         {line.text}
                       </div>
                     )}
                   </div>
                 );
               })}
-
-              {/* 白塗りは全オーバーレイの最後 = 最前面に描画。
-                  SVG rect を使うことでブラウザPDF出力時も確実に白く塗られる。
-                  overflow:visible な寸法線SVGより後に置くことで必ず上に重なる。 */}
               {whiteoutBoxesForMap.length > 0 && (
                 <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible', zIndex: 50, pointerEvents: 'none' }}>
                   {whiteoutBoxesForMap.map((box: WhiteoutBox) => (
-                    <rect
-                      key={box.id}
-                      x={`${box.x - box.width / 2}%`}
-                      y={`${box.y - box.height / 2}%`}
-                      width={`${box.width}%`}
-                      height={`${box.height}%`}
-                      fill="white"
-                    />
+                    <rect key={box.id} x={`${box.x - box.width / 2}%`} y={`${box.y - box.height / 2}%`} width={`${box.width}%`} height={`${box.height}%`} fill="white" />
                   ))}
                 </svg>
               )}
             </>
           );
 
-          if (!showLegendTable) {
-            return (
-              <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-                <div
-                  className={`pdf-page pdf-map-fullbleed w-full h-full bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`}
-                  style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: 0, transform: isPrinting ? 'none' : `scale(${scale})` }}
-                >
-                  <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {u ? (
-                      <div style={{ position: 'relative', aspectRatio: '175/255', height: '100%', overflow: 'hidden' }}>
-                        <div style={{ position: 'absolute', inset: 0, transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center' }}>
-                          <img
-                            src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)}
-                            data-original-src={u}
-                            crossOrigin="anonymous"
-                            style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
-                            alt=""
-                          />
-                          {mapOverlays}
-                        </div>
-                      </div>
-                    ) : (
-                      <span className="font-bold text-gray-400 absolute inset-0 flex items-center justify-center">位置図未登録</span>
-                    )}
-                    <div style={{ position: 'absolute', bottom: '5mm', right: '8mm', zIndex: 50, fontSize: '12px', fontWeight: 'bold', color: '#555' }}>
-                      - {pageOffset('map') + mapIndex + 1} / {totalPages} -
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          }
-
           return (
-            <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-              <div className={`pdf-page w-full h-full flex flex-col bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '15mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
-                <div className="w-full h-full flex flex-col border-[3px] border-gray-800 print:border-black p-6 print:p-2">
+          <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+          <div className={`pdf-page w-full h-full flex flex-col bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`}
+            style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '12mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
 
-                  {/* aspectRatio must match MapPage legend container (194/120) exactly.
-                      width:100% fills the flex-1 area; height is derived from aspect-ratio.
-                      Do NOT use height:100% here — landscape 194/120 would overflow the flex-row
-                      parent width, and browsers differ in how they resolve that conflict. */}
-                  <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-gray-50 print:bg-white p-2 border border-gray-400 print:border-gray-500">
-                    {u ? (
-                      <div style={{ position: 'relative', aspectRatio: '194/120', width: '100%', overflow: 'hidden' }}>
-                        <div style={{ position: 'absolute', inset: 0, transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center' }}>
-                          <img
-                            src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)}
-                            data-original-src={u}
-                            crossOrigin="anonymous"
-                            style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
-                            alt=""
-                          />
-                          {mapOverlays}
-                        </div>
-                      </div>
-                    ) : <span className="font-bold text-gray-400">位置図未登録</span>}
-                  </div>
-                  <div className="mt-4 shrink-0">
-                    <div className="flex justify-between items-end mb-2"><div className="text-base font-bold">項目欄</div></div>
-                    <div className="border-2 border-gray-800 print:border-black">
-                      <div className="grid grid-cols-12 text-base font-bold border-b-2 border-gray-800 bg-gray-100 print:bg-gray-50 print:border-black">
-                        <div className="col-span-1 py-2 text-center flex justify-center items-center border-r-2 border-gray-800 print:border-black">符号</div><div className="col-span-2 py-2 text-center flex justify-center items-center border-r-2 border-gray-800 print:border-black">部位</div><div className="col-span-2 py-2 text-center flex justify-center items-center border-r-2 border-gray-800 print:border-black">写真NO</div><div className="col-span-7 py-2 text-center flex justify-center items-center">備考</div>
-                      </div>
-                      {(() => {
-                        const rows: MapRow[] = project.mapRows ?? [];
-                        const currentRows = rows.filter((r) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0));
-                        const displayRows: MapRow[] = currentRows.length > 0 ? currentRows.slice(0, 6) : Array.from({ length: 6 }, (_, i) => ({ id: -(i + 1), symbol: '　', part: '　', photoNo: '　', remarks: '　' }));
-                        return displayRows.map((row) => (
-                          <div key={row.id} className="grid grid-cols-12 text-base border-b border-gray-400 print:border-black">
-                            <div className="col-span-1 py-2 font-bold text-center flex justify-center items-center border-r border-gray-400 text-red-700 print:border-black">{row.symbol ?? '　'}</div><div className="col-span-2 px-2 py-2 flex items-center overflow-hidden border-r border-gray-400 print:border-black">{row.part ?? '　'}</div><div className="col-span-2 py-2 text-center flex justify-center items-center overflow-hidden border-r border-gray-400 print:border-black">{row.photoNo ?? row.relatedPhotoNumber ?? '　'}</div><div className="col-span-7 px-2 py-2 flex items-center overflow-hidden">{row.remarks ?? '　'}</div>
-                          </div>
-                        ));
-                      })()}
-                    </div>
-                  </div>
+            <div style={{ background: '#f0f7f4', borderBottom: '2px solid #0f6e56', padding: '5px 12px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <span style={{ color: '#0f6e56', fontWeight: 700, fontSize: '14px' }}>◆ 位置図</span>
+              <span style={{ color: '#333', fontSize: '13px', fontWeight: 500 }}>・ {project.projectName ?? ''}</span>
+              {mapCount > 1 && <span style={{ color: '#666', fontSize: '12px', marginLeft: 'auto' }}>({mapIndex + 1}/{mapCount})</span>}
+            </div>
+
+            <div className="flex-1 relative overflow-hidden border border-gray-300 bg-gray-50 print:bg-white min-h-0" style={{ marginTop: 6, marginBottom: 6 }}>
+              {u ? (
+                <div style={{ position: 'absolute', inset: 0, transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center' }}>
+                  <img
+                    src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)}
+                    data-original-src={u}
+                    crossOrigin="anonymous"
+                    style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
+                    alt=""
+                  />
+                  {mapOverlays}
                 </div>
-                <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500 shrink-0">- {pageOffset('map') + mapIndex + 1} / {totalPages} -</div>
+              ) : (
+                <span className="font-bold text-gray-400 absolute inset-0 flex items-center justify-center">位置図未登録</span>
+              )}
+            </div>
+
+            <div className="shrink-0">
+              <div className="border border-gray-300">
+                <div className="grid grid-cols-12 text-sm font-bold" style={{ background: '#f3f7f4', borderBottom: '2px solid #0f6e56', color: '#0f6e56' }}>
+                  <div className="col-span-1 py-1.5 text-center border-r border-gray-300">符号</div>
+                  <div className="col-span-2 py-1.5 text-center border-r border-gray-300">部位</div>
+                  <div className="col-span-2 py-1.5 text-center border-r border-gray-300">写真NO</div>
+                  <div className="col-span-7 py-1.5 text-center">備考</div>
+                </div>
+                {currentRows.length > 0 ? currentRows.map((row) => {
+                  const badgeColor = colorForSymbol(row.symbol ?? '');
+                  return (
+                    <div key={row.id} className="grid grid-cols-12 text-sm border-b border-gray-300 last:border-b-0">
+                      <div className="col-span-1 py-2 flex justify-center items-center border-r border-gray-300">
+                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: '50%', background: badgeColor, color: 'white', fontWeight: 700, fontSize: '12px' }}>
+                          {(row.symbol ?? '').slice(0, 2)}
+                        </span>
+                      </div>
+                      <div className="col-span-2 px-2 py-2 flex items-center overflow-hidden border-r border-gray-300">{row.part ?? ''}</div>
+                      <div className="col-span-2 py-2 text-center flex justify-center items-center overflow-hidden border-r border-gray-300">{row.photoNo ?? row.relatedPhotoNumber ?? ''}</div>
+                      <div className="col-span-7 px-2 py-2 flex items-center overflow-hidden">{row.remarks ?? ''}</div>
+                    </div>
+                  );
+                }) : (
+                  <div className="py-2 text-center text-gray-400 text-xs">項目なし</div>
+                )}
               </div>
             </div>
+
+            <div className="absolute bottom-[8mm] print:bottom-[5mm] right-[12mm] print:right-[8mm] text-xs font-bold text-gray-500">- {pageOffset('map') + mapIndex + 1} / {totalPages} -</div>
+          </div>
+          </div>
           );
-        });}
+          });}
 
         case 'photo': {
           if (!sections.photo) return [];
