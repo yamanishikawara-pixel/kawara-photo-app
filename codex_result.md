@@ -1,3 +1,3 @@
-`src/pages/PdfExportPage.tsx` と `src/pages/ShareViewPage.tsx` の位置図レイアウトを指定どおり差し替えました。`colorForSymbol` を両方に追加し、符号連動カラーのピン・凡例バッジに統一しています。`PdfExportPage.tsx` では `showLegendTable` 分岐と `pdf-map-fullbleed` CSS を削除し、クラシック改良版の固定レイアウトへ一本化しました。
+`PdfExportPage.tsx` と `ShareViewPage.tsx` の図面表示コンテナを、指定どおり `aspectRatio: '194 / 120'` 基準に戻しました。編集画面の `%` 座標系と揃うので、ピン・寸法線のズレ修正が入っています。
 
-確認として `npm run build` を実行し、成功しています。
+案1の改善要素は触っていません。`ShareViewPage.tsx` はラッパーを 1 段増やし、対応する閉じタグも追加済みです。テストやビルドは今回は回していません。

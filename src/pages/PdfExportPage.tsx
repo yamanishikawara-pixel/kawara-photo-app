@@ -1030,20 +1030,22 @@ export default function PdfExportPage() {
               {mapCount > 1 && <span style={{ color: '#666', fontSize: '12px', marginLeft: 'auto' }}>({mapIndex + 1}/{mapCount})</span>}
             </div>
 
-            <div className="flex-1 relative overflow-hidden border border-gray-300 bg-gray-50 print:bg-white min-h-0" style={{ marginTop: 6, marginBottom: 6 }}>
+            <div className="flex-1 flex items-center justify-center overflow-hidden bg-gray-50 print:bg-white min-h-0" style={{ marginTop: 6, marginBottom: 6 }}>
               {u ? (
-                <div style={{ position: 'absolute', inset: 0, transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center' }}>
-                  <img
-                    src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)}
-                    data-original-src={u}
-                    crossOrigin="anonymous"
-                    style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
-                    alt=""
-                  />
-                  {mapOverlays}
+                <div style={{ position: 'relative', aspectRatio: '194 / 120', width: '100%', overflow: 'hidden' }}>
+                  <div style={{ position: 'absolute', inset: 0, transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center' }}>
+                    <img
+                      src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)}
+                      data-original-src={u}
+                      crossOrigin="anonymous"
+                      style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
+                      alt=""
+                    />
+                    {mapOverlays}
+                  </div>
                 </div>
               ) : (
-                <span className="font-bold text-gray-400 absolute inset-0 flex items-center justify-center">位置図未登録</span>
+                <span className="font-bold text-gray-400">位置図未登録</span>
               )}
             </div>
 

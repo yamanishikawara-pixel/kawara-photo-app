@@ -146,12 +146,13 @@ export default function ShareViewPage() {
                 </h2>
               </div>
 
-              <div className="overflow-hidden" style={{ background: CARD2, minHeight: '40vh', maxHeight: '78vh', position: 'relative' }}>
-                <div
-                  className="absolute inset-0 flex items-center justify-center"
-                  style={{ transform: `translate(${t.x}%, ${t.y}%) scale(${t.scale}) rotate(${mapRotation}deg)`, transformOrigin: 'center center' }}
-                >
-                  <img src={u} alt="位置図" className="block w-full h-full object-contain" />
+              <div className="overflow-hidden flex items-center justify-center" style={{ background: CARD2, maxHeight: '78vh' }}>
+                <div style={{ position: 'relative', aspectRatio: '194 / 120', width: '100%', maxWidth: `calc(78vh * ${194 / 120})`, overflow: 'hidden' }}>
+                  <div
+                    className="absolute inset-0"
+                    style={{ transform: `translate(${t.x}%, ${t.y}%) scale(${t.scale}) rotate(${mapRotation}deg)`, transformOrigin: 'center center' }}
+                  >
+                    <img src={u} alt="位置図" className="block w-full h-full object-contain" />
 
                   {(project.mapPins ?? []).filter(p => p.mapIndex === mapIndex).map(pin => {
                     const pinColor = colorForSymbol(pin.label);
@@ -204,6 +205,7 @@ export default function ShareViewPage() {
                   {(project.whiteoutBoxes ?? []).filter(b => (b.mapIndex || 0) === mapIndex).map(box => (
                     <div key={box.id} className="absolute bg-white pointer-events-none" style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%`, height: `${box.height}%`, transform: 'translate(-50%, -50%)', zIndex: 25 }} />
                   ))}
+                  </div>
                 </div>
               </div>
 
