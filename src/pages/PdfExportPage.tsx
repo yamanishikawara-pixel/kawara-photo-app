@@ -823,128 +823,215 @@ export default function PdfExportPage() {
         {sectionOrder.flatMap(secKey => { switch (secKey) {
 
         // ① 表紙
+               // ① 表紙
         case 'cover': {
           if (!sections.cover) return [];
-          const coverFields = [
-            { chars: ['工','事','件','名'], value: project.projectName ?? '',                     valPt: '18pt', last: false },
-            { chars: ['工','事','場','所'], value: project.projectLocation ?? '',                  valPt: '18pt', last: false },
-            { chars: ['工','　','　','期'], value: project.constructionPeriod ?? '',               valPt: '18pt', last: false },
-            { chars: ['施','工','業','者'], value: displayContractor,                              valPt: '18pt', last: false },
-            { chars: ['作','成','年','月','日'], value: project.creationDate ?? displayReportDate, valPt: '18pt', last: true  },
+
+          const formatCoverPeriod = (value: string) => {
+            const text = value.trim();
+            if (!text) return '';
+
+            return text
+              .replace(/\s+/g, '')
+              .replace(/[〜～~]/, '〜\n');
+          };
+
+          const coverFields: {
+            chars: string[];
+            value: string;
+            valPt: string;
+            last: boolean;
+            multiline?: boolean;
+          }[] = [
+            {
+              chars: ['工','事','件','名'],
+              value: project.projectName ?? '',
+              valPt: '18pt',
+              last: false,
+            },
+            {
+              chars: ['工','事','場','所'],
+              value: project.projectLocation ?? '',
+              valPt: '18pt',
+              last: false,
+            },
+            {
+              chars: ['工','　','　','期'],
+              value: formatCoverPeriod(project.constructionPeriod ?? ''),
+              valPt: '18pt',
+              last: false,
+              multiline: true,
+            },
+            {
+              chars: ['施','工','業','者'],
+              value: displayContractor,
+              valPt: '18pt',
+              last: false,
+            },
+            {
+              chars: ['作','成','年','月','日'],
+              value: project.creationDate ?? displayReportDate,
+              valPt: '18pt',
+              last: true,
+            },
           ];
+
           return [(
-          <div key="cover" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-          <div className={`pdf-page pdf-cover-page overflow-hidden ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`}
-            style={{
-              width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`,
-              height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`,
-              transform: isPrinting ? 'none' : `scale(${scale})`,
-              background: '#ffffff',
-              overflow: 'hidden',
-            }}>
+            <div
+              key="cover"
+              style={{
+                width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`,
+                height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px`,
+              }}
+              className="pdf-page-wrapper relative bg-white shadow-md shrink-0"
+            >
+              <div
+                className={`pdf-page pdf-cover-page overflow-hidden ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`}
+                style={{
+                  width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`,
+                  height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`,
+                  transform: isPrinting ? 'none' : `scale(${scale})`,
+                  background: '#ffffff',
+                  overflow: 'hidden',
+                }}
+              >
 
-            <div className="cover-title" style={{
-              position: 'absolute', left: 0, right: 0, top: 96,
-              textAlign: 'center',
-              fontSize: '42pt',
-              fontWeight: 800,
-              letterSpacing: '0.22em',
-              textIndent: '0.22em',
-              color: '#111',
-              lineHeight: 1,
-              fontFamily: "'Shippori Mincho', 'Noto Serif JP', serif",
-            }}>工事写真報告書</div>
-
-            <div style={{
-              position: 'absolute', left: '50%', top: 210,
-              transform: 'translateX(-50%)',
-              width: 620, height: 1, background: '#111',
-            }} />
-
-            <div style={{
-              position: 'absolute', left: '50%', top: 280,
-              bottom: 300,
-              transform: 'translateX(-50%)',
-              width: 620,
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-            }}>
-              {coverFields.map((row, i) => (
-                <div key={i} style={{
-                  display: 'grid',
-                  gridTemplateColumns: '148px 40px 1fr',
-                  alignItems: 'start',
-                  paddingTop: 18,
-                  paddingBottom: 18,
-                  borderBottom: '1px solid #111',
+                <div className="cover-title" style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: 96,
+                  textAlign: 'center',
+                  fontSize: '42pt',
+                  fontWeight: 800,
+                  letterSpacing: '0.22em',
+                  textIndent: '0.22em',
+                  color: '#111',
+                  lineHeight: 1,
+                  fontFamily: "'Shippori Mincho', 'Noto Serif JP', serif",
                 }}>
-                  <div className="cover-lbl" style={{
-                    fontSize: '16pt',
-                    fontWeight: 400,
-                    color: '#111',
-                    fontFamily: "'Noto Sans JP', sans-serif",
-                    width: '6em',
-                    display: 'inline-flex',
-                    justifyContent: 'space-between',
-                    letterSpacing: 0,
-                  }}>
-                    {row.chars.map((c, j) => <span key={j}>{c}</span>)}
-                  </div>
-                  <div style={{
-                    fontSize: '16pt',
-                    fontWeight: 400,
-                    color: '#111',
-                    fontFamily: "'Noto Sans JP', sans-serif",
-                    textAlign: 'center',
-                    lineHeight: 1.5,
-                  }}>—</div>
-                  <div className="cover-val" style={{
-                    fontSize: row.valPt,
-                    fontWeight: 500,
-                    color: '#111',
-                    letterSpacing: '0.06em',
-                    fontFamily: "'Noto Serif JP', serif",
-                    lineHeight: 1.6,
-                  }}>{row.value}</div>
+                  工事写真報告書
                 </div>
-              ))}
-            </div>
 
-            {/* ④ フッター: 赤ロゴ＋社名（左）｜ページ番号（右） */}
-            <div style={{
-              position: 'absolute', left: 0, right: 0, bottom: 56,
-              display: 'flex', alignItems: 'center',
-              padding: '0 60px',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <img src={logoRed} alt="logo" style={{ width: 26, height: 26, objectFit: 'contain' }} />
-                {companyName && (
-                  <div className="cover-footer-name" style={{
+                <div style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: 210,
+                  transform: 'translateX(-50%)',
+                  width: 620,
+                  height: 1,
+                  background: '#111',
+                }} />
+
+                <div style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: 280,
+                  bottom: 300,
+                  transform: 'translateX(-50%)',
+                  width: 620,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                }}>
+                  {coverFields.map((row, i) => (
+                    <div key={i} style={{
+                      display: 'grid',
+                      gridTemplateColumns: '148px 40px 1fr',
+                      alignItems: row.multiline ? 'center' : 'start',
+                      paddingTop: 18,
+                      paddingBottom: 18,
+                      borderBottom: '1px solid #111',
+                    }}>
+                      <div className="cover-lbl" style={{
+                        fontSize: '16pt',
+                        fontWeight: 400,
+                        color: '#111',
+                        fontFamily: "'Noto Sans JP', sans-serif",
+                        width: '6em',
+                        display: 'inline-flex',
+                        justifyContent: 'space-between',
+                        letterSpacing: 0,
+                      }}>
+                        {row.chars.map((c, j) => <span key={j}>{c}</span>)}
+                      </div>
+
+                      <div style={{
+                        fontSize: '16pt',
+                        fontWeight: 400,
+                        color: '#111',
+                        fontFamily: "'Noto Sans JP', sans-serif",
+                        textAlign: 'center',
+                        lineHeight: 1.5,
+                      }}>
+                        —
+                      </div>
+
+                      <div className="cover-val" style={{
+                        fontSize: row.valPt,
+                        fontWeight: 500,
+                        color: '#111',
+                        letterSpacing: '0.06em',
+                        fontFamily: "'Noto Serif JP', serif",
+                        lineHeight: 1.6,
+                        whiteSpace: row.multiline ? 'pre-line' : 'normal',
+                        wordBreak: 'keep-all',
+                        overflowWrap: 'normal',
+                      }}>
+                        {row.value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* ④ フッター: 赤ロゴ＋社名（左）｜ページ番号（右） */}
+                <div style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  bottom: 56,
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '0 60px',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <img
+                      src={logoRed}
+                      alt="logo"
+                      style={{ width: 26, height: 26, objectFit: 'contain' }}
+                    />
+                    {companyName && (
+                      <div className="cover-footer-name" style={{
+                        fontSize: '10pt',
+                        fontWeight: 500,
+                        color: '#333',
+                        letterSpacing: '0.08em',
+                        fontFamily: "'Noto Serif JP', serif",
+                      }}>
+                        {companyName}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ flex: 1 }} />
+
+                  <div className="cover-pnum" style={{
                     fontSize: '10pt',
-                    fontWeight: 500,
-                    color: '#333',
-                    letterSpacing: '0.08em',
-                    fontFamily: "'Noto Serif JP', serif",
-                  }}>{companyName}</div>
-                )}
-              </div>
-              <div style={{ flex: 1 }} />
-              <div className="cover-pnum" style={{
-                fontSize: '10pt',
-                color: '#888',
-                letterSpacing: '0.25em',
-                fontFamily: "'Noto Sans JP', sans-serif",
-              }}>- 1 / {totalPages} -</div>
-            </div>
+                    color: '#888',
+                    letterSpacing: '0.25em',
+                    fontFamily: "'Noto Sans JP', sans-serif",
+                  }}>
+                    - 1 / {totalPages} -
+                  </div>
+                </div>
 
-          </div>
-          </div>
-          )]; }
+              </div>
+            </div>
+          )];
+        }
 
         case 'map': {
           if (!sections.map) return [];
-
           // 案1: 符号(A, B, C...)ごとに色を割り当てる。
           // ピンと凡例バッジで同じ色を使うことで視線移動を最小化する。
           // 6色を順番に循環(空文字/未指定の符号は赤フォールバック)。
