@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import type { CSSProperties } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Download, Printer, FileDown, ChevronUp, ChevronDown, AlertTriangle } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
@@ -11,17 +10,12 @@ import { getContractorName, getReportDate } from '../types';
 import kawaraLogo from '../assets/kawara-logo.png';
 import logoRed from '../assets/logo_red.png';
 import { A4_HEIGHT_PX, A4_WIDTH_PX, getPreviewScale, proxyUrl } from '../shared/utils';
+import { resolveMapAspect } from '../shared/mapCoords';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 
 const JP_FONT = "'Noto Sans JP', 'BIZ UDPGothic', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif";
-const SYMBOL_COLORS = ['#16a34a', '#2563eb', '#92400e', '#7c3aed', '#db2777', '#065f46'];
-const colorForSymbol = (symbol: string): string => {
-  const s = (symbol ?? '').trim();
-  if (!s) return SYMBOL_COLORS[0];
-  return SYMBOL_COLORS[s.charCodeAt(0) % SYMBOL_COLORS.length];
-};
 
 function safeStyleLine(val: string | number | undefined | null, defaultUnit: string): string {
   if (val == null || val === '') return `0${defaultUnit}`;
@@ -319,8 +313,9 @@ export default function PdfExportPage() {
       });
       await Promise.all(promises);
       if (!mountedRef.current) return;
-      if (failedCount > 0 && failedCount === photosWithImage.length) {
-        setError('すべての写真の取得に失敗しました。ネットワーク接続を確認して再試行してください。');
+      // 全枚失敗していたら空 ZIP を保存しない(空ZIPはユーザー混乱の元)。
+      if (failedCount === photosWithImage.length) {
+        setError('すべての写真の取得に失敗しました。通信状態を確認して再度お試しください。');
         return;
       }
       if (failedCount > 0) {
@@ -949,32 +944,65 @@ export default function PdfExportPage() {
 
         case 'map': {
           if (!sections.map) return [];
+
+          // 案1: 符号(A, B, C...)ごとに色を割り当てる。
+          // ピンと凡例バッジで同じ色を使うことで視線移動を最小化する。
+          // 6色を順番に循環(空文字/未指定の符号は赤フォールバック)。
+          const SYMBOL_PALETTE = [
+            '#0f6e56', // 緑
+            '#185fa5', // 青
+            '#b45309', // 茶
+            '#7c2d8a', // 紫
+            '#a3185a', // 桃赤
+            '#3b4f1a', // 深緑
+          ];
+          const colorForSymbol = (sym: string | undefined): string => {
+            if (!sym || !sym.trim()) return '#d12c2c'; // フォールバック(従来の赤)
+            // 同じ符号には同じ色が返るように、文字列をハッシュ化して色IDに割り付け。
+            // 単純 charCodeAt 合算で十分(衝突しても見やすさに実害なし)。
+            const s = sym.trim();
+            let h = 0;
+            for (let i = 0; i < s.length; i++) h = (h + s.charCodeAt(i)) >>> 0;
+            return SYMBOL_PALETTE[h % SYMBOL_PALETTE.length];
+          };
+
           return mapUrlsToRender.map((u, mapIndex) => {
           const userRotation = project.mapRotations?.[mapIndex] ?? 0;
           const totalRotation = userRotation % 360;
+
           const transform = project.mapTransforms?.[mapIndex] || { scale: 1, x: 0, y: 0 };
+          const layout = project.mapLayouts?.[mapIndex] || { title: '位置図', x: 15, y: 10, rotation: 0 };
+
+          // 座標系のアスペクト解決:
+          //   - 新形式の地図 → 画像の自然アスペクト (Project.mapImageAspects[mapIndex])
+          //   - 旧形式の地図 → 194/120 (LEGACY_MAP_ASPECT)
+          // 旧形式のドキュメントは編集画面で開いた瞬間に新形式へ移行される。
+          // 出力側は読み取り専用なので、保存値を尊重して描画する。
+          const containerAspect = resolveMapAspect(project.mapImageAspects, mapIndex);
+
           const whiteoutBoxesForMap = (project.whiteoutBoxes ?? []).filter((b: WhiteoutBox) => b.mapIndex === mapIndex);
-          const currentRows = (project.mapRows ?? []).filter(
-            (r) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0)
-          );
 
           const mapOverlays = (
             <>
+              {/* 案1: タイトル札は画像内に置かず、ページ上部の帯ヘッダーに移動した(後述)。
+                  これにより図面の有効領域が広がり、図面の中心情報が見やすくなる。 */}
+
               {(project.mapPins ?? []).filter(p => p.mapIndex === mapIndex).map(pin => {
-                const pinColor = colorForSymbol(pin.label);
                 const visualScale = (pin.size ?? 1) / transform.scale;
+                // 案1: 符号(label)ごとに色を決定。凡例バッジと完全一致させて視線移動を抑える。
+                const pinColor = colorForSymbol(pin.label);
                 return (
                   <div key={pin.id} style={{ left: `${pin.x}%`, top: `${pin.y}%`, transform: `translate(-50%, -50%) scale(${visualScale})`, zIndex: 10 }} className="absolute">
                     <div style={{ transform: `rotate(${pin.textRotation ?? 0}deg)` }}>
                       {pin.type === 'arrow' ? (
-                        <div className="flex items-center gap-1 px-1 rounded bg-white/70" style={{ border: `1px solid ${pinColor}` }}>
+                        <div className="flex items-center gap-1 px-1 rounded" style={{ background: 'rgba(255,255,255,0.7)', border: `1px solid ${pinColor}33` }}>
                           <span className="font-bold text-[24px]" style={{ color: pinColor, transform: `rotate(${pin.rotation ?? 0}deg)` }}>➡</span>
                           <span className="font-bold text-[20px]" style={{ color: pinColor }}>{pin.label}</span>
                         </div>
                       ) : (
                         <div className="relative flex items-center justify-center">
-                          <div className="w-[14mm] h-[14mm] rounded-full border-[4px]" style={{ borderColor: pinColor, backgroundColor: `${pinColor}22` }} />
-                          <span className="absolute font-bold text-[18px] px-1 rounded bg-white/70" style={{ color: pinColor }}>{pin.label}</span>
+                          <div className="w-[14mm] h-[14mm] rounded-full" style={{ border: `4px solid ${pinColor}`, background: `${pinColor}1a` }} />
+                          <span className="absolute font-bold text-[18px] px-1 rounded" style={{ color: pinColor, background: 'rgba(255,255,255,0.7)' }}>{pin.label}</span>
                         </div>
                       )}
                     </div>
@@ -985,11 +1013,14 @@ export default function PdfExportPage() {
                 <div key={`line-${line.id}`} className="absolute" style={{ left: safeStyleLine(line.x, '%'), top: safeStyleLine(line.y, '%'), width: safeStyleLine(line.length, '%'), height: safeStyleLine(line.thickness, 'px'), backgroundColor: line.color || '#000000', transform: `translate(-50%, -50%) rotate(${line.rotation ?? 0}deg)`, transformOrigin: 'center center', zIndex: 15 }} />
               ))}
               {(project.mapDimensionLines ?? []).filter(l => (l.mapIndex || 0) === mapIndex).map((line) => {
-                const color = line.color || '#FFFFFF';
+                const color = line.color || "#FFFFFF";
                 const thickness = Number(line.size || 2);
                 const midX = (line.start.x + line.end.x) / 2;
                 const midY = (line.start.y + line.end.y) / 2;
                 const dynamicFontSize = 14 + (thickness - 2) * 4;
+                // 案1: 文字背景の半透明黒(rgba(0,0,0,0.5))を廃止。
+                // 元の line.color をそのまま使い、白縁取り(paint-order: stroke)で視認性を確保する。
+                // CAD 慣習に近く、印刷時も灰色の塊にならない。
                 return (
                   <div key={line.id} className="absolute inset-0 z-20 pointer-events-none w-full h-full" style={{ overflow: 'visible' }}>
                     <svg className="absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
@@ -1002,86 +1033,172 @@ export default function PdfExportPage() {
                       <line x1={`${line.start.x}%`} y1={`${line.start.y}%`} x2={`${line.end.x}%`} y2={`${line.end.y}%`} stroke={color} strokeWidth={thickness} fill="none" markerStart={`url(#cad-tick-pdf-map-${line.id})`} markerEnd={`url(#cad-tick-pdf-map-${line.id})`} />
                     </svg>
                     {line.text && (
-                      <div style={{ left: `${midX}%`, top: `${midY}%`, color, fontSize: `${dynamicFontSize}px`, transform: `translate(-50%,-50%) rotate(${line.textRotation ?? 0}deg) scale(${1 / transform.scale})`, paintOrder: 'stroke fill', WebkitTextStroke: '4px white' } as CSSProperties} className="absolute z-20 font-bold px-1.5 py-0.5 pointer-events-none whitespace-nowrap">
+                      <div
+                        style={{
+                          left: `${midX}%`,
+                          top: `${midY}%`,
+                          color,
+                          fontSize: `${dynamicFontSize}px`,
+                          transform: `translate(-50%,-50%) rotate(${line.textRotation ?? 0}deg) scale(${1 / transform.scale})`,
+                          paintOrder: 'stroke fill',
+                          WebkitTextStroke: '4px white',
+                        }}
+                        className="absolute z-20 font-bold px-0.5 pointer-events-none whitespace-nowrap"
+                      >
                         {line.text}
                       </div>
                     )}
                   </div>
                 );
               })}
+
+              {/* 白塗りは全オーバーレイの最後 = 最前面に描画。
+                  SVG rect を使うことでブラウザPDF出力時も確実に白く塗られる。
+                  overflow:visible な寸法線SVGより後に置くことで必ず上に重なる。 */}
               {whiteoutBoxesForMap.length > 0 && (
                 <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible', zIndex: 50, pointerEvents: 'none' }}>
                   {whiteoutBoxesForMap.map((box: WhiteoutBox) => (
-                    <rect key={box.id} x={`${box.x - box.width / 2}%`} y={`${box.y - box.height / 2}%`} width={`${box.width}%`} height={`${box.height}%`} fill="white" />
+                    <rect
+                      key={box.id}
+                      x={`${box.x - box.width / 2}%`}
+                      y={`${box.y - box.height / 2}%`}
+                      width={`${box.width}%`}
+                      height={`${box.height}%`}
+                      fill="white"
+                    />
                   ))}
                 </svg>
               )}
             </>
           );
 
+          // 案1: モードA(フルブリード)は廃止し、常に凡例付きレイアウトで出力する。
+          // データ後方互換のため types.ts の showLegendTable は残しているが、
+          // PDF 出力では参照しない。
+
           return (
-          <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-          <div className={`pdf-page w-full h-full flex flex-col bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`}
-            style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '12mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
+            <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+              <div className={`pdf-page w-full h-full flex flex-col bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '15mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
+                {/* 案1: 外周は薄い枠線(従来 3px → 1px)に変更し、上品さを優先。 */}
+                <div className="w-full h-full flex flex-col border border-gray-700 print:border-black p-4 print:p-2 min-h-0">
 
-            <div style={{ background: '#f0f7f4', borderBottom: '2px solid #0f6e56', padding: '5px 12px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-              <span style={{ color: '#0f6e56', fontWeight: 700, fontSize: '14px' }}>◆ 位置図</span>
-              <span style={{ color: '#333', fontSize: '13px', fontWeight: 500 }}>・ {project.projectName ?? ''}</span>
-              {mapCount > 1 && <span style={{ color: '#666', fontSize: '12px', marginLeft: 'auto' }}>({mapIndex + 1}/{mapCount})</span>}
-            </div>
+                  {/* 案1: 上部の帯ヘッダー。
+                      従来は画像内に「タイトル札」を浮かべていたが、画像と重なって
+                      情報を隠してしまう原因だった。固定位置ヘッダーに移すことで
+                      図面の有効領域が広がり、現場名・ページ番号も常に同じ位置に出る。 */}
+                  <div
+                    className="shrink-0 flex items-center justify-between mb-3 px-3"
+                    style={{
+                      background: '#f3f7f4',
+                      borderBottom: '1px solid #0f6e56',
+                      padding: '8px 12px',
+                    }}
+                  >
+                    <div className="font-bold" style={{ fontSize: '14pt', color: '#0f6e56', letterSpacing: '0.04em' }}>
+                      ◆ {layout.title}
+                      {project.projectName ? <span style={{ color: '#444', marginLeft: '0.5em' }}> ・ {project.projectName}</span> : null}
+                      {mapCount > 1 ? <span style={{ color: '#666', marginLeft: '0.5em' }}>({mapIndex + 1}/{mapCount})</span> : null}
+                    </div>
+                  </div>
 
-            <div className="flex-1 flex items-center justify-center overflow-hidden bg-gray-50 print:bg-white min-h-0" style={{ marginTop: 6, marginBottom: 6 }}>
-              {u ? (
-                <div style={{ position: 'relative', aspectRatio: '194 / 120', width: '100%', overflow: 'hidden' }}>
-                  <div style={{ position: 'absolute', inset: 0, transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center' }}>
-                    <img
-                      src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)}
-                      data-original-src={u}
-                      crossOrigin="anonymous"
-                      style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
-                      alt=""
-                    />
-                    {mapOverlays}
+                  {/* 画像エリア。
+                      ピン座標はそのマップに対応する `containerAspect` 内の % で
+                      保存されている (新形式: 画像の自然アスペクト / 旧形式: 194:120)。
+                      ここでも同じアスペクトのコンテナを作って、その中に画像を
+                      object-contain (新形式では完全一致、旧形式ではレターボックス)
+                      で配置する。
+
+                      画像エリアを flex-1 にすると下に余白が出るため、コンテナの
+                      高さは aspectRatio で自動決定する。 */}
+                  <div
+                    className="relative overflow-hidden bg-gray-50 print:bg-white border border-gray-300 print:border-gray-500"
+                    style={{ width: '100%', aspectRatio: `${containerAspect}` }}
+                  >
+                    {u ? (
+                      <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+                        <div style={{ position: 'absolute', inset: 0, transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center' }}>
+                          <img
+                            src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)}
+                            data-original-src={u}
+                            crossOrigin="anonymous"
+                            style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
+                            alt=""
+                          />
+                          {mapOverlays}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="font-bold text-gray-400">位置図未登録</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 案1: 凡例テーブル。
+                      - 空行(従来 6 行固定)を廃止し、項目数だけ表示。
+                      - 0 件のときは "項目なし" を控えめに表示。
+                      - 符号は色付き丸囲みバッジで、ピンと同じ色を割り当てる。
+                      - ヘッダー行は緑帯にして業務文書らしい仕上がりに。 */}
+                  <div className="mt-3 shrink-0">
+                    <div className="border border-gray-700 print:border-black">
+                      <div
+                        className="grid grid-cols-12 text-base font-bold border-b border-gray-700 print:border-black"
+                        style={{ background: '#f3f7f4', color: '#0f6e56' }}
+                      >
+                        <div className="col-span-1 py-2 text-center flex justify-center items-center border-r border-gray-700 print:border-black">符号</div>
+                        <div className="col-span-2 py-2 text-center flex justify-center items-center border-r border-gray-700 print:border-black">部位</div>
+                        <div className="col-span-2 py-2 text-center flex justify-center items-center border-r border-gray-700 print:border-black">写真NO</div>
+                        <div className="col-span-7 py-2 text-center flex justify-center items-center">備考</div>
+                      </div>
+                      {(() => {
+                        const rows: MapRow[] = project.mapRows ?? [];
+                        const currentRows = rows.filter((r) => r.mapIndex === mapIndex || (r.mapIndex === undefined && mapIndex === 0));
+                        if (currentRows.length === 0) {
+                          return (
+                            <div className="py-3 text-center text-gray-400 text-sm">
+                              項目なし
+                            </div>
+                          );
+                        }
+                        return currentRows.map((row) => {
+                          const symBg = colorForSymbol(row.symbol);
+                          return (
+                            <div key={row.id} className="grid grid-cols-12 text-base border-b border-gray-300 last:border-b-0 print:border-black">
+                              {/* 符号セルは中央に色付き丸バッジ */}
+                              <div className="col-span-1 py-2.5 flex justify-center items-center border-r border-gray-300 print:border-black">
+                                {row.symbol && row.symbol.trim() ? (
+                                  <span
+                                    className="inline-flex items-center justify-center font-bold text-white"
+                                    style={{
+                                      width: '26px',
+                                      height: '26px',
+                                      borderRadius: '50%',
+                                      background: symBg,
+                                      fontSize: '13pt',
+                                      lineHeight: 1,
+                                    }}
+                                  >
+                                    {row.symbol}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-300">―</span>
+                                )}
+                              </div>
+                              <div className="col-span-2 px-2 py-2.5 flex items-center overflow-hidden border-r border-gray-300 print:border-black">{row.part ?? ''}</div>
+                              <div className="col-span-2 py-2.5 text-center flex justify-center items-center overflow-hidden border-r border-gray-300 print:border-black">{row.photoNo ?? row.relatedPhotoNumber ?? ''}</div>
+                              <div className="col-span-7 px-2 py-2.5 flex items-center overflow-hidden">{row.remarks ?? ''}</div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
                   </div>
                 </div>
-              ) : (
-                <span className="font-bold text-gray-400">位置図未登録</span>
-              )}
-            </div>
-
-            <div className="shrink-0">
-              <div className="border border-gray-300">
-                <div className="grid grid-cols-12 text-sm font-bold" style={{ background: '#f3f7f4', borderBottom: '2px solid #0f6e56', color: '#0f6e56' }}>
-                  <div className="col-span-1 py-1.5 text-center border-r border-gray-300">符号</div>
-                  <div className="col-span-2 py-1.5 text-center border-r border-gray-300">部位</div>
-                  <div className="col-span-2 py-1.5 text-center border-r border-gray-300">写真NO</div>
-                  <div className="col-span-7 py-1.5 text-center">備考</div>
-                </div>
-                {currentRows.length > 0 ? currentRows.map((row) => {
-                  const badgeColor = colorForSymbol(row.symbol ?? '');
-                  return (
-                    <div key={row.id} className="grid grid-cols-12 text-sm border-b border-gray-300 last:border-b-0">
-                      <div className="col-span-1 py-2 flex justify-center items-center border-r border-gray-300">
-                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: '50%', background: badgeColor, color: 'white', fontWeight: 700, fontSize: '12px' }}>
-                          {(row.symbol ?? '').slice(0, 2)}
-                        </span>
-                      </div>
-                      <div className="col-span-2 px-2 py-2 flex items-center overflow-hidden border-r border-gray-300">{row.part ?? ''}</div>
-                      <div className="col-span-2 py-2 text-center flex justify-center items-center overflow-hidden border-r border-gray-300">{row.photoNo ?? row.relatedPhotoNumber ?? ''}</div>
-                      <div className="col-span-7 px-2 py-2 flex items-center overflow-hidden">{row.remarks ?? ''}</div>
-                    </div>
-                  );
-                }) : (
-                  <div className="py-2 text-center text-gray-400 text-xs">項目なし</div>
-                )}
+                <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500 shrink-0">- {pageOffset('map') + mapIndex + 1} / {totalPages} -</div>
               </div>
             </div>
-
-            <div className="absolute bottom-[8mm] print:bottom-[5mm] right-[12mm] print:right-[8mm] text-xs font-bold text-gray-500">- {pageOffset('map') + mapIndex + 1} / {totalPages} -</div>
-          </div>
-          </div>
           );
-          });}
+        });}
 
         case 'photo': {
           if (!sections.photo) return [];
@@ -1179,7 +1296,14 @@ export default function PdfExportPage() {
                       <div className="w-[40%] h-full flex flex-col text-[13px] border border-gray-400 bg-white shrink-0 print:border-black">
                         <div className="flex flex-1 min-h-0 border-b border-gray-400 shrink-0 print:border-black"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">写真NO</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.photoNumber || '　'}</div></div>
                         <div className="flex flex-1 min-h-0 border-b border-gray-400 shrink-0 print:border-black"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">撮影日</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.shootingDate || '　'}</div></div>
-                        <div className="flex flex-1 min-h-0 border-b border-gray-400 shrink-0 print:border-black"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">位置図</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden text-red-700 whitespace-nowrap">{p.locationMap || '　'}</div></div>
+                        {/* 「位置図」行は、PDF 出力に位置図セクションを含めるときだけ表示する。
+                            位置図を出力しない設定では、写真側の "位置図(参照先)" を示しても
+                            参照先がない (= 出力PDFに位置図ページが存在しない) ため意味がなくなる。
+                            非表示にすることで、他の行(写真NO/撮影日/工程/説明)が縦方向に均等
+                            配分され、説明欄が自然に広がる。 */}
+                        {sections.map && (
+                          <div className="flex flex-1 min-h-0 border-b border-gray-400 shrink-0 print:border-black"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">位置図</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden text-red-700 whitespace-nowrap">{p.locationMap || '　'}</div></div>
+                        )}
                         <div className="flex flex-1 min-h-0 border-b border-gray-400 shrink-0 print:border-black"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">工程</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.process || '　'}</div></div>
                         <div className="flex-[2] flex min-h-0"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">説明</div><div className="p-2 flex-1 overflow-hidden font-bold leading-snug flex items-start break-words whitespace-pre-wrap">{p.description || '　'}</div></div>
                       </div>

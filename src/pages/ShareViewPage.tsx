@@ -9,6 +9,7 @@ import { getContractorName } from '../types';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import kawaraLogo from '../assets/kawara-logo.png';
 import { Edit3 } from 'lucide-react';
+import { resolveMapAspect } from '../shared/mapCoords';
 
 function safeStyleLine(val: string | number | undefined | null, defaultUnit: string): string {
   if (val == null || val === '') return `0${defaultUnit}`;
@@ -147,7 +148,7 @@ export default function ShareViewPage() {
               </div>
 
               <div className="overflow-hidden flex items-center justify-center" style={{ background: CARD2, maxHeight: '78vh' }}>
-                <div style={{ position: 'relative', aspectRatio: '194 / 120', width: '100%', maxWidth: `calc(78vh * ${194 / 120})`, overflow: 'hidden' }}>
+                <div style={{ position: 'relative', aspectRatio: String(resolveMapAspect(project.mapImageAspects, mapIndex)), width: '100%', maxWidth: `calc(78vh * ${resolveMapAspect(project.mapImageAspects, mapIndex)})`, overflow: 'hidden' }}>
                   <div
                     className="absolute inset-0"
                     style={{ transform: `translate(${t.x}%, ${t.y}%) scale(${t.scale}) rotate(${mapRotation}deg)`, transformOrigin: 'center center' }}

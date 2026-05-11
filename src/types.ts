@@ -191,6 +191,7 @@ export interface Project {
   mapRotations?: number[];
   mapTransforms?: { scale: number; x: number; y: number }[];
   mapLayouts?: { title: string; x?: number; y?: number; rotation?: number }[];
+  mapImageAspects?: number[];
   whiteoutBoxes?: WhiteoutBox[];
   showLegendTable?: boolean;
 

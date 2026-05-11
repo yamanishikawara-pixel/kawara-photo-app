@@ -11,6 +11,7 @@ import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import { ConfirmModal } from '../shared/ConfirmModal';
+import { resolveMapAspect, isLegacyMap, migrateMapToImageAspect } from '../shared/mapCoords';
 
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -1014,51 +1015,9 @@ export default function MapPage() {
   
   const currentLayout = mapLayouts[currentMapIndex] || { title: '位置図', x: 15, y: 10, rotation: 0 };
 
-  const aspectStr = showLegendTable ? '194 / 120' : '175 / 255';
-  const aspectNum = showLegendTable ? 194 / 120 : 175 / 255;
-
-  /**
-   * セーフゾーン計算（コンテナ座標系 = transform の外側）
-   *
-   * セーフゾーン枠はコンテナ div（transform外）に absolute で置くため、
-   * コンテナ % 座標で「PDF に実際に印刷される矩形」を求める。
-   *
-   * transform: translate(tx%, ty%) scale(s) rotate(r)
-   * コンテナ中心 = (50%, 50%)
-   *
-   * transform 後、コンテナ内で見える範囲の逆算:
-   *   コンテナ座標 P が transform 内のオーバーレイ % Q にマップされる関係:
-   *   P_x = 50 + s*(Q_x - 50) + tx   (rotate=0 のとき)
-   *
-   * ここでは rotate を無視し（セーフゾーンは矩形近似）、
-   * overflow:hidden でクリップされる外周 → コンテナ座標 0〜100% をそのまま使う。
-   * つまり「コンテナ全体 = セーフゾーン」。ズームしても overflow:hidden が保証するため。
-   *
-   * ただし object-contain のレターボックス（画像の外の余白）は印刷されても白になるだけで
-   * 実害はないが、セーフゾーン表示の精度向上のため除外する。
-   * → 画像のコンテナ内表示位置を計算して枠とする。
-   */
-  const safeZoneBounds = useMemo(() => {
-    const containerAspect = showLegendTable ? 194 / 120 : 175 / 255;
-    const imageAspect = mapImageAspects[currentMapIndex];
-
-    // object-contain でのレターボックス計算（コンテナ % 座標）
-    let left = 0, top = 0, width = 100, height = 100;
-    if (imageAspect) {
-      if (imageAspect > containerAspect) {
-        // 横長画像 → 上下余白
-        height = (containerAspect / imageAspect) * 100;
-        top    = (100 - height) / 2;
-        left   = 0; width = 100;
-      } else {
-        // 縦長画像 → 左右余白
-        width = (imageAspect / containerAspect) * 100;
-        left  = (100 - width) / 2;
-        top   = 0; height = 100;
-      }
-    }
-    return { left, top, width, height };
-  }, [showLegendTable, mapImageAspects, currentMapIndex]);
+  const mapAspectNum = project ? resolveMapAspect(project.mapImageAspects, currentMapIndex) : (194 / 120);
+  const aspectStr = String(mapAspectNum);
+  const aspectNum = mapAspectNum;
 
   const mapCount = project?.mapUrls?.length || 0;
 
@@ -1271,17 +1230,6 @@ export default function MapPage() {
                       onPointerUp={handlePanPointerUp}
                       onPointerCancel={handlePanPointerUp}
                     >
-                      {/* セーフゾーン: object-contain レターボックス + ズームクリップの交差領域 */}
-                      <div
-                        className={`absolute z-40 pointer-events-none transition-opacity ${editingMode === 'pan' ? 'opacity-100' : 'opacity-0'}`}
-                        style={{ left: `${safeZoneBounds.left}%`, top: `${safeZoneBounds.top}%`, width: `${safeZoneBounds.width}%`, height: `${safeZoneBounds.height}%`, border: '4px dashed #ef4444' }}
-                      >
-                        <div className="absolute top-0 left-0 bg-red-500 text-white font-black text-[10px] px-2 py-0.5 rounded-br-lg">印刷セーフエリア</div>
-                        <div className="absolute top-1/2 left-0 w-full border-t border-red-500/40 border-dashed" />
-                        <div className="absolute left-1/2 top-0 h-full border-l border-red-500/40 border-dashed" />
-                        <div className="absolute top-1/2 left-1/2 -mt-3 -ml-3 w-6 h-6 border-2 border-red-500/50 rounded-full" />
-                      </div>
-
                       <div
                         className="map-content-wrapper absolute inset-0 flex items-center justify-center transition-transform duration-75"
                         style={{ transform: `translate(${currentTransform.x}%, ${currentTransform.y}%) scale(${currentTransform.scale}) rotate(${currentRotation}deg)`, transformOrigin: 'center center' }}
@@ -1291,10 +1239,41 @@ export default function MapPage() {
                           crossOrigin="anonymous"
                           className="block w-full h-full object-contain pointer-events-none"
                           alt=""
-                          onLoad={(e) => {
+                          onLoad={async (e) => {
                             const img = e.currentTarget;
-                            if (img.naturalWidth && img.naturalHeight) {
-                              setMapImageAspects(prev => ({ ...prev, [currentMapIndex]: img.naturalWidth / img.naturalHeight }));
+                            if (!img.naturalWidth || !img.naturalHeight) return;
+                            const naturalAspect = img.naturalWidth / img.naturalHeight;
+
+                            setMapImageAspects(prev => ({ ...prev, [currentMapIndex]: naturalAspect }));
+
+                            if (!project || !isLegacyMap(project.mapImageAspects, currentMapIndex)) return;
+
+                            const migrated = migrateMapToImageAspect(project, currentMapIndex, naturalAspect);
+
+                            setMapPins(migrated.mapPins);
+                            setMapDimensionLines(migrated.mapDimensionLines);
+                            setWhiteoutBoxes(migrated.whiteoutBoxes);
+                            setProject(prev => prev ? {
+                              ...prev,
+                              mapPins: migrated.mapPins,
+                              mapDimensionLines: migrated.mapDimensionLines,
+                              mapLines: migrated.mapLines ?? prev.mapLines,
+                              whiteoutBoxes: migrated.whiteoutBoxes,
+                              mapImageAspects: migrated.mapImageAspects,
+                            } : prev);
+
+                            if (id) {
+                              try {
+                                await updateDoc(doc(db, 'projects', id), {
+                                  mapPins: migrated.mapPins,
+                                  mapDimensionLines: migrated.mapDimensionLines,
+                                  mapLines: migrated.mapLines ?? [],
+                                  whiteoutBoxes: migrated.whiteoutBoxes,
+                                  mapImageAspects: migrated.mapImageAspects,
+                                });
+                              } catch (err) {
+                                logFirebaseError(err, 'マップ座標系移行');
+                              }
                             }
                           }}
                         />
