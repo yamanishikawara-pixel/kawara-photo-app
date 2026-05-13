@@ -827,15 +827,6 @@ export default function PdfExportPage() {
         case 'cover': {
           if (!sections.cover) return [];
 
-          const formatCoverPeriod = (value: string) => {
-            const text = value.trim();
-            if (!text) return '';
-
-            return text
-              .replace(/\s+/g, '')
-              .replace(/[〜～~]/, '〜\n');
-          };
-
           const coverFields: {
             chars: string[];
             value: string;
@@ -857,7 +848,7 @@ export default function PdfExportPage() {
             },
             {
               chars: ['工','　','　','期'],
-              value: formatCoverPeriod(project.constructionPeriod ?? ''),
+              value: project.constructionPeriod ?? '',
               valPt: '18pt',
               last: false,
               multiline: true,
@@ -974,11 +965,19 @@ export default function PdfExportPage() {
                         letterSpacing: '0.06em',
                         fontFamily: "'Noto Serif JP', serif",
                         lineHeight: 1.6,
-                        whiteSpace: row.multiline ? 'pre-line' : 'normal',
-                        wordBreak: 'keep-all',
-                        overflowWrap: 'normal',
                       }}>
-                        {row.value}
+                        {row.multiline ? (() => {
+                          const sep = row.value.search(/[〜～~]/);
+                          if (sep === -1) return <span>{row.value}</span>;
+                          const before = row.value.slice(0, sep + 1).replace(/[～~]/, '〜');
+                          const after = row.value.slice(sep + 1).trim();
+                          return (
+                            <>
+                              <div>{before}</div>
+                              {after && <div>{after}</div>}
+                            </>
+                          );
+                        })() : row.value}
                       </div>
                     </div>
                   ))}
