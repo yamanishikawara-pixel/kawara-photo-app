@@ -534,8 +534,7 @@ export function BeforeAfterPage() {
         if (d.exists()) {
           const p = d.data();
           setProjectName(p.projectName ?? '');
-          // canonical: contractorName / legacy fallback: contractor
-          setContractor(getContractorName(p as { contractorName?: string; contractor?: string }));
+          setContractor(getContractorName(p));
           if (Array.isArray(p.beforeAfterItems) && p.beforeAfterItems.length) {
             setItems(p.beforeAfterItems);
           }

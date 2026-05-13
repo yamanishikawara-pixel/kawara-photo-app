@@ -2,16 +2,16 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, MapPin, CaseUpper, FileText, LayoutGrid, Ruler, Paintbrush, Save, UploadCloud, RotateCcw, RotateCw, Eraser, Move } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, getMetadata } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
 import type { MapPin as MapPinT, MapRow, Project, DimensionLine, WhiteoutBox } from '../types';
 import { proxyUrl, nextId } from '../shared/utils';
-import { canUpload, trackUpload, deleteStorageFileWithAccounting } from '../shared/storageUtils';
-import { resolveMapAspect, isLegacyMapCoord, migrateMapToImageAspect } from '../shared/mapCoords';
+import { canUpload, trackUpload, deleteStorageFileWithAccounting, storagePathFromUrl } from '../shared/storageUtils';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import { ConfirmModal } from '../shared/ConfirmModal';
+import { resolveMapAspect, isLegacyMap, migrateMapToImageAspect } from '../shared/mapCoords';
 
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -643,77 +643,6 @@ export default function MapPage() {
     } finally { setIsSaving(false); }
   }, [id]);
 
-  /**
-   * 旧形式 (194:120 コンテナ基準) の地図を新形式 (画像アスペクト基準) に移行する。
-   *
-   * 画像 onLoad のタイミングで、その地図がまだ旧形式 (mapImageAspects に未記録)
-   * なら呼ばれる。
-   *   1. 全座標 (ピン・寸法線・マップライン・白塗り) を変換
-   *   2. mapImageAspects[mapIndex] に自然アスペクトを記録
-   *   3. Firestore に書き戻し
-   *   4. ローカル state も同期して、変換後の座標で再描画
-   *
-   * 多重発火防止のため migratedIndicesRef で 1度だけ実行を保証する。
-   */
-  const migratedIndicesRef = useRef<Set<number>>(new Set());
-
-  const migrateLegacyMap = useCallback(async (mapIndex: number, naturalAspect: number) => {
-    if (!id || !project) return;
-    if (migratedIndicesRef.current.has(mapIndex)) return; // 多重発火防止 (同セッション)
-    // 既に新形式なら何もしない
-    if (!isLegacyMapCoord(project.mapImageAspects, mapIndex)) return;
-
-    migratedIndicesRef.current.add(mapIndex);
-
-    // 現在の state ベースで変換する (Firestore の最新 project ではなく、
-    // 編集中の最新を含む state を変換対象にする)
-    const result = migrateMapToImageAspect(
-      {
-        mapPins,
-        mapDimensionLines,
-        mapLines: project.mapLines,
-        whiteoutBoxes,
-        mapImageAspects: project.mapImageAspects,
-      },
-      mapIndex,
-      naturalAspect,
-    );
-
-    // ローカル state を更新 (画面の再描画で新座標系に切り替わる)
-    setMapPins(result.mapPins);
-    setMapDimensionLines(result.mapDimensionLines);
-    setWhiteoutBoxes(result.whiteoutBoxes);
-    setProject(prev => prev ? {
-      ...prev,
-      mapPins: result.mapPins,
-      mapDimensionLines: result.mapDimensionLines,
-      mapLines: result.mapLines,
-      whiteoutBoxes: result.whiteoutBoxes,
-      mapImageAspects: result.mapImageAspects,
-    } : prev);
-
-    // Firestore に書き戻し
-    try {
-      setIsSaving(true);
-      await updateDoc(doc(db, 'projects', id), {
-        mapPins: result.mapPins,
-        mapDimensionLines: result.mapDimensionLines,
-        mapLines: result.mapLines,
-        whiteoutBoxes: result.whiteoutBoxes,
-        mapImageAspects: result.mapImageAspects,
-      });
-      if (import.meta.env.DEV) {
-        console.info(`[mapMigrate] mapIndex=${mapIndex} migrated to natural aspect ${naturalAspect.toFixed(3)}`);
-      }
-    } catch (err) {
-      logFirebaseError(err, '位置図座標系移行');
-      // 失敗してもセッション内では再試行しない (再ロードで再挑戦)
-      migratedIndicesRef.current.delete(mapIndex);
-    } finally {
-      setIsSaving(false);
-    }
-  }, [id, project, mapPins, mapDimensionLines, whiteoutBoxes]);
-
   const updateMapLayout = (updates: Partial<{ title: string; x?: number; y?: number; rotation?: number }>) => {
     const newLayouts = [...mapLayouts];
     const current = newLayouts[currentMapIndex] || { title: '位置図', x: 15, y: 10, rotation: 0 };
@@ -772,9 +701,8 @@ export default function MapPage() {
       const newMapUrls = [...(project.mapUrls || [])];
       const newMapLayouts = [...mapLayouts];
       const insertAt = mode === 'replace' ? currentMapIndex : newMapUrls.length;
-      // ループ内で state が古いままにならないよう累積をローカルに持つ
-      let virtualUsed = storageUsedBytes;
 
+      let virtualUsed = storageUsedBytes;
       for (let i = 0; i < imageFiles.length; i++) {
         setUploadProgress(`アップロード中... (${i + 1}/${imageFiles.length})`);
         const f = imageFiles[i];
@@ -782,14 +710,14 @@ export default function MapPage() {
           setError('ストレージ容量が上限（500MB）に達しています。不要な図面を削除してください。');
           break;
         }
-        const storageRef = ref(storage, `maps/${id}/${nextId()}_${f.name}`);
+        const storageRef = ref(storage, `maps/${id}/${Date.now()}_${f.name}`);
         await uploadBytes(storageRef, f);
         const url = await getDownloadURL(storageRef);
         if (uid) {
           await trackUpload(uid, f.size);
+          virtualUsed += f.size;
+          setStorageUsedBytes(virtualUsed);
         }
-        virtualUsed += f.size;
-        setStorageUsedBytes(virtualUsed);
         if (mode === 'replace' && i === 0) {
           newMapUrls[insertAt] = url;
         } else {
@@ -827,7 +755,13 @@ export default function MapPage() {
 
     const urlToDelete = project.mapUrls?.[mapIndex];
     if (urlToDelete) {
-      const bytes = await deleteStorageFileWithAccounting(urlToDelete, uid ?? undefined);
+      let bytes = 0;
+      try {
+        const path = storagePathFromUrl(urlToDelete) ?? urlToDelete;
+        const meta = await getMetadata(ref(storage, path));
+        bytes = meta.size ?? 0;
+      } catch { /* noop */ }
+      await deleteStorageFileWithAccounting(urlToDelete, uid ?? undefined, bytes || undefined);
       if (bytes > 0) setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
     }
 
@@ -937,7 +871,7 @@ export default function MapPage() {
       if (width > 1 && height > 1) {
         const centerX = Math.min(whiteoutStart.x, whiteoutCurrent.x) + width / 2;
         const centerY = Math.min(whiteoutStart.y, whiteoutCurrent.y) + height / 2;
-        const newBox: WhiteoutBox = { id: Date.now(), x: centerX, y: centerY, width, height, mapIndex: currentMapIndex };
+        const newBox: WhiteoutBox = { id: nextId(), x: centerX, y: centerY, width, height, mapIndex: currentMapIndex };
         const newBoxes = [...whiteoutBoxes, newBox];
         setWhiteoutBoxes(newBoxes);
         saveProjectMapData(mapPins, mapRows, mapDimensionLines, newBoxes, showLegendTable, mapTransforms, mapLayouts);
@@ -968,9 +902,9 @@ export default function MapPage() {
           let nextNum = 1;
           while (existingNums.has(nextNum)) nextNum++;
           const newLabel = String(nextNum);
-          const newPins: MapPinT[] = [...mapPins, { id: Date.now(), x, y, label: newLabel, type: 'circle', size: 1, rotation: 0, mapIndex: currentMapIndex, textRotation: -(mapRotations[currentMapIndex] || 0) }];
+          const newPins: MapPinT[] = [...mapPins, { id: nextId(), x, y, label: newLabel, type: 'circle', size: 1, rotation: 0, mapIndex: currentMapIndex, textRotation: -(mapRotations[currentMapIndex] || 0) }];
           setMapPins(newPins);
-          const newRows: MapRow[] = [...mapRows, { id: Date.now(), symbol: newLabel, part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }];
+          const newRows: MapRow[] = [...mapRows, { id: nextId(), symbol: newLabel, part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }];
           setMapRows(newRows);
           saveProjectMapData(newPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts);
 
@@ -978,7 +912,7 @@ export default function MapPage() {
           if (!drawingStartPoint) {
             setDrawingStartPoint({ x, y }); 
           } else {
-            const newLineId = Date.now();
+            const newLineId = nextId();
             const newDimLines: DimensionLine[] = [...mapDimensionLines, {
               id: newLineId, start: drawingStartPoint, end: { x, y }, text: "", size: 2, color: activeColor, mapIndex: currentMapIndex, textRotation: -(mapRotations[currentMapIndex] || 0)
             }];
@@ -1081,37 +1015,9 @@ export default function MapPage() {
   
   const currentLayout = mapLayouts[currentMapIndex] || { title: '位置図', x: 15, y: 10, rotation: 0 };
 
-  /**
-   * コンテナアスペクトの解決:
-   *   新形式 (project.mapImageAspects[currentMapIndex] が記録済み)
-   *     → その自然アスペクト (画像とコンテナがぴったり一致)
-   *   旧形式 (mapImageAspects に未記録)
-   *     → 194/120 (LEGACY_MAP_ASPECT)
-   *
-   * 旧形式のドキュメントは、画像読み込みが完了したタイミングで
-   * 自動的に新形式に移行される (onLoad ハンドラ内で migrateMapToImageAspect)。
-   * 一度移行すれば以降は常に新形式として動く。
-   *
-   * showLegendTable === false (旧モードA: フルブリード) は廃止しているため
-   * 分岐は残さない。
-   */
-  const containerAspectNum = resolveMapAspect(project?.mapImageAspects, currentMapIndex);
-  const aspectStr = `${containerAspectNum}`;
-  const aspectNum = containerAspectNum;
-  const isLegacyMap = isLegacyMapCoord(project?.mapImageAspects, currentMapIndex);
-
-  /**
-   * セーフゾーン (印刷セーフエリア) 枠は新形式では不要。
-   *
-   * 新形式: コンテナ = 画像 なので、コンテナ全体 (0..100%) が印刷範囲。
-   *         追加の枠表示は冗長で、むしろユーザー混乱の元になる。
-   * 旧形式: 旧 194:120 コンテナに画像が object-contain でレターボックスされて
-   *         いた都合上、画像の表示範囲を示す枠に意味があった。ただし旧形式の
-   *         地図は編集された瞬間に新形式に自動移行するので、ここでセーフゾーン
-   *         枠が出るのは「初回ロード ~ onLoad」のごく短時間だけ。
-   *
-   * 上記から、セーフゾーン枠表示は撤去する。
-   */
+  const mapAspectNum = project ? resolveMapAspect(project.mapImageAspects, currentMapIndex) : (194 / 120);
+  const aspectStr = String(mapAspectNum);
+  const aspectNum = mapAspectNum;
 
   const mapCount = project?.mapUrls?.length || 0;
 
@@ -1324,9 +1230,6 @@ export default function MapPage() {
                       onPointerUp={handlePanPointerUp}
                       onPointerCancel={handlePanPointerUp}
                     >
-                      {/* 印刷セーフエリア枠は撤去 (詳細は aspectStr/safeZoneBounds のコメント参照)。
-                          新形式 (画像=コンテナ) では枠を出す意味がなく、混乱の元になる。 */}
-
                       <div
                         className="map-content-wrapper absolute inset-0 flex items-center justify-center transition-transform duration-75"
                         style={{ transform: `translate(${currentTransform.x}%, ${currentTransform.y}%) scale(${currentTransform.scale}) rotate(${currentRotation}deg)`, transformOrigin: 'center center' }}
@@ -1336,15 +1239,41 @@ export default function MapPage() {
                           crossOrigin="anonymous"
                           className="block w-full h-full object-contain pointer-events-none"
                           alt=""
-                          onLoad={(e) => {
+                          onLoad={async (e) => {
                             const img = e.currentTarget;
                             if (!img.naturalWidth || !img.naturalHeight) return;
                             const naturalAspect = img.naturalWidth / img.naturalHeight;
-                            // ローカル state を更新 (表示計算に使用)
+
                             setMapImageAspects(prev => ({ ...prev, [currentMapIndex]: naturalAspect }));
-                            // 旧形式なら新形式に自動移行 (Firestore + 全座標変換)
-                            if (isLegacyMap) {
-                              void migrateLegacyMap(currentMapIndex, naturalAspect);
+
+                            if (!project || !isLegacyMap(project.mapImageAspects, currentMapIndex)) return;
+
+                            const migrated = migrateMapToImageAspect(project, currentMapIndex, naturalAspect);
+
+                            setMapPins(migrated.mapPins);
+                            setMapDimensionLines(migrated.mapDimensionLines);
+                            setWhiteoutBoxes(migrated.whiteoutBoxes);
+                            setProject(prev => prev ? {
+                              ...prev,
+                              mapPins: migrated.mapPins,
+                              mapDimensionLines: migrated.mapDimensionLines,
+                              mapLines: migrated.mapLines ?? prev.mapLines,
+                              whiteoutBoxes: migrated.whiteoutBoxes,
+                              mapImageAspects: migrated.mapImageAspects,
+                            } : prev);
+
+                            if (id) {
+                              try {
+                                await updateDoc(doc(db, 'projects', id), {
+                                  mapPins: migrated.mapPins,
+                                  mapDimensionLines: migrated.mapDimensionLines,
+                                  mapLines: migrated.mapLines ?? [],
+                                  whiteoutBoxes: migrated.whiteoutBoxes,
+                                  mapImageAspects: migrated.mapImageAspects,
+                                });
+                              } catch (err) {
+                                logFirebaseError(err, 'マップ座標系移行');
+                              }
                             }
                           }}
                         />
@@ -1495,7 +1424,7 @@ export default function MapPage() {
                   <div className="text-center py-8 text-sm font-bold" style={{ background: '#12122a', color: '#6b7280' }}>ピンを追加すると<br/>ここに行が追加されます</div>
           )}
         </div>
-              <button onClick={() => { const newRows = [...mapRows, { id: Date.now(), symbol: '', part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }]; setMapRows(newRows); saveProjectMapData(mapPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts); }} className="w-full font-black py-3 px-4 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-colors text-sm" style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }} onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')} onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}><Plus className="w-4 h-4"/> 行を手動追加</button>
+              <button onClick={() => { const newRows = [...mapRows, { id: nextId(), symbol: '', part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }]; setMapRows(newRows); saveProjectMapData(mapPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts); }} className="w-full font-black py-3 px-4 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-colors text-sm" style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }} onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')} onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}><Plus className="w-4 h-4"/> 行を手動追加</button>
       </div>
           )}
         </div>

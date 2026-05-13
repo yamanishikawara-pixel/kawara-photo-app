@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Trash2, LogOut, Settings, CheckCircle2, Circle, HardHat, Database } from 'lucide-react';
-import { collection, addDoc, deleteDoc, doc, getDoc, getDocs, query, where, orderBy, updateDoc, increment } from 'firebase/firestore';
+import { collection, addDoc, deleteDoc, doc, getDoc, getDocs, query, where, orderBy, updateDoc } from 'firebase/firestore';
 import { ref, listAll, deleteObject, getMetadata } from 'firebase/storage';
 import { signOut } from 'firebase/auth';
 
@@ -11,7 +11,7 @@ import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { ConfirmModal } from '../shared/ConfirmModal';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
-import { formatBytes, STORAGE_LIMIT_BYTES } from '../shared/storageUtils';
+import { formatBytes, STORAGE_LIMIT_BYTES, trackDelete } from '../shared/storageUtils';
 
 interface ProjectWithId extends Project {
   id: string;
@@ -138,9 +138,6 @@ export function ProjectListPage() {
   }, []);
 
   useEffect(() => {
-    // 予算書アプリ等から `?search=工事名` で来訪したとき、その文字列で検索する。
-    // searchParams.get は既に URL デコード済みの値を返すため、ここで
-    // decodeURIComponent を再度呼ぶと "%" を含む工事名が壊れる。trim だけで十分。
     const term = searchParams.get('search');
     if (term) {
       setSearchQuery(term.trim());
@@ -186,81 +183,52 @@ export function ProjectListPage() {
     setIsDeleting(true);
     try {
       const user = auth.currentUser;
-      if (!user) {
-        setError('ログインが必要です。');
-        return;
-      }
+      if (!user) { setError('ログインが必要です。'); return; }
 
-      // ── W-5: 所有権の二重チェック ────────────────────────────
-      // 一覧フェッチ時に userId 一致でフィルタしているが、
-      // 引数 id を直接受けるため、削除直前にも所有権を再検証する。
-      // (Firestore セキュリティルールが守る前提だが、多重防御として)
-      const projectSnap = await getDoc(doc(db, 'projects', id));
-      if (!projectSnap.exists()) {
-        setError('対象の現場が見つかりません。');
-        return;
+      // 所有権を再確認（多重防御）
+      const snap = await getDoc(doc(db, 'projects', id));
+      if (snap.exists()) {
+        const owner = (snap.data() as { userId?: string }).userId;
+        if (owner && owner !== user.uid) {
+          setError('この現場を削除する権限がありません。');
+          return;
+        }
       }
-      const projectData = projectSnap.data() as Project & { userId?: string };
-      if (projectData.userId && projectData.userId !== user.uid) {
-        setError('この現場を削除する権限がありません。');
-        return;
-      }
-
-      // ── C-3: 削除前に Storage 上のサイズを合算 ───────────────
-      // listAll で得た item ごとに getMetadata でサイズ取得。
-      // 並列実行(Promise.allSettled)で getMetadata の遅延を吸収。
-      // 失敗した item はサイズ 0 扱いで続行(削除自体は試みる)。
-      const folders = [
-        `maps/${id}`,
-        `photos/${id}`,
-        `materials/${id}`,
-        `users/${user.uid}/projects/${id}`,
-      ];
-
       let totalBytes = 0;
-      for (const folder of folders) {
+
+      // フォルダ内ファイルを削除しバイト数を集計するヘルパー
+      const deleteFolder = async (folderPath: string) => {
         try {
-          const list = await listAll(ref(storage, folder));
-          // メタデータ取得 + 削除を1ファイル単位でまとめて並列実行
-          const results = await Promise.allSettled(
-            list.items.map(async (item) => {
-              let size = 0;
-              try {
-                const meta = await getMetadata(item);
-                size = meta.size ?? 0;
-              } catch {
-                // メタ取得失敗でも削除は続行(サイズ加算は諦める)
-              }
+          const list = await listAll(ref(storage, folderPath));
+          await Promise.all(list.items.map(async (item) => {
+            try {
+              const meta = await getMetadata(item);
+              totalBytes += meta.size ?? 0;
+            } catch { /* サイズ取得失敗は無視して削除継続 */ }
+            try {
               await deleteObject(item);
-              return size;
-            }),
-          );
-          for (const r of results) {
-            if (r.status === 'fulfilled') totalBytes += r.value;
-          }
+            } catch (e) {
+              import.meta.env.DEV && console.warn('Storageファイル削除失敗:', item.fullPath, e);
+            }
+          }));
         } catch (e) {
-          import.meta.env.DEV && console.warn('Storageフォルダ削除失敗:', folder, e);
+          import.meta.env.DEV && console.warn('Storageフォルダ一覧取得失敗:', folderPath, e);
         }
-      }
+      };
 
-      // ── Firestore ドキュメント削除 ────────────────────────────
+      for (const folder of ['maps', 'photos', 'materials']) {
+        await deleteFolder(`${folder}/${id}`);
+      }
+      await deleteFolder(`users/${user.uid}/projects/${id}`);
+
       await deleteDoc(doc(db, 'projects', id));
-
-      // ── C-3: storageUsedBytes 減算 ────────────────────────────
-      // ファイル単位の trackDelete を呼ぶよりも 1回でまとめて減算する方が
-      // Firestore writes コストを抑えられる。
-      if (totalBytes > 0) {
-        try {
-          await updateDoc(doc(db, 'users', user.uid), {
-            storageUsedBytes: increment(-totalBytes),
-          });
-          setStorageUsed((prev) => Math.max(0, prev - totalBytes));
-        } catch (e) {
-          import.meta.env.DEV && console.warn('storageUsedBytes 減算失敗:', e);
-        }
-      }
-
       setProjects((prev) => prev.filter((p) => p.id !== id));
+
+      // Firestore カウンタ減算 + ローカル表示更新
+      if (totalBytes > 0) {
+        await trackDelete(user.uid, totalBytes);
+        setStorageUsed((prev) => Math.max(0, prev - totalBytes));
+      }
     } catch (err) {
       logFirebaseError(err, '現場削除');
       setError(firebaseErrorMessage(err, '現場の削除'));

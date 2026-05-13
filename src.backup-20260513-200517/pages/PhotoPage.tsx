@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, Plus, Edit2, Ruler, Paintbrush, CaseUpper, Copy, CheckSquare, Calendar, BookmarkPlus } from 'lucide-react';
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, getMetadata } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
 import { proxyUrl, useDraggablePin, nextId } from '../shared/utils';
-import { canUpload, trackUpload, deleteStorageFileWithAccounting } from '../shared/storageUtils';
-import { compressPhotoWithQuality } from '../shared/imageUtils';
+import { canUpload, trackUpload, deleteStorageFileWithAccounting, storagePathFromUrl } from '../shared/storageUtils';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
+import { compressPhotoWithQuality } from '../shared/imageUtils';
 import type { Circle, Photo, Project, DimensionLine, PhotoMaster } from '../types';
 import type { ChangeEvent, MouseEvent } from 'react';
 import { ConfirmModal } from '../shared/ConfirmModal';
@@ -330,74 +330,45 @@ export default function PhotoPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [templateNameTarget, setTemplateNameTarget] = useState<Photo | null>(null);
   const [templateNameInput, setTemplateNameInput] = useState('');
-
-  // ── デバウンス保存インフラ(C-5 対策) ─────────────────────────
-  // テキスト入力を1キーストロークごとに Firestore へ書くと、1現場で
-  // 数千 writes に達し、コスト・競合・ネットワーク詰まりの原因になる。
-  // ローカル state は即時反映、Firestore 書き込みは入力停止後にまとめる。
-  const DEBOUNCE_MS = 600;
   const mountedRef = useRef(true);
-  const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout> | undefined>>({});
-  // 同一 photoId の異なる field を別キーで管理(同 field 連打のみ debounce)。
-  // 加えて、最新の photos 配列をリングバッファ的に保持して
-  // タイマー発火時に "そのとき最新" の photos を Firestore に書き込めるようにする。
   const pendingPhotosRef = useRef<Photo[] | null>(null);
+  const photoSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      // 全タイマーを停止
-      Object.values(debounceTimers.current).forEach((t) => { if (t) clearTimeout(t); });
-      debounceTimers.current = {};
-      // 未書き込みのデータがあれば最後に1回だけ書く
-      // (await できないので fire-and-forget。失敗時は次回ロードで整合)
-      if (pendingPhotosRef.current && id) {
-        const finalPhotos = pendingPhotosRef.current;
-        pendingPhotosRef.current = null;
-        void updateDoc(doc(db, 'projects', id), { photos: finalPhotos })
-          .catch((err) => import.meta.env.DEV && console.warn('[PhotoPage] flush on unmount failed:', err));
+      if (photoSaveTimer.current) {
+        clearTimeout(photoSaveTimer.current);
+        photoSaveTimer.current = undefined;
+        // アンマウント時に未保存データがあれば即時フラッシュ
+        const photos = pendingPhotosRef.current;
+        if (photos && id) {
+          updateDoc(doc(db, 'projects', id), { photos }).catch(() => {});
+        }
       }
     };
-    // 依存に id を入れると id 切替時に flush できる利点がある。
-    // unmount 同等扱いだが、現状の画面遷移では id が変わらない前提。
   }, [id]);
 
   useEffect(() => {
     if (!id) return;
-    let aborted = false;
-    (async () => {
-      try {
-        const projectSnap = await getDoc(doc(db, "projects", id));
-        if (aborted || !mountedRef.current) return;
-        if (projectSnap.exists()) setProject(projectSnap.data() as Project);
-
-        const user = auth.currentUser;
-        if (!user) return;
-        if (!aborted && mountedRef.current) setUid(user.uid);
-
-        const userSnap = await getDoc(doc(db, 'users', user.uid));
-        if (aborted || !mountedRef.current) return;
-        if (userSnap.exists()) {
-          const data = userSnap.data();
-          if (data.customProcesses && data.customProcesses.length > 0) setProcessOptions(data.customProcesses);
-          if (data.customDescTemplates && data.customDescTemplates.length > 0) setDescTemplates(data.customDescTemplates);
-          if (Array.isArray(data.photoMaster)) setPhotoMasters(data.photoMaster);
-          if (typeof data.storageUsedBytes === 'number') setStorageUsedBytes(data.storageUsedBytes);
-        }
-      } catch (err) {
-        logFirebaseError(err, '写真ページ初期ロード');
-        if (!aborted && mountedRef.current) {
-          setUploadError(firebaseErrorMessage(err, 'データ読み込み'));
-        }
+    getDoc(doc(db, "projects", id)).then(d => d.exists() && setProject(d.data() as Project));
+    const user = auth.currentUser;
+    if (!user) return;
+    setUid(user.uid);
+    getDoc(doc(db, 'users', user.uid)).then((s) => {
+      if (s.exists()) {
+        const data = s.data();
+        if (data.customProcesses && data.customProcesses.length > 0) setProcessOptions(data.customProcesses);
+        if (data.customDescTemplates && data.customDescTemplates.length > 0) setDescTemplates(data.customDescTemplates);
+        if (Array.isArray(data.photoMaster)) setPhotoMasters(data.photoMaster);
+        if (typeof data.storageUsedBytes === 'number') setStorageUsedBytes(data.storageUsedBytes);
       }
-    })();
-    return () => { aborted = true; };
+    });
   }, [id]);
 
   const applyPhotoMaster = async (photoId: number, m: PhotoMaster) => {
     if (!project || !id) return;
-    cancelPendingPhotoDebounces();
     const newPhotos = project.photos.map((p) =>
       p.id === photoId ? { ...p, process: m.process, description: m.description } : p
     );
@@ -412,10 +383,7 @@ export default function PhotoPage() {
   };
 
   const doSaveToPhotoMaster = async (name: string, photo: Photo, existing: PhotoMaster | undefined) => {
-    // 末尾スペース等で重複検出をすり抜けないよう trim する。
-    // 呼び出し側でも trim しているが、念のため二重に。
     const trimmedName = name.trim();
-    if (!trimmedName) return;
     const entry: PhotoMaster = { id: existing?.id ?? nextId(), name: trimmedName, process: photo.process, description: photo.description };
     const newMasters = existing ? photoMasters.map((m) => m.id === existing.id ? entry : m) : [...photoMasters, entry];
     setPhotoMasters(newMasters);
@@ -424,93 +392,38 @@ export default function PhotoPage() {
     setTimeout(() => setMasterSaveSuccess(null), 3000);
   };
 
-  /**
-   * 進行中のデバウンスタイマーを全部止める。
-   *
-   * 即時書き込み系の関数(applyBatchDate / deletePhotoSlot / applyPhotoMaster 等)が
-   * 自前の updateDoc を実行する前に呼ぶ。これをやらないと、
-   * "デバウンス中の古い photos" が "即時書き込みで保存した最新 photos" を上書きする
-   * race condition が発生する。
-   */
-  const cancelPendingPhotoDebounces = useCallback(() => {
-    Object.values(debounceTimers.current).forEach((t) => { if (t) clearTimeout(t); });
-    debounceTimers.current = {};
-    pendingPhotosRef.current = null;
-  }, []);
-
-  // ── デバウンス保存(テキスト入力など連打されるフィールド用) ──
-  const TEXT_FIELDS = new Set<keyof Photo>([
-    'description', 'photoNumber', 'locationMap', 'process', 'shootingDate',
-  ]);
-
-  /**
-   * 写真フィールドを更新する。
-   *
-   * - TEXT_FIELDS に含まれるフィールドはデバウンス書き込み(600ms)。
-   * - それ以外(circles / dimensionLines / rotation / image)は即時書き込み。
-   *   ボタン操作・ドラッグ確定は「確定操作」なので遅延すべきでない。
-   */
-  const updatePhoto = useCallback(async (
-    photoId: number,
-    field: keyof Photo,
-    value: Photo[keyof Photo],
-  ) => {
+  const updatePhoto = (photoId: number, field: keyof Photo, value: Photo[keyof Photo]) => {
     if (!project || !id) return;
+    const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, [field]: value } : p);
 
-    // ローカル即時反映
-    const newPhotos = project.photos.map((p) =>
-      p.id === photoId ? { ...p, [field]: value } : p,
-    );
+    setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
+
     pendingPhotosRef.current = newPhotos;
-    setProject((prev) => prev ? { ...prev, photos: newPhotos } : prev);
-
-    if (TEXT_FIELDS.has(field)) {
-      // デバウンス: 同一 photoId+field の連打は最後の1回だけ書く。
-      // photoId 単位でタイマーキーを作ると、別フィールド(例: process)を
-      // 触ったときに前のタイマーがキャンセルされてしまうので field も含める。
-      const key = `${photoId}:${field}`;
-      const existing = debounceTimers.current[key];
-      if (existing) clearTimeout(existing);
-      debounceTimers.current[key] = setTimeout(async () => {
-        debounceTimers.current[key] = undefined;
-        // タイマー発火時点で最新の photos を書く(他フィールドの変更も反映)
-        const photosToSave = pendingPhotosRef.current ?? newPhotos;
-        try {
-          await updateDoc(doc(db, 'projects', id), { photos: photosToSave });
-          if (pendingPhotosRef.current === photosToSave) {
-            pendingPhotosRef.current = null;
-          }
-        } catch (err) {
-          logFirebaseError(err, '写真フィールド保存');
-          if (mountedRef.current) {
-            setUploadError(firebaseErrorMessage(err, '写真の保存'));
-          }
-        }
-      }, DEBOUNCE_MS);
-    } else {
-      // 即時書き込み: ボタン操作系は確定として扱う
+    if (photoSaveTimer.current) clearTimeout(photoSaveTimer.current);
+    photoSaveTimer.current = setTimeout(async () => {
+      photoSaveTimer.current = undefined;
+      const photos = pendingPhotosRef.current;
+      if (!photos || !mountedRef.current) return;
       try {
-        await updateDoc(doc(db, 'projects', id), { photos: newPhotos });
-        if (pendingPhotosRef.current === newPhotos) {
-          pendingPhotosRef.current = null;
-        }
+        await updateDoc(doc(db, 'projects', id), { photos });
+        if (mountedRef.current) pendingPhotosRef.current = null;
       } catch (err) {
-        logFirebaseError(err, '写真フィールド保存');
-        if (mountedRef.current) {
-          setUploadError(firebaseErrorMessage(err, '写真の保存'));
-        }
+        logFirebaseError(err, '写真データ保存');
       }
-    }
-  }, [project, id]);
+    }, 600);
+  };
 
   const deletePhotoSlot = async (photoId: number) => {
     if (!project || !id) return;
-    cancelPendingPhotoDebounces();
     const target = project.photos.find((p) => p.id === photoId);
-    // Storage 削除 + storageUsedBytes 減算を統合関数で実施。
-    // 戻り値の bytes でローカル state を整合更新する(0 なら未減算)。
     if (target?.image) {
-      const bytes = await deleteStorageFileWithAccounting(target.image, uid ?? undefined);
+      let bytes = 0;
+      try {
+        const path = storagePathFromUrl(target.image) ?? target.image;
+        const meta = await getMetadata(ref(storage, path));
+        bytes = meta.size ?? 0;
+      } catch { /* noop */ }
+      await deleteStorageFileWithAccounting(target.image, uid ?? undefined, bytes || undefined);
       if (bytes > 0) setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
     }
     const newPhotos = project.photos.filter((p) => p.id !== photoId);
@@ -525,16 +438,27 @@ export default function PhotoPage() {
 
   const deleteSelectedPhotos = async () => {
     if (!project || !id || selectedPhotoIds.length === 0) return;
-    cancelPendingPhotoDebounces();
     const targets = project.photos.filter((p) => selectedPhotoIds.includes(p.id) && p.image);
-    // 並列削除(逐次だと10枚で5秒級になりやすい)
+
+    // メタデータ取得と削除を並列実行
     const results = await Promise.allSettled(
-      targets.map((t) => t.image ? deleteStorageFileWithAccounting(t.image, uid ?? undefined) : Promise.resolve(0))
+      targets.map(async (target) => {
+        if (!target.image) return 0;
+        let bytes = 0;
+        try {
+          const path = storagePathFromUrl(target.image) ?? target.image;
+          const meta = await getMetadata(ref(storage, path));
+          bytes = meta.size ?? 0;
+        } catch { /* noop */ }
+        await deleteStorageFileWithAccounting(target.image, uid ?? undefined, bytes || undefined);
+        return bytes;
+      })
     );
-    const totalDeleted = results.reduce(
-      (sum, r) => sum + (r.status === 'fulfilled' ? r.value : 0),
-      0,
-    );
+
+    // 削除成功分のバイト数を合算して state を1回更新
+    const totalDeleted = results.reduce((sum, r) => {
+      return sum + (r.status === 'fulfilled' ? (r.value ?? 0) : 0);
+    }, 0);
     if (totalDeleted > 0) setStorageUsedBytes((prev) => Math.max(0, prev - totalDeleted));
 
     const newPhotos = project.photos.filter((p) => !selectedPhotoIds.includes(p.id));
@@ -547,7 +471,6 @@ export default function PhotoPage() {
 
   const applyBatchDate = async () => {
     if (!project || !id || !batchDate) return;
-    cancelPendingPhotoDebounces();
     const formatted = formatToYMDSlash(batchDate);
     const newPhotos = project.photos.map(p => ({ ...p, shootingDate: formatted }));
     setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
@@ -557,7 +480,6 @@ export default function PhotoPage() {
 
   const addPhotoSlot = async () => {
     if (!project || !id) return;
-    cancelPendingPhotoDebounces();
     const newPhotos: Photo[] = [...project.photos, { id: nextId(), image: null, photoNumber: String(project.photos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], dimensionLines: [], rotation: 0 }];
     setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
     await updateDoc(doc(db, "projects", id), { photos: newPhotos });
@@ -566,7 +488,6 @@ export default function PhotoPage() {
   const duplicatePhotoSlot = async (index: number) => {
     if (!project || !id) return;
     if (index < 0 || index >= project.photos.length) return;
-    cancelPendingPhotoDebounces();
     const source = project.photos[index];
     const newPhoto: Photo = {
       id: nextId(),
@@ -590,7 +511,6 @@ export default function PhotoPage() {
   const movePhoto = async (index: number, direction: 'up' | 'down') => {
     if (!project || !id) return;
     if ((direction === 'up' && index === 0) || (direction === 'down' && index === project.photos.length - 1)) return;
-    cancelPendingPhotoDebounces();
     const newPhotos = [...project.photos];
     const targetIdx = direction === 'up' ? index - 1 : index + 1;
     [newPhotos[index], newPhotos[targetIdx]] = [newPhotos[targetIdx], newPhotos[index]];
@@ -603,15 +523,12 @@ export default function PhotoPage() {
     if (!project || !id) return;
     const files = Array.from(e.target.files as FileList);
     if (files.length === 0) return;
-    cancelPendingPhotoDebounces();
     setBulkUploading(true);
     setBulkTotal(files.length);
     setBulkProgress(0);
     const newPhotos = [...project.photos];
     let uploadedCount = 0;
     const todayStr = getTodayStr();
-    // ループ内では state closure が古いままなので、累積をローカル変数で持つ。
-    // これがないと、5枚×100MB のように同一バッチ内で上限を超過してアップロード成功してしまう。
     let virtualUsed = storageUsedBytes;
 
     for (let i = 0; i < files.length; i++) {
@@ -627,14 +544,14 @@ export default function PhotoPage() {
           setUploadError('ストレージ容量が上限（500MB）に達しています。不要な写真を削除してください。');
           break;
         }
-        const r = ref(storage, `photos/${id}/${nextId()}_bulk_${i}.jpg`);
+        const r = ref(storage, `photos/${id}/${Date.now()}_bulk_${i}.jpg`);
         await uploadBytes(r, compressedFile);
         const url = await getDownloadURL(r);
         if (uid) {
           await trackUpload(uid, compressedFile.size);
+          virtualUsed += compressedFile.size;
+          setStorageUsedBytes(virtualUsed);
         }
-        virtualUsed += compressedFile.size;
-        setStorageUsedBytes(virtualUsed);
         newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: newPhotos[targetIndex].shootingDate || todayStr };
         setProject((prev) => prev ? { ...prev, photos: [...newPhotos] } : null);
       } catch (error) {
@@ -656,7 +573,6 @@ export default function PhotoPage() {
     const f = e.target.files?.[0];
     if (!f) return;
     if (index < 0 || index >= project.photos.length) return;
-    cancelPendingPhotoDebounces();
     const photoId = project.photos[index].id;
     setLoadingId(photoId);
 
@@ -666,7 +582,7 @@ export default function PhotoPage() {
         setUploadError('ストレージ容量が上限（500MB）に達しています。不要な写真を削除してください。');
         return;
       }
-      const r = ref(storage, `photos/${id}/${nextId()}.jpg`);
+      const r = ref(storage, `photos/${id}/${Date.now()}.jpg`);
       await uploadBytes(r, compressedFile);
       const url = await getDownloadURL(r);
       if (uid) {
@@ -1311,7 +1227,7 @@ export default function PhotoPage() {
         variant="default"
         onConfirm={async () => {
           if (confirmOverwritePhotoMaster) {
-            const existing = photoMasters.find((m) => m.name === confirmOverwritePhotoMaster.name);
+            const existing = photoMasters.find((m) => (m.name ?? '').trim() === confirmOverwritePhotoMaster.name);
             await doSaveToPhotoMaster(confirmOverwritePhotoMaster.name, confirmOverwritePhotoMaster.photo, existing);
             setConfirmOverwritePhotoMaster(null);
           }

@@ -5,9 +5,21 @@ import { ArrowLeft, Camera, FileDown, MapPin, Wrench, ClipboardList, ChevronRigh
 import type { Project } from '../types';
 import { db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { ErrorMessage } from '../shared/ErrorMessage';
-import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
+
+// 予算書アプリ側 validateProjectSlug と同等のルール
+// kawara-budget/src/projectStorage.js を変更した場合はここも合わせて更新すること
+function validateBudgetProjectName(name: string): string | null {
+  if (!name || !name.trim()) return '工事名を入力してください';
+  const s = name.trim();
+  if (s.includes('/') || s.includes('\\')) return '工事名にスラッシュ（/ ¥）は使えません';
+  if (s === '.' || s === '..') return '工事名に「.」「..」は使えません';
+  if (/^__.*__$/.test(s)) return '工事名の先頭末尾の二重アンダースコアは使えません';
+  if (s.length > 100) return '工事名は100文字以下にしてください';
+  return null;
+}
 
 type MenuItem = {
   title: string;
@@ -17,32 +29,6 @@ type MenuItem = {
   accent: string;
   external?: boolean;
 };
-
-/**
- * 実行予算書アプリ(kawara-budget)側のバリデーションルールに合致するか確認する。
- *
- * - 予算書側 (`kawara-budget/src/projectStorage.js`) の `validateProjectSlug` と
- *   揃えてあるため、片方を変えるときはもう片方も更新すること。
- * - エラー時はユーザー向けメッセージを返す。OK なら null。
- *
- * @param name 確認対象の現場名(trim 済みであること)
- */
-function validateBudgetProjectName(name: string): string | null {
-  if (!name) return '現場名が空です';
-  if (name.includes('/') || name.includes('\\')) {
-    return '現場名にスラッシュ（/ ¥）は使えません';
-  }
-  if (name === '.' || name === '..') {
-    return '現場名に「.」「..」は使えません';
-  }
-  if (/^__.*__$/.test(name)) {
-    return '現場名の先頭末尾の二重アンダースコアは予約されています';
-  }
-  if (name.length > 100) {
-    return '現場名は100文字以下にしてください';
-  }
-  return null;
-}
 
 const MENU_ITEMS: MenuItem[] = [
   {
@@ -206,14 +192,9 @@ export function HomePage() {
                   alert('現場名が未入力です。先に「表紙」で現場名を登録してください。');
                   return;
                 }
-                // ── 予算書アプリ側のバリデーションルールを事前チェック ──
-                // (kawara-budget/src/projectStorage.js の validateProjectSlug と同等)
-                // 予算書側はこれらの文字を含む工事名を弾くため、写真台帳側で先に
-                // 親切なアラートを出してユーザーに対処してもらう。ルールが変わった
-                // 場合は両方を更新する必要があることに注意。
-                const validationError = validateBudgetProjectName(projectName);
-                if (validationError) {
-                  alert(`実行予算書を開けません:\n${validationError}\n\n「表紙」画面で現場名を修正してから再度お試しください。`);
+                const slugErr = validateBudgetProjectName(projectName);
+                if (slugErr) {
+                  alert(`実行予算書を開けません: ${slugErr}\n「表紙」画面で現場名を修正してから再度お試しください。`);
                   return;
                 }
                 window.open(

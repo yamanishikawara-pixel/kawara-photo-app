@@ -126,15 +126,13 @@ export function isStorageUrl(url: string): boolean {
  * @param pathOrUrl Storage パス ("users/uid/file.jpg") または HTTPS URL
  * @param uid カウンタ減算対象のユーザーID(未指定時は減算しない)
  * @param knownSize 既知のファイルサイズ(バイト)。未指定なら getMetadata で取得
- * @returns 実際に減算したバイト数。削除失敗時やサイズ不明時は 0。
- *          呼び出し側はこの値でローカル state (storageUsedBytes) を更新できる。
  */
 export async function deleteStorageFileWithAccounting(
   pathOrUrl: string,
   uid: string | undefined,
   knownSize?: number,
-): Promise<number> {
-  if (!pathOrUrl) return 0;
+): Promise<void> {
+  if (!pathOrUrl) return;
 
   // URL 形式ならパスに変換
   const path = pathOrUrl.startsWith('http')
@@ -142,7 +140,7 @@ export async function deleteStorageFileWithAccounting(
     : pathOrUrl;
   if (!path) {
     import.meta.env.DEV && console.warn('[storageUtils] invalid path/url:', pathOrUrl);
-    return 0;
+    return;
   }
 
   const fileRef = ref(storage, path);
@@ -164,13 +162,11 @@ export async function deleteStorageFileWithAccounting(
     await deleteObject(fileRef);
   } catch (err) {
     import.meta.env.DEV && console.warn('[storageUtils] deleteObject failed:', path, err);
-    return 0; // 削除失敗時はカウンタを触らない
+    return; // 削除失敗時はカウンタを触らない
   }
 
   // カウンタ減算
   if (uid && size > 0) {
     await trackDelete(uid, size);
-    return size;
   }
-  return 0;
 }

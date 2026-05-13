@@ -2,14 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Camera, RotateCcw, RotateCw, ArrowUp, ArrowDown, BookmarkPlus, ChevronDown } from 'lucide-react';
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, getMetadata } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { proxyUrl, nextId } from '../shared/utils';
-import { canUpload, trackUpload, deleteStorageFileWithAccounting } from '../shared/storageUtils';
-import { compressPhotoWithQuality } from '../shared/imageUtils';
+import { canUpload, trackUpload, deleteStorageFileWithAccounting, storagePathFromUrl } from '../shared/storageUtils';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
+import { compressPhotoWithQuality } from '../shared/imageUtils';
 import type { Material, MaterialMaster, Project } from '../types';
 import { ConfirmModal } from '../shared/ConfirmModal';
 import { ErrorMessage } from '../shared/ErrorMessage';
@@ -202,7 +202,13 @@ export default function MaterialPage() {
   const removeMaterial = async (materialId: number) => {
     const material = (project?.materials || []).find((m) => m.id === materialId);
     if (material?.image) {
-      const bytes = await deleteStorageFileWithAccounting(material.image, uid ?? undefined);
+      let bytes = 0;
+      try {
+        const path = storagePathFromUrl(material.image) ?? material.image;
+        const meta = await getMetadata(ref(storage, path));
+        bytes = meta.size ?? 0;
+      } catch { /* noop */ }
+      await deleteStorageFileWithAccounting(material.image, uid ?? undefined, bytes || undefined);
       if (bytes > 0) setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
     }
     saveMaterials((project?.materials || []).filter((m) => m.id !== materialId));
@@ -254,22 +260,20 @@ export default function MaterialPage() {
 
   const handleImageUpload = async (materialId: number, e: React.ChangeEvent<HTMLInputElement>) => {
     if (!project || !id || !e.target.files || e.target.files.length === 0) return;
-    const file = e.target.files[0];
+    const rawFile = e.target.files[0];
     setUploadingId(materialId);
     try {
-      // PhotoPage と同じ 1MB / 1920px JPEG 圧縮を経由する。
-      // 圧縮失敗時は元ファイルがそのまま返るので、アップロードは継続可能。
-      const compressed = await compressPhotoWithQuality(file);
-      if (!canUpload(storageUsedBytes, compressed.size)) {
+      const file = await compressPhotoWithQuality(rawFile);
+      if (!canUpload(storageUsedBytes, file.size)) {
         setUploadError('ストレージ容量が上限（500MB）に達しています。不要な画像を削除してください。');
         return;
       }
-      const storageRef = ref(storage, `materials/${id}/${nextId()}.jpg`);
-      await uploadBytes(storageRef, compressed);
+      const storageRef = ref(storage, `materials/${id}/${Date.now()}_${rawFile.name}`);
+      await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
       if (uid) {
-        await trackUpload(uid, compressed.size);
-        setStorageUsedBytes((prev) => prev + compressed.size);
+        await trackUpload(uid, file.size);
+        setStorageUsedBytes((prev) => prev + file.size);
       }
       updateMaterial(materialId, 'image', url);
     } catch (err) {

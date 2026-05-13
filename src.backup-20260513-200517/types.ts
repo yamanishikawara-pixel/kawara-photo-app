@@ -191,19 +191,9 @@ export interface Project {
   mapRotations?: number[];
   mapTransforms?: { scale: number; x: number; y: number }[];
   mapLayouts?: { title: string; x?: number; y?: number; rotation?: number }[];
+  mapImageAspects?: number[];
   whiteoutBoxes?: WhiteoutBox[];
   showLegendTable?: boolean;
-  /**
-   * 各位置図画像の自然アスペクト比 (width / height)。
-   *
-   * 新形式 (画像基準座標系) で運用されている地図のみ値が入る。
-   * 配列の index は mapUrls の index と対応。
-   *
-   * 未指定 / 0 / NaN の地図は旧形式 (194:120 コンテナ基準) として扱われ、
-   * 編集画面で初めて開かれたタイミングで自動的に新形式へ移行される。
-   * 詳細は shared/mapCoords.ts を参照。
-   */
-  mapImageAspects?: number[];
 
   // ── ビフォーアフター ────────────────────────────────────────
   beforeAfterItems?: BeforeAfterItem[];

@@ -57,40 +57,6 @@ function createEmptyMaterial(id: number): Material {
   return { id, image: null, name: '', manufacturer: '', specification: '', remarks: '', rotation: 0 };
 }
 
-// ── 長文テキストのスタイル決定 ─────────────────────────────────
-// PDF/印刷の固定枠で長文が見切れる問題への対策。
-// 文字数に応じて段階的にフォントサイズと行高を縮め、最後に "..." で省略する。
-//
-// 設計方針:
-//   1. 80 文字以下(現実的な大多数)は現状の見た目を完全に維持
-//   2. 1 段階 1px ずつゆるやかに縮小
-//   3. 下限 10px を超えて小さくしない(可読性の最低ライン)
-//   4. 文字サイズに合わせて行高(line-height)も連動 → 間延びを防ぐ
-//   5. それでも入らない極端な長文は CSS 側の overflow-hidden で頭から表示、
-//      末尾は ::after 等ではなく後ろが切り捨てられる挙動(現状と同じ)。
-//      ただし「これは省略されている」のサインとして
-//      `truncated` フラグで判定し、続きあり記号を付ける手も将来追加可。
-//
-// この関数は写真説明欄・位置図備考列・材料備考欄の 3 箇所で共通利用される。
-type LongTextStyle = {
-  fontSize: string;        // 例: '13px'
-  lineHeight: string;      // 例: '1.4'
-  isLong: boolean;         // 後で "続きあり" マーク等を出すための判定
-};
-
-function pickLongTextStyle(text: string | undefined | null): LongTextStyle {
-  const len = (text ?? '').length;
-  // 段階的縮小テーブル。短い順にチェックして最初にマッチしたものを採用。
-  if (len <= 80)       return { fontSize: '13px', lineHeight: '1.4', isLong: false };
-  if (len <= 150)      return { fontSize: '12px', lineHeight: '1.4', isLong: false };
-  if (len <= 250)      return { fontSize: '11px', lineHeight: '1.35', isLong: true  };
-  if (len <= 400)      return { fontSize: '10px', lineHeight: '1.3',  isLong: true  };
-  // 401 文字超: 下限の 10px で詰めるが、それでも入らなければ末尾は切れる。
-  // 編集画面では全文確認できるので、印刷向けの妥協として許容する。
-  return                       { fontSize: '10px', lineHeight: '1.25', isLong: true  };
-}
-
-
 
 export default function PdfExportPage() {
   const { id } = useParams();
@@ -857,128 +823,214 @@ export default function PdfExportPage() {
         {sectionOrder.flatMap(secKey => { switch (secKey) {
 
         // ① 表紙
+               // ① 表紙
         case 'cover': {
           if (!sections.cover) return [];
-          const coverFields = [
-            { chars: ['工','事','件','名'], value: project.projectName ?? '',                     valPt: '18pt', last: false },
-            { chars: ['工','事','場','所'], value: project.projectLocation ?? '',                  valPt: '18pt', last: false },
-            { chars: ['工','　','　','期'], value: project.constructionPeriod ?? '',               valPt: '18pt', last: false },
-            { chars: ['施','工','業','者'], value: displayContractor,                              valPt: '18pt', last: false },
-            { chars: ['作','成','年','月','日'], value: project.creationDate ?? displayReportDate, valPt: '18pt', last: true  },
+
+          const coverFields: {
+            chars: string[];
+            value: string;
+            valPt: string;
+            last: boolean;
+            multiline?: boolean;
+          }[] = [
+            {
+              chars: ['工','事','件','名'],
+              value: project.projectName ?? '',
+              valPt: '18pt',
+              last: false,
+            },
+            {
+              chars: ['工','事','場','所'],
+              value: project.projectLocation ?? '',
+              valPt: '18pt',
+              last: false,
+            },
+            {
+              chars: ['工','　','　','期'],
+              value: project.constructionPeriod ?? '',
+              valPt: '18pt',
+              last: false,
+              multiline: true,
+            },
+            {
+              chars: ['施','工','業','者'],
+              value: displayContractor,
+              valPt: '18pt',
+              last: false,
+            },
+            {
+              chars: ['作','成','年','月','日'],
+              value: project.creationDate ?? displayReportDate,
+              valPt: '18pt',
+              last: true,
+            },
           ];
+
           return [(
-          <div key="cover" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-          <div className={`pdf-page pdf-cover-page overflow-hidden ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`}
-            style={{
-              width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`,
-              height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`,
-              transform: isPrinting ? 'none' : `scale(${scale})`,
-              background: '#ffffff',
-              overflow: 'hidden',
-            }}>
+            <div
+              key="cover"
+              style={{
+                width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`,
+                height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px`,
+              }}
+              className="pdf-page-wrapper relative bg-white shadow-md shrink-0"
+            >
+              <div
+                className={`pdf-page pdf-cover-page overflow-hidden ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`}
+                style={{
+                  width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`,
+                  height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`,
+                  transform: isPrinting ? 'none' : `scale(${scale})`,
+                  background: '#ffffff',
+                  overflow: 'hidden',
+                }}
+              >
 
-            <div className="cover-title" style={{
-              position: 'absolute', left: 0, right: 0, top: 96,
-              textAlign: 'center',
-              fontSize: '42pt',
-              fontWeight: 800,
-              letterSpacing: '0.22em',
-              textIndent: '0.22em',
-              color: '#111',
-              lineHeight: 1,
-              fontFamily: "'Shippori Mincho', 'Noto Serif JP', serif",
-            }}>工事写真報告書</div>
-
-            <div style={{
-              position: 'absolute', left: '50%', top: 210,
-              transform: 'translateX(-50%)',
-              width: 620, height: 1, background: '#111',
-            }} />
-
-            <div style={{
-              position: 'absolute', left: '50%', top: 280,
-              bottom: 300,
-              transform: 'translateX(-50%)',
-              width: 620,
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-            }}>
-              {coverFields.map((row, i) => (
-                <div key={i} style={{
-                  display: 'grid',
-                  gridTemplateColumns: '148px 40px 1fr',
-                  alignItems: 'start',
-                  paddingTop: 18,
-                  paddingBottom: 18,
-                  borderBottom: '1px solid #111',
+                <div className="cover-title" style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: 96,
+                  textAlign: 'center',
+                  fontSize: '42pt',
+                  fontWeight: 800,
+                  letterSpacing: '0.22em',
+                  textIndent: '0.22em',
+                  color: '#111',
+                  lineHeight: 1,
+                  fontFamily: "'Shippori Mincho', 'Noto Serif JP', serif",
                 }}>
-                  <div className="cover-lbl" style={{
-                    fontSize: '16pt',
-                    fontWeight: 400,
-                    color: '#111',
-                    fontFamily: "'Noto Sans JP', sans-serif",
-                    width: '6em',
-                    display: 'inline-flex',
-                    justifyContent: 'space-between',
-                    letterSpacing: 0,
-                  }}>
-                    {row.chars.map((c, j) => <span key={j}>{c}</span>)}
-                  </div>
-                  <div style={{
-                    fontSize: '16pt',
-                    fontWeight: 400,
-                    color: '#111',
-                    fontFamily: "'Noto Sans JP', sans-serif",
-                    textAlign: 'center',
-                    lineHeight: 1.5,
-                  }}>—</div>
-                  <div className="cover-val" style={{
-                    fontSize: row.valPt,
-                    fontWeight: 500,
-                    color: '#111',
-                    letterSpacing: '0.06em',
-                    fontFamily: "'Noto Serif JP', serif",
-                    lineHeight: 1.6,
-                  }}>{row.value}</div>
+                  工事写真報告書
                 </div>
-              ))}
-            </div>
 
-            {/* ④ フッター: 赤ロゴ＋社名（左）｜ページ番号（右） */}
-            <div style={{
-              position: 'absolute', left: 0, right: 0, bottom: 56,
-              display: 'flex', alignItems: 'center',
-              padding: '0 60px',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <img src={logoRed} alt="logo" style={{ width: 26, height: 26, objectFit: 'contain' }} />
-                {companyName && (
-                  <div className="cover-footer-name" style={{
+                <div style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: 210,
+                  transform: 'translateX(-50%)',
+                  width: 620,
+                  height: 1,
+                  background: '#111',
+                }} />
+
+                <div style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: 280,
+                  bottom: 300,
+                  transform: 'translateX(-50%)',
+                  width: 620,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                }}>
+                  {coverFields.map((row, i) => (
+                    <div key={i} style={{
+                      display: 'grid',
+                      gridTemplateColumns: '148px 40px 1fr',
+                      alignItems: row.multiline ? 'center' : 'start',
+                      paddingTop: 18,
+                      paddingBottom: 18,
+                      borderBottom: '1px solid #111',
+                    }}>
+                      <div className="cover-lbl" style={{
+                        fontSize: '16pt',
+                        fontWeight: 400,
+                        color: '#111',
+                        fontFamily: "'Noto Sans JP', sans-serif",
+                        width: '6em',
+                        display: 'inline-flex',
+                        justifyContent: 'space-between',
+                        letterSpacing: 0,
+                      }}>
+                        {row.chars.map((c, j) => <span key={j}>{c}</span>)}
+                      </div>
+
+                      <div style={{
+                        fontSize: '16pt',
+                        fontWeight: 400,
+                        color: '#111',
+                        fontFamily: "'Noto Sans JP', sans-serif",
+                        textAlign: 'center',
+                        lineHeight: 1.5,
+                      }}>
+                        —
+                      </div>
+
+                      <div className="cover-val" style={{
+                        fontSize: row.valPt,
+                        fontWeight: 500,
+                        color: '#111',
+                        letterSpacing: '0.06em',
+                        fontFamily: "'Noto Serif JP', serif",
+                        lineHeight: 1.6,
+                      }}>
+                        {row.multiline ? (() => {
+                          const sep = row.value.search(/[〜～~]/);
+                          if (sep === -1) return <span>{row.value}</span>;
+                          const before = row.value.slice(0, sep + 1).replace(/[～~]/, '〜');
+                          const after = row.value.slice(sep + 1).trim();
+                          return (
+                            <>
+                              <div>{before}</div>
+                              {after && <div>{after}</div>}
+                            </>
+                          );
+                        })() : row.value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* ④ フッター: 赤ロゴ＋社名（左）｜ページ番号（右） */}
+                <div style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  bottom: 56,
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '0 60px',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <img
+                      src={logoRed}
+                      alt="logo"
+                      style={{ width: 26, height: 26, objectFit: 'contain' }}
+                    />
+                    {companyName && (
+                      <div className="cover-footer-name" style={{
+                        fontSize: '10pt',
+                        fontWeight: 500,
+                        color: '#333',
+                        letterSpacing: '0.08em',
+                        fontFamily: "'Noto Serif JP', serif",
+                      }}>
+                        {companyName}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ flex: 1 }} />
+
+                  <div className="cover-pnum" style={{
                     fontSize: '10pt',
-                    fontWeight: 500,
-                    color: '#333',
-                    letterSpacing: '0.08em',
-                    fontFamily: "'Noto Serif JP', serif",
-                  }}>{companyName}</div>
-                )}
-              </div>
-              <div style={{ flex: 1 }} />
-              <div className="cover-pnum" style={{
-                fontSize: '10pt',
-                color: '#888',
-                letterSpacing: '0.25em',
-                fontFamily: "'Noto Sans JP', sans-serif",
-              }}>- 1 / {totalPages} -</div>
-            </div>
+                    color: '#888',
+                    letterSpacing: '0.25em',
+                    fontFamily: "'Noto Sans JP', sans-serif",
+                  }}>
+                    - 1 / {totalPages} -
+                  </div>
+                </div>
 
-          </div>
-          </div>
-          )]; }
+              </div>
+            </div>
+          )];
+        }
 
         case 'map': {
           if (!sections.map) return [];
-
           // 案1: 符号(A, B, C...)ごとに色を割り当てる。
           // ピンと凡例バッジで同じ色を使うことで視線移動を最小化する。
           // 6色を順番に循環(空文字/未指定の符号は赤フォールバック)。
@@ -1014,14 +1066,14 @@ export default function PdfExportPage() {
           // 出力側は読み取り専用なので、保存値を尊重して描画する。
           const containerAspect = resolveMapAspect(project.mapImageAspects, mapIndex);
 
-          const whiteoutBoxesForMap = (project.whiteoutBoxes ?? []).filter((b: WhiteoutBox) => (b.mapIndex ?? 0) === mapIndex);
+          const whiteoutBoxesForMap = (project.whiteoutBoxes ?? []).filter((b: WhiteoutBox) => b.mapIndex === mapIndex);
 
           const mapOverlays = (
             <>
               {/* 案1: タイトル札は画像内に置かず、ページ上部の帯ヘッダーに移動した(後述)。
                   これにより図面の有効領域が広がり、図面の中心情報が見やすくなる。 */}
 
-              {(project.mapPins ?? []).filter(p => (p.mapIndex ?? 0) === mapIndex).map(pin => {
+              {(project.mapPins ?? []).filter(p => p.mapIndex === mapIndex).map(pin => {
                 const visualScale = (pin.size ?? 1) / transform.scale;
                 // 案1: 符号(label)ごとに色を決定。凡例バッジと完全一致させて視線移動を抑える。
                 const pinColor = colorForSymbol(pin.label);
@@ -1220,17 +1272,7 @@ export default function PdfExportPage() {
                               </div>
                               <div className="col-span-2 px-2 py-2.5 flex items-center overflow-hidden border-r border-gray-300 print:border-black">{row.part ?? ''}</div>
                               <div className="col-span-2 py-2.5 text-center flex justify-center items-center overflow-hidden border-r border-gray-300 print:border-black">{row.photoNo ?? row.relatedPhotoNumber ?? ''}</div>
-                              <div className="col-span-7 px-2 py-2.5 flex items-center overflow-hidden">
-                                {(() => {
-                                  // 凡例の備考列も同じ段階縮小ロジック
-                                  const style = pickLongTextStyle(row.remarks);
-                                  return (
-                                    <span style={{ fontSize: style.fontSize, lineHeight: style.lineHeight, display: 'block', overflow: 'hidden' }}>
-                                      {row.remarks ?? ''}
-                                    </span>
-                                  );
-                                })()}
-                              </div>
+                              <div className="col-span-7 px-2 py-2.5 flex items-center overflow-hidden">{row.remarks ?? ''}</div>
                             </div>
                           );
                         });
@@ -1349,22 +1391,7 @@ export default function PdfExportPage() {
                           <div className="flex flex-1 min-h-0 border-b border-gray-400 shrink-0 print:border-black"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">位置図</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden text-red-700 whitespace-nowrap">{p.locationMap || '　'}</div></div>
                         )}
                         <div className="flex flex-1 min-h-0 border-b border-gray-400 shrink-0 print:border-black"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">工程</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.process || '　'}</div></div>
-                        {/* 写真説明欄: 文字数に応じて段階的にフォントサイズを縮める。
-                            短文は現状維持、長文は 10px まで縮小。極端な長文は末尾切れ。 */}
-                        {(() => {
-                          const style = pickLongTextStyle(p.description);
-                          return (
-                            <div className="flex-[2] flex min-h-0">
-                              <div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">説明</div>
-                              <div
-                                className="p-2 flex-1 overflow-hidden font-bold flex items-start break-words whitespace-pre-wrap"
-                                style={{ fontSize: style.fontSize, lineHeight: style.lineHeight }}
-                              >
-                                {p.description || '　'}
-                              </div>
-                            </div>
-                          );
-                        })()}
+                        <div className="flex-[2] flex min-h-0"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">説明</div><div className="p-2 flex-1 overflow-hidden font-bold leading-snug flex items-start break-words whitespace-pre-wrap">{p.description || '　'}</div></div>
                       </div>
                     </div>
                   );
@@ -1610,21 +1637,7 @@ export default function PdfExportPage() {
                         <div className="flex flex-1 min-h-0 border-b border-gray-400 shrink-0 print:border-black"><div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">品名</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden break-words whitespace-pre-wrap">{m.name || '　'}</div></div>
                         <div className="flex flex-1 min-h-0 border-b border-gray-400 shrink-0 print:border-black"><div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">メーカー</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden break-words whitespace-pre-wrap">{m.manufacturer || '　'}</div></div>
                         <div className="flex flex-[1.5] min-h-0 border-b border-gray-400 shrink-0 print:border-black"><div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-tight print:bg-gray-50 print:border-black">規格・寸法<br />数量</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden text-red-700 leading-snug break-words whitespace-pre-wrap">{m.specification || '　'}</div></div>
-                        {(() => {
-                          // 材料備考欄も同じ段階縮小ロジック
-                          const style = pickLongTextStyle(m.remarks);
-                          return (
-                            <div className="flex flex-1 min-h-0">
-                              <div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">備考</div>
-                              <div
-                                className="p-2 flex-1 overflow-hidden font-bold flex items-start break-words whitespace-pre-wrap"
-                                style={{ fontSize: style.fontSize, lineHeight: style.lineHeight }}
-                              >
-                                {m.remarks || '　'}
-                              </div>
-                            </div>
-                          );
-                        })()}
+                        <div className="flex flex-1 min-h-0"><div className="w-24 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">備考</div><div className="p-2 flex-1 overflow-hidden font-bold flex items-start leading-snug break-words whitespace-pre-wrap">{m.remarks || '　'}</div></div>
                       </div>
                     </div>
                   );

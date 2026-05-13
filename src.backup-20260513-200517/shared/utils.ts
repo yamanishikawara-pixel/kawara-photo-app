@@ -17,17 +17,6 @@ export const ROOF_PARTS = [
   'その他',
 ];
 
-// ==========================================
-// 衝突しない数値ID生成
-// ----------------------------------------------------------------------------
-// Date.now() 単独だと iOS Safari の 1ms 解像度で同 ms にループ生成すると衝突する。
-// 単調増加カウンタを足すことで、1ms 内の連続呼び出しでも一意性を保つ。
-// 数値型のまま既存データと互換あり。
-// ==========================================
-let _idCounter = 0;
-export const nextId = (): number => Date.now() + (++_idCounter);
-
-
 export const PROCESS_SNIPPETS = ['施工前', '施工確認', '施工後'];
 
 export const DESC_SNIPPETS = [
@@ -174,4 +163,18 @@ export function useDraggablePin(
   }, [dragging, rotation]);
 
   return { position, onMouseDown, onTouchStart, dragging, containerRef };
+}
+
+// ============================================================================
+// ID生成（エンティティID用）
+// ============================================================================
+
+/**
+ * 衝突しない数値IDを生成する。
+ * Date.now() + モジュールスコープの単調増加カウンタで構成する。
+ * 同一ミリ秒に複数回呼んでも衝突しない。
+ */
+let _idCounter = 0;
+export function nextId(): number {
+  return Date.now() + (++_idCounter);
 }

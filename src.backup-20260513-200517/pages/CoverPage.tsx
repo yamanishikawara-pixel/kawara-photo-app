@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Paperclip, Trash2, Upload, List, Check, Loader2, X,
 } from 'lucide-react';
-import { doc, getDoc, updateDoc, deleteField, increment } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, deleteField } from 'firebase/firestore';
 import {
   ref, uploadBytesResumable, getDownloadURL, type UploadTask,
 } from 'firebase/storage';
@@ -16,6 +16,7 @@ import { ConfirmModal } from '../shared/ConfirmModal';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import {
   canUpload,
+  trackUpload,
   deleteStorageFileWithAccounting,
 } from '../shared/storageUtils';
 
@@ -191,17 +192,10 @@ export function CoverPage() {
     setAppendixUploading(true);
     setAppendixProgress(0);
 
-    // ── 旧PDFはアップロード完了後に削除する(W-3) ─────────────
-    // 旧 → 新の順で処理すると、新アップロードが失敗した場合に
-    // 旧PDFが消えていて Firestore は古いURLを指したまま 404 になる。
-    // 「同パスなのに getDownloadURL が成功する別ファイルが残る」状態は
-    // uploadBytesResumable の resumable プロトコル下では発生しないので、
-    // 旧URLを変数に取っておき、新アップロード成功後に削除する。
-    const oldUrl = project?.appendixPdfUrl;
-    const oldSize = project?.appendixPdfSize;
-
     try {
-      // 新規アップロード(キャンセル可能)
+      const oldSize = project?.appendixPdfSize ?? 0;
+
+      // 新規アップロード(同パスに上書き → 旧ファイルは自動で置換される)
       const storageRef = ref(storage, `users/${uid}/projects/${id}/appendix.pdf`);
       const task = uploadBytesResumable(storageRef, file);
       uploadTaskRef.current = task;
@@ -222,39 +216,16 @@ export function CoverPage() {
       uploadTaskRef.current = null;
 
       const url = await getDownloadURL(storageRef);
-      // Firestore を先に更新(失敗したら storage 上の新ファイルだけ orphan、
-      //   Firestore は旧URLのままなので参照は健全)
       await updateDoc(doc(db, 'projects', id), {
         appendixPdfUrl: url,
         appendixPdfSize: file.size,
       });
 
-      // ストレージ使用量カウンタの差分更新:
-      // 同パスに上書きアップロードしているので、増分は (file.size - oldSize)。
-      // trackUpload + 旧ファイル削除(trackDelete込み)の組合せだと、
-      // 同パス上書きなのに2回カウンタを動かして整合がぶれる。差分1回が正解。
-      const delta = file.size - (oldSize ?? 0);
-      if (delta !== 0) {
-        // 差分が正なら trackUpload(増加)、負なら逆向きに加算する。
-        // increment は負数も受け付けるので、trackUpload 内で +delta すれば OK。
-        // ただし現状 trackUpload は signature が "正の値" 前提なので、
-        // 直接 updateDoc + increment(delta) を使う。
-        try {
-          await updateDoc(doc(db, 'users', uid), {
-            storageUsedBytes: increment(delta),
-          });
-        } catch (e) {
-          import.meta.env.DEV && console.warn('storageUsedBytes 差分更新失敗:', e);
-        }
+      // カウンタは純増分だけ加算（旧ファイルと差分）
+      const netDelta = file.size - oldSize;
+      if (netDelta !== 0) {
+        await trackUpload(uid, netDelta);
       }
-
-      // 旧ファイル削除: 新URLが Firestore に確定した「後」なので、
-      // ここで失敗しても整合性は崩れない(orphan が1つ残るだけ)。
-      // 同パスに上書きしているためそもそも旧ファイルは存在しない可能性が高いが、
-      // パスが変わる将来拡張に備えて削除呼び出しは残しておく。
-      // ただし現状は同パス上書きなので deleteObject はスキップでよい。
-      // → カウンタは既に差分で調整済みなので、trackDelete は呼ばない。
-      void oldUrl; // 同パス上書き前提なので明示的に未使用化
 
       if (!mountedRef.current) return;
       setProject(prev =>
