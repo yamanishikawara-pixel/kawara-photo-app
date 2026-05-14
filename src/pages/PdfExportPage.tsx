@@ -591,37 +591,47 @@ export default function PdfExportPage() {
         .pdf-cover-page .cover-pnum        { font-family: 'Noto Sans JP', sans-serif !important; }
 
         @media print {
-          /* ブラウザ自動ヘッダー・フッター（ページ番号・URL）を非表示 */
+          /* ── ページ設定 ────────────────────────────────── */
           @page {
             size: A4 portrait;
-            margin: 0;
-            /* Chrome/Edge: ヘッダー・フッターを空文字で上書き */
-            @top-center { content: ''; }
-            @bottom-center { content: ''; }
+            margin: 0mm;
           }
+
+          /* ── ルート要素 ───────────────────────────────── */
           html, body {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+            color-adjust: exact !important;
             background: white !important;
             margin: 0 !important;
             padding: 0 !important;
-            width: 100% !important;
+            width: 210mm !important;
+            height: auto !important;
             overflow: visible !important;
+            /* Safari: @page margin を無視する場合の補完 */
+            -webkit-margin-before: 0 !important;
+            -webkit-margin-after: 0 !important;
           }
+
+          /* 印刷時は非表示 */
           .no-print { display: none !important; }
 
+          /* ── コンテナ ─────────────────────────────────── */
           .pdf-container-wrapper {
             display: block !important;
-            width: 100% !important;
+            width: 210mm !important;
             padding: 0 !important;
             margin: 0 !important;
           }
 
+          /* ── 1ページ分のラッパー ───────────────────────── */
           .pdf-page-wrapper {
             position: relative !important;
             display: block !important;
-            width: 794px !important;
-            height: 1123px !important;
+            width: 210mm !important;
+            height: 297mm !important;
+            min-height: 297mm !important;
+            max-height: 297mm !important;
             margin: 0 !important;
             padding: 0 !important;
             overflow: hidden !important;
@@ -629,10 +639,7 @@ export default function PdfExportPage() {
             transform: none !important;
             -webkit-transform: none !important;
 
-            break-after: auto !important;
-            page-break-after: auto !important;
-            -webkit-page-break-after: auto !important;
-
+            /* 改ページ: 各ページの前で必ず改ページ */
             break-before: page !important;
             page-break-before: always !important;
             -webkit-page-break-before: always !important;
@@ -640,27 +647,28 @@ export default function PdfExportPage() {
             break-inside: avoid !important;
             page-break-inside: avoid !important;
             -webkit-page-break-inside: avoid !important;
+
+            break-after: avoid !important;
+            page-break-after: avoid !important;
+            -webkit-page-break-after: avoid !important;
           }
 
+          /* 先頭ページだけ改ページなし */
           .pdf-container-wrapper > .pdf-page-wrapper:first-child {
             break-before: auto !important;
             page-break-before: auto !important;
             -webkit-page-break-before: auto !important;
           }
 
-          .pdf-page.pdf-cover-page {
-            padding: 0 !important;
-            width: 210mm !important;
-            height: 297mm !important;
-          }
-
+          /* ── ページ本体 ───────────────────────────────── */
           .pdf-page {
             position: relative !important;
             top: auto !important;
             left: auto !important;
-            width: 794px !important;
-            height: 1123px !important;
-            padding: 8mm !important;
+            width: 210mm !important;
+            height: 297mm !important;
+            min-height: 297mm !important;
+            max-height: 297mm !important;
             box-sizing: border-box !important;
             overflow: hidden !important;
             transform: none !important;
@@ -669,10 +677,32 @@ export default function PdfExportPage() {
             -webkit-transform-origin: unset !important;
           }
 
-          /* :has() は Firefox 121以降でのみサポート。
-             Firefox旧版向けフォールバックとして body 直接指定も併記。
-             DOM 側で print 時に data-printing 属性をつければ確実だが、
-             :has が効かない場合のみ body が汚れる程度で実害は少ない。 */
+          /* 表紙専用 */
+          .pdf-page.pdf-cover-page {
+            padding: 0 !important;
+          }
+
+          /* ── 印刷品質向上 ──────────────────────────────── */
+          .pdf-page img {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            /* 印刷時の画像補間を高品質に */
+            image-rendering: auto !important;
+            /* Firefox: ぼかし防止 */
+            image-rendering: -moz-crisp-edges !important;
+            image-rendering: -webkit-optimize-contrast !important;
+          }
+
+          /* フォントの印刷レンダリングを安定化 */
+          .pdf-page * {
+            -webkit-font-smoothing: antialiased !important;
+            text-rendering: optimizeLegibility !important;
+            /* テキストの途中改ページを防ぐ */
+            orphans: 2;
+            widows: 2;
+          }
+
+          /* :has() は現代ブラウザ対応 */
           :has(> .pdf-container-wrapper) {
             min-height: 0 !important;
             padding: 0 !important;

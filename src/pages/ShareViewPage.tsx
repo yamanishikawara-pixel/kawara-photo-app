@@ -43,9 +43,10 @@ const DIM     = '#4b4b70';
 const ACCENT  = '#ff6b35';
 
 export default function ShareViewPage() {
-  const { id, token } = useParams<{ id: string; token: string }>();
+  const { id, token, shareToken } = useParams<{ id?: string; token?: string; shareToken?: string }>();
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
+  const [resolvedProjectId, setResolvedProjectId] = useState<string | null>(null);
   const [status, setStatus] = useState<'loading' | 'ok' | 'invalid'>('loading');
   const [isOwner, setIsOwner] = useState(false);
 
@@ -55,19 +56,48 @@ export default function ShareViewPage() {
   }, []);
 
   useEffect(() => {
-    if (!id || !token) return;
-    getDoc(doc(db, 'projects', id))
-      .then((snap) => {
-        if (!snap.exists()) { setStatus('invalid'); return; }
-        const data = snap.data() as Project;
-        if (data.shareToken !== token) { setStatus('invalid'); return; }
-        setProject(data);
-        setStatus('ok');
-      })
-      .catch(() => setStatus('invalid'));
-  }, [id, token]);
+    if (shareToken) {
+      // 新形式: shares/{shareToken} → projectId → projects/{projectId}
+      let aborted = false;
+      (async () => {
+        try {
+          const shareSnap = await getDoc(doc(db, 'shares', shareToken));
+          if (aborted) return;
+          if (!shareSnap.exists()) { setStatus('invalid'); return; }
+          const { projectId } = shareSnap.data() as { projectId: string };
+          const projectSnap = await getDoc(doc(db, 'projects', projectId));
+          if (aborted) return;
+          if (!projectSnap.exists()) { setStatus('invalid'); return; }
+          setResolvedProjectId(projectId);
+          setProject(projectSnap.data() as Project);
+          setStatus('ok');
+        } catch {
+          if (!aborted) setStatus('invalid');
+        }
+      })();
+      return () => { aborted = true; };
+    } else if (id && token) {
+      // 旧形式: 後方互換
+      let aborted = false;
+      (async () => {
+        try {
+          const snap = await getDoc(doc(db, 'projects', id));
+          if (aborted) return;
+          if (!snap.exists()) { setStatus('invalid'); return; }
+          const data = snap.data() as Project;
+          if (data.shareToken !== token) { setStatus('invalid'); return; }
+          setResolvedProjectId(id);
+          setProject(data);
+          setStatus('ok');
+        } catch {
+          if (!aborted) setStatus('invalid');
+        }
+      })();
+      return () => { aborted = true; };
+    }
+  }, [id, token, shareToken]);
 
-  if (!id || !token) {
+  if (!shareToken && (!id || !token)) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center font-sans" style={{ background: BG, color: TEXT }}>
         <div className="text-5xl mb-4">🔒</div>
@@ -108,7 +138,7 @@ export default function ShareViewPage() {
         {isOwner && (
           <button
             type="button"
-            onClick={() => navigate(`/project/${id}`)}
+            onClick={() => navigate(`/project/${resolvedProjectId ?? id}`)}
             className="shrink-0 flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg border transition-colors"
             style={{ color: ACCENT, borderColor: `${ACCENT}40`, background: `${ACCENT}12` }}
             onPointerEnter={e => (e.currentTarget.style.background = `${ACCENT}22`)}

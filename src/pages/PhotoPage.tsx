@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, Plus, Edit2, Ruler, Paintbrush, CaseUpper, Copy, CheckSquare, Calendar, BookmarkPlus } from 'lucide-react';
+import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, Plus, Edit2, Ruler, Paintbrush, CaseUpper, Copy, CheckSquare, Calendar, BookmarkPlus, GripVertical } from 'lucide-react';
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
@@ -13,6 +13,16 @@ import type { ChangeEvent, MouseEvent } from 'react';
 import { ConfirmModal } from '../shared/ConfirmModal';
 import { PinSelectModal } from './photo/PinSelectModal';
 import { PhotoMasterCombobox } from './photo/PhotoMasterCombobox';
+import {
+  DndContext, PointerSensor, TouchSensor,
+  closestCenter, useSensor, useSensors,
+} from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
+import {
+  SortableContext, arrayMove, useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const DEFAULT_PROCESS_OPTIONS = [
   "着工前", "下地・下葺き", "防水ルーフィング施工", "瓦桟施工",
@@ -296,6 +306,32 @@ const getTodayStr = () => {
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
 };
 
+// ドラッグ可能な写真カードラッパー（Render Props パターン）
+// カード本体のロジックをここに移さず、ドラッグ挙動だけを提供する
+interface SortablePhotoCardProps {
+  id: number;
+  children: (props: {
+    isDragging: boolean;
+    dragHandleProps: React.HTMLAttributes<HTMLElement>;
+  }) => React.ReactNode;
+}
+function SortablePhotoCard({ id, children }: SortablePhotoCardProps) {
+  const {
+    attributes, listeners, setNodeRef,
+    transform, transition, isDragging,
+  } = useSortable({ id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : 'auto',
+  };
+  return (
+    <div ref={setNodeRef} style={style}>
+      {children({ isDragging, dragHandleProps: { ...attributes, ...listeners } })}
+    </div>
+  );
+}
+
 export default function PhotoPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -342,6 +378,14 @@ export default function PhotoPage() {
   // 加えて、最新の photos 配列をリングバッファ的に保持して
   // タイマー発火時に "そのとき最新" の photos を Firestore に書き込めるようにする。
   const pendingPhotosRef = useRef<Photo[] | null>(null);
+
+  // dnd-kit センサー設定
+  // PointerSensor: 8px 移動後に発動（クリック誤検知防止）
+  // TouchSensor: 250ms 長押しで発動（赤丸・寸法線タッチと競合しない）
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+  );
 
   useEffect(() => {
     mountedRef.current = true;
@@ -597,6 +641,19 @@ export default function PhotoPage() {
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
     setProject((prev) => prev ? { ...prev, photos: renumbered } : null);
     await updateDoc(doc(db, "projects", id), { photos: renumbered });
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !project || !id) return;
+    const oldIndex = project.photos.findIndex(p => p.id === active.id);
+    const newIndex = project.photos.findIndex(p => p.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    cancelPendingPhotoDebounces();
+    const newPhotos = arrayMove(project.photos, oldIndex, newIndex);
+    const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
+    setProject(prev => prev ? { ...prev, photos: renumbered } : null);
+    await updateDoc(doc(db, 'projects', id), { photos: renumbered });
   };
 
   const handleBulkUpload = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -882,17 +939,27 @@ export default function PhotoPage() {
 
         {/* ── 写真カードリスト ── */}
         <div className="space-y-6 mt-2">
-          {project.photos.map((photo, index: number) => {
-            const isRotated90 = Number(photo.rotation || 0) % 180 !== 0;
-            const isCircleMode = cardMode?.photoId === photo.id && cardMode.mode === 'circle';
-            const isDimensionMode = cardMode?.photoId === photo.id && cardMode.mode === 'dimension';
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={project.photos.map(p => p.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {project.photos.map((photo, index: number) => {
+                const isRotated90 = Number(photo.rotation || 0) % 180 !== 0;
+                const isCircleMode = cardMode?.photoId === photo.id && cardMode.mode === 'circle';
+                const isDimensionMode = cardMode?.photoId === photo.id && cardMode.mode === 'dimension';
 
-            return (
-              <div
-                key={photo.id}
-                className="rounded-2xl border relative"
-                style={{ background: '#1c1c30', borderColor: '#2e2e50' }}
-              >
+                return (
+                  <SortablePhotoCard key={photo.id} id={photo.id}>
+                    {({ isDragging, dragHandleProps }) => (
+                      <div
+                        className="rounded-2xl border relative"
+                        style={{ background: '#1c1c30', borderColor: '#2e2e50', opacity: isDragging ? 0.5 : 1 }}
+                      >
                 {/* 一括削除モード時のオーバーレイ */}
                 {isSelectMode && (
                   <div
@@ -928,7 +995,18 @@ export default function PhotoPage() {
                       </span>
                       写真
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 items-center">
+                      <button
+                        {...dragHandleProps}
+                        className="p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing touch-none"
+                        style={{ background: '#12122a', color: '#3d3d60', border: '1px solid #2e2e50' }}
+                        onPointerEnter={e => (e.currentTarget.style.color = '#8b8ba8')}
+                        onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
+                        title="ドラッグして並び替え"
+                        tabIndex={-1}
+                      >
+                        <GripVertical className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={() => movePhoto(index, 'up')}
                         className="p-2 rounded-lg transition-colors"
@@ -1230,9 +1308,13 @@ export default function PhotoPage() {
                     </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+                      </div>
+                    )}
+                  </SortablePhotoCard>
+                );
+              })}
+            </SortableContext>
+          </DndContext>
         </div>
 
         {/* 写真追加ボタン */}

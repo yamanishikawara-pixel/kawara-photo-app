@@ -541,8 +541,8 @@ export default function MapPage() {
   const [mapLayouts, setMapLayouts] = useState<{ title: string; x?: number; y?: number; rotation?: number }[]>([]);
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingTitleSnapshot, setEditingTitleSnapshot] = useState<string>('');
-  // Natural aspect ratio (w/h) of each map image, captured on load, used for safe-zone accuracy
-  const [mapImageAspects, setMapImageAspects] = useState<Record<number, number>>({});
+  // Natural aspect ratio (w/h) of each map image, captured on load
+  const [, setMapImageAspects] = useState<Record<number, number>>({});
   
   const [selectedPinId, setSelectedPinId] = useState<number | null>(null);
   const [editingPinLabel, setEditingPinLabel] = useState<string>('');
@@ -566,7 +566,7 @@ export default function MapPage() {
   const [editingMode, setEditingMode] = useState<'pin' | 'dimension' | 'whiteout' | 'pan'>('pan');
   const [drawingStartPoint, setDrawingStartPoint] = useState<{ x: number; y: number } | null>(null);
   const [activeColor, setActiveColor] = useState<string>(COLOR_PALETTE[0].value); 
-  const [showLegendTable, setShowLegendTable] = useState(true);
+  const showLegendTable = true; // フルブリードモード廃止済み。常に凡例表示
 
   const [whiteoutStart, setWhiteoutStart] = useState<{ x: number; y: number } | null>(null);
   const [whiteoutCurrent, setWhiteoutCurrent] = useState<{ x: number; y: number } | null>(null);
@@ -589,7 +589,6 @@ export default function MapPage() {
           setMapPins(data.mapPins || []);
           setMapRows(data.mapRows || []);
           setMapDimensionLines(data.mapDimensionLines || []);
-          setShowLegendTable(data.showLegendTable !== false);
           setMapRotations(data.mapRotations || []);
           setWhiteoutBoxes(data.whiteoutBoxes || []);
           setMapTransforms(data.mapTransforms || []);
@@ -1204,15 +1203,6 @@ export default function MapPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-3 rounded-2xl border" style={{ background: '#1c1c30', borderColor: '#2e2e50' }}>
-            <div className="flex items-center gap-2 sm:pr-4 sm:border-r" style={{ borderColor: '#2e2e50' }}>
-               <FileText className="w-4 h-4" style={{ color: showLegendTable ? '#3b82f6' : '#3d3d60' }}/>
-               <span className="font-bold text-xs" style={{ color: '#8b8ba8' }}>凡例表</span>
-               <button onClick={() => { const newState = !showLegendTable; setShowLegendTable(newState); saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, newState, mapTransforms, mapLayouts); }} className={`relative inline-flex h-7 w-14 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none`} style={{ background: showLegendTable ? '#3b82f6' : '#3d3d60' }}>
-                  <span aria-hidden="true" className={`inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${showLegendTable ? 'translate-x-7' : 'translate-x-0'}`} />
-               </button>
-               <span className="font-black text-xs w-8" style={{ color: showLegendTable ? '#3b82f6' : '#6b7280' }}>{showLegendTable ? '表示' : '非表示'}</span>
-            </div>
-
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="font-bold text-xs w-full sm:w-auto" style={{ color: '#6b7280' }}>描画:</span>
               <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5 w-full sm:w-auto">
@@ -1324,7 +1314,7 @@ export default function MapPage() {
                       onPointerUp={handlePanPointerUp}
                       onPointerCancel={handlePanPointerUp}
                     >
-                      {/* 印刷セーフエリア枠は撤去 (詳細は aspectStr/safeZoneBounds のコメント参照)。
+                      {/* 印刷セーフエリア枠は撤去 (詳細は aspectStr のコメント参照)。
                           新形式 (画像=コンテナ) では枠を出す意味がなく、混乱の元になる。 */}
 
                       <div
@@ -1340,7 +1330,7 @@ export default function MapPage() {
                             const img = e.currentTarget;
                             if (!img.naturalWidth || !img.naturalHeight) return;
                             const naturalAspect = img.naturalWidth / img.naturalHeight;
-                            // ローカル state を更新 (表示計算に使用)
+                            // ローカル state を更新
                             setMapImageAspects(prev => ({ ...prev, [currentMapIndex]: naturalAspect }));
                             // 旧形式なら新形式に自動移行 (Firestore + 全座標変換)
                             if (isLegacyMap) {

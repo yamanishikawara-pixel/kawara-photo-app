@@ -74,6 +74,7 @@ export default function App() {
           <Route path="/project/:id/map" element={<ProtectedRoute user={user}><MapPage /></ProtectedRoute>} />
           <Route path="/project/:id/pdf" element={<ProtectedRoute user={user}><PdfExportPage /></ProtectedRoute>} />
           <Route path="/project/:id/before-after" element={<ProtectedRoute user={user}><BeforeAfterPage /></ProtectedRoute>} />
+          <Route path="/share/:shareToken" element={<ShareViewPage />} />
           <Route path="/share/:id/:token" element={<ShareViewPage />} />
         </Routes>
       </Suspense>

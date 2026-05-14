@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Trash2, LogOut, Settings, CheckCircle2, Circle, HardHat, Database } from 'lucide-react';
+import { Plus, Trash2, LogOut, Settings, CheckCircle2, Circle, HardHat, Database, AlertTriangle } from 'lucide-react';
 import { collection, addDoc, deleteDoc, doc, getDoc, getDocs, query, where, orderBy, updateDoc, increment } from 'firebase/firestore';
 import { ref, listAll, deleteObject, getMetadata } from 'firebase/storage';
 import { signOut } from 'firebase/auth';
@@ -350,6 +350,51 @@ export function ProjectListPage() {
           quota={STORAGE_LIMIT_BYTES}
           onClick={() => navigate('/settings')}
         />
+
+        {/* ── 課金警告バナー（Blaze プラン：超過すると実費発生） ── */}
+        {(() => {
+          const pct = Math.min(100, Math.round((storageUsed / STORAGE_LIMIT_BYTES) * 100));
+          if (pct < 80) return null;
+          const isCritical = pct >= 95;
+          const isWarning  = pct >= 80;
+          if (!isWarning) return null;
+          return (
+            <div
+              className="mt-3 flex items-start gap-3 px-4 py-3 rounded-xl border font-bold text-sm"
+              style={{
+                background: isCritical ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.10)',
+                borderColor: isCritical ? '#ef4444' : '#f59e0b',
+                color:       isCritical ? '#f87171' : '#fbbf24',
+              }}
+            >
+              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+              <div>
+                {isCritical ? (
+                  <>
+                    <div>🚨 ストレージが {pct}% に達しています！</div>
+                    <div className="text-xs font-normal mt-1" style={{ opacity: 0.85 }}>
+                      Blaze プランのため、上限（500MB）を超えると追加料金が発生します。
+                      不要な現場・写真を今すぐ削除してください。
+                      <button
+                        onClick={() => navigate('/settings')}
+                        className="ml-2 underline font-bold"
+                      >
+                        設定で再計算 →
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>⚠ ストレージが {pct}% に達しています</div>
+                    <div className="text-xs font-normal mt-1" style={{ opacity: 0.85 }}>
+                      まもなく上限（500MB）です。不要な現場の削除をご検討ください。
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {error && (
           <div className="mt-4">

@@ -1,10 +1,8 @@
-対応しました。対象は [src/pages/PdfExportPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/PdfExportPage.tsx) のみです。
+完了しました。
 
 変更内容:
-- `formatCoverPeriod` を削除
-- 工期の `value` を `project.constructionPeriod ?? ''` に戻し
-- `cover-val` 内で `row.multiline` の場合だけ `〜/～/~` 位置で DOM レベルの2行 `<div>` に分割
-- `whiteSpace: pre-line` 依存を削除
+- [ProjectListPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/ProjectListPage.tsx): `AlertTriangle` import を追加し、`StorageUsageBar` 直後に 80% / 95% の課金警告バナーを追加
+- [storage.rules](/Users/yamanishikenta/kawara-photo-app/storage.rules): `photos` / `maps` / `materials` の `allow write` にファイルサイズ制限を追加
 
 検証:
 - `npm run build` 成功済みです。

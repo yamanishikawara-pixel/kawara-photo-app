@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getAuth } from "firebase/auth";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 // ★ 追加：環境変数がちゃんと設定されているか起動時にチェック（フェイルセーフ）
 const requiredEnvVars = [
@@ -30,6 +31,19 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+
+// App Check: 不正なAPIキー利用・クォータ枯渇攻撃を防ぐ
+// 開発環境ではコンソールに出力されるデバッグトークンを Firebase Console に登録してください
+if (import.meta.env.DEV) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+}
+if (import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
+  initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider(import.meta.env.VITE_RECAPTCHA_SITE_KEY),
+    isTokenAutoRefreshEnabled: true,
+  });
+}
 
 // オフライン防衛線を起動したデータベース
 export const db = initializeFirestore(app, {
