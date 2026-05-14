@@ -374,11 +374,16 @@ export default function PhotoPage() {
   // ローカル state は即時反映、Firestore 書き込みは入力停止後にまとめる。
   const DEBOUNCE_MS = 600;
   const mountedRef = useRef(true);
+  const [photoSaveState, setPhotoSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const saveStateTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout> | undefined>>({});
   // 同一 photoId の異なる field を別キーで管理(同 field 連打のみ debounce)。
   // 加えて、最新の photos 配列をリングバッファ的に保持して
   // タイマー発火時に "そのとき最新" の photos を Firestore に書き込めるようにする。
   const pendingPhotosRef = useRef<Photo[] | null>(null);
+  // updatePhoto の useCallback 依存を id だけにするため、
+  // project の最新値を ref 経由で参照する
+  const projectRef = useRef<Project | null>(null);
 
   // dnd-kit センサー設定
   // PointerSensor: 8px 移動後に発動（クリック誤検知防止）
@@ -395,6 +400,7 @@ export default function PhotoPage() {
       // 全タイマーを停止
       Object.values(debounceTimers.current).forEach((t) => { if (t) clearTimeout(t); });
       debounceTimers.current = {};
+      if (saveStateTimer.current) clearTimeout(saveStateTimer.current);
       // 未書き込みのデータがあれば最後に1回だけ書く
       // (await できないので fire-and-forget。失敗時は次回ロードで整合)
       if (pendingPhotosRef.current && id) {
@@ -407,6 +413,10 @@ export default function PhotoPage() {
     // 依存に id を入れると id 切替時に flush できる利点がある。
     // unmount 同等扱いだが、現状の画面遷移では id が変わらない前提。
   }, [id]);
+
+  useEffect(() => {
+    projectRef.current = project;
+  }, [project]);
 
   useEffect(() => {
     if (!id) return;
@@ -500,14 +510,18 @@ export default function PhotoPage() {
     field: keyof Photo,
     value: Photo[keyof Photo],
   ) => {
-    if (!project || !id) return;
+    const current = projectRef.current; // ref 経由で最新値を取得
+    if (!current || !id) return;
 
-    // ローカル即時反映
-    const newPhotos = project.photos.map((p) =>
+    const newPhotos = current.photos.map((p) =>
       p.id === photoId ? { ...p, [field]: value } : p,
     );
     pendingPhotosRef.current = newPhotos;
     setProject((prev) => prev ? { ...prev, photos: newPhotos } : prev);
+
+    // 保存中インジケータ表示
+    if (saveStateTimer.current) clearTimeout(saveStateTimer.current);
+    setPhotoSaveState('saving');
 
     if (TEXT_FIELDS.has(field)) {
       // デバウンス: 同一 photoId+field の連打は最後の1回だけ書く。
@@ -525,9 +539,16 @@ export default function PhotoPage() {
           if (pendingPhotosRef.current === photosToSave) {
             pendingPhotosRef.current = null;
           }
+          if (mountedRef.current) {
+            setPhotoSaveState('saved');
+            saveStateTimer.current = setTimeout(() => {
+              if (mountedRef.current) setPhotoSaveState('idle');
+            }, 2000);
+          }
         } catch (err) {
           logFirebaseError(err, '写真フィールド保存');
           if (mountedRef.current) {
+            setPhotoSaveState('idle');
             setUploadError(firebaseErrorMessage(err, '写真の保存'));
           }
         }
@@ -539,14 +560,21 @@ export default function PhotoPage() {
         if (pendingPhotosRef.current === newPhotos) {
           pendingPhotosRef.current = null;
         }
+        if (mountedRef.current) {
+          setPhotoSaveState('saved');
+          saveStateTimer.current = setTimeout(() => {
+            if (mountedRef.current) setPhotoSaveState('idle');
+          }, 2000);
+        }
       } catch (err) {
         logFirebaseError(err, '写真フィールド保存');
         if (mountedRef.current) {
+          setPhotoSaveState('idle');
           setUploadError(firebaseErrorMessage(err, '写真の保存'));
         }
       }
     }
-  }, [project, id]);
+  }, [id]);
 
   const deletePhotoSlot = async (photoId: number) => {
     if (!project || !id) return;
@@ -847,23 +875,38 @@ export default function PhotoPage() {
             >
               <ArrowLeft className="w-4 h-4" /> もどる
             </button>
-            <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background: '#1c1c30', border: '1px solid #2e2e50' }}>
-              <button
-                onClick={() => setViewMode('grid')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                style={{ background: viewMode === 'grid' ? '#ff6b35' : 'transparent', color: viewMode === 'grid' ? '#fff' : '#6b7280' }}
-                title="グリッド表示"
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                style={{ background: viewMode === 'list' ? '#ff6b35' : 'transparent', color: viewMode === 'list' ? '#fff' : '#6b7280' }}
-                title="リスト表示"
-              >
-                <List className="w-3.5 h-3.5" />
-              </button>
+            <div className="flex items-center gap-3">
+              {/* 自動保存ステータス */}
+              {photoSaveState !== 'idle' && (
+                <span
+                  className="text-xs font-bold flex items-center gap-1 transition-all"
+                  style={{ color: photoSaveState === 'saved' ? '#10b981' : '#6b7280' }}
+                >
+                  {photoSaveState === 'saving' ? (
+                    <><span className="inline-block w-3 h-3 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#6b7280', borderTopColor: 'transparent' }} /> 保存中…</>
+                  ) : (
+                    <>✓ 保存済み</>
+                  )}
+                </span>
+              )}
+              <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background: '#1c1c30', border: '1px solid #2e2e50' }}>
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                  style={{ background: viewMode === 'grid' ? '#ff6b35' : 'transparent', color: viewMode === 'grid' ? '#fff' : '#6b7280' }}
+                  title="グリッド表示"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                  style={{ background: viewMode === 'list' ? '#ff6b35' : 'transparent', color: viewMode === 'list' ? '#fff' : '#6b7280' }}
+                  title="リスト表示"
+                >
+                  <List className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -980,6 +1023,8 @@ export default function PhotoPage() {
                   <img
                     src={proxyUrl(photo.image, `grid_${photo.id}`)}
                     className="w-full h-full object-cover"
+                    loading="lazy"
+                    decoding="async"
                     alt=""
                     style={{ transform: `rotate(${Number(photo.rotation || 0)}deg)` }}
                   />
@@ -1176,6 +1221,8 @@ export default function PhotoPage() {
                               src={proxyUrl(photo.image, photo.id)}
                               crossOrigin="anonymous"
                               className="block w-auto h-auto max-w-full pointer-events-none rounded-lg object-contain"
+                              loading="lazy"
+                              decoding="async"
                               style={{ maxHeight: isRotated90 ? '50vh' : '60vh' }}
                               alt=""
                             />

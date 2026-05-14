@@ -1,9 +1,10 @@
-対応しました。対象は [src/pages/MapPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/MapPage.tsx:566) のみです。
+対応しました。`src/pages/PhotoPage.tsx` に以下を反映済みです。
 
-変更内容:
-- デフォルト `editingMode` を `'pan'` から `'pin'` に変更
-- `showAdvancedModes` state を追加
-- モードボタン群を「ピン追加」「移動/ズーム」中心に変更
-- 「寸法線」「消し」を「詳細」折りたたみ内へ移動
+- `photoSaveState` / `saveStateTimer` を追加
+- `projectRef` を追加し、`project` と同期する `useEffect` を追加
+- `updatePhoto` を `projectRef.current` 参照に変更
+- `updatePhoto` の依存配列を `[id]` に変更
+- 保存中 / 保存済みステータスをヘッダー右側、グリッド/リスト切替の左に追加
+- `saveStateTimer` は unmount 時に clear するようにしました
 
-ポインターイベント処理、描画ロジック、ズーム・パン操作には触れていません。テスト実行はしていません。
+確認: `npm run build` は成功しています。

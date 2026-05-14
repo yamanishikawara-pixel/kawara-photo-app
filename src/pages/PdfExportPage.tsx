@@ -430,6 +430,17 @@ export default function PdfExportPage() {
 
   const handlePrint = () => {
     if (!project) return;
+    // 写真セクションがONのとき、撮影日空の写真を事前チェック
+    if (sections.photo) {
+      const emptyDatePhotos = project.photos.filter(p => p.image && !p.shootingDate);
+      if (emptyDatePhotos.length > 0) {
+        const nums = emptyDatePhotos.map(p => p.photoNumber || '?').join('・');
+        const ok = window.confirm(
+          `写真 ${nums} の撮影日が未入力です。\n役所提出時に差し戻しになる場合があります。\nこのまま続行しますか?`
+        );
+        if (!ok) return;
+      }
+    }
     setIsPrinting(true);
     setPrintProgress('準備中...');
     setTimeout(async () => {
@@ -449,6 +460,16 @@ export default function PdfExportPage() {
 
   const handlePdfDownload = () => {
     if (!project) return;
+    if (sections.photo) {
+      const emptyDatePhotos = project.photos.filter(p => p.image && !p.shootingDate);
+      if (emptyDatePhotos.length > 0) {
+        const nums = emptyDatePhotos.map(p => p.photoNumber || '?').join('・');
+        const ok = window.confirm(
+          `写真 ${nums} の撮影日が未入力です。\n役所提出時に差し戻しになる場合があります。\nこのまま続行しますか?`
+        );
+        if (!ok) return;
+      }
+    }
     setIsCapturingForPdf(true);
     setPdfProgress('準備中...');
     setTimeout(async () => {
