@@ -1,8 +1,9 @@
-完了しました。
+対応しました。対象は [src/pages/MapPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/MapPage.tsx:566) のみです。
 
 変更内容:
-- [ProjectListPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/ProjectListPage.tsx): `AlertTriangle` import を追加し、`StorageUsageBar` 直後に 80% / 95% の課金警告バナーを追加
-- [storage.rules](/Users/yamanishikenta/kawara-photo-app/storage.rules): `photos` / `maps` / `materials` の `allow write` にファイルサイズ制限を追加
+- デフォルト `editingMode` を `'pan'` から `'pin'` に変更
+- `showAdvancedModes` state を追加
+- モードボタン群を「ピン追加」「移動/ズーム」中心に変更
+- 「寸法線」「消し」を「詳細」折りたたみ内へ移動
 
-検証:
-- `npm run build` 成功済みです。
+ポインターイベント処理、描画ロジック、ズーム・パン操作には触れていません。テスト実行はしていません。

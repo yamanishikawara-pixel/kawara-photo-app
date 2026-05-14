@@ -563,7 +563,8 @@ export default function MapPage() {
 
   const [uid, setUid] = useState<string | null>(null);
   const [storageUsedBytes, setStorageUsedBytes] = useState(0);
-  const [editingMode, setEditingMode] = useState<'pin' | 'dimension' | 'whiteout' | 'pan'>('pan');
+  const [editingMode, setEditingMode] = useState<'pin' | 'dimension' | 'whiteout' | 'pan'>('pin');
+  const [showAdvancedModes, setShowAdvancedModes] = useState(false);
   const [drawingStartPoint, setDrawingStartPoint] = useState<{ x: number; y: number } | null>(null);
   const [activeColor, setActiveColor] = useState<string>(COLOR_PALETTE[0].value); 
   const showLegendTable = true; // フルブリードモード廃止済み。常に凡例表示
@@ -1202,16 +1203,55 @@ export default function MapPage() {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-3 rounded-2xl border" style={{ background: '#1c1c30', borderColor: '#2e2e50' }}>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="font-bold text-xs w-full sm:w-auto" style={{ color: '#6b7280' }}>描画:</span>
-              <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5 w-full sm:w-auto">
-                <button onClick={() => { setEditingMode('pan'); setDrawingStartPoint(null); }} className="flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs transition-colors" style={editingMode === 'pan' ? { background: '#4f46e5', color: '#fff' } : { background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}><Move className="w-4 h-4"/> 印刷枠</button>
-                <button onClick={() => { setEditingMode('pin'); setDrawingStartPoint(null); }} className="flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs transition-colors" style={editingMode === 'pin' ? { background: '#ef4444', color: '#fff' } : { background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}><MapPin className="w-4 h-4"/> ピン</button>
-                <button onClick={() => { setEditingMode('dimension'); setDrawingStartPoint(null); }} className="flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs transition-colors" style={editingMode === 'dimension' ? { background: '#f0ede8', color: '#0f0f1a' } : { background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}><Ruler className="w-4 h-4"/> 寸法</button>
-                <button onClick={() => { setEditingMode('whiteout'); setDrawingStartPoint(null); }} className="flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs transition-colors" style={editingMode === 'whiteout' ? { background: '#eab308', color: '#0f0f1a' } : { background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}><Eraser className="w-4 h-4"/> 消し</button>
-              </div>
-            </div>
+          <div className="flex flex-wrap items-center gap-2 p-3 rounded-2xl border" style={{ background: '#1c1c30', borderColor: '#2e2e50' }}>
+            {/* メインモード: ピン・移動 */}
+            <button
+              onClick={() => { setEditingMode('pin'); setDrawingStartPoint(null); }}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl font-black text-sm transition-colors"
+              style={editingMode === 'pin' ? { background: '#ef4444', color: '#fff' } : { background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}
+            >
+              <MapPin className="w-4 h-4" /> ピン追加
+            </button>
+            <button
+              onClick={() => { setEditingMode('pan'); setDrawingStartPoint(null); }}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl font-black text-sm transition-colors"
+              style={editingMode === 'pan' ? { background: '#4f46e5', color: '#fff' } : { background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}
+            >
+              <Move className="w-4 h-4" /> 移動/ズーム
+            </button>
+
+            {/* 詳細トグル */}
+            <button
+              onClick={() => setShowAdvancedModes(v => !v)}
+              className="flex items-center gap-1 px-3 py-2 rounded-xl font-bold text-xs transition-colors"
+              style={{
+                background: (editingMode === 'dimension' || editingMode === 'whiteout') ? 'rgba(245,158,11,0.15)' : '#12122a',
+                color: (editingMode === 'dimension' || editingMode === 'whiteout') ? '#f59e0b' : '#6b7280',
+                border: `1px solid ${(editingMode === 'dimension' || editingMode === 'whiteout') ? 'rgba(245,158,11,0.4)' : '#2e2e50'}`,
+              }}
+            >
+              詳細 {showAdvancedModes ? '▲' : '▼'}
+            </button>
+
+            {/* 詳細モード: 寸法・消し */}
+            {showAdvancedModes && (
+              <>
+                <button
+                  onClick={() => { setEditingMode('dimension'); setDrawingStartPoint(null); }}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs transition-colors"
+                  style={editingMode === 'dimension' ? { background: '#f0ede8', color: '#0f0f1a' } : { background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}
+                >
+                  <Ruler className="w-4 h-4" /> 寸法線
+                </button>
+                <button
+                  onClick={() => { setEditingMode('whiteout'); setDrawingStartPoint(null); }}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs transition-colors"
+                  style={editingMode === 'whiteout' ? { background: '#eab308', color: '#0f0f1a' } : { background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}
+                >
+                  <Eraser className="w-4 h-4" /> 消し
+                </button>
+              </>
+            )}
           </div>
         </div>
 

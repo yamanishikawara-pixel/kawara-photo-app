@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Download, Printer, FileDown, ChevronUp, ChevronDown, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Download, Printer, FileDown, AlertTriangle } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import JSZip from 'jszip';
@@ -25,16 +25,14 @@ function safeStyleLine(val: string | number | undefined | null, defaultUnit: str
 
 // ── セクション定義（モジュールスコープ）────────────────
 // Hooks や order の比較で参照が安定している必要があるため、モジュール直下で定義する。
-const SECTION_KEYS = ['cover', 'map', 'photo', 'beforeAfter', 'completion', 'material', 'appendix'] as const;
+const SECTION_KEYS = ['cover', 'map', 'photo', 'beforeAfter', 'material', 'appendix'] as const;
 type SectionKey = (typeof SECTION_KEYS)[number];
-const DEFAULT_ORDER: readonly SectionKey[] = SECTION_KEYS;
 
 const SECTION_META: Record<SectionKey, { label: string; icon: string }> = {
   cover:       { label: '表紙',             icon: '📋' },
   map:         { label: '位置図',           icon: '📍' },
   photo:       { label: '工事写真',         icon: '📷' },
   beforeAfter: { label: 'ビフォーアフター', icon: '🔄' },
-  completion:  { label: '完了報告書',       icon: '📝' },
   material:    { label: '使用材料',         icon: '🔧' },
   appendix:    { label: '添付PDF',          icon: '📎' },
 };
@@ -126,38 +124,34 @@ export default function PdfExportPage() {
     map: true,
     photo: true,
     beforeAfter: true,
-    completion: false,
     material: true,
     appendix: true,
   });
-  const [sectionOrder, setSectionOrder] = useState<SectionKey[]>([...DEFAULT_ORDER]);
+  const [showDetail, setShowDetail] = useState(false);
+  const sectionOrder = [...SECTION_KEYS] as SectionKey[];
 
   const toggleSection = useCallback((key: SectionKey) => {
     setSections(prev => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
-  const moveSection = useCallback((key: SectionKey, dir: 'up' | 'down') => {
-    setSectionOrder(prev => {
-      const idx = prev.indexOf(key);
-      const next = dir === 'up' ? idx - 1 : idx + 1;
-      if (next < 0 || next >= prev.length) return prev;
-      const arr = [...prev];
-      [arr[idx], arr[next]] = [arr[next], arr[idx]];
-      return arr;
-    });
-  }, []);
-
-  // プリセット適用:セクションのON/OFF のみ変更し、**並び順は維持する**。
-  // （以前は DEFAULT_ORDER に常にリセットしていたため、ユーザー操作が無言で消えていた）
+  // プリセット適用:セクションのON/OFF のみ変更する。
   const applyPreset = useCallback((preset: Record<SectionKey, boolean>) => {
     setSections(preset);
   }, []);
 
-  const PRESETS: { label: string; icon: string; value: Record<SectionKey, boolean> }[] = useMemo(() => [
-    { label: '施主提出用', icon: '🏠', value: { cover: true, map: false, photo: false, beforeAfter: true, completion: true, material: false, appendix: false } },
-    { label: '役所提出用', icon: '🏛️', value: { cover: true, map: true, photo: true, beforeAfter: true, completion: false, material: true, appendix: true } },
-    { label: '写真のみ',   icon: '📷', value: { cover: false, map: false, photo: true, beforeAfter: false, completion: false, material: false, appendix: false } },
-    { label: '全部',       icon: '📋', value: { cover: true, map: true, photo: true, beforeAfter: true, completion: true, material: true, appendix: true } },
+  const PRESETS: { label: string; icon: string; sub: string; value: Record<SectionKey, boolean> }[] = useMemo(() => [
+    {
+      label: '施主提出用', icon: '🏠', sub: '表紙・ビフォーアフター',
+      value: { cover: true, map: false, photo: false, beforeAfter: true, material: false, appendix: false },
+    },
+    {
+      label: '役所提出用', icon: '🏛️', sub: '表紙・位置図・写真・材料',
+      value: { cover: true, map: true, photo: true, beforeAfter: true, material: true, appendix: false },
+    },
+    {
+      label: '全部',       icon: '📋', sub: '全セクション',
+      value: { cover: true, map: true, photo: true, beforeAfter: true, material: true, appendix: true },
+    },
   ], []);
 
   // ── マウントフラグ ──
@@ -487,8 +481,7 @@ export default function PdfExportPage() {
   const mapCount = mapUrlsToRender.length;
 
   // 写真フィルタ基準: 画像あり OR テキスト(工程・説明)あり
-  // → PDF本体(photo)、完了報告書(completion)、ZIP(画像のみ)で3種類の基準が
-  //    散らばっていた問題を統一
+  // PDF本体(photo)とZIP(画像のみ)で基準が散らばっていた問題を統一
   const activePhotos = useMemo(
     () => (project?.photos ?? []).filter((p) => p.image || p.process || p.description),
     [project?.photos],
@@ -534,24 +527,11 @@ export default function PdfExportPage() {
     return pages;
   }, [project?.beforeAfterItems]);
 
-  // 完了報告書用:画像のある写真(最大9枚)
-  const keyPhotos = useMemo(
-    () => (project?.photos ?? []).filter((p) => p.image).slice(0, 9),
-    [project?.photos],
-  );
-
-  // 完了報告書用:品名のある材料(最大4)
-  const topMaterials = useMemo(
-    () => (project?.materials ?? []).filter((m) => m.name).slice(0, 4),
-    [project?.materials],
-  );
-
   const sectionPageCounts: Record<SectionKey, number> = useMemo(() => ({
     cover: 1,
     map: mapCount,
     photo: photoPages.length,
     beforeAfter: beforeAfterPages.length,
-    completion: 1,
     material: materialPages.length,
     appendix: appendixPages.length,
   }), [mapCount, photoPages.length, beforeAfterPages.length, materialPages.length, appendixPages.length]);
@@ -778,97 +758,90 @@ export default function PdfExportPage() {
             <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #2e2e50' }}>
               <div className="flex items-center gap-2">
                 <div className="w-1 h-5 rounded-full" style={{ background: '#f59e0b' }} />
-                <span className="text-sm font-bold" style={{ color: '#f0ede8' }}>出力するセクション</span>
+                <span className="text-sm font-bold" style={{ color: '#f0ede8' }}>出力形式を選択</span>
               </div>
               <span className="text-xs" style={{ color: '#4b4b70' }}>{totalPages}ページ</span>
             </div>
 
-            {/* トグル一覧（並び替え可） */}
-            <div className="px-4 py-3 flex flex-col gap-2">
-              {sectionOrder.map((key, idx) => {
-                const { label, icon } = SECTION_META[key];
-                const count = sectionPageCounts[key];
-                const on = sections[key];
-                const showTruncateWarn = key === 'appendix' && appendixTruncated && on;
+            {/* 3プリセットボタン */}
+            <div className="p-4 grid grid-cols-3 gap-3">
+              {PRESETS.map(p => {
+                const isActive = sectionOrder.every(k => sections[k] === p.value[k]);
                 return (
-                  <div key={key} className="flex items-center gap-1.5">
-                    {/* 上下ボタン */}
-                    <div className="flex flex-col gap-0.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => moveSection(key, 'up')}
-                        disabled={idx === 0}
-                        aria-label={`${label}を上に移動`}
-                        className="flex items-center justify-center w-6 h-5 rounded transition-colors disabled:opacity-20"
-                        style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#8b8ba8' }}
-                        onPointerEnter={e => { if (idx > 0) e.currentTarget.style.color = '#f0ede8'; }}
-                        onPointerLeave={e => { e.currentTarget.style.color = '#8b8ba8'; }}
-                      >
-                        <ChevronUp className="w-3 h-3" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveSection(key, 'down')}
-                        disabled={idx === sectionOrder.length - 1}
-                        aria-label={`${label}を下に移動`}
-                        className="flex items-center justify-center w-6 h-5 rounded transition-colors disabled:opacity-20"
-                        style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#8b8ba8' }}
-                        onPointerEnter={e => { if (idx < sectionOrder.length - 1) e.currentTarget.style.color = '#f0ede8'; }}
-                        onPointerLeave={e => { e.currentTarget.style.color = '#8b8ba8'; }}
-                      >
-                        <ChevronDown className="w-3 h-3" />
-                      </button>
-                    </div>
-                    {/* トグル本体 */}
-                    <button
-                      type="button"
-                      onClick={() => toggleSection(key)}
-                      aria-pressed={on}
-                      className="flex-1 flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left"
-                      style={{
-                        background: on ? 'rgba(245,158,11,0.08)' : '#12122a',
-                        border: `1.5px solid ${on ? 'rgba(245,158,11,0.3)' : '#2e2e50'}`,
-                      }}
-                    >
-                      <span style={{ fontSize: '16px' }}>{icon}</span>
-                      <span className="flex-1 text-sm font-bold" style={{ color: on ? '#f59e0b' : '#6b7280' }}>
-                        {label}
-                        {showTruncateWarn && (
-                          <span
-                            className="ml-2 inline-flex items-center gap-1 text-xs font-normal"
-                            style={{ color: '#f87171' }}
-                            title={`添付PDFは${APPENDIX_PAGE_LIMIT}ページまでに制限されました`}
-                          >
-                            <AlertTriangle className="w-3 h-3" />
-                            {APPENDIX_PAGE_LIMIT}p超は省略
-                          </span>
-                        )}
-                      </span>
-                      {count > 0 && <span className="text-xs" style={{ color: '#4b4b70' }}>{count}p</span>}
-                      <div className="w-12 h-6 rounded-full relative transition-all shrink-0" style={{ background: on ? '#f59e0b' : '#2e2e50' }}>
-                        <div className="w-5 h-5 rounded-full absolute top-0.5 transition-all" style={{ background: '#fff', left: on ? '26px' : '2px' }} />
-                      </div>
-                    </button>
-                  </div>
+                  <button
+                    key={p.label}
+                    type="button"
+                    onClick={() => applyPreset(p.value)}
+                    className="flex flex-col items-center gap-1.5 py-4 px-2 rounded-xl font-bold transition-all"
+                    style={{
+                      background: isActive ? 'rgba(245,158,11,0.12)' : '#12122a',
+                      border: `2px solid ${isActive ? '#f59e0b' : '#2e2e50'}`,
+                      color: isActive ? '#f59e0b' : '#8b8ba8',
+                    }}
+                    onPointerEnter={e => { if (!isActive) { (e.currentTarget as HTMLButtonElement).style.borderColor = '#f59e0b'; (e.currentTarget as HTMLButtonElement).style.color = '#f59e0b'; } }}
+                    onPointerLeave={e => { if (!isActive) { (e.currentTarget as HTMLButtonElement).style.borderColor = '#2e2e50'; (e.currentTarget as HTMLButtonElement).style.color = '#8b8ba8'; } }}
+                  >
+                    <span style={{ fontSize: '24px' }}>{p.icon}</span>
+                    <span className="text-sm font-black">{p.label}</span>
+                    <span className="text-xs font-normal text-center leading-tight" style={{ color: isActive ? '#fbbf24' : '#4b4b70' }}>{p.sub}</span>
+                  </button>
                 );
               })}
             </div>
 
-            {/* プリセットボタン */}
-            <div className="px-4 pb-4 pt-1 flex gap-2 flex-wrap">
-              {PRESETS.map(p => (
-                <button
-                  key={p.label}
-                  type="button"
-                  onClick={() => applyPreset(p.value)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
-                  style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#8b8ba8' }}
-                  onPointerEnter={e => { e.currentTarget.style.borderColor = '#f59e0b'; e.currentTarget.style.color = '#f59e0b'; }}
-                  onPointerLeave={e => { e.currentTarget.style.borderColor = '#2e2e50'; e.currentTarget.style.color = '#8b8ba8'; }}
-                >
-                  <span style={{ fontSize: '12px' }}>{p.icon}</span> {p.label}
-                </button>
-              ))}
+            {/* 詳細設定トグル */}
+            <div style={{ borderTop: '1px solid #2e2e50' }}>
+              <button
+                type="button"
+                onClick={() => setShowDetail(v => !v)}
+                className="w-full flex items-center justify-between px-5 py-3 text-xs font-bold transition-colors"
+                style={{ color: '#6b7280' }}
+                onPointerEnter={e => (e.currentTarget.style.color = '#8b8ba8')}
+                onPointerLeave={e => (e.currentTarget.style.color = '#6b7280')}
+              >
+                <span>詳細設定（個別ON/OFF）</span>
+                <span style={{ fontSize: '10px' }}>{showDetail ? '▲ 閉じる' : '▼ 開く'}</span>
+              </button>
+
+              {showDetail && (
+                <div className="px-4 pb-4 flex flex-col gap-2">
+                  {sectionOrder.map((key) => {
+                    const { label, icon } = SECTION_META[key];
+                    const count = sectionPageCounts[key];
+                    const on = sections[key];
+                    const showTruncateWarn = key === 'appendix' && appendixTruncated && on;
+                    return (
+                      <div key={key} className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleSection(key)}
+                          aria-pressed={on}
+                          className="flex-1 flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left"
+                          style={{
+                            background: on ? 'rgba(245,158,11,0.08)' : '#12122a',
+                            border: `1.5px solid ${on ? 'rgba(245,158,11,0.3)' : '#2e2e50'}`,
+                          }}
+                        >
+                          <span style={{ fontSize: '16px' }}>{icon}</span>
+                          <span className="flex-1 text-sm font-bold" style={{ color: on ? '#f59e0b' : '#6b7280' }}>
+                            {label}
+                            {showTruncateWarn && (
+                              <span className="ml-2 inline-flex items-center gap-1 text-xs font-normal" style={{ color: '#f87171' }} title={`添付PDFは${APPENDIX_PAGE_LIMIT}ページまでに制限されました`}>
+                                <AlertTriangle className="w-3 h-3" />
+                                {APPENDIX_PAGE_LIMIT}p超は省略
+                              </span>
+                            )}
+                          </span>
+                          {count > 0 && <span className="text-xs" style={{ color: '#4b4b70' }}>{count}p</span>}
+                          <div className="w-12 h-6 rounded-full relative transition-all shrink-0" style={{ background: on ? '#f59e0b' : '#2e2e50' }}>
+                            <div className="w-5 h-5 rounded-full absolute top-0.5 transition-all" style={{ background: '#fff', left: on ? '26px' : '2px' }} />
+                          </div>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1489,116 +1462,6 @@ export default function PdfExportPage() {
               </div>
             </div>
           ));
-        }
-
-        case 'completion': {
-          if (!sections.completion) return [];
-          // keyPhotos / topMaterials は useMemo で計算済み
-          return [(
-            <div key="completion" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-              <div className={`pdf-page bg-white text-black overflow-hidden ${isPrinting ? '' : 'absolute top-0 left-0 origin-top-left'}`}
-                style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm 10mm' : '30px 38px', transform: isPrinting ? 'none' : `scale(${scale})`, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: isPrinting ? '4mm' : '14px', position: 'relative' }}>
-
-                {/* ヘッダー */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '2px solid #111', paddingBottom: isPrinting ? '3mm' : '10px', flexShrink: 0 }}>
-                  <h2 style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '16pt' : '21px', fontWeight: '900', color: '#111', margin: 0 }}>完了報告書</h2>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: isPrinting ? '3mm' : '10px' }}>
-                    {logoUrl ? (
-                      <img src={proxyUrl(logoUrl, `logo_cr_${sessionId}`)} data-original-src={logoUrl} crossOrigin="anonymous" alt="logo" style={{ height: isPrinting ? '8mm' : '30px', width: 'auto', objectFit: 'contain' }} />
-                    ) : (
-                      <img src={kawaraLogo} data-original-src={kawaraLogo} alt="logo" crossOrigin="anonymous" style={{ height: isPrinting ? '7mm' : '26px', width: 'auto', objectFit: 'contain', filter: 'grayscale(1)' }} />
-                    )}
-                    {companyName && (
-                      <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', color: '#555', lineHeight: 1.4 }}>
-                        <div style={{ fontWeight: 'bold', color: '#222' }}>{companyName}</div>
-                        {address && <div>{address}</div>}
-                        {phone && <div>TEL: {phone}</div>}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* 工事情報テーブル */}
-                <div style={{ flexShrink: 0, border: '1px solid #ccc', borderRadius: '3px', overflow: 'hidden' }}>
-                  {([
-                    ['工事件名', project.projectName],
-                    ['工事場所', project.projectLocation],
-                    ['工　　期', project.constructionPeriod],
-                    ['作成年月日', displayReportDate],
-                  ] as [string, string][]).map(([label, value], i) => (
-                    <div key={i} style={{ display: 'flex', borderBottom: i < 3 ? '1px solid #e0e0e0' : 'none' }}>
-                      <div style={{ width: isPrinting ? '28mm' : '106px', flexShrink: 0, fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', fontWeight: 'bold', color: '#666', background: '#f5f5f5', padding: isPrinting ? '1.5mm 3mm' : '5px 10px', display: 'flex', alignItems: 'center', borderRight: '1px solid #e0e0e0' }}>{label}</div>
-                      <div style={{ flex: 1, fontFamily: JP_FONT, fontSize: isPrinting ? '8.5pt' : '12px', color: '#111', padding: isPrinting ? '1.5mm 3mm' : '5px 10px', display: 'flex', alignItems: 'center' }}>{value || '　'}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* 主要写真最大9枚（3×3グリッド） */}
-                {keyPhotos.length > 0 && (
-                  <div style={{ flex: '1 1 0', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(3, 1fr)', gap: isPrinting ? '2mm' : '8px', minHeight: 0 }}>
-                    {keyPhotos.map((p, i) => (
-                      <div key={i} style={{ display: 'flex', flexDirection: 'column', border: '1px solid #ccc', borderRadius: '3px', overflow: 'hidden', minWidth: 0 }}>
-                        <div style={{ flex: 1, overflow: 'hidden', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <img
-                            src={proxyUrl(p.image!, `cr_photo_${p.id}_${sessionId}`)}
-                            data-original-src={p.image!}
-                            crossOrigin="anonymous"
-                            alt=""
-                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transform: `rotate(${p.rotation ?? 0}deg)` }}
-                          />
-                        </div>
-                        <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7pt' : '10px', color: '#555', padding: isPrinting ? '1mm 2mm' : '3px 6px', background: '#f9f9f9', borderTop: '1px solid #e8e8e8', flexShrink: 0, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-                          {p.process || p.description || `写真${i + 1}`}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* 使用材料テーブル */}
-                {topMaterials.length > 0 && (
-                  <div style={{ flexShrink: 0, border: '1px solid #ccc', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{ display: 'flex', background: '#f0f0f0', borderBottom: '1px solid #ccc' }}>
-                      {(['品名', 'メーカー', '規格・数量', '備考'] as const).map(h => (
-                        <div key={h} style={{ flex: 1, fontFamily: JP_FONT, fontSize: isPrinting ? '7pt' : '10px', fontWeight: 'bold', color: '#555', padding: isPrinting ? '1mm 2mm' : '4px 6px', borderRight: '1px solid #ddd', textAlign: 'center' }}>{h}</div>
-                      ))}
-                    </div>
-                    {topMaterials.map((m, i) => (
-                      <div key={i} style={{ display: 'flex', borderBottom: i < topMaterials.length - 1 ? '1px solid #ebebeb' : 'none' }}>
-                        {[m.name, m.manufacturer, m.specification, m.remarks].map((v, j) => (
-                          <div key={j} style={{ flex: 1, fontFamily: JP_FONT, fontSize: isPrinting ? '7.5pt' : '10px', color: '#333', padding: isPrinting ? '1mm 2mm' : '4px 6px', borderRight: '1px solid #ebebeb', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{v || '　'}</div>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* 施工保証ボックス */}
-                {(project.warrantyYears || project.warrantyStartDate || project.warrantyNote) && (
-                  <div style={{ flexShrink: 0, border: '1.5px solid #555', borderRadius: '4px', padding: isPrinting ? '2mm 4mm' : '8px 14px', background: '#fafafa' }}>
-                    <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', fontWeight: 'bold', color: '#333', marginBottom: isPrinting ? '1.5mm' : '5px' }}>■ 施工保証</div>
-                    <div style={{ display: 'flex', gap: isPrinting ? '6mm' : '20px', flexWrap: 'wrap' }}>
-                      {project.warrantyYears && <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', color: '#444' }}><span style={{ color: '#888' }}>保証期間：</span>{project.warrantyYears}</div>}
-                      {project.warrantyStartDate && <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', color: '#444' }}><span style={{ color: '#888' }}>開始日：</span>{project.warrantyStartDate}</div>}
-                      {project.warrantyNote && <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', color: '#555', fontStyle: 'italic' }}>{project.warrantyNote}</div>}
-                    </div>
-                  </div>
-                )}
-
-                {/* 署名欄 */}
-                <div style={{ flexShrink: 0, display: 'flex', gap: isPrinting ? '5mm' : '18px', marginTop: 'auto' }}>
-                  {(['施工業者', '施主確認'] as const).map(label => (
-                    <div key={label} style={{ flex: 1, border: '1px solid #ccc', borderRadius: '3px', padding: isPrinting ? '2mm 3mm' : '8px 10px' }}>
-                      <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7pt' : '10px', fontWeight: 'bold', color: '#888', marginBottom: isPrinting ? '5mm' : '18px' }}>{label}</div>
-                      <div style={{ borderBottom: '1px solid #bbb', height: isPrinting ? '8mm' : '30px' }} />
-                    </div>
-                  ))}
-                </div>
-
-                <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500">- {pageOffset('completion') + 1} / {totalPages} -</div>
-              </div>
-            </div>
-          )];
         }
 
         case 'material': {

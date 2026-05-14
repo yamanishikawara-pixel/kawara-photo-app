@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, Plus, Edit2, Ruler, Paintbrush, CaseUpper, Copy, CheckSquare, Calendar, BookmarkPlus, GripVertical } from 'lucide-react';
+import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, Plus, Edit2, Ruler, Paintbrush, CaseUpper, Copy, CheckSquare, Calendar, BookmarkPlus, GripVertical, LayoutGrid, List } from 'lucide-react';
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
@@ -365,6 +365,7 @@ export default function PhotoPage() {
   const [masterSaveSuccess, setMasterSaveSuccess] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [templateNameTarget, setTemplateNameTarget] = useState<Photo | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
   const [templateNameInput, setTemplateNameInput] = useState('');
 
   // ── デバウンス保存インフラ(C-5 対策) ─────────────────────────
@@ -656,6 +657,13 @@ export default function PhotoPage() {
     await updateDoc(doc(db, 'projects', id), { photos: renumbered });
   };
 
+  const handleGridPhotoClick = (photoId: number) => {
+    setViewMode('list');
+    setTimeout(() => {
+      document.getElementById(`photo-card-${photoId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
+  };
+
   const handleBulkUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     if (!project || !id) return;
     const files = Array.from(e.target.files as FileList);
@@ -839,6 +847,24 @@ export default function PhotoPage() {
             >
               <ArrowLeft className="w-4 h-4" /> もどる
             </button>
+            <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background: '#1c1c30', border: '1px solid #2e2e50' }}>
+              <button
+                onClick={() => setViewMode('grid')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                style={{ background: viewMode === 'grid' ? '#ff6b35' : 'transparent', color: viewMode === 'grid' ? '#fff' : '#6b7280' }}
+                title="グリッド表示"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                style={{ background: viewMode === 'list' ? '#ff6b35' : 'transparent', color: viewMode === 'list' ? '#fff' : '#6b7280' }}
+                title="リスト表示"
+              >
+                <List className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
           {/* タイトル */}
@@ -937,8 +963,66 @@ export default function PhotoPage() {
           </div>
         </div>
 
+        {/* ── グリッドビュー ── */}
+        {viewMode === 'grid' && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2 mb-4">
+            {project.photos.map((photo, index) => (
+              <button
+                key={photo.id}
+                type="button"
+                onClick={() => handleGridPhotoClick(photo.id)}
+                className="relative rounded-xl overflow-hidden border transition-all active:scale-95"
+                style={{ background: '#1c1c30', borderColor: '#2e2e50', aspectRatio: '4/3' }}
+                onPointerEnter={e => (e.currentTarget.style.borderColor = '#ff6b35')}
+                onPointerLeave={e => (e.currentTarget.style.borderColor = '#2e2e50')}
+              >
+                {photo.image ? (
+                  <img
+                    src={proxyUrl(photo.image, `grid_${photo.id}`)}
+                    className="w-full h-full object-cover"
+                    alt=""
+                    style={{ transform: `rotate(${Number(photo.rotation || 0)}deg)` }}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Camera className="w-8 h-8" style={{ color: '#2e2e50' }} />
+                  </div>
+                )}
+                {/* 写真番号バッジ */}
+                <div className="absolute top-1.5 left-1.5 w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black" style={{ background: '#ff6b35', color: '#fff' }}>
+                  {index + 1}
+                </div>
+                {/* 説明プレビュー */}
+                {(photo.description || photo.process) && (
+                  <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 text-xs font-bold truncate text-left" style={{ background: 'rgba(15,15,26,0.82)', color: '#f0ede8' }}>
+                    {photo.process || photo.description}
+                  </div>
+                )}
+                {/* 赤丸がある場合のインジケーター */}
+                {(photo.circles?.length ?? 0) > 0 && (
+                  <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black" style={{ background: '#ef4444', color: '#fff' }}>
+                    {photo.circles!.length}
+                  </div>
+                )}
+              </button>
+            ))}
+            {/* 写真追加ボタン */}
+            <button
+              type="button"
+              onClick={addPhotoSlot}
+              className="rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-colors active:scale-95"
+              style={{ borderColor: '#2e2e50', color: '#3d3d60', aspectRatio: '4/3' }}
+              onPointerEnter={e => { (e.currentTarget.style.borderColor = '#ff6b35'); (e.currentTarget.style.color = '#ff6b35'); }}
+              onPointerLeave={e => { (e.currentTarget.style.borderColor = '#2e2e50'); (e.currentTarget.style.color = '#3d3d60'); }}
+            >
+              <Plus className="w-7 h-7" />
+              <span className="text-xs font-bold">追加</span>
+            </button>
+          </div>
+        )}
+
         {/* ── 写真カードリスト ── */}
-        <div className="space-y-6 mt-2">
+        <div className={`space-y-6 mt-2 ${viewMode === 'grid' ? 'hidden' : ''}`}>
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -957,6 +1041,7 @@ export default function PhotoPage() {
                   <SortablePhotoCard key={photo.id} id={photo.id}>
                     {({ isDragging, dragHandleProps }) => (
                       <div
+                        id={`photo-card-${photo.id}`}
                         className="rounded-2xl border relative"
                         style={{ background: '#1c1c30', borderColor: '#2e2e50', opacity: isDragging ? 0.5 : 1 }}
                       >

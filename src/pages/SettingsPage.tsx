@@ -20,16 +20,6 @@ const DEFAULT_PROCESSES = [
   "流れ壁板金", "平行壁板金", "確認", "棟金具設置", "緊結状況", "施工中", "完成"
 ];
 
-const DEFAULT_TEMPLATES = [
-  { label: "基準/実測", text: "基準値：\n実測値：" },
-  { label: "重ね幅(ヨコ)", text: "重ね幅（ヨコ）：" },
-  { label: "重ね幅(タテ)", text: "重ね幅（タテ）：" },
-  { label: "平行壁(立上)", text: "平行壁：立ち上げ高 " },
-  { label: "流れ壁(立上)", text: "流れ壁：立ち上げ高 " },
-  { label: "棟芯(重ね)", text: "棟芯：重ね（左右） " },
-  { label: "棟部(増張り)", text: "棟部：増し張り " },
-];
-
 // セクションカード
 function Section({ title, icon, accent = '#ff6b35', children }: {
   title: string;
@@ -68,7 +58,6 @@ export default function SettingsPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
   const [processes, setProcesses] = useState<string[]>(DEFAULT_PROCESSES);
-  const [templates, setTemplates] = useState<{label: string, text: string}[]>(DEFAULT_TEMPLATES);
   const [materialMaster, setMaterialMaster] = useState<MaterialMaster[]>([]);
   const [photoMaster, setPhotoMaster] = useState<PhotoMaster[]>([]);
   const [storageUsedBytes, setStorageUsedBytes] = useState(0);
@@ -90,7 +79,6 @@ export default function SettingsPage() {
           if (data.phone) setPhone(data.phone);
           if (data.logoUrl) setLogoUrl(data.logoUrl);
           if (data.customProcesses && data.customProcesses.length > 0) setProcesses(data.customProcesses);
-          if (data.customDescTemplates && data.customDescTemplates.length > 0) setTemplates(data.customDescTemplates);
           if (Array.isArray(data.materialMaster)) setMaterialMaster(data.materialMaster);
           if (Array.isArray(data.photoMaster)) setPhotoMaster(data.photoMaster);
           if (typeof data.storageUsedBytes === 'number') setStorageUsedBytes(data.storageUsedBytes);
@@ -127,7 +115,6 @@ export default function SettingsPage() {
       await setDoc(doc(db, 'users', uid), {
         companyName, address, phone, logoUrl,
         customProcesses: processes,
-        customDescTemplates: templates,
         materialMaster,
         photoMaster,
       }, { merge: true });
@@ -523,51 +510,6 @@ export default function SettingsPage() {
               ))}
             </div>
             <AddButton onClick={() => setMaterialMaster(prev => [...prev, { id: nextId(), name: '', manufacturer: '', specification: '', remarks: '' }])} label="材料を追加" accent="#8b5cf6" />
-          </Section>
-
-          {/* 定型文 */}
-          <Section title="説明欄の「ワンタップ定型文」" icon={<Settings className="w-4 h-4" />} accent="#f59e0b">
-            <p className="text-xs mb-4" style={{ color: '#6b7280' }}>よく使う説明文をボタン一つで入力できるようにします。</p>
-            <div className="space-y-3 mb-4">
-              {templates.map((tmpl, index) => (
-                <div key={index} className="flex gap-2 items-start p-3 rounded-xl border" style={{ background: '#12122a', borderColor: '#2e2e50' }}>
-                  <div className="flex-1 space-y-2">
-                    <div>
-                      <label className="block text-xs font-bold mb-1" style={{ color: '#6b7280' }}>ボタンの名前（短く）</label>
-                      <input
-                        type="text"
-                        value={tmpl.label}
-                        onChange={(e) => setTemplates(prev => prev.map((t, i) => i === index ? { ...t, label: e.target.value } : t))}
-                        className={inputCls}
-                        style={{ ...inputStyle, background: '#1c1c30' }}
-                        placeholder="例：基準/実測"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold mb-1" style={{ color: '#6b7280' }}>ボタンを押した時に挿入される文章</label>
-                      <textarea
-                        value={tmpl.text}
-                        onChange={(e) => setTemplates(prev => prev.map((t, i) => i === index ? { ...t, text: e.target.value } : t))}
-                        rows={2}
-                        className={`${inputCls} resize-none`}
-                        style={{ ...inputStyle, background: '#1c1c30' }}
-                        placeholder="例：基準値：&#13;&#10;実測値："
-                      />
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setTemplates(templates.filter((_, i) => i !== index))}
-                    className="p-1.5 mt-5 rounded-lg transition-colors shrink-0"
-                    style={{ color: '#3d3d60' }}
-                    onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
-                    onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <AddButton onClick={() => setTemplates([...templates, { label: "新規ボタン", text: "新しい説明文" }])} label="定型文ボタンを追加" accent="#f59e0b" />
           </Section>
 
           {/* 位置図 一括マイグレーション */}
