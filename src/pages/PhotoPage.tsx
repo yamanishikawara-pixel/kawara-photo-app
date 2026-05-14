@@ -1063,7 +1063,7 @@ export default function PhotoPage() {
                     >
                       <Camera className="w-3.5 h-3.5" />
                       {photo.image ? '写真を変更' : '写真を選択'}
-                      <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadPhoto(e, index)} />
+                      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => uploadPhoto(e, index)} />
                     </label>
                   </div>
 

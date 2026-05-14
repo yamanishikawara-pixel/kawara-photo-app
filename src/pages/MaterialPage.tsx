@@ -402,7 +402,7 @@ export default function MaterialPage() {
                             <span className="text-xs font-bold" style={{ color: '#6b7280' }}>写真を撮影</span>
                           </>
                         )}
-                        <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(material.id, e)} disabled={uploadingId === material.id} />
+                        <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleImageUpload(material.id, e)} disabled={uploadingId === material.id} />
                       </label>
                     )}
                   </div>
@@ -414,7 +414,7 @@ export default function MaterialPage() {
                       onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
                     >
                       写真を変更
-                      <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(material.id, e)} disabled={uploadingId === material.id} />
+                      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleImageUpload(material.id, e)} disabled={uploadingId === material.id} />
                     </label>
                   )}
                 </div>
