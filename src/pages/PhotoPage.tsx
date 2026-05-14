@@ -457,7 +457,7 @@ export default function PhotoPage() {
       p.id === photoId ? { ...p, process: m.process, description: m.description } : p
     );
     setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-    await updateDoc(doc(db, 'projects', id), { photos: newPhotos });
+    await safeUpdate(newPhotos);
   };
 
   const saveToPhotoMaster = (photo: Photo) => {
@@ -492,6 +492,21 @@ export default function PhotoPage() {
     debounceTimers.current = {};
     pendingPhotosRef.current = null;
   }, []);
+
+  /** photos 配列を Firestore に安全に書き込む。失敗時はトーストを表示。 */
+  const safeUpdate = useCallback(async (photos: Photo[]): Promise<boolean> => {
+    if (!id) return false;
+    try {
+      await updateDoc(doc(db, 'projects', id), { photos });
+      return true;
+    } catch (err) {
+      logFirebaseError(err, '写真ページ保存');
+      if (mountedRef.current) {
+        setUploadError(firebaseErrorMessage(err, '保存に失敗しました'));
+      }
+      return false;
+    }
+  }, [id]);
 
   // ── デバウンス保存(テキスト入力など連打されるフィールド用) ──
   const TEXT_FIELDS = new Set<keyof Photo>([
@@ -589,7 +604,7 @@ export default function PhotoPage() {
     const newPhotos = project.photos.filter((p) => p.id !== photoId);
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
     setProject((prev) => prev ? { ...prev, photos: renumbered } : null);
-    await updateDoc(doc(db, "projects", id), { photos: renumbered });
+    await safeUpdate(renumbered);
   };
 
   const toggleSelectPhoto = (photoId: number) => {
@@ -613,7 +628,7 @@ export default function PhotoPage() {
     const newPhotos = project.photos.filter((p) => !selectedPhotoIds.includes(p.id));
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
     setProject((prev) => prev ? { ...prev, photos: renumbered } : null);
-    await updateDoc(doc(db, "projects", id), { photos: renumbered });
+    await safeUpdate(renumbered);
     setSelectedPhotoIds([]);
     setIsSelectMode(false);
   };
@@ -624,7 +639,7 @@ export default function PhotoPage() {
     const formatted = formatToYMDSlash(batchDate);
     const newPhotos = project.photos.map(p => ({ ...p, shootingDate: formatted }));
     setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-    await updateDoc(doc(db, "projects", id), { photos: newPhotos });
+    await safeUpdate(newPhotos);
     setBatchDate("");
   };
 
@@ -633,7 +648,7 @@ export default function PhotoPage() {
     cancelPendingPhotoDebounces();
     const newPhotos: Photo[] = [...project.photos, { id: nextId(), image: null, photoNumber: String(project.photos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], dimensionLines: [], rotation: 0 }];
     setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-    await updateDoc(doc(db, "projects", id), { photos: newPhotos });
+    await safeUpdate(newPhotos);
   };
 
   const duplicatePhotoSlot = async (index: number) => {
@@ -657,7 +672,7 @@ export default function PhotoPage() {
     newPhotos.splice(index + 1, 0, newPhoto);
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
     setProject((prev) => prev ? { ...prev, photos: renumbered } : null);
-    await updateDoc(doc(db, "projects", id), { photos: renumbered });
+    await safeUpdate(renumbered);
   };
 
   const movePhoto = async (index: number, direction: 'up' | 'down') => {
@@ -669,7 +684,7 @@ export default function PhotoPage() {
     [newPhotos[index], newPhotos[targetIdx]] = [newPhotos[targetIdx], newPhotos[index]];
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
     setProject((prev) => prev ? { ...prev, photos: renumbered } : null);
-    await updateDoc(doc(db, "projects", id), { photos: renumbered });
+    await safeUpdate(renumbered);
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -682,7 +697,7 @@ export default function PhotoPage() {
     const newPhotos = arrayMove(project.photos, oldIndex, newIndex);
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
     setProject(prev => prev ? { ...prev, photos: renumbered } : null);
-    await updateDoc(doc(db, 'projects', id), { photos: renumbered });
+    await safeUpdate(renumbered);
   };
 
   const handleGridPhotoClick = (photoId: number) => {
@@ -739,7 +754,7 @@ export default function PhotoPage() {
       setBulkProgress(uploadedCount);
     }
     if (newPhotos.some(p => p.image)) {
-      await updateDoc(doc(db, "projects", id), { photos: newPhotos });
+      await safeUpdate(newPhotos);
     }
     setBulkUploading(false);
   };
@@ -768,7 +783,7 @@ export default function PhotoPage() {
       }
       const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, image: url, shootingDate: p.shootingDate || getTodayStr() } : p);
       setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-      await updateDoc(doc(db, "projects", id), { photos: newPhotos });
+      await safeUpdate(newPhotos);
     } catch (err) {
       logFirebaseError(err, '写真アップロード');
       setUploadError(firebaseErrorMessage(err, '写真のアップロード'));
@@ -798,7 +813,7 @@ export default function PhotoPage() {
       if (selectedCircleId !== null) { setSelectedCircleId(null); return; }
       const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: [...(p.circles || []), { id: nextId(), x, y, size: 20 }] } : p);
       setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-      await updateDoc(doc(db, "projects", id), { photos: newPhotos });
+      await safeUpdate(newPhotos);
     } else if (mode === 'dimension') {
       if (selectedDimensionLineId !== null) { setSelectedDimensionLineId(null); return; }
       if (!drawingStartPoint) {
@@ -810,7 +825,7 @@ export default function PhotoPage() {
           dimensionLines: [...(p.dimensionLines || []), { id: newLineId, start: drawingStartPoint, end: { x, y }, text: "", size: 2, color: activeColor }]
         } : p);
         setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-        await updateDoc(doc(db, "projects", id), { photos: newPhotos });
+        await safeUpdate(newPhotos);
         setDrawingStartPoint(null);
         setSelectedDimensionLineId(newLineId);
       }
@@ -821,14 +836,14 @@ export default function PhotoPage() {
     if (!project || !id) return;
     const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: (p.circles ?? []).map((c) => c.id === circleId ? { ...c, ...newProps } : c) } : p);
     setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-    await updateDoc(doc(db, "projects", id), { photos: newPhotos });
+    await safeUpdate(newPhotos);
   };
 
   const removeCircle = async (photoId: number, circleId: number) => {
     if (!project || !id) return;
     const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: (p.circles ?? []).filter((c) => c.id !== circleId) } : p);
     setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-    await updateDoc(doc(db, "projects", id), { photos: newPhotos });
+    await safeUpdate(newPhotos);
     setSelectedCircleId(null);
   };
 
@@ -836,14 +851,14 @@ export default function PhotoPage() {
     if (!project || !id) return;
     const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, dimensionLines: p.dimensionLines?.map((c) => c.id === lineId ? { ...c, ...newProps } : c) } : p);
     setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-    await updateDoc(doc(db, "projects", id), { photos: newPhotos });
+    await safeUpdate(newPhotos);
   };
 
   const removeDimensionLine = async (photoId: number, lineId: number) => {
     if (!project || !id) return;
     const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, dimensionLines: p.dimensionLines?.filter((c) => c.id !== lineId) } : p);
     setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-    await updateDoc(doc(db, "projects", id), { photos: newPhotos });
+    await safeUpdate(newPhotos);
     setSelectedDimensionLineId(null);
   };
 
@@ -1126,9 +1141,10 @@ export default function PhotoPage() {
                       写真
                     </div>
                     <div className="flex gap-2 items-center">
+                      {/* グリップ: PC のみ表示（スマホでは非表示） */}
                       <button
                         {...dragHandleProps}
-                        className="p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing touch-none"
+                        className="hidden sm:flex p-2 rounded-lg transition-colors cursor-grab active:cursor-grabbing touch-none items-center justify-center"
                         style={{ background: '#12122a', color: '#3d3d60', border: '1px solid #2e2e50' }}
                         onPointerEnter={e => (e.currentTarget.style.color = '#8b8ba8')}
                         onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
@@ -1137,9 +1153,10 @@ export default function PhotoPage() {
                       >
                         <GripVertical className="w-4 h-4" />
                       </button>
+                      {/* ↑↓ボタン: スマホのみ表示（PC では非表示） */}
                       <button
                         onClick={() => movePhoto(index, 'up')}
-                        className="p-2 rounded-lg transition-colors"
+                        className="flex sm:hidden p-2 rounded-lg transition-colors"
                         style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}
                         onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')}
                         onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
@@ -1149,7 +1166,7 @@ export default function PhotoPage() {
                       </button>
                       <button
                         onClick={() => movePhoto(index, 'down')}
-                        className="p-2 rounded-lg transition-colors"
+                        className="flex sm:hidden p-2 rounded-lg transition-colors"
                         style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}
                         onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')}
                         onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
