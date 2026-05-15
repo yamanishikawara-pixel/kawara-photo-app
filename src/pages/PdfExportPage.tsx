@@ -79,13 +79,13 @@ type LongTextStyle = {
 function pickLongTextStyle(text: string | undefined | null): LongTextStyle {
   const len = (text ?? '').length;
   // 段階的縮小テーブル。短い順にチェックして最初にマッチしたものを採用。
-  if (len <= 80)       return { fontSize: '13px', lineHeight: '1.4', isLong: false };
-  if (len <= 150)      return { fontSize: '12px', lineHeight: '1.4', isLong: false };
-  if (len <= 250)      return { fontSize: '11px', lineHeight: '1.35', isLong: true  };
-  if (len <= 400)      return { fontSize: '10px', lineHeight: '1.3',  isLong: true  };
-  // 401 文字超: 下限の 10px で詰めるが、それでも入らなければ末尾は切れる。
-  // 編集画面では全文確認できるので、印刷向けの妥協として許容する。
-  return                       { fontSize: '10px', lineHeight: '1.25', isLong: true  };
+  if (len <= 80)       return { fontSize: '13px',   lineHeight: '1.4',  isLong: false };
+  if (len <= 150)      return { fontSize: '12px',   lineHeight: '1.4',  isLong: false };
+  if (len <= 250)      return { fontSize: '11px',   lineHeight: '1.35', isLong: true  };
+  if (len <= 400)      return { fontSize: '10px',   lineHeight: '1.3',  isLong: true  };
+  if (len <= 600)      return { fontSize: '9px',    lineHeight: '1.25', isLong: true  };
+  // 601 文字超: 最小フォントで詰め込む。極端に長い場合は編集画面で確認。
+  return                       { fontSize: '8.5px', lineHeight: '1.2',  isLong: true  };
 }
 
 
@@ -1378,7 +1378,7 @@ export default function PdfExportPage() {
                         {(() => {
                           const style = pickLongTextStyle(p.description);
                           return (
-                            <div className="flex-[2] flex min-h-0">
+                            <div className="flex-[3] flex min-h-0">
                               <div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">説明</div>
                               <div
                                 className="p-2 flex-1 overflow-hidden font-bold flex items-start break-words whitespace-pre-wrap"

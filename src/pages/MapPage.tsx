@@ -36,6 +36,14 @@ const COLOR_PALETTE = [
   { name: "Red", value: "#ef4444" },
 ];
 
+/** ピンラベルから一貫した色を返す（PDF出力と同じ6色パレット） */
+const SYMBOL_COLORS = ['#16a34a', '#2563eb', '#92400e', '#7c3aed', '#db2777', '#065f46'];
+function colorForSymbol(label: string): string {
+  const s = (label ?? '').trim();
+  if (!s) return SYMBOL_COLORS[0];
+  return SYMBOL_COLORS[s.charCodeAt(0) % SYMBOL_COLORS.length];
+}
+
 const getLocalPointFromRect = (clientX: number, clientY: number, rect: DOMRect, angle: number) => {
   let localX = 0, localY = 0;
   let w = rect.width, h = rect.height;
@@ -496,9 +504,9 @@ const MapMarker = React.memo(({ pin, rotation, currentScale, isSelected, onDragE
       >
         <div style={{ transform: `rotate(${pin.textRotation ?? 0}deg)` }}>
           {pin.type === 'arrow' ? (
-            <div className="flex items-center gap-1 drop-shadow-md bg-white/70 px-2 py-0.5 rounded-lg border border-red-200"><span className="text-red-600 font-black text-2xl leading-none" style={{ transform: `rotate(${pin.rotation || 0}deg)` }}>➡</span><span className="text-red-600 font-bold text-xl">{pin.label}</span></div>
+            <div className="flex items-center gap-1 drop-shadow-md bg-white/70 px-2 py-0.5 rounded-lg border" style={{ borderColor: colorForSymbol(pin.label) + '80' }}><span className="font-black text-2xl leading-none" style={{ color: colorForSymbol(pin.label), transform: `rotate(${pin.rotation || 0}deg)` }}>➡</span><span className="font-bold text-xl" style={{ color: colorForSymbol(pin.label) }}>{pin.label}</span></div>
           ) : (
-            <div className="relative flex items-center justify-center"><div className="w-14 h-14 rounded-full border-[4px] border-red-600 shadow-sm bg-red-600/10"></div><span className="absolute text-red-600 font-black text-xl drop-shadow-md bg-white/50 px-1 rounded">{pin.label}</span></div>
+            <div className="relative flex items-center justify-center"><div className="w-14 h-14 rounded-full border-[4px] shadow-sm" style={{ borderColor: colorForSymbol(pin.label), backgroundColor: colorForSymbol(pin.label) + '1a' }}></div><span className="absolute font-black text-xl drop-shadow-md bg-white/50 px-1 rounded" style={{ color: colorForSymbol(pin.label) }}>{pin.label}</span></div>
           )}
         </div>
       </div>
@@ -515,7 +523,7 @@ const LegendRow = React.memo(({ row, isSelected, onSelect, onChange, onRemove }:
       onPointerEnter={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)'; }}
       onPointerLeave={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
     >
-      <input type="text" value={row.symbol} onChange={(e) => onChange({ symbol: e.target.value })} className="col-span-2 py-2.5 text-xs sm:text-sm text-center font-black bg-transparent outline-none border-r" style={{ color: '#ef4444', borderColor: '#2e2e50' }} />
+      <input type="text" value={row.symbol} onChange={(e) => onChange({ symbol: e.target.value })} className="col-span-2 py-2.5 text-xs sm:text-sm text-center font-black bg-transparent outline-none border-r" style={{ color: colorForSymbol(row.symbol), borderColor: '#2e2e50' }} />
       <input type="text" value={row.part} placeholder="軒先" onChange={(e) => onChange({ part: e.target.value })} className="col-span-4 py-2.5 px-2 text-xs sm:text-sm font-bold bg-transparent outline-none border-r" style={{ color: '#f0ede8', borderColor: '#2e2e50' }} />
       <input type="text" value={row.remarks} placeholder="..." onChange={(e) => onChange({ remarks: e.target.value })} className="col-span-5 py-2.5 px-2 text-xs sm:text-sm font-bold bg-transparent outline-none border-r" style={{ color: '#f0ede8', borderColor: '#2e2e50' }} />
       <div className="col-span-1 flex items-center justify-center">
@@ -958,10 +966,10 @@ export default function MapPage() {
         const { localX: x, localY: y } = pendingActionInfo;
 
         if (editingMode === 'pin') {
-          // 現在のマップの欠番を埋める採番（削除後の番号が再利用される）
+          // 全マップ横断の欠番を埋める採番（削除後の番号が再利用される）
           const existingNums = new Set(
             mapPins
-              .filter(p => (p.mapIndex || 0) === currentMapIndex && p.type === 'circle')
+              .filter(p => p.type === 'circle')
               .map(p => parseInt(p.label))
               .filter(n => !isNaN(n) && n > 0)
           );
