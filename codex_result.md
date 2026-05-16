@@ -1,9 +1,5 @@
-完了しました。対象は [src/pages/MapPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/MapPage.tsx) のみです。
+`src/App.tsx` を指定どおり更新しました。
 
-変更内容:
-- `COLOR_PALETTE` 直後に `SYMBOL_COLORS` / `colorForSymbol` を追加
-- 丸ピンの採番を全マップ横断に変更
-- 矢印ピン・丸ピンの表示色を `colorForSymbol` に変更
-- 凡例テーブルの符号列の文字色を `colorForSymbol(row.symbol)` に変更
+ログイン後に `users/{uid}` から `logoUrl` と `companyName` を取得し、`apple-touch-icon`、`document.title`、`apple-mobile-web-app-title` を動的に更新します。ProtectedRoute、PageLoader、ルーティング構造は触っていません。
 
-`rg` と `git diff` で指定箇所の反映を確認済みです。テストは実行していません。
+検証: `npm run build` 成功。

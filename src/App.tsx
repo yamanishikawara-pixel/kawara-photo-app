@@ -2,7 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, useState, Suspense, lazy } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import type { User } from 'firebase/auth';
-import { auth } from './firebase';
+import { auth, db } from './firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const PhotoPage = lazy(() => import('./pages/PhotoPage'));
@@ -42,9 +43,32 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       setAuthLoading(false); // 確認が終わったらローディングを解除
+
+      if (!currentUser) return;
+      try {
+        const snap = await getDoc(doc(db, 'users', currentUser.uid));
+        if (!snap.exists()) return;
+        const data = snap.data();
+
+        // ── apple-touch-icon を会社ロゴに更新（Safari の「ホーム画面に追加」が読む）
+        if (data.logoUrl) {
+          const iconLink = document.querySelector('link[rel="apple-touch-icon"]') as HTMLLinkElement | null;
+          if (iconLink) iconLink.href = data.logoUrl;
+        }
+
+        // ── ページタイトルを会社名に更新
+        if (data.companyName) {
+          document.title = `${data.companyName} 写真台帳`;
+          // apple-mobile-web-app-title も更新
+          const titleMeta = document.querySelector('meta[name="apple-mobile-web-app-title"]') as HTMLMetaElement | null;
+          if (titleMeta) titleMeta.content = data.companyName;
+        }
+      } catch {
+        // 設定取得失敗はサイレントに無視（認証には影響しない）
+      }
     });
     return () => unsubscribe();
   }, []);
