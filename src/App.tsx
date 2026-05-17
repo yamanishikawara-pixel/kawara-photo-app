@@ -75,7 +75,7 @@ export default function App() {
 
   // 最初のカギ確認中だけ表示。以降の画面遷移では一切出ません！
   if (authLoading) {
-    return <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center font-bold text-gray-500">カギを確認中...</div>;
+    return <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center font-bold text-gray-500">ログインしています...</div>;
   }
 
   return (
