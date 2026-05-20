@@ -1,9 +1,10 @@
-完了しました。`src/pages/ProjectListPage.tsx` に以下を追加済みです。
+共有リンク機能を指定どおり削除しました。
 
-- `lucide-react` import に `Calculator` を追加
-- `validateBudgetProjectName` を追加
-- タイトル行の「完了済みを非表示」前に「実行予算書」ボタンを追加
-- 各物件カードの完了ボタン前に電卓ボタンを追加
-- カード側は `e.stopPropagation()` ありなので既存のカードクリック `navigate` には干渉しません
+変更内容:
+- [src/pages/HomePage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/HomePage.tsx): 共有リンク用 import/state/生成関数/UI を削除
+- [src/App.tsx](/Users/yamanishikenta/kawara-photo-app/src/App.tsx): `ShareViewPage` lazy import と `/share/...` ルートを削除
+- [firestore.rules](/Users/yamanishikenta/kawara-photo-app/firestore.rules): `shares` コレクションのルールブロックを削除
 
-確認として `npm run lint` を実行しましたが、既存の lint エラーで失敗しています。今回の追加箇所ではなく、例として `src/pages/ProjectListPage.tsx` の既存 `no-unused-expressions`、`PdfExportPage.tsx` の未使用変数や不正空白、`src.backup-*` 配下のエラーなどが出ています。
+確認:
+- `npm run build` 成功
+- 共有リンク関連の残存参照は実装上なし。`firestore.rules` のコメントに「共有リンクによる外部公開は廃止」と残っているだけです。

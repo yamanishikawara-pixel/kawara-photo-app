@@ -7,23 +7,21 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // 現場データ
+    // 現場データ: オーナーのみ読み書き可（共有リンクによる外部公開は廃止）
     match /projects/{projectId} {
-      // オーナーは読み書き可
       allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
-      // 旧形式の共有リンク用（shareToken が設定されていれば誰でも読める）
-      // 新形式への移行が完了したら、この行は削除を検討してください
-      allow read: if resource.data.shareToken != null;
     }
 
-    // 共有トークン（新形式）
-    // ドキュメントには projectId・ownerUid・createdAt のみ保存
-    match /shares/{shareToken} {
-      allow read: if true;                           // 誰でも読める（機密情報なし）
-      allow create: if request.auth != null          // 認証ユーザーのみ作成可
-        && request.resource.data.ownerUid == request.auth.uid;
-      allow delete: if request.auth != null          // オーナーのみ削除可
-        && resource.data.ownerUid == request.auth.uid;
+    // 実行予算書アプリ（kawara-budget）用コレクション
+    match /cost_projects/{document=**} {
+      allow read, write: if request.auth != null;
     }
+    match /cost_master/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+    match /cost_system/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
   }
 }

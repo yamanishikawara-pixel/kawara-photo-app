@@ -15,7 +15,6 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const ProjectListPage = lazy(() => import('./pages/ProjectListPage').then(module => ({ default: module.ProjectListPage })));
 const HomePage = lazy(() => import('./pages/HomePage').then(module => ({ default: module.HomePage })));
 const CoverPage = lazy(() => import('./pages/CoverPage').then(module => ({ default: module.CoverPage })));
-const ShareViewPage = lazy(() => import('./pages/ShareViewPage'));
 const BeforeAfterPage = lazy(() => import('./pages/BeforeAfterPage').then(m => ({ default: m.BeforeAfterPage })));
 
 
@@ -98,8 +97,6 @@ export default function App() {
           <Route path="/project/:id/map" element={<ProtectedRoute user={user}><MapPage /></ProtectedRoute>} />
           <Route path="/project/:id/pdf" element={<ProtectedRoute user={user}><PdfExportPage /></ProtectedRoute>} />
           <Route path="/project/:id/before-after" element={<ProtectedRoute user={user}><BeforeAfterPage /></ProtectedRoute>} />
-          <Route path="/share/:shareToken" element={<ShareViewPage />} />
-          <Route path="/share/:id/:token" element={<ShareViewPage />} />
         </Routes>
       </Suspense>
     </BrowserRouter>

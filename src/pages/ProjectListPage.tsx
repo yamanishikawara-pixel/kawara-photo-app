@@ -102,6 +102,7 @@ export function ProjectListPage() {
   const [storageUsed, setStorageUsed] = useState(0);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [refreshCounter, setRefreshCounter] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -135,6 +136,17 @@ export function ProjectListPage() {
       }
     };
     fetchData();
+  }, [refreshCounter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // タブがアクティブになったとき最新データを再取得
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        setRefreshCounter(c => c + 1);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
   useEffect(() => {

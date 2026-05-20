@@ -2,7 +2,7 @@ import { initializeApp } from "firebase/app";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getAuth } from "firebase/auth";
-import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 
 // ★ 追加：環境変数がちゃんと設定されているか起動時にチェック（フェイルセーフ）
 const requiredEnvVars = [
@@ -40,7 +40,7 @@ if (import.meta.env.DEV) {
 }
 if (import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
   initializeAppCheck(app, {
-    provider: new ReCaptchaV3Provider(import.meta.env.VITE_RECAPTCHA_SITE_KEY),
+    provider: new ReCaptchaEnterpriseProvider(import.meta.env.VITE_RECAPTCHA_SITE_KEY),
     isTokenAutoRefreshEnabled: true,
   });
 }

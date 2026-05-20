@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Camera, FileDown, MapPin, Wrench, ClipboardList, ChevronRight, ArrowLeftRight, Calculator, Share2, Copy, Check } from 'lucide-react';
+import { ArrowLeft, Camera, FileDown, MapPin, Wrench, ClipboardList, ChevronRight, ArrowLeftRight, Calculator } from 'lucide-react';
 
 import type { Project } from '../types';
-import { db, auth } from '../firebase';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
@@ -78,9 +78,6 @@ export function HomePage() {
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [sharing, setSharing] = useState(false);
-  const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [shareCopied, setShareCopied] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -103,33 +100,6 @@ export function HomePage() {
     })();
     return () => { aborted = true; };
   }, [id]);
-
-  const handleGenerateShareLink = async () => {
-    if (!id) return;
-    setSharing(true);
-    try {
-      const token = crypto.randomUUID();
-      await setDoc(doc(db, 'shares', token), {
-        projectId: id,
-        ownerUid: auth.currentUser?.uid ?? '',
-        createdAt: new Date().toISOString(),
-      });
-      // Firestore ルールの `allow read: if resource.data.shareToken != null` を満たすため
-      // project にも同じトークンを書き込む
-      await updateDoc(doc(db, 'projects', id), { shareToken: token });
-      const url = `${window.location.origin}/share/${token}`;
-      setShareUrl(url);
-      try {
-        await navigator.clipboard.writeText(url);
-        setShareCopied(true);
-        setTimeout(() => setShareCopied(false), 3000);
-      } catch { /* クリップボード API が使えない環境でも URL 表示は続ける */ }
-    } catch {
-      setError('共有リンクの発行に失敗しました。');
-    } finally {
-      setSharing(false);
-    }
-  };
 
   if (error && !project) {
     return (
@@ -199,57 +169,6 @@ export function HomePage() {
               )}
             </div>
           </div>
-        </div>
-
-        {/* ── 共有リンク ── */}
-        <div className="mb-4 rounded-2xl border px-5 py-4" style={{ borderColor: '#2e2e50', background: '#1c1c30' }}>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-bold" style={{ color: '#f0ede8' }}>共有リンク</div>
-              <div className="text-xs mt-0.5" style={{ color: '#6b7280' }}>閲覧専用リンクを発行してPDF確認を共有</div>
-            </div>
-            <button
-              onClick={handleGenerateShareLink}
-              disabled={sharing}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all disabled:opacity-50 shrink-0"
-              style={{ background: '#12122a', color: '#6366f1', border: '1px solid #2e2e50' }}
-              onPointerEnter={e => { if (!sharing) (e.currentTarget as HTMLButtonElement).style.borderColor = '#6366f1'; }}
-              onPointerLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#2e2e50'; }}
-            >
-              <Share2 className="w-3.5 h-3.5" />
-              {sharing ? '発行中...' : 'リンクを発行'}
-            </button>
-          </div>
-          {shareUrl && (
-            <div className="mt-3 flex items-center gap-2">
-              <input
-                readOnly
-                value={shareUrl}
-                className="flex-1 text-xs px-3 py-2 rounded-lg font-mono truncate outline-none"
-                style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#8b8ba8' }}
-                onFocus={e => e.currentTarget.select()}
-              />
-              <button
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(shareUrl);
-                    setShareCopied(true);
-                    setTimeout(() => setShareCopied(false), 2000);
-                  } catch {
-                    setError('クリップボードへのコピーに失敗しました。');
-                  }
-                }}
-                className="p-2 rounded-lg transition-colors shrink-0"
-                style={{ background: '#12122a', border: '1px solid #2e2e50', color: shareCopied ? '#10b981' : '#6b7280' }}
-                title="コピー"
-              >
-                {shareCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              </button>
-            </div>
-          )}
-          {shareCopied && !shareUrl && (
-            <p className="mt-2 text-xs font-bold" style={{ color: '#10b981' }}>クリップボードにコピーしました</p>
-          )}
         </div>
 
         {/* ── メニュー ── */}
