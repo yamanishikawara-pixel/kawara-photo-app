@@ -33,8 +33,14 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 // App Check: 不正なAPIキー利用・クォータ枯渇攻撃を防ぐ
-// 開発環境ではコンソールに出力されるデバッグトークンを Firebase Console に登録してください
+// 本番ビルドでキーが未設定なら起動を止める（無言で App Check 無効のまま出荷させない）
+if (import.meta.env.PROD && !import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
+  throw new Error('本番ビルドで VITE_RECAPTCHA_SITE_KEY が未設定です。App Check が無効化されます。.env を確認してください。');
+}
 if (import.meta.env.DEV) {
+  if (!import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
+    console.warn('[App Check] VITE_RECAPTCHA_SITE_KEY 未設定（開発時のみ許容）');
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
 }
