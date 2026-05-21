@@ -5,8 +5,8 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
 import type { MapPin as MapPinT, MapRow, Project, DimensionLine, WhiteoutBox } from '../types';
-import { proxyUrl, nextId } from '../shared/utils';
-import { canUpload, trackUpload, deleteStorageFileWithAccounting } from '../shared/storageUtils';
+import { proxyUrl } from '../shared/utils';
+import { canUpload, trackUpload, deleteStorageFileWithAccounting, genId } from '../shared/storageUtils';
 import { resolveMapAspect, isLegacyMapCoord, migrateMapToImageAspect } from '../shared/mapCoords';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
@@ -790,7 +790,7 @@ export default function MapPage() {
           setError('ストレージ容量が上限（500MB）に達しています。不要な図面を削除してください。');
           break;
         }
-        const storageRef = ref(storage, `maps/${id}/${nextId()}_${f.name}`);
+        const storageRef = ref(storage, `maps/${id}/${genId()}_${f.name}`);
         await uploadBytes(storageRef, f);
         const url = await getDownloadURL(storageRef);
         if (uid) {
@@ -1378,6 +1378,16 @@ export default function MapPage() {
                             const img = e.currentTarget;
                             if (!img.naturalWidth || !img.naturalHeight) return;
                             const naturalAspect = img.naturalWidth / img.naturalHeight;
+                            // 不正な aspect（0・NaN・極端な値）はマイグレーション対象外
+                            // 範囲外なら次回ロード時に再試行するため、ここで中断する
+                            const ASPECT_MIN = 0.2;
+                            const ASPECT_MAX = 5.0;
+                            if (!Number.isFinite(naturalAspect) || naturalAspect < ASPECT_MIN || naturalAspect > ASPECT_MAX) {
+                              import.meta.env.DEV && console.warn(
+                                `[mapMigrate] 不正なアスペクト比 ${naturalAspect} を検出。マイグレーションをスキップ。`
+                              );
+                              return;
+                            }
                             // ローカル state を更新
                             setMapImageAspects(prev => ({ ...prev, [currentMapIndex]: naturalAspect }));
                             // 旧形式なら新形式に自動移行 (Firestore + 全座標変換)

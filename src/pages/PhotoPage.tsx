@@ -5,7 +5,7 @@ import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
 import { proxyUrl, useDraggablePin, nextId } from '../shared/utils';
-import { canUpload, trackUpload, deleteStorageFileWithAccounting } from '../shared/storageUtils';
+import { canUpload, trackUpload, deleteStorageFileWithAccounting, genId } from '../shared/storageUtils';
 import { compressPhotoWithQuality } from '../shared/imageUtils';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import type { Circle, Photo, Project, DimensionLine, PhotoMaster } from '../types';
@@ -735,7 +735,7 @@ export default function PhotoPage() {
           setUploadError('ストレージ容量が上限（500MB）に達しています。不要な写真を削除してください。');
           break;
         }
-        const r = ref(storage, `photos/${id}/${nextId()}_bulk_${i}.jpg`);
+        const r = ref(storage, `photos/${id}/${genId()}_bulk_${i}.jpg`);
         await uploadBytes(r, compressedFile);
         const url = await getDownloadURL(r);
         if (uid) {
@@ -774,7 +774,7 @@ export default function PhotoPage() {
         setUploadError('ストレージ容量が上限（500MB）に達しています。不要な写真を削除してください。');
         return;
       }
-      const r = ref(storage, `photos/${id}/${nextId()}.jpg`);
+      const r = ref(storage, `photos/${id}/${genId()}.jpg`);
       await uploadBytes(r, compressedFile);
       const url = await getDownloadURL(r);
       if (uid) {

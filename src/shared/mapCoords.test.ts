@@ -134,11 +134,20 @@ describe('migrateMapToImageAspect', () => {
     expect(pin.y).toBeCloseTo(50, 1);
   });
 
-  it('invalid aspect (0) → does NOT change mapImageAspects', () => {
-    // フェーズ2修正の前提確認: 現在の挙動を記録
-    // ※ フェーズ2で「0を渡したら変換しない」ガードが追加された後に更新する
+  it('invalid aspect (0) → returns unchanged data, mapImageAspects NOT set', () => {
     const result = migrateMapToImageAspect(baseProject, 0, 0);
-    // 0 を渡すと LEGACY_ASPECT で変換されてしまう（修正前の現状を記録）
-    expect(typeof result.mapImageAspects[0]).toBe('number');
+    // 0 は不正値 → 何も変換せず元のデータをそのまま返す
+    expect(result.mapImageAspects[0]).toBeUndefined();
+    expect(result.mapPins[0].x).toBeCloseTo(50); // 変換されていない
+  });
+
+  it('invalid aspect (NaN) → returns unchanged data', () => {
+    const result = migrateMapToImageAspect(baseProject, 0, NaN);
+    expect(result.mapImageAspects[0]).toBeUndefined();
+  });
+
+  it('invalid aspect (negative) → returns unchanged data', () => {
+    const result = migrateMapToImageAspect(baseProject, 0, -1);
+    expect(result.mapImageAspects[0]).toBeUndefined();
   });
 });

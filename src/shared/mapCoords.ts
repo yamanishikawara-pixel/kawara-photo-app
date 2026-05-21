@@ -169,6 +169,18 @@ export function migrateMapToImageAspect(
   whiteoutBoxes: WhiteoutBox[];
   mapImageAspects: number[];
 } {
+  // 不正な aspect は座標を壊さないためにそのまま返す（mapImageAspects も書き換えない）
+  // 0・NaN・負値・Infinity が渡ると全座標が 0 に潰れる恐れがある
+  if (!Number.isFinite(naturalAspect) || naturalAspect <= 0) {
+    return {
+      mapPins: project.mapPins ?? [],
+      mapDimensionLines: project.mapDimensionLines ?? [],
+      mapLines: (project.mapLines ?? []) as MapLine[],
+      whiteoutBoxes: project.whiteoutBoxes ?? [],
+      mapImageAspects: project.mapImageAspects ?? [],
+    };
+  }
+
   const oldAspect = LEGACY_MAP_ASPECT;
 
   // ピン
