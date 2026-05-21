@@ -418,6 +418,29 @@ export default function PhotoPage() {
     projectRef.current = project;
   }, [project]);
 
+  // タブクローズ・バックグラウンド移行時に未保存データをフラッシュする。
+  // React のアンマウントはタブクローズでは発火しないため、
+  // pagehide と visibilitychange で補完する。
+  // Firebase オフライン永続化が有効なのでオフラインでもローカルキューに残る。
+  useEffect(() => {
+    const flush = () => {
+      const pending = pendingPhotosRef.current;
+      if (!pending || !id) return;
+      pendingPhotosRef.current = null;
+      void updateDoc(doc(db, 'projects', id), { photos: pending })
+        .catch((e) => import.meta.env.DEV && console.warn('[PhotoPage] flush on hide failed:', e));
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [id]);
+
   useEffect(() => {
     if (!id) return;
     let aborted = false;
@@ -496,6 +519,13 @@ export default function PhotoPage() {
   /** photos 配列を Firestore に安全に書き込む。失敗時はトーストを表示。 */
   const safeUpdate = useCallback(async (photos: Photo[]): Promise<boolean> => {
     if (!id) return false;
+    // Firestore 1ドキュメントの上限は 1MiB。80% を超えたら警告を出す（保存は続行）。
+    const estimatedBytes = new Blob([JSON.stringify(photos)]).size;
+    if (estimatedBytes > 0.8 * 1024 * 1024 && mountedRef.current) {
+      setUploadError(
+        `⚠ このプロジェクトのデータ量が上限（1MB）の80%に達しています。不要な写真を削除するか、現場を分割することをご検討ください。`
+      );
+    }
     try {
       await updateDoc(doc(db, 'projects', id), { photos });
       return true;

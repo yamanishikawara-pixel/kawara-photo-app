@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Plus, Trash2, Settings, Image as ImageIcon, X, Package, Camera, HardDrive, RefreshCw, Map } from 'lucide-react';
 import { doc, getDoc, setDoc, updateDoc, getDocs, collection, query, where } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, getMetadata } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, getMetadata, listAll } from 'firebase/storage';
 import { db, auth, storage } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
@@ -66,6 +66,7 @@ export default function SettingsPage() {
   const [recalculating, setRecalculating] = useState(false);
   const [bulkMigrating, setBulkMigrating] = useState(false);
   const [migrationResult, setMigrationResult] = useState<string | null>(null);
+  const [orphanResult, setOrphanResult] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -168,6 +169,69 @@ export default function SettingsPage() {
     } catch (err) {
       logFirebaseError(err, 'ストレージ再計算');
       setError(firebaseErrorMessage(err, 'ストレージ使用量の再計算'));
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
+  // Firestore に参照されていない孤立 Storage ファイルを検出する（削除はしない）
+  const handleDetectOrphans = async () => {
+    if (!uid) return;
+    setOrphanResult(null);
+    setRecalculating(true);
+    setError(null);
+    try {
+      const snap = await getDocs(query(collection(db, 'projects'), where('userId', '==', uid)));
+
+      // Firestore に参照されている全パスを収集
+      const referencedPaths = new Set<string>();
+      const addRef = (url: string | null | undefined) => {
+        if (!url) return;
+        const path = storagePathFromUrl(url);
+        if (path) referencedPaths.add(path);
+      };
+      for (const docSnap of snap.docs) {
+        const p = docSnap.data() as Project;
+        for (const photo of p.photos ?? []) addRef(photo.image);
+        for (const u of p.mapUrls ?? []) addRef(u);
+        for (const m of p.materials ?? []) addRef(m.image);
+        addRef(p.appendixPdfUrl);
+        for (const item of p.beforeAfterItems ?? []) {
+          addRef(item.beforeImage);
+          addRef(item.afterImage);
+        }
+      }
+      addRef(logoUrl);
+
+      // Storage 上の実ファイルと比較して孤立を検出
+      let orphanCount = 0;
+      let orphanBytes = 0;
+      for (const docSnap of snap.docs) {
+        const projectId = docSnap.id;
+        for (const folder of ['photos', 'maps', 'materials'] as const) {
+          try {
+            const list = await listAll(ref(storage, `${folder}/${projectId}`));
+            for (const item of list.items) {
+              if (!referencedPaths.has(item.fullPath)) {
+                orphanCount++;
+                try {
+                  const meta = await getMetadata(item);
+                  orphanBytes += meta.size ?? 0;
+                } catch { /* サイズ取得失敗は無視 */ }
+              }
+            }
+          } catch { /* フォルダが存在しない場合は無視 */ }
+        }
+      }
+
+      setOrphanResult(
+        orphanCount === 0
+          ? '孤立ファイルは見つかりませんでした ✓'
+          : `⚠ 孤立ファイル ${orphanCount}件（${formatBytes(orphanBytes)}）が Storage に残っています。ストレージ使用量を消費しています。`
+      );
+    } catch (err) {
+      logFirebaseError(err, '孤立ファイル検出');
+      setError(firebaseErrorMessage(err, '孤立ファイル検出'));
     } finally {
       setRecalculating(false);
     }
@@ -328,6 +392,22 @@ export default function SettingsPage() {
                 <RefreshCw className={`w-3.5 h-3.5 ${recalculating ? 'animate-spin' : ''}`} />
                 {recalculating ? '集計中...' : '使用量を再計算'}
               </button>
+              <button
+                onClick={handleDetectOrphans}
+                disabled={recalculating}
+                className="mt-2 flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all disabled:opacity-50"
+                style={{ background: '#12122a', color: recalculating ? '#6b7280' : '#f59e0b', border: '1px solid #2e2e50' }}
+                onPointerEnter={e => { if (!recalculating) (e.currentTarget as HTMLButtonElement).style.borderColor = '#f59e0b'; }}
+                onPointerLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#2e2e50'; }}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${recalculating ? 'animate-spin' : ''}`} />
+                {recalculating ? '検索中...' : '孤立ファイルを検出'}
+              </button>
+              {orphanResult && (
+                <p className="mt-2 text-xs font-bold" style={{ color: orphanResult.startsWith('⚠') ? '#f59e0b' : '#10b981' }}>
+                  {orphanResult}
+                </p>
+              )}
             </div>
           </Section>
 
