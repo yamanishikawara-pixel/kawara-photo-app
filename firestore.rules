@@ -7,9 +7,14 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // 現場データ: オーナーのみ読み書き可（共有リンクによる外部公開は廃止）
+    // 現場データ: オーナーのみ読み書き可
     match /projects/{projectId} {
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      // 読み取り・更新・削除: 既存ドキュメントの userId と照合
+      allow read, update, delete: if request.auth != null
+        && request.auth.uid == resource.data.userId;
+      // 作成: 書き込もうとしている userId と認証ユーザーを照合（なりすまし防止）
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.userId;
     }
 
     // 実行予算書アプリ（kawara-budget）用コレクション
