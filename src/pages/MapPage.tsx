@@ -1484,46 +1484,85 @@ export default function MapPage() {
               );
             })()}
 
+            {/* ── ピン編集ボトムシート ── */}
             {selectedPinId !== null && (() => {
               const pin = currentMapPins.find(p => p.id === selectedPinId);
               if (!pin) return null;
               const currentSize = pin.size || 1;
               return (
-                <div className="mt-4 flex flex-col gap-3 p-3 rounded-xl border" style={{ background: '#12122a', borderColor: 'rgba(239,68,68,0.3)' }}>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold shrink-0" style={{ color: '#8b8ba8' }}>名称</span>
-                    <input
-                      type="text"
-                      value={editingPinLabel}
-                      onChange={e => setEditingPinLabel(e.target.value)}
-                      onBlur={() => {
-                        const trimmed = editingPinLabel.trim();
-                        if (trimmed && trimmed !== pin.label) {
-                          updateMapMarker(selectedPinId, { label: trimmed });
-                        } else {
-                          setEditingPinLabel(pin.label);
-                        }
-                      }}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                        if (e.key === 'Escape') { setEditingPinLabel(pin.label); (e.target as HTMLInputElement).blur(); }
-                      }}
-                      className="flex-1 px-3 py-1.5 rounded-xl text-sm font-bold outline-none"
-                      style={{ background: '#1c1c30', border: '1px solid #3d3d60', color: '#f0ede8' }}
-                      maxLength={20}
-                    />
+                <>
+                  {/* バックドロップ */}
+                  <div
+                    className="fixed inset-0 z-[100]"
+                    style={{ background: 'rgba(0,0,0,0.4)' }}
+                    onClick={() => setSelectedPinId(null)}
+                  />
+                  {/* ボトムシート */}
+                  <div
+                    className="fixed bottom-0 left-0 right-0 z-[101] rounded-t-2xl shadow-2xl"
+                    style={{ background: '#1c1c30', border: '1px solid #3d3d60', borderBottom: 'none' }}
+                  >
+                    {/* ドラッグハンドル */}
+                    <div className="flex justify-center pt-3 pb-1">
+                      <div className="w-10 h-1 rounded-full" style={{ background: '#3d3d60' }} />
+                    </div>
+                    <div className="px-5 pb-8 pt-2 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="font-black text-base" style={{ color: '#f0ede8' }}>ピンを編集</span>
+                        <button onClick={() => setSelectedPinId(null)} className="p-1.5 rounded-full" style={{ background: '#2e2e50', color: '#8b8ba8' }}>
+                          <span className="text-sm font-black">✕</span>
+                        </button>
+                      </div>
+                      {/* 名称 */}
+                      <div>
+                        <label className="block text-xs font-bold mb-1.5" style={{ color: '#6b7280' }}>ピン番号・名称</label>
+                        <input
+                          type="text"
+                          value={editingPinLabel}
+                          onChange={e => setEditingPinLabel(e.target.value)}
+                          onBlur={() => {
+                            const trimmed = editingPinLabel.trim();
+                            if (trimmed && trimmed !== pin.label) {
+                              updateMapMarker(selectedPinId, { label: trimmed });
+                            } else {
+                              setEditingPinLabel(pin.label);
+                            }
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                            if (e.key === 'Escape') { setEditingPinLabel(pin.label); (e.target as HTMLInputElement).blur(); }
+                          }}
+                          className="w-full px-4 py-3 rounded-xl text-sm font-bold outline-none"
+                          style={{ background: '#12122a', border: '1.5px solid #2e2e50', color: '#f0ede8', fontSize: '16px' }}
+                          maxLength={20}
+                          autoFocus
+                        />
+                      </div>
+                      {/* サイズ */}
+                      <div>
+                        <label className="block text-xs font-bold mb-2" style={{ color: '#6b7280' }}>サイズ</label>
+                        <div className="flex items-center gap-3">
+                          <button type="button"
+                            onClick={() => updateMapMarker(selectedPinId, { size: Math.max(0.3, Math.round((currentSize - 0.1) * 10) / 10) })}
+                            className="w-12 h-12 flex items-center justify-center text-xl font-bold rounded-xl active:scale-90"
+                            style={{ background: '#2e2e50', color: '#f0ede8' }}>ー</button>
+                          <span className="flex-1 text-center font-black text-lg" style={{ color: '#f0ede8' }}>{currentSize.toFixed(1)}x</span>
+                          <button type="button"
+                            onClick={() => updateMapMarker(selectedPinId, { size: Math.min(3, Math.round((currentSize + 0.1) * 10) / 10) })}
+                            className="w-12 h-12 flex items-center justify-center text-xl font-bold rounded-xl active:scale-90"
+                            style={{ background: '#2e2e50', color: '#f0ede8' }}>＋</button>
+                        </div>
+                      </div>
+                      {/* 削除 */}
+                      <button type="button"
+                        onClick={() => { removeMapMarker(selectedPinId); setSelectedPinId(null); }}
+                        className="w-full py-3 rounded-xl font-black text-sm active:scale-95 transition-all"
+                        style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' }}>
+                        <Trash2 className="w-4 h-4 inline mr-1.5" /> このピンを削除
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold" style={{ color: '#8b8ba8' }}>サイズ</span>
-                    <button type="button" onClick={() => updateMapMarker(selectedPinId, { size: Math.max(0.3, Math.round((currentSize - 0.1) * 10) / 10) })} className="w-9 h-9 flex items-center justify-center text-base font-bold rounded-xl transition-colors" style={{ background: '#2e2e50', color: '#f0ede8' }}>ー</button>
-                    <span className="w-10 text-center font-black text-sm" style={{ color: '#f0ede8' }}>{currentSize.toFixed(1)}x</span>
-                    <button type="button" onClick={() => updateMapMarker(selectedPinId, { size: Math.min(3, Math.round((currentSize + 0.1) * 10) / 10) })} className="w-9 h-9 flex items-center justify-center text-base font-bold rounded-xl transition-colors" style={{ background: '#2e2e50', color: '#f0ede8' }}>＋</button>
-                    <div className="flex-1" />
-                    <button type="button" onClick={() => { removeMapMarker(selectedPinId); setSelectedPinId(null); }} className="flex items-center gap-1.5 px-3 py-2 font-bold rounded-xl active:scale-95 text-xs transition-colors" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' }}>
-                      <Trash2 className="w-3.5 h-3.5" /> 削除
-                    </button>
-                  </div>
-                </div>
+                </>
               );
             })()}
           </div>

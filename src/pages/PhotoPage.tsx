@@ -370,6 +370,13 @@ export default function PhotoPage() {
   const [templateNameTarget, setTemplateNameTarget] = useState<Photo | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
   const [fullscreenPhotoId, setFullscreenPhotoId] = useState<number | null>(null);
+  const [longPressMenu, setLongPressMenu] = useState<{
+    photoId: number;
+    index: number;
+    x: number;
+    y: number;
+  } | null>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [templateNameInput, setTemplateNameInput] = useState('');
 
   // ── デバウンス保存インフラ(C-5 対策) ─────────────────────────
@@ -738,6 +745,18 @@ export default function PhotoPage() {
     setFullscreenPhotoId(photoId);
   };
 
+  const handleLongPressStart = (photoId: number, index: number, e: React.PointerEvent) => {
+    longPressTimer.current = setTimeout(() => {
+      setLongPressMenu({ photoId, index, x: e.clientX, y: e.clientY });
+      // 振動フィードバック（対応端末）
+      if ('vibrate' in navigator) navigator.vibrate(30);
+    }, 500);
+  };
+
+  const handleLongPressEnd = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  };
+
   const handleBulkUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     if (!project || !id) return;
     const files = Array.from(e.target.files as FileList);
@@ -1069,6 +1088,9 @@ export default function PhotoPage() {
               <button
                 key={photo.id}
                 type="button"
+                onPointerDown={e => handleLongPressStart(photo.id, index, e)}
+                onPointerUp={handleLongPressEnd}
+                onPointerCancel={handleLongPressEnd}
                 onClick={() => handleGridPhotoClick(photo.id)}
                 className="relative rounded-xl overflow-hidden border transition-all active:scale-95"
                 style={{ background: '#1c1c30', borderColor: '#2e2e50', aspectRatio: '4/3' }}
@@ -1638,6 +1660,58 @@ export default function PhotoPage() {
           </div>
         </div>
       )}
+
+      {/* ── 長押しコンテキストメニュー ── */}
+      {longPressMenu && (() => {
+        const photo = project.photos.find(p => p.id === longPressMenu.photoId);
+        if (!photo) { setLongPressMenu(null); return null; }
+        return (
+          <>
+            {/* バックドロップ */}
+            <div
+              className="fixed inset-0 z-[150]"
+              onPointerDown={() => setLongPressMenu(null)}
+            />
+            {/* メニュー */}
+            <div
+              className="fixed z-[151] rounded-2xl border overflow-hidden shadow-2xl"
+              style={{
+                background: '#1c1c30',
+                borderColor: '#3d3d60',
+                minWidth: 200,
+                top: Math.min(longPressMenu.y, window.innerHeight - 240),
+                left: Math.min(longPressMenu.x, window.innerWidth - 220),
+              }}
+            >
+              <div className="px-4 py-2.5" style={{ borderBottom: '1px solid #2e2e50' }}>
+                <span className="text-xs font-bold" style={{ color: '#6b7280' }}>写真 {longPressMenu.index + 1}</span>
+              </div>
+              {[
+                { icon: '✏️', label: '詳細を編集', action: () => { setFullscreenPhotoId(longPressMenu.photoId); setLongPressMenu(null); } },
+                { icon: '📋', label: '複製', action: () => { duplicatePhotoSlot(longPressMenu.index); setLongPressMenu(null); } },
+                { icon: '↻', label: '90° 回転', action: () => { updatePhoto(photo.id, 'rotation', ((Number(photo.rotation || 0)) + 90) % 360); setLongPressMenu(null); } },
+                { icon: '🗑', label: '削除', action: () => { setConfirmDeletePhotoId(photo.id); setLongPressMenu(null); }, danger: true },
+              ].map(item => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={item.action}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold transition-colors text-left active:scale-95"
+                  style={{
+                    color: (item as { danger?: boolean }).danger ? '#ef4444' : '#f0ede8',
+                    borderBottom: '1px solid #2e2e50',
+                  }}
+                  onPointerEnter={e => (e.currentTarget.style.background = '#2e2e50')}
+                  onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <span>{item.icon}</span>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </>
+        );
+      })()}
 
       {/* ── フルスクリーン写真編集モーダル ── */}
       {fullscreenPhotoId !== null && (() => {
