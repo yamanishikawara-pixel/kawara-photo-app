@@ -177,7 +177,10 @@ export function HomePage() {
             const Icon = item.icon;
             const handleClick = () => {
               if (item.external && item.path === '__budget__') {
-                window.open('https://kawara-budget.web.app', '_blank', 'noopener,noreferrer');
+                const budgetUrl = project?.projectName
+                  ? `https://kawara-budget.web.app/?project=${encodeURIComponent(project.projectName)}`
+                  : 'https://kawara-budget.web.app';
+                window.open(budgetUrl, '_blank', 'noopener,noreferrer');
                 return;
               }
               navigate(`/project/${id}/${item.path}`);
