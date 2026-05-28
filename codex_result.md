@@ -1,11 +1,13 @@
-実装しました。
+`src/pages/PhotoPage.tsx` に Batch 2 を反映しました。
 
-- [PhotoPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/PhotoPage.tsx:344): `floatingCamRef` を追加
-- [PhotoPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/PhotoPage.tsx:1643): 右下固定のカメラボタンを追加し、既存 `handleBulkUpload` に接続
-- [ProjectListPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/ProjectListPage.tsx:106): スワイプ状態を追加
-- [ProjectListPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/ProjectListPage.tsx:306): 左スワイプ削除確認、右スワイプ完了トグルのハンドラを追加
-- [ProjectListPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/ProjectListPage.tsx:563): 現場カードに pointer event とスワイプ中の追従表示を適用
+変更内容:
+- `ChevronLeft` / `ChevronRight` を lucide import に追加
+- `fullscreenPhotoId` state を追加
+- グリッド写真タップ時にリスト遷移せずフルスクリーンモーダルを開くよう変更
+- フローティングカメラボタン直前にフルスクリーン写真編集モーダルを追加
+- 写真エリアで左右スワイプによる前後移動も追加
 
-スワイプ後に同じカードのクリック遷移が発火しないよう、直後のクリックを抑止するガードも入れています。
+検証:
+- `npm run build` 成功済み
 
-検証: `npm run build` 成功。
+対象ファイル: [src/pages/PhotoPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/PhotoPage.tsx)

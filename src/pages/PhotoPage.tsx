@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, Plus, Edit2, Ruler, Paintbrush, CaseUpper, Copy, CheckSquare, Calendar, BookmarkPlus, GripVertical, LayoutGrid, List } from 'lucide-react';
+import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, Plus, Edit2, Ruler, Paintbrush, CaseUpper, Copy, CheckSquare, Calendar, BookmarkPlus, GripVertical, LayoutGrid, List, ChevronLeft, ChevronRight } from 'lucide-react';
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
@@ -342,6 +342,7 @@ export default function PhotoPage() {
   const [bulkTotal, setBulkTotal] = useState(0);
   const bulkCancelRef = useRef(false);
   const floatingCamRef = useRef<HTMLInputElement>(null);
+  const fullscreenTouchStartRef = useRef<{ x: number; y: number } | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [currentPhotoId, setCurrentPhotoId] = useState<number | null>(null);
   const [selectedCircleId, setSelectedCircleId] = useState<number | null>(null);
@@ -368,6 +369,7 @@ export default function PhotoPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [templateNameTarget, setTemplateNameTarget] = useState<Photo | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
+  const [fullscreenPhotoId, setFullscreenPhotoId] = useState<number | null>(null);
   const [templateNameInput, setTemplateNameInput] = useState('');
 
   // ── デバウンス保存インフラ(C-5 対策) ─────────────────────────
@@ -733,10 +735,7 @@ export default function PhotoPage() {
   };
 
   const handleGridPhotoClick = (photoId: number) => {
-    setViewMode('list');
-    setTimeout(() => {
-      document.getElementById(`photo-card-${photoId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 80);
+    setFullscreenPhotoId(photoId);
   };
 
   const handleBulkUpload = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -1639,6 +1638,165 @@ export default function PhotoPage() {
           </div>
         </div>
       )}
+
+      {/* ── フルスクリーン写真編集モーダル ── */}
+      {fullscreenPhotoId !== null && (() => {
+        const photos = project.photos;
+        const idx = photos.findIndex(p => p.id === fullscreenPhotoId);
+        if (idx === -1) { setFullscreenPhotoId(null); return null; }
+        const photo = photos[idx];
+        const hasPrev = idx > 0;
+        const hasNext = idx < photos.length - 1;
+
+        return (
+          <div
+            className="fixed inset-0 z-[200] flex flex-col"
+            style={{ background: '#0f0f1a' }}
+            onClick={(e) => { if (e.target === e.currentTarget) setFullscreenPhotoId(null); }}
+          >
+            {/* ヘッダー */}
+            <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ borderBottom: '1px solid #2e2e50' }}>
+              <button
+                onClick={() => setFullscreenPhotoId(null)}
+                className="flex items-center gap-1.5 font-bold text-sm"
+                style={{ color: '#8b8ba8' }}
+              >
+                <ArrowLeft className="w-4 h-4" /> 戻る
+              </button>
+              <span className="font-black text-sm" style={{ color: '#f0ede8' }}>
+                {idx + 1} / {photos.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => hasPrev && setFullscreenPhotoId(photos[idx - 1].id)}
+                  disabled={!hasPrev}
+                  className="p-2 rounded-lg disabled:opacity-30"
+                  style={{ color: '#8b8ba8' }}
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => hasNext && setFullscreenPhotoId(photos[idx + 1].id)}
+                  disabled={!hasNext}
+                  className="p-2 rounded-lg disabled:opacity-30"
+                  style={{ color: '#8b8ba8' }}
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* 写真エリア */}
+            <div
+              className="flex-1 flex items-center justify-center overflow-hidden px-2 min-h-0"
+              onTouchStart={(e) => {
+                const touch = e.touches[0];
+                fullscreenTouchStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
+              }}
+              onTouchEnd={(e) => {
+                const start = fullscreenTouchStartRef.current;
+                const touch = e.changedTouches[0];
+                fullscreenTouchStartRef.current = null;
+                if (!start || !touch) return;
+                const dx = touch.clientX - start.x;
+                const dy = touch.clientY - start.y;
+                if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
+                if (dx > 0 && hasPrev) setFullscreenPhotoId(photos[idx - 1].id);
+                if (dx < 0 && hasNext) setFullscreenPhotoId(photos[idx + 1].id);
+              }}
+            >
+              {photo.image ? (
+                <img
+                  src={proxyUrl(photo.image, photo.id)}
+                  crossOrigin="anonymous"
+                  loading="lazy"
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                    objectFit: 'contain',
+                    transform: `rotate(${Number(photo.rotation || 0)}deg)`,
+                    borderRadius: 12,
+                  }}
+                  alt=""
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-3">
+                  <Camera className="w-16 h-16" style={{ color: '#2e2e50' }} />
+                  <label
+                    className="flex items-center gap-2 px-5 py-3 rounded-xl font-black text-sm cursor-pointer"
+                    style={{ background: '#ff6b35', color: '#fff' }}
+                  >
+                    <Camera className="w-4 h-4" /> 写真を選択
+                    <input type="file" accept="image/*" capture="environment" className="hidden"
+                      onChange={(e) => { uploadPhoto(e, idx); }} />
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {/* 編集エリア（下部） */}
+            <div className="shrink-0 px-4 pb-6 pt-3 space-y-3 overflow-y-auto" style={{ maxHeight: '45vh', borderTop: '1px solid #2e2e50' }}>
+              {/* 写真番号・回転・削除 */}
+              <div className="flex items-center gap-2 justify-between">
+                <span className="font-black text-base" style={{ color: '#f0ede8' }}>写真 {idx + 1}</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => updatePhoto(photo.id, 'rotation', ((Number(photo.rotation || 0)) + 90) % 360)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold"
+                    style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}
+                  >↻ 回転</button>
+                  {photo.image && (
+                    <label className="px-3 py-1.5 rounded-lg text-xs font-black cursor-pointer"
+                      style={{ background: '#ff6b35', color: '#fff' }}>
+                      📷 変更
+                      <input type="file" accept="image/*" capture="environment" className="hidden"
+                        onChange={(e) => { uploadPhoto(e, idx); }} />
+                    </label>
+                  )}
+                  <button
+                    onClick={() => { setConfirmDeletePhotoId(photo.id); setFullscreenPhotoId(null); }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold"
+                    style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}
+                  ><Trash2 className="w-3.5 h-3.5 inline" /></button>
+                </div>
+              </div>
+
+              {/* 撮影日 */}
+              <div>
+                <label className="block text-xs font-bold mb-1" style={{ color: '#6b7280' }}>撮影日</label>
+                <input type="date"
+                  value={photo.shootingDate ? photo.shootingDate.replace(/\//g, '-') : ''}
+                  onChange={e => updatePhoto(photo.id, 'shootingDate', e.target.value.replace(/-/g, '/'))}
+                  className="w-full px-3 py-2.5 rounded-xl text-sm font-bold outline-none"
+                  style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }} />
+              </div>
+
+              {/* 工程 */}
+              <div>
+                <label className="block text-xs font-bold mb-1" style={{ color: '#6b7280' }}>工程</label>
+                <input type="text"
+                  value={photo.process}
+                  onChange={e => updatePhoto(photo.id, 'process', e.target.value)}
+                  placeholder="例: 施工前"
+                  className="w-full px-3 py-2.5 rounded-xl text-sm font-bold outline-none"
+                  style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }} />
+              </div>
+
+              {/* 説明 */}
+              <div>
+                <label className="block text-xs font-bold mb-1" style={{ color: '#6b7280' }}>説明</label>
+                <textarea
+                  value={photo.description}
+                  onChange={e => updatePhoto(photo.id, 'description', e.target.value)}
+                  rows={3}
+                  placeholder="説明を入力..."
+                  className="w-full px-3 py-2.5 rounded-xl text-sm font-bold outline-none resize-none"
+                  style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }} />
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── フローティングカメラボタン（右下固定） ── */}
       {!bulkUploading && !isSelectMode && (
