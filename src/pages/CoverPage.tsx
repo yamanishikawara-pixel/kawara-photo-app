@@ -59,9 +59,7 @@ export function CoverPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [coverTitle, setCoverTitle] = useState('');
   const [coverHiddenFields, setCoverHiddenFields] = useState<string[]>([]);
-  const [wizardMode, setWizardMode] = useState<boolean>(
-    () => localStorage.getItem('coverWizardMode') === 'true'
-  );
+  const [wizardMode, setWizardMode] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -655,15 +653,13 @@ export function CoverPage() {
           );
         })()}
 
-        {/* ── 基本情報 ── */}
-        {!wizardMode && (
-          <div
-            className="rounded-2xl border overflow-hidden mb-4"
-            style={{ background: '#1c1c30', borderColor: '#2e2e50' }}
-          >
-            {BASIC_FIELDS.map((f, idx) => renderField(f, idx === BASIC_FIELDS.length - 1))}
-          </div>
-        )}
+        {/* ── 基本情報（ウィザードモードでも常に表示） ── */}
+        <div
+          className="rounded-2xl border overflow-hidden mb-4"
+          style={{ background: '#1c1c30', borderColor: '#2e2e50' }}
+        >
+          {BASIC_FIELDS.map((f, idx) => renderField(f, idx === BASIC_FIELDS.length - 1))}
+        </div>
 
         {/* ── 施工保証 ── */}
         <div
