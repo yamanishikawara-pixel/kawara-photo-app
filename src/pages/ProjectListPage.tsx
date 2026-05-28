@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Trash2, LogOut, Settings, CheckCircle2, Circle, HardHat, Database, AlertTriangle, Calculator } from 'lucide-react';
 import { collection, addDoc, deleteDoc, doc, getDoc, getDocs, query, where, orderBy, updateDoc, increment } from 'firebase/firestore';
@@ -103,6 +103,12 @@ export function ProjectListPage() {
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshCounter, setRefreshCounter] = useState(0);
+  const [swipeState, setSwipeState] = useState<{
+    id: string;
+    startX: number;
+    currentX: number;
+  } | null>(null);
+  const swipeActionRef = useRef(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -295,6 +301,35 @@ export function ProjectListPage() {
 
   const handleLogout = () => {
     setConfirmLogout(true);
+  };
+
+  const SWIPE_THRESHOLD = 80; // px
+
+  const handleSwipeStart = (id: string, clientX: number) => {
+    setSwipeState({ id, startX: clientX, currentX: clientX });
+  };
+
+  const handleSwipeMove = (id: string, clientX: number) => {
+    if (!swipeState || swipeState.id !== id) return;
+    setSwipeState(prev => prev ? { ...prev, currentX: clientX } : null);
+  };
+
+  const handleSwipeEnd = (id: string, project: ProjectWithId) => {
+    if (!swipeState || swipeState.id !== id) {
+      setSwipeState(null);
+      return;
+    }
+    const delta = swipeState.currentX - swipeState.startX;
+    setSwipeState(null);
+    if (delta < -SWIPE_THRESHOLD) {
+      // 左スワイプ → 削除確認
+      swipeActionRef.current = true;
+      setConfirmDelete({ id });
+    } else if (delta > SWIPE_THRESHOLD) {
+      // 右スワイプ → 完了トグル
+      swipeActionRef.current = true;
+      void toggleCompleted({ stopPropagation: () => {} } as React.MouseEvent, id, !!project.isCompleted);
+    }
   };
 
   const doLogout = async () => {
@@ -527,25 +562,57 @@ export function ProjectListPage() {
               return (
                 <div
                   key={p.id}
-                  onClick={() => navigate(`/project/${p.id}`)}
-                  className="group cursor-pointer rounded-2xl border overflow-hidden transition-all"
+                  className="group cursor-pointer rounded-2xl border overflow-hidden transition-all relative"
                   style={{
                     background: p.isCompleted ? '#141422' : '#1c1c30',
                     borderColor: isExactMatch ? '#ff6b35' : '#2e2e50',
                     boxShadow: isExactMatch ? '0 0 0 2px rgba(255,107,53,0.3)' : 'none',
                     opacity: p.isCompleted ? 0.65 : 1,
+                    transform: swipeState?.id === p.id
+                      ? `translateX(${Math.max(-100, Math.min(100, swipeState.currentX - swipeState.startX))}px)`
+                      : 'translateX(0)',
+                    transition: swipeState?.id === p.id ? 'none' : 'transform 0.3s ease',
+                    touchAction: 'pan-y',
                   }}
+                  onClick={() => {
+                    if (swipeActionRef.current) {
+                      swipeActionRef.current = false;
+                      return;
+                    }
+                    if (swipeState) return; // スワイプ中はナビゲーション無効
+                    navigate(`/project/${p.id}`);
+                  }}
+                  onPointerDown={e => handleSwipeStart(p.id, e.clientX)}
+                  onPointerMove={e => handleSwipeMove(p.id, e.clientX)}
+                  onPointerUp={() => handleSwipeEnd(p.id, p)}
+                  onPointerCancel={() => setSwipeState(null)}
                   onPointerEnter={e => {
-                    (e.currentTarget as HTMLDivElement).style.borderColor = '#ff6b35';
-                    (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 24px rgba(255,107,53,0.15)';
-                    (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
+                    if (!swipeState) {
+                      (e.currentTarget as HTMLDivElement).style.borderColor = '#ff6b35';
+                      (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 24px rgba(255,107,53,0.15)';
+                    }
                   }}
                   onPointerLeave={e => {
                     (e.currentTarget as HTMLDivElement).style.borderColor = isExactMatch ? '#ff6b35' : '#2e2e50';
                     (e.currentTarget as HTMLDivElement).style.boxShadow = isExactMatch ? '0 0 0 2px rgba(255,107,53,0.3)' : 'none';
-                    (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
+                    (e.currentTarget as HTMLDivElement).style.transform = 'translateX(0)';
                   }}
                 >
+                  {/* スワイプ方向ヒント */}
+                  {swipeState?.id === p.id && (
+                    <>
+                      {(swipeState.currentX - swipeState.startX) < -20 && (
+                        <div className="absolute inset-y-0 right-0 flex items-center px-4 rounded-r-2xl pointer-events-none" style={{ background: 'rgba(239,68,68,0.15)' }}>
+                          <Trash2 className="w-5 h-5" style={{ color: '#ef4444' }} />
+                        </div>
+                      )}
+                      {(swipeState.currentX - swipeState.startX) > 20 && (
+                        <div className="absolute inset-y-0 left-0 flex items-center px-4 rounded-l-2xl pointer-events-none" style={{ background: 'rgba(16,185,129,0.15)' }}>
+                          <CheckCircle2 className="w-5 h-5" style={{ color: '#10b981' }} />
+                        </div>
+                      )}
+                    </>
+                  )}
                   <div className="relative w-full aspect-video" style={{ background: '#12122a' }}>
                     {thumb ? (
                       <img src={thumb} alt="現場写真" className="w-full h-full object-cover" />

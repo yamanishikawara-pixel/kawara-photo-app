@@ -341,6 +341,7 @@ export default function PhotoPage() {
   const [bulkProgress, setBulkProgress] = useState(0);
   const [bulkTotal, setBulkTotal] = useState(0);
   const bulkCancelRef = useRef(false);
+  const floatingCamRef = useRef<HTMLInputElement>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [currentPhotoId, setCurrentPhotoId] = useState<number | null>(null);
   const [selectedCircleId, setSelectedCircleId] = useState<number | null>(null);
@@ -1637,6 +1638,29 @@ export default function PhotoPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── フローティングカメラボタン（右下固定） ── */}
+      {!bulkUploading && !isSelectMode && (
+        <label
+          className="fixed bottom-6 right-6 z-50 w-16 h-16 rounded-full flex items-center justify-center cursor-pointer active:scale-90 transition-transform no-print"
+          style={{
+            background: 'linear-gradient(135deg, #ff6b35, #e85d2a)',
+            boxShadow: '0 4px 24px rgba(255,107,53,0.55)',
+          }}
+          title="写真を撮影"
+        >
+          <Camera className="w-7 h-7 text-white" />
+          <input
+            ref={floatingCamRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleBulkUpload}
+            disabled={bulkUploading}
+          />
+        </label>
       )}
     </div>
   );

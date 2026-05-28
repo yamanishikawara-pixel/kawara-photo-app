@@ -1,17 +1,11 @@
-対応しました。
+実装しました。
 
-変更内容:
-- [CoverPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/CoverPage.tsx)
-  - `projectRef` を追加
-  - `project` 同期用 `useEffect` を追加
-  - 保存失敗時に楽観的更新を `prevValue` へ巻き戻す処理を追加
-  - `update` の `useCallback` 依存配列は `[id]` のまま
+- [PhotoPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/PhotoPage.tsx:344): `floatingCamRef` を追加
+- [PhotoPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/PhotoPage.tsx:1643): 右下固定のカメラボタンを追加し、既存 `handleBulkUpload` に接続
+- [ProjectListPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/ProjectListPage.tsx:106): スワイプ状態を追加
+- [ProjectListPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/ProjectListPage.tsx:306): 左スワイプ削除確認、右スワイプ完了トグルのハンドラを追加
+- [ProjectListPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/ProjectListPage.tsx:563): 現場カードに pointer event とスワイプ中の追従表示を適用
 
-- [PhotoPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/PhotoPage.tsx)
-  - `bulkCancelRef` を追加
-  - 一括アップロード開始時にキャンセル状態をリセット
-  - ループ先頭でキャンセルチェック
-  - プログレスバー下に「アップロードを中止」ボタンを追加
+スワイプ後に同じカードのクリック遷移が発火しないよう、直後のクリックを抑止するガードも入れています。
 
-確認:
-- `npm run build` 成功済みです。
+検証: `npm run build` 成功。
