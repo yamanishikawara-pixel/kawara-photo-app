@@ -1,4 +1,11 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/yamanishikenta/kawara-photo-app add src/pages/HomePage.tsx)",
+      "Bash(git -C /Users/yamanishikenta/kawara-photo-app commit -m ' *)",
+      "Bash(git -C /Users/yamanishikenta/kawara-photo-app add -A)"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {
@@ -10,12 +17,6 @@
           }
         ]
       }
-    ]
-  },
-  "permissions": {
-    "allow": [
-      "Bash(git -C /Users/yamanishikenta/kawara-photo-app add src/pages/HomePage.tsx)",
-      "Bash(git -C /Users/yamanishikenta/kawara-photo-app commit -m ' *)"
     ]
   }
 }

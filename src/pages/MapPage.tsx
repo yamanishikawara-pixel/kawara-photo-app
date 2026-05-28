@@ -1038,9 +1038,16 @@ export default function MapPage() {
   const removeMapMarker = useCallback((pinId: number) => {
     const pin = mapPins.find(p => p.id === pinId);
     const newPins = mapPins.filter(p => p.id !== pinId);
-    // ピン削除時に対応するmapRowも削除
+    // ピン削除時に対応する凡例行を1件だけ削除（同ラベルが複数ある場合は1件だけ）
+    let removedRow = false;
     const newRows = pin
-      ? mapRows.filter(r => !(r.symbol === pin.label && (r.mapIndex || 0) === (pin.mapIndex || 0)))
+      ? mapRows.filter(r => {
+          if (!removedRow && r.symbol === pin.label && (r.mapIndex || 0) === (pin.mapIndex || 0)) {
+            removedRow = true;
+            return false;
+          }
+          return true;
+        })
       : mapRows;
     setMapPins(newPins);
     setMapRows(newRows);
