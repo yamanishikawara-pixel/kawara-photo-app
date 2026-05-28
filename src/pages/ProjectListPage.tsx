@@ -497,17 +497,6 @@ export function ProjectListPage() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => window.open('https://kawara-budget.web.app', '_blank', 'noopener,noreferrer')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition-colors"
-              style={{ background: 'rgba(16,185,129,0.10)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}
-              onPointerEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(16,185,129,0.20)'; }}
-              onPointerLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(16,185,129,0.10)'; }}
-              title="実行予算書アプリを開く"
-            >
-              <Calculator className="w-3.5 h-3.5" /> 実行予算書
-            </button>
-            <button
-              type="button"
               onClick={() => setHideCompleted((v) => !v)}
               className="text-xs font-bold px-3 py-1.5 rounded-full border transition-colors"
               style={hideCompleted
