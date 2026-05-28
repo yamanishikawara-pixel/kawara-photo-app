@@ -412,6 +412,7 @@ export default function PhotoPage() {
       Object.values(debounceTimers.current).forEach((t) => { if (t) clearTimeout(t); });
       debounceTimers.current = {};
       if (saveStateTimer.current) clearTimeout(saveStateTimer.current);
+      if (longPressTimer.current) clearTimeout(longPressTimer.current); // C4: メモリリーク防止
       // 未書き込みのデータがあれば最後に1回だけ書く
       // (await できないので fire-and-forget。失敗時は次回ロードで整合)
       if (pendingPhotosRef.current && id) {
@@ -742,6 +743,9 @@ export default function PhotoPage() {
   };
 
   const handleGridPhotoClick = (photoId: number) => {
+    // W1: 長押しタイマーが動いている間にタップ完了した場合にキャンセル
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    setLongPressMenu(null);
     setFullscreenPhotoId(photoId);
   };
 
@@ -1641,6 +1645,12 @@ export default function PhotoPage() {
                   const name = templateNameInput.trim();
                   if (!name) return;
                   const photo = templateNameTarget;
+                  // C3: 保存前に対象写真がまだ存在するか確認
+                  if (!photo || !project?.photos.find(p => p.id === photo.id)) {
+                    setTemplateNameTarget(null);
+                    setTemplateNameInput('');
+                    return;
+                  }
                   setTemplateNameTarget(null);
                   setTemplateNameInput('');
                   const existing = photoMasters.find((m) => (m.name ?? '').trim() === name);
@@ -1742,7 +1752,11 @@ export default function PhotoPage() {
               </span>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => hasPrev && setFullscreenPhotoId(photos[idx - 1].id)}
+                  onClick={() => {
+                    // C2: 削除等で配列が変わっていても安全にナビ
+                    const prevPhoto = hasPrev ? photos[idx - 1] : null;
+                    if (prevPhoto) setFullscreenPhotoId(prevPhoto.id);
+                  }}
                   disabled={!hasPrev}
                   className="p-2 rounded-lg disabled:opacity-30"
                   style={{ color: '#8b8ba8' }}
@@ -1750,7 +1764,10 @@ export default function PhotoPage() {
                   <ChevronLeft className="w-5 h-5" />
                 </button>
                 <button
-                  onClick={() => hasNext && setFullscreenPhotoId(photos[idx + 1].id)}
+                  onClick={() => {
+                    const nextPhoto = hasNext ? photos[idx + 1] : null;
+                    if (nextPhoto) setFullscreenPhotoId(nextPhoto.id);
+                  }}
                   disabled={!hasNext}
                   className="p-2 rounded-lg disabled:opacity-30"
                   style={{ color: '#8b8ba8' }}
@@ -1873,7 +1890,7 @@ export default function PhotoPage() {
       })()}
 
       {/* ── フローティングカメラボタン（右下固定） ── */}
-      {!bulkUploading && !isSelectMode && (
+      {!bulkUploading && !isSelectMode && !fullscreenPhotoId && !longPressMenu && (
         <label
           className="fixed bottom-6 right-6 z-50 w-16 h-16 rounded-full flex items-center justify-center cursor-pointer active:scale-90 transition-transform no-print"
           style={{

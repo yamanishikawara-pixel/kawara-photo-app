@@ -529,7 +529,7 @@ export function CoverPage() {
                 type="text"
                 value={coverTitle}
                 onChange={e => updateCoverTitle(e.target.value)}
-                placeholder="工事写真報告書"
+                placeholder="未入力時: 工事写真報告書"
                 className="w-full px-4 py-3 rounded-xl text-sm font-medium transition-colors outline-none"
                 style={{ background: '#12122a', border: '1.5px solid #2e2e50', color: '#f0ede8' }}
                 onFocus={e => (e.currentTarget.style.borderColor = '#10b981')}

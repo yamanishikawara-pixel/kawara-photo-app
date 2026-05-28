@@ -632,9 +632,10 @@ export function ProjectListPage() {
                     }
                   }}
                   onPointerLeave={e => {
+                    // W3: スワイプ中はスタイル操作しない（ガタつき防止）
+                    if (swipeState?.id === p.id) return;
                     (e.currentTarget as HTMLDivElement).style.borderColor = isExactMatch ? '#ff6b35' : '#2e2e50';
                     (e.currentTarget as HTMLDivElement).style.boxShadow = isExactMatch ? '0 0 0 2px rgba(255,107,53,0.3)' : 'none';
-                    (e.currentTarget as HTMLDivElement).style.transform = 'translateX(0)';
                   }}
                 >
                   {/* スワイプ方向ヒント */}
