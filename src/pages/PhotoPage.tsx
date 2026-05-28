@@ -340,6 +340,7 @@ export default function PhotoPage() {
   const [bulkUploading, setBulkUploading] = useState(false);
   const [bulkProgress, setBulkProgress] = useState(0);
   const [bulkTotal, setBulkTotal] = useState(0);
+  const bulkCancelRef = useRef(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [currentPhotoId, setCurrentPhotoId] = useState<number | null>(null);
   const [selectedCircleId, setSelectedCircleId] = useState<number | null>(null);
@@ -742,6 +743,7 @@ export default function PhotoPage() {
     const files = Array.from(e.target.files as FileList);
     if (files.length === 0) return;
     cancelPendingPhotoDebounces();
+    bulkCancelRef.current = false; // 前回キャンセルをリセット
     setBulkUploading(true);
     setBulkTotal(files.length);
     setBulkProgress(0);
@@ -753,6 +755,7 @@ export default function PhotoPage() {
     let virtualUsed = storageUsedBytes;
 
     for (let i = 0; i < files.length; i++) {
+      if (bulkCancelRef.current) break; // キャンセルボタンが押された
       let targetIndex = newPhotos.findIndex(p => !p.image);
       if (targetIndex === -1) {
         newPhotos.push({ id: nextId(), image: null, photoNumber: String(newPhotos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], dimensionLines: [], rotation: 0 });
@@ -989,6 +992,14 @@ export default function PhotoPage() {
                 <div className="text-right mt-1 text-xs font-bold" style={{ color: '#8b8ba8' }}>
                   {Math.round((bulkProgress / bulkTotal) * 100)}%
                 </div>
+                <button
+                  type="button"
+                  onClick={() => { bulkCancelRef.current = true; }}
+                  className="mt-2 w-full py-2 rounded-lg font-bold text-xs transition-colors"
+                  style={{ background: '#1c1c30', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}
+                >
+                  アップロードを中止
+                </button>
               </div>
             )}
           </div>

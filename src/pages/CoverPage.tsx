@@ -59,6 +59,7 @@ export function CoverPage() {
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout> | undefined>>({});
   const savedFlashTimers = useRef<Record<string, ReturnType<typeof setTimeout> | undefined>>({});
   const mountedRef = useRef(true);
+  const projectRef = useRef<Project | null>(null);
   const uploadTaskRef = useRef<UploadTask | null>(null);
 
   // ── マウント状態 + クリーンアップ ──
@@ -78,6 +79,10 @@ export function CoverPage() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    projectRef.current = project;
+  }, [project]);
 
   // ── エラー自動消去(8秒) ──
   useEffect(() => {
@@ -118,6 +123,7 @@ export function CoverPage() {
 
     // ローカル即時反映
     setProject(prev => prev ? { ...prev, [field]: value } : prev);
+    const prevValue = (projectRef.current?.[field] ?? '') as string;
 
     // 保存中インジケータ
     setSavingKey(key);
@@ -143,6 +149,8 @@ export function CoverPage() {
       } catch (err) {
         logFirebaseError(err, 'フィールド保存');
         if (mountedRef.current) {
+          // 保存失敗 → 楽観的更新を元の値に巻き戻す
+          setProject(prev => prev ? { ...prev, [field]: prevValue } : prev);
           setSavingKey(prev => prev === key ? null : prev);
           setError(firebaseErrorMessage(err, '保存'));
         }

@@ -831,6 +831,9 @@ export default function PdfExportPage() {
                     const count = sectionPageCounts[key];
                     const on = sections[key];
                     const showTruncateWarn = key === 'appendix' && appendixTruncated && on;
+                    const emptyDateCount = key === 'photo' && on
+                      ? project.photos.filter(p => p.image && !p.shootingDate).length
+                      : 0;
                     return (
                       <div key={key} className="flex items-center gap-1.5">
                         <button
@@ -850,6 +853,12 @@ export default function PdfExportPage() {
                               <span className="ml-2 inline-flex items-center gap-1 text-xs font-normal" style={{ color: '#f87171' }} title={`添付PDFは${APPENDIX_PAGE_LIMIT}ページまでに制限されました`}>
                                 <AlertTriangle className="w-3 h-3" />
                                 {APPENDIX_PAGE_LIMIT}p超は省略
+                              </span>
+                            )}
+                            {emptyDateCount > 0 && (
+                              <span className="ml-2 inline-flex items-center gap-1 text-xs font-normal" style={{ color: '#f59e0b' }} title={`撮影日が未入力の写真が${emptyDateCount}枚あります`}>
+                                <AlertTriangle className="w-3 h-3" />
+                                撮影日未入力 {emptyDateCount}枚
                               </span>
                             )}
                           </span>

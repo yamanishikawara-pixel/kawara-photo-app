@@ -6,7 +6,7 @@ import { ref, uploadBytes, getDownloadURL, getMetadata, listAll } from 'firebase
 import { db, auth, storage } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
-import { formatBytes, storageUsageRatio, STORAGE_LIMIT_BYTES, trackUpload, storagePathFromUrl } from '../shared/storageUtils';
+import { formatBytes, storageUsageRatio, STORAGE_LIMIT_BYTES, trackUpload, storagePathFromUrl, deleteStorageFileWithAccounting } from '../shared/storageUtils';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import type { MaterialMaster, PhotoMaster, Project } from '../types';
 import { ErrorMessage } from '../shared/ErrorMessage';
@@ -67,6 +67,8 @@ export default function SettingsPage() {
   const [bulkMigrating, setBulkMigrating] = useState(false);
   const [migrationResult, setMigrationResult] = useState<string | null>(null);
   const [orphanResult, setOrphanResult] = useState<string | null>(null);
+  const [orphanPaths, setOrphanPaths] = useState<string[]>([]);
+  const [deletingOrphans, setDeletingOrphans] = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -206,6 +208,7 @@ export default function SettingsPage() {
       // Storage 上の実ファイルと比較して孤立を検出
       let orphanCount = 0;
       let orphanBytes = 0;
+      const foundPaths: string[] = [];
       for (const docSnap of snap.docs) {
         const projectId = docSnap.id;
         for (const folder of ['photos', 'maps', 'materials'] as const) {
@@ -214,6 +217,7 @@ export default function SettingsPage() {
             for (const item of list.items) {
               if (!referencedPaths.has(item.fullPath)) {
                 orphanCount++;
+                foundPaths.push(item.fullPath);
                 try {
                   const meta = await getMetadata(item);
                   orphanBytes += meta.size ?? 0;
@@ -223,6 +227,7 @@ export default function SettingsPage() {
           } catch { /* フォルダが存在しない場合は無視 */ }
         }
       }
+      setOrphanPaths(foundPaths);
 
       setOrphanResult(
         orphanCount === 0
@@ -235,6 +240,35 @@ export default function SettingsPage() {
     } finally {
       setRecalculating(false);
     }
+  };
+
+  // 検出済みの孤立ファイルを削除する（確認ダイアログ付き）
+  const handleDeleteOrphans = async () => {
+    if (orphanPaths.length === 0) return;
+    const ok = window.confirm(
+      `孤立ファイル ${orphanPaths.length}件を削除します。\nこの操作は元に戻せません。続行しますか?`
+    );
+    if (!ok) return;
+    setDeletingOrphans(true);
+    let deleted = 0;
+    let failed = 0;
+    for (const path of orphanPaths) {
+      try {
+        await deleteStorageFileWithAccounting(path, uid ?? undefined);
+        deleted++;
+      } catch {
+        failed++;
+      }
+    }
+    setOrphanPaths([]);
+    setOrphanResult(
+      failed === 0
+        ? `✓ ${deleted}件の孤立ファイルを削除しました`
+        : `${deleted}件削除、${failed}件失敗`
+    );
+    setDeletingOrphans(false);
+    // ストレージ使用量を再計算して反映
+    void handleRecalcStorage();
   };
 
   // 全現場の位置図座標を旧形式(194:120基準)から画像アスペクト基準に一括変換する
@@ -407,6 +441,17 @@ export default function SettingsPage() {
                 <p className="mt-2 text-xs font-bold" style={{ color: orphanResult.startsWith('⚠') ? '#f59e0b' : '#10b981' }}>
                   {orphanResult}
                 </p>
+              )}
+              {orphanPaths.length > 0 && (
+                <button
+                  onClick={handleDeleteOrphans}
+                  disabled={deletingOrphans}
+                  className="mt-2 flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all disabled:opacity-50"
+                  style={{ background: 'rgba(239,68,68,0.10)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  {deletingOrphans ? '削除中...' : `孤立ファイル ${orphanPaths.length}件を削除`}
+                </button>
               )}
             </div>
           </Section>

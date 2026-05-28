@@ -1,13 +1,17 @@
-[HomePage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/HomePage.tsx:180) を修正しました。予算アプリを開く際、`project.projectName` があれば `?project=${encodeURIComponent(project.projectName)}` を付けて開きます。
+対応しました。
 
-確認結果:
-- `npm run build`: 成功
-- `firebase deploy --only hosting`: 失敗
+変更内容:
+- [CoverPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/CoverPage.tsx)
+  - `projectRef` を追加
+  - `project` 同期用 `useEffect` を追加
+  - 保存失敗時に楽観的更新を `prevValue` へ巻き戻す処理を追加
+  - `update` の `useCallback` 依存配列は `[id]` のまま
 
-デプロイ失敗理由は Firebase CLI 側で以下のエラーです。
+- [PhotoPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/PhotoPage.tsx)
+  - `bulkCancelRef` を追加
+  - 一括アップロード開始時にキャンセル状態をリセット
+  - ループ先頭でキャンセルチェック
+  - プログレスバー下に「アップロードを中止」ボタンを追加
 
-```text
-Assertion failed: resolving hosting target of a site with no site name or target name
-```
-
-`--project kawara-photo-app` 指定でも同じでした。さらに `hosting:sites:list` は Firebase API へのリクエストに失敗しており、この環境からはデプロイ完了まで進められませんでした。
+確認:
+- `npm run build` 成功済みです。
