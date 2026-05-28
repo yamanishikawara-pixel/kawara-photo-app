@@ -48,6 +48,8 @@ export function CoverPage() {
   const navigate = useNavigate();
 
   const [project, setProject] = useState<Project | null>(null);
+  const [coverTitle, setCoverTitle] = useState('');
+  const [coverHiddenFields, setCoverHiddenFields] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [savedKey, setSavedKey] = useState<string | null>(null);
@@ -103,7 +105,10 @@ export function CoverPage() {
         const d = await getDoc(doc(db, 'projects', id));
         if (aborted || !mountedRef.current) return;
         if (d.exists()) {
-          setProject(d.data() as Project);
+          const data = d.data() as Project;
+          setProject(data);
+          setCoverTitle(data.coverTitle ?? '');
+          setCoverHiddenFields(data.coverHiddenFields ?? []);
         } else {
           setError('表紙データが見つかりません。');
         }
@@ -157,6 +162,33 @@ export function CoverPage() {
       }
     }, DEBOUNCE_MS);
   }, [id]);
+
+  const updateCoverTitle = useCallback((value: string) => {
+    if (!id) return;
+    setCoverTitle(value);
+    if (debounceTimers.current['coverTitle']) clearTimeout(debounceTimers.current['coverTitle']);
+    debounceTimers.current['coverTitle'] = setTimeout(async () => {
+      try {
+        await updateDoc(doc(db, 'projects', id), { coverTitle: value });
+      } catch (err) {
+        logFirebaseError(err, '表紙タイトル保存');
+        if (mountedRef.current) setError(firebaseErrorMessage(err, '保存'));
+      }
+    }, DEBOUNCE_MS);
+  }, [id]);
+
+  const toggleHiddenField = useCallback(async (key: string) => {
+    if (!id) return;
+    const next = coverHiddenFields.includes(key)
+      ? coverHiddenFields.filter(k => k !== key)
+      : [...coverHiddenFields, key];
+    setCoverHiddenFields(next);
+    try {
+      await updateDoc(doc(db, 'projects', id), { coverHiddenFields: next });
+    } catch (err) {
+      logFirebaseError(err, '表紙フィールド設定保存');
+    }
+  }, [id, coverHiddenFields]);
 
   // ── 添付PDFアップロード ──
   const handleAppendixUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -443,6 +475,69 @@ export function CoverPage() {
           <h1 className="text-2xl font-bold break-words" style={{ color: '#f0ede8' }}>
             表紙の入力
           </h1>
+        </div>
+
+        {/* ── 表紙カスタマイズ ── */}
+        <div
+          className="rounded-2xl border overflow-hidden mb-4"
+          style={{ background: '#1c1c30', borderColor: '#2e2e50' }}
+        >
+          <div className="px-5 py-3" style={{ borderBottom: '1px solid #2e2e50' }}>
+            <span className="text-sm font-bold" style={{ color: '#8b8ba8' }}>表紙タイトル・項目設定</span>
+          </div>
+          <div className="px-5 py-4 space-y-4">
+            {/* タイトル編集 */}
+            <div>
+              <label className="block text-xs font-bold mb-1.5" style={{ color: '#6b7280' }}>
+                表紙のタイトル（大見出し）
+              </label>
+              <input
+                type="text"
+                value={coverTitle}
+                onChange={e => updateCoverTitle(e.target.value)}
+                placeholder="工事写真報告書"
+                className="w-full px-4 py-3 rounded-xl text-sm font-medium transition-colors outline-none"
+                style={{ background: '#12122a', border: '1.5px solid #2e2e50', color: '#f0ede8' }}
+                onFocus={e => (e.currentTarget.style.borderColor = '#10b981')}
+                onBlur={e => (e.currentTarget.style.borderColor = '#2e2e50')}
+              />
+              <p className="text-xs mt-1" style={{ color: '#4b4b70' }}>空欄の場合「工事写真報告書」が表示されます</p>
+            </div>
+
+            {/* フィールド表示/非表示 */}
+            <div>
+              <label className="block text-xs font-bold mb-2" style={{ color: '#6b7280' }}>
+                表示する項目
+              </label>
+              <div className="space-y-2">
+                {[
+                  { key: 'projectLocation', label: '工事場所' },
+                  { key: 'constructionPeriod', label: '工期' },
+                  { key: 'contractorName', label: '施工業者' },
+                  { key: 'creationDate', label: '作成年月日' },
+                ].map(({ key, label }) => {
+                  const isVisible = !coverHiddenFields.includes(key);
+                  return (
+                    <div key={key} className="flex items-center justify-between py-1">
+                      <span className="text-sm font-bold" style={{ color: isVisible ? '#f0ede8' : '#4b4b70' }}>{label}</span>
+                      <button
+                        type="button"
+                        onClick={() => toggleHiddenField(key)}
+                        className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors"
+                        style={{ background: isVisible ? '#10b981' : '#2e2e50' }}
+                      >
+                        <span
+                          className="inline-block h-5 w-5 transform rounded-full bg-white shadow transition"
+                          style={{ transform: isVisible ? 'translateX(20px)' : 'translateX(0)' }}
+                        />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-xs mt-2" style={{ color: '#4b4b70' }}>※ 工事件名は常に表示されます</p>
+            </div>
+          </div>
         </div>
 
         {/* ── 基本情報 ── */}

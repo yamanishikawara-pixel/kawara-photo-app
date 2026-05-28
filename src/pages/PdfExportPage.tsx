@@ -892,13 +892,17 @@ export default function PdfExportPage() {
         // ① 表紙
         case 'cover': {
           if (!sections.cover) return [];
-          const coverFields = [
-            { chars: ['工','事','件','名'], value: project.projectName ?? '',                     valPt: '18pt', last: false },
-            { chars: ['工','事','場','所'], value: project.projectLocation ?? '',                  valPt: '18pt', last: false },
-            { chars: ['工','　','　','期'], value: project.constructionPeriod ?? '',               valPt: '18pt', last: false },
-            { chars: ['施','工','業','者'], value: displayContractor,                              valPt: '18pt', last: false },
-            { chars: ['作','成','年','月','日'], value: project.creationDate ?? displayReportDate, valPt: '18pt', last: true  },
+          const hidden = new Set(project.coverHiddenFields ?? []);
+          const allCoverFields = [
+            { key: 'projectName', chars: ['工','事','件','名'], value: project.projectName ?? '', valPt: '18pt' },
+            { key: 'projectLocation', chars: ['工','事','場','所'], value: project.projectLocation ?? '', valPt: '18pt' },
+            { key: 'constructionPeriod', chars: ['工','　','　','期'], value: project.constructionPeriod ?? '', valPt: '18pt', multiline: true },
+            { key: 'contractorName', chars: ['施','工','業','者'], value: displayContractor, valPt: '18pt' },
+            { key: 'creationDate', chars: ['作','成','年','月','日'], value: project.creationDate ?? displayReportDate, valPt: '18pt' },
           ];
+          const coverFields = allCoverFields
+            .filter(f => !hidden.has(f.key))
+            .map((f, i, arr) => ({ ...f, last: i === arr.length - 1 }));
           return [(
           <div key="cover" style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
           <div className={`pdf-page pdf-cover-page overflow-hidden ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`}
@@ -920,7 +924,7 @@ export default function PdfExportPage() {
               color: '#111',
               lineHeight: 1,
               fontFamily: "'Shippori Mincho', 'Noto Serif JP', serif",
-            }}>工事写真報告書</div>
+            }}>{project.coverTitle?.trim() || '工事写真報告書'}</div>
 
             <div style={{
               position: 'absolute', left: '50%', top: 210,
@@ -973,7 +977,11 @@ export default function PdfExportPage() {
                     letterSpacing: '0.06em',
                     fontFamily: "'Noto Serif JP', serif",
                     lineHeight: 1.6,
-                  }}>{row.value}</div>
+                  }}>
+                    {row.multiline
+                      ? row.value.split(/\r?\n/).map((line, lineIndex) => <div key={lineIndex}>{line}</div>)
+                      : row.value}
+                  </div>
                 </div>
               ))}
             </div>
