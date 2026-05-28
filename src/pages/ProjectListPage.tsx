@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Trash2, LogOut, Settings, CheckCircle2, Circle, HardHat, Database, AlertTriangle, Calculator } from 'lucide-react';
+import { Plus, Trash2, LogOut, Settings, CheckCircle2, Circle, HardHat, Database, AlertTriangle, Calculator, Camera, ChevronRight } from 'lucide-react';
 import { collection, addDoc, deleteDoc, doc, getDoc, getDocs, query, where, orderBy, updateDoc, increment } from 'firebase/firestore';
 import { ref, listAll, deleteObject, getMetadata } from 'firebase/storage';
 import { signOut } from 'firebase/auth';
@@ -449,8 +449,47 @@ export function ProjectListPage() {
           </div>
         )}
 
+        {/* ── アプリランチャー ── */}
+        <div className="grid grid-cols-2 gap-3 mt-4 mb-2">
+          <a
+            href="#project-list"
+            className="flex flex-col items-center justify-center gap-3 p-5 rounded-2xl border transition-all active:scale-95"
+            style={{ background: '#1c1c30', borderColor: '#2e2e50', textDecoration: 'none' }}
+            onPointerEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#ff6b35'; }}
+            onPointerLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#2e2e50'; }}
+          >
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,107,53,0.15)' }}>
+              <Camera className="w-7 h-7" style={{ color: '#ff6b35' }} />
+            </div>
+            <div className="text-center">
+              <div className="font-black text-sm" style={{ color: '#f0ede8' }}>工事写真台帳</div>
+              <div className="text-xs mt-0.5 flex items-center justify-center gap-0.5" style={{ color: '#6b7280' }}>
+                現場一覧 <ChevronRight className="w-3 h-3" />
+              </div>
+            </div>
+          </a>
+          <button
+            type="button"
+            onClick={() => window.open('https://kawara-budget.web.app', '_blank', 'noopener,noreferrer')}
+            className="flex flex-col items-center justify-center gap-3 p-5 rounded-2xl border transition-all active:scale-95"
+            style={{ background: '#1c1c30', borderColor: '#2e2e50' }}
+            onPointerEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#10b981'; }}
+            onPointerLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#2e2e50'; }}
+          >
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.15)' }}>
+              <Calculator className="w-7 h-7" style={{ color: '#10b981' }} />
+            </div>
+            <div className="text-center">
+              <div className="font-black text-sm" style={{ color: '#f0ede8' }}>実行予算書</div>
+              <div className="text-xs mt-0.5 flex items-center justify-center gap-0.5" style={{ color: '#6b7280' }}>
+                別アプリで開く <ChevronRight className="w-3 h-3" />
+              </div>
+            </div>
+          </button>
+        </div>
+
         {/* ── タイトル行 ── */}
-        <div className="flex items-center justify-between mt-8 mb-6">
+        <div id="project-list" className="flex items-center justify-between mt-8 mb-6">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-wide" style={{ color: '#f0ede8' }}>現場一覧</h1>
             <div className="mt-1 h-0.5 w-12 rounded-full" style={{ background: '#ff6b35' }} />

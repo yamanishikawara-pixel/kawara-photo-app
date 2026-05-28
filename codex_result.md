@@ -1,16 +1,13 @@
-実装しました。
+実装しました。対象は [src/pages/CoverPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/CoverPage.tsx:39) です。
 
 変更内容:
-- [PhotoPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/PhotoPage.tsx:372)
-  - 写真グリッドの長押しメニュー用 state/ref を追加
-  - 500ms 長押しハンドラを追加
-  - グリッドサムネイルに `onPointerDown/Up/Cancel` を追加
-  - フルスクリーンモーダル直前にコンテキストメニューを追加
-- [MapPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/MapPage.tsx:1487)
-  - 既存のピン編集 UI を iOS 風ボトムシートへ置き換え
+- `WIZARD_FIELDS` を追加
+- `wizardMode` / `wizardStep` state を追加
+- `coverWizardMode` を `localStorage` に保存
+- ページタイトル右側にウィザード切替ボタンを追加
+- 表紙カスタマイズ直後にウィザード入力UIを追加
+- `coverHiddenFields` の非表示項目はウィザードからスキップ
+- ウィザードON時は基本情報一覧を隠し、OFF時は従来通り表示
 
 確認:
-- `npm run build` 成功
-
-補足:
-- `docs/batch4-cover-wizard.md` は既存の未追跡ファイルとして残っています。今回の作業では触っていません。
+- `npm run build` 成功済みです。
