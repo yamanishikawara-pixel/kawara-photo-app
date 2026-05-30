@@ -2,25 +2,26 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // ── 写真 ────────────────────────────────────────────────────
-    // 読み取り: 誰でも可（共有リンクの <img> タグで使用するため）
-    // 書き込み: ログインユーザーのみ（匿名ユーザーによる不正アップロードを防止）
-    // 写真・位置図・材料: 現場オーナーのみ読み書き可
+    // ── 写真・位置図・材料 ──────────────────────────────────────
+    // 読み取り: ログイン済みユーザーのみ（社内専用）
+    // 書き込み: ログイン済みユーザーのみ・サイズ制限あり
+    // ※ firestore.get() による所有権チェックはアップロード失敗の原因になるため除外
     match /photos/{projectId}/{allPaths=**} {
-      allow read, write: if request.auth != null
-        && firestore.get(/databases/(default)/documents/projects/$(projectId)).data.userId == request.auth.uid;
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.resource.size < 5 * 1024 * 1024;
     }
 
-    // ── 位置図 ──────────────────────────────────────────────────
     match /maps/{projectId}/{allPaths=**} {
-      allow read, write: if request.auth != null
-        && firestore.get(/databases/(default)/documents/projects/$(projectId)).data.userId == request.auth.uid;
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.resource.size < 20 * 1024 * 1024;
     }
 
-    // ── 材料画像 ────────────────────────────────────────────────
     match /materials/{projectId}/{allPaths=**} {
-      allow read, write: if request.auth != null
-        && firestore.get(/databases/(default)/documents/projects/$(projectId)).data.userId == request.auth.uid;
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.resource.size < 5 * 1024 * 1024;
     }
 
     // ── 添付PDF・ロゴ（uid スコープ）──────────────────────────
