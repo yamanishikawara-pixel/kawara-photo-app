@@ -549,9 +549,6 @@ export default function MapPage() {
   const [mapLayouts, setMapLayouts] = useState<{ title: string; x?: number; y?: number; rotation?: number }[]>([]);
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingTitleSnapshot, setEditingTitleSnapshot] = useState<string>('');
-  // Natural aspect ratio (w/h) of each map image, captured on load
-  const [, setMapImageAspects] = useState<Record<number, number>>({});
-  
   const [selectedPinId, setSelectedPinId] = useState<number | null>(null);
   const [editingPinLabel, setEditingPinLabel] = useState<string>('');
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
@@ -583,6 +580,7 @@ export default function MapPage() {
 
   const [pendingActionInfo, setPendingActionInfo] = useState<{ clientX: number, clientY: number, localX: number, localY: number, time: number } | null>(null);
   const startDragPan = useRef({ x: 0, y: 0, startX: 0, startY: 0, isDragging: false });
+  const zoomSaveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     if (!id) return;
@@ -651,6 +649,19 @@ export default function MapPage() {
     } finally { setIsSaving(false); }
   }, [id]);
 
+  const debouncedSaveFromZoom = useCallback(() => {
+    if (zoomSaveTimerRef.current) clearTimeout(zoomSaveTimerRef.current);
+    zoomSaveTimerRef.current = setTimeout(() => {
+      saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts);
+    }, 200);
+  }, [mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts, saveProjectMapData]);
+
+  useEffect(() => {
+    return () => {
+      if (zoomSaveTimerRef.current) clearTimeout(zoomSaveTimerRef.current);
+    };
+  }, []);
+
   /**
    * 旧形式 (194:120 コンテナ基準) の地図を新形式 (画像アスペクト基準) に移行する。
    *
@@ -664,6 +675,11 @@ export default function MapPage() {
    * 多重発火防止のため migratedIndicesRef で 1度だけ実行を保証する。
    */
   const migratedIndicesRef = useRef<Set<number>>(new Set());
+
+  // C2: プロジェクト切り替え時にマイグレーション済みキャッシュをリセット
+  useEffect(() => {
+    migratedIndicesRef.current = new Set();
+  }, [id]);
 
   const migrateLegacyMap = useCallback(async (mapIndex: number, naturalAspect: number) => {
     if (!id || !project) return;
@@ -1350,7 +1366,7 @@ export default function MapPage() {
                   {editingMode === 'pan' && (
                      <div className="absolute -top-14 z-50 flex items-center gap-3 px-5 py-2.5 rounded-full shadow-2xl" style={{ background: '#12122a', border: '1px solid #3d3d60' }}>
                         <span className="font-black text-xs whitespace-nowrap" style={{ color: '#f0ede8' }}>🔍 ズーム:</span>
-                        <input type="range" min="0.2" max="4" step="0.05" value={currentTransform.scale} onChange={(e) => updateTransform(currentMapIndex, { scale: parseFloat(e.target.value) })} onMouseUp={() => saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts)} onTouchEnd={() => saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts)} className="w-28 lg:w-40 accent-orange-500 cursor-pointer" />
+                        <input type="range" min="0.2" max="4" step="0.05" value={currentTransform.scale} onChange={(e) => updateTransform(currentMapIndex, { scale: parseFloat(e.target.value) })} onMouseUp={debouncedSaveFromZoom} onTouchEnd={debouncedSaveFromZoom} className="w-28 lg:w-40 accent-orange-500 cursor-pointer" />
                         <span className="font-bold w-10 text-center text-xs" style={{ color: '#8b8ba8' }}>{Math.round(currentTransform.scale * 100)}%</span>
                         <button onClick={() => { updateTransform(currentMapIndex, { scale: 1, x: 0, y: 0 }); saveProjectMapData(mapPins, mapRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts); }} className="ml-1 px-3 py-1 rounded-full font-bold text-xs transition-colors whitespace-nowrap" style={{ background: '#2e2e50', color: '#8b8ba8' }}>リセット</button>
                      </div>
@@ -1395,8 +1411,6 @@ export default function MapPage() {
                               );
                               return;
                             }
-                            // ローカル state を更新
-                            setMapImageAspects(prev => ({ ...prev, [currentMapIndex]: naturalAspect }));
                             // 旧形式なら新形式に自動移行 (Firestore + 全座標変換)
                             if (isLegacyMap) {
                               void migrateLegacyMap(currentMapIndex, naturalAspect);

@@ -240,7 +240,7 @@ const ItemCard = React.memo(function ItemCard({
       const img = new Image();
       img.onerror = () => {
         if (import.meta.env.DEV) console.error('[ItemCard] Image decode failed (unsupported format?)');
-        setError('画像の処理に失敗しました。HEIC 等の未対応形式の可能性があります。JPEG/PNG でお試しください。');
+        onError('画像の処理に失敗しました。HEIC 等の未対応形式の可能性があります。JPEG/PNG でお試しください。');
       };
       img.onload = () => {
         try {
@@ -255,7 +255,7 @@ const ItemCard = React.memo(function ItemCard({
           void onImageUpload(side, dataUrl);
         } catch (err) {
           if (import.meta.env.DEV) console.error('[ItemCard] processFile failed:', err);
-          setError('画像の処理に失敗しました');
+          onError('画像の処理に失敗しました');
         }
       };
       img.src = src;
@@ -586,27 +586,34 @@ export function BeforeAfterPage() {
   }, []);
 
   const deleteItem = useCallback((idx: number) => {
-    setItems(prev => {
-      const target = prev[idx];
-      if (!target) return prev;
-      const hasContent = target.title || target.beforeDesc || target.afterDesc
-        || target.beforeImage || target.afterImage;
-      if (hasContent && !window.confirm('この工事箇所を削除します。よろしいですか?')) {
-        return prev;
+    const target = items[idx];
+    if (!target) return;
+    const hasContent = target.title || target.beforeDesc || target.afterDesc
+      || target.beforeImage || target.afterImage;
+    if (hasContent && !window.confirm('この工事箇所を削除します。よろしいですか?')) {
+      return;
+    }
+    // Storage 削除予約（保存時にまとめて実行）
+    [target.beforeImage, target.afterImage].forEach(url => {
+      if (isStorageUrl(url)) {
+        const p = storagePathFromUrl(url);
+        if (p) pendingDeletePaths.current.push(p);
       }
-      // Storage 削除予約（保存時にまとめて実行）
-      [target.beforeImage, target.afterImage].forEach(url => {
-        if (isStorageUrl(url)) {
-          const p = storagePathFromUrl(url);
-          if (p) pendingDeletePaths.current.push(p);
-        }
-      });
-      isDirty.current = true;
+    });
+    isDirty.current = true;
+    setItems(prev => {
       const next = prev.filter((_, i) => i !== idx);
       // 最後の1件を消した場合は空カードを補充（プレビューが消えないように）
       return next.length === 0 ? [makeEmptyItem()] : next;
     });
-  }, []);
+    // W2: 削除したアイテムのアップロード状態をクリア
+    setUploadingKeys(prev => {
+      const next = new Set(prev);
+      next.delete(`${target.id}:before`);
+      next.delete(`${target.id}:after`);
+      return next;
+    });
+  }, [items]);
 
   const updateItem = useCallback((idx: number, field: keyof BeforeAfterItem, value: string) => {
     setItems(prev => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));

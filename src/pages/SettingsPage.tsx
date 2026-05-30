@@ -263,12 +263,10 @@ export default function SettingsPage() {
     setOrphanPaths([]);
     setOrphanResult(
       failed === 0
-        ? `✓ ${deleted}件の孤立ファイルを削除しました`
-        : `${deleted}件削除、${failed}件失敗`
+        ? `✓ ${deleted}件の孤立ファイルを削除しました。「使用量を再計算」で容量を更新してください。`
+        : `${deleted}件削除、${failed}件失敗。「使用量を再計算」で容量を更新してください。`
     );
     setDeletingOrphans(false);
-    // ストレージ使用量を再計算して反映
-    void handleRecalcStorage();
   };
 
   // 全現場の位置図座標を旧形式(194:120基準)から画像アスペクト基準に一括変換する
