@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Plus, Trash2, Settings, Image as ImageIcon, X, Package, Camera, HardDrive, RefreshCw, Map } from 'lucide-react';
 import { doc, getDoc, setDoc, updateDoc, getDocs, collection, query, where } from 'firebase/firestore';
@@ -69,6 +69,12 @@ export default function SettingsPage() {
   const [orphanResult, setOrphanResult] = useState<string | null>(null);
   const [orphanPaths, setOrphanPaths] = useState<string[]>([]);
   const [deletingOrphans, setDeletingOrphans] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -95,19 +101,21 @@ export default function SettingsPage() {
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!uid || !e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
+    e.target.value = ''; // 同じファイルの再選択を可能にする
     setUploadingLogo(true);
     try {
       const storageRef = ref(storage, `logos/${uid}_${Date.now()}`);
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
       await trackUpload(uid, file.size);
+      if (!mountedRef.current) return;
       setStorageUsedBytes((prev) => prev + file.size);
       setLogoUrl(url);
     } catch (err) {
       logFirebaseError(err, 'ロゴアップロード');
-      setError(firebaseErrorMessage(err, 'ロゴのアップロード'));
+      if (mountedRef.current) setError(firebaseErrorMessage(err, 'ロゴのアップロード'));
     } finally {
-      setUploadingLogo(false);
+      if (mountedRef.current) setUploadingLogo(false);
     }
   };
 
@@ -165,14 +173,15 @@ export default function SettingsPage() {
       await addSize(logoUrl);
 
       await updateDoc(doc(db, 'users', uid), { storageUsedBytes: total });
+      if (!mountedRef.current) return;
       setStorageUsedBytes(total);
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      setTimeout(() => { if (mountedRef.current) setSaveSuccess(false); }, 3000);
     } catch (err) {
       logFirebaseError(err, 'ストレージ再計算');
-      setError(firebaseErrorMessage(err, 'ストレージ使用量の再計算'));
+      if (mountedRef.current) setError(firebaseErrorMessage(err, 'ストレージ使用量の再計算'));
     } finally {
-      setRecalculating(false);
+      if (mountedRef.current) setRecalculating(false);
     }
   };
 
@@ -227,8 +236,8 @@ export default function SettingsPage() {
           } catch { /* フォルダが存在しない場合は無視 */ }
         }
       }
+      if (!mountedRef.current) return;
       setOrphanPaths(foundPaths);
-
       setOrphanResult(
         orphanCount === 0
           ? '孤立ファイルは見つかりませんでした ✓'
@@ -236,9 +245,9 @@ export default function SettingsPage() {
       );
     } catch (err) {
       logFirebaseError(err, '孤立ファイル検出');
-      setError(firebaseErrorMessage(err, '孤立ファイル検出'));
+      if (mountedRef.current) setError(firebaseErrorMessage(err, '孤立ファイル検出'));
     } finally {
-      setRecalculating(false);
+      if (mountedRef.current) setRecalculating(false);
     }
   };
 
@@ -330,14 +339,15 @@ export default function SettingsPage() {
           }
         }
       }
+      if (!mountedRef.current) return;
       setMigrationResult(
         `完了: ${migratedCount}件移行 / ${skippedCount}件スキップ済み${errorCount > 0 ? ` / ${errorCount}件エラー` : ''}`
       );
     } catch (err) {
       logFirebaseError(err, '一括マイグレーション');
-      setError(firebaseErrorMessage(err, '一括マイグレーション'));
+      if (mountedRef.current) setError(firebaseErrorMessage(err, '一括マイグレーション'));
     } finally {
-      setBulkMigrating(false);
+      if (mountedRef.current) setBulkMigrating(false);
     }
   };
 
