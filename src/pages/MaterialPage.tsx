@@ -255,6 +255,7 @@ export default function MaterialPage() {
   const handleImageUpload = async (materialId: number, e: React.ChangeEvent<HTMLInputElement>) => {
     if (!project || !id || !e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
+    e.target.value = ''; // ② 同じファイルを再選択できるようリセット
     setUploadingId(materialId);
     try {
       // PhotoPage と同じ 1MB / 1920px JPEG 圧縮を経由する。

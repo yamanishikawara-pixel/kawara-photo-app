@@ -205,6 +205,7 @@ interface ItemCardProps {
   onChange: (field: keyof BeforeAfterItem, value: string) => void;
   onDelete: () => void;
   onImageUpload: (side: 'before' | 'after', dataUrl: string) => void | Promise<void>;
+  onError: (msg: string) => void;
   onDragStart: (e: React.DragEvent) => void;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: () => void;
@@ -213,7 +214,7 @@ interface ItemCardProps {
 const ItemCard = React.memo(function ItemCard({
   item, index,
   uploadingBefore, uploadingAfter,
-  onChange, onDelete, onImageUpload,
+  onChange, onDelete, onImageUpload, onError,
   onDragStart, onDragOver, onDrop,
 }: ItemCardProps) {
   const num = '①②③④⑤⑥⑦⑧⑨⑩'[index] ?? `${index + 1}`;
@@ -228,18 +229,18 @@ const ItemCard = React.memo(function ItemCard({
     const reader = new FileReader();
     reader.onerror = () => {
       if (import.meta.env.DEV) console.error('[ItemCard] FileReader error:', reader.error);
-      alert('ファイルの読み込みに失敗しました');
+      onError('ファイルの読み込みに失敗しました');
     };
     reader.onload = ev => {
       const src = ev.target?.result;
       if (typeof src !== 'string') {
-        alert('ファイルの読み込みに失敗しました');
+        onError('ファイルの読み込みに失敗しました');
         return;
       }
       const img = new Image();
       img.onerror = () => {
         if (import.meta.env.DEV) console.error('[ItemCard] Image decode failed (unsupported format?)');
-        alert('画像の処理に失敗しました。HEIC 等の未対応形式の可能性があります。JPEG/PNG でお試しください。');
+        setError('画像の処理に失敗しました。HEIC 等の未対応形式の可能性があります。JPEG/PNG でお試しください。');
       };
       img.onload = () => {
         try {
@@ -254,7 +255,7 @@ const ItemCard = React.memo(function ItemCard({
           void onImageUpload(side, dataUrl);
         } catch (err) {
           if (import.meta.env.DEV) console.error('[ItemCard] processFile failed:', err);
-          alert('画像の処理に失敗しました');
+          setError('画像の処理に失敗しました');
         }
       };
       img.src = src;
@@ -279,7 +280,7 @@ const ItemCard = React.memo(function ItemCard({
     img.crossOrigin = 'anonymous';
     img.onerror = () => {
       if (import.meta.env.DEV) console.error('[ItemCard] rotateImage: img load failed');
-      alert('画像の読み込みに失敗しました(Firebase Storage の CORS 設定をご確認ください)');
+      onError('画像の読み込みに失敗しました(CORS エラーの可能性があります)');
     };
     img.onload = () => {
       try {
@@ -295,7 +296,7 @@ const ItemCard = React.memo(function ItemCard({
         void onImageUpload(side, dataUrl);
       } catch (err) {
         if (import.meta.env.DEV) console.error('[ItemCard] rotateImage failed:', err);
-        alert('画像の回転に失敗しました(CORS エラーの可能性があります)');
+        onError('画像の回転に失敗しました(CORS エラーの可能性があります)');
       }
     };
     img.src = src;
@@ -875,6 +876,7 @@ export function BeforeAfterPage() {
                 onChange={(f, v) => updateItem(idx, f, v)}
                 onDelete={() => deleteItem(idx)}
                 onImageUpload={(side, dataUrl) => uploadImage(item.id, side, dataUrl)}
+                onError={setError}
                 onDragStart={handleDragStart(idx)}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop(idx)}

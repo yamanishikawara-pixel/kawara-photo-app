@@ -276,7 +276,7 @@ function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChan
             transform: 'translateX(-50%)',
             background: '#1c1c30', border: '1px solid #3d3d60',
           }}
-          className="absolute z-[1000] flex rounded-xl shadow-2xl overflow-hidden"
+          className="absolute z-[201] flex rounded-xl shadow-2xl overflow-hidden"
         >
           <button onClick={(e) => { e.stopPropagation(); onSizeChange(Math.min(80, Math.round(size + 5))); }} className="px-4 py-2.5 text-lg font-bold transition-colors" style={{ color: '#f0ede8', borderRight: '1px solid #3d3d60' }} onPointerEnter={e => (e.currentTarget.style.background = '#2e2e50')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}>＋</button>
           <button onClick={(e) => { e.stopPropagation(); onSizeChange(Math.max(5, Math.round(size - 5))); }} className="px-4 py-2.5 text-lg font-bold transition-colors" style={{ color: '#f0ede8', borderRight: '1px solid #3d3d60' }} onPointerEnter={e => (e.currentTarget.style.background = '#2e2e50')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}>－</button>
@@ -818,6 +818,7 @@ export default function PhotoPage() {
   const uploadPhoto = async (e: ChangeEvent<HTMLInputElement>, index: number) => {
     if (!project || !id) return;
     const f = e.target.files?.[0];
+    e.target.value = ''; // ① 同じファイルを再選択できるようリセット
     if (!f) return;
     if (index < 0 || index >= project.photos.length) return;
     cancelPendingPhotoDebounces();
