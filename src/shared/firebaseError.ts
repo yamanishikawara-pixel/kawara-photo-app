@@ -55,7 +55,7 @@ export function firebaseErrorMessage(err: unknown, context: string = '操作'): 
     return `対象のファイルが見つかりません。`;
   }
   if (code === 'storage/unknown') {
-    return `${context}に失敗しました。しばらく待ってから再度お試しください。`;
+    return `アップロードに失敗しました（storage/unknown）。App Check の設定またはネットワークを確認してください。`;
   }
 
   // ── Auth（LoginPage以外でも念のため） ──
@@ -83,8 +83,10 @@ export function firebaseErrorMessage(err: unknown, context: string = '操作'): 
  * 本番では何も出さないので、ユーザーに技術情報が漏れない。
  */
 export function logFirebaseError(err: unknown, context: string): void {
-  if (import.meta.env.DEV) {
-    const code = (err as { code?: string })?.code ?? 'unknown';
-    console.error(`[${context}] code=${code}`, err);
+  const code = (err as { code?: string })?.code ?? 'unknown';
+  const msg = (err as { message?: string })?.message ?? '';
+  // 本番でも Storage エラーはコンソールに出力（デバッグ用）
+  if (import.meta.env.DEV || code.startsWith('storage/')) {
+    console.error(`[${context}] code=${code} msg=${msg}`, err);
   }
 }
