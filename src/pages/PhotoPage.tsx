@@ -764,6 +764,7 @@ export default function PhotoPage() {
   const handleBulkUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     if (!project || !id) return;
     const files = Array.from(e.target.files as FileList);
+    e.target.value = ''; // 同じファイル群を再選択できるようリセット
     if (files.length === 0) return;
     cancelPendingPhotoDebounces();
     bulkCancelRef.current = false; // 前回キャンセルをリセット
