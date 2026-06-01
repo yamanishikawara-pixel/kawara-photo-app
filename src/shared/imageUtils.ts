@@ -28,10 +28,23 @@ export const compressPhotoWithQuality = async (
 ): Promise<File> => {
   try {
     return await imageCompression(file, options);
-  } catch (error) {
-    if (import.meta.env.DEV) {
-      console.warn('画像の圧縮に失敗しました。元のファイルで続行します。', error);
+  } catch {
+    // 第1段階失敗 → より積極的な設定で再試行
+    try {
+      if (import.meta.env.DEV) console.warn('圧縮失敗。フォールバック圧縮を試みます。');
+      return await imageCompression(file, {
+        maxSizeMB: 2,
+        maxWidthOrHeight: 1280,
+        useWebWorker: true,
+        fileType: 'image/jpeg',
+        initialQuality: 0.7,
+      });
+    } catch (fallbackError) {
+      // 第2段階も失敗 → 元ファイルを返す（Storage ルールで弾かれる可能性あり）
+      if (import.meta.env.DEV) {
+        console.warn('フォールバック圧縮も失敗。元のファイルで続行します。', fallbackError);
+      }
+      return file;
     }
-    return file;
   }
 };
