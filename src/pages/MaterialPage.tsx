@@ -167,7 +167,14 @@ export default function MaterialPage() {
   const saveMaterials = async (newMaterials: Material[]) => {
     if (!project || !id) return;
     setProject((prev) => prev ? { ...prev, materials: newMaterials } : null);
-    await updateDoc(doc(db, 'projects', id), { materials: newMaterials });
+    try {
+      await updateDoc(doc(db, 'projects', id), { materials: newMaterials });
+    } catch (err) {
+      logFirebaseError(err, '材料保存');
+      setSaveError(firebaseErrorMessage(err, '材料の保存'));
+      // 保存失敗時は楽観的更新を元に戻す
+      setProject((prev) => prev ? { ...prev, materials: project.materials } : null);
+    }
   };
 
   const addMaterial = () => {
