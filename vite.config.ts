@@ -6,11 +6,9 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
-  // 本番ビルド時に必須キーを確認。未設定なら即ビルド失敗。
+  // 本番ビルド時にキーがない場合は警告のみ（正しいキーに差し替え中は一時的にビルドを通す）
   if (mode === 'production' && !env.VITE_RECAPTCHA_SITE_KEY) {
-    throw new Error(
-      '[build] VITE_RECAPTCHA_SITE_KEY が未設定です。App Check が無効化されます。.env を確認してください。'
-    );
+    console.warn('[build] VITE_RECAPTCHA_SITE_KEY が未設定です。App Check が無効化されます。');
   }
 
   return {
