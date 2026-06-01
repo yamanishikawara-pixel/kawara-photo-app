@@ -792,9 +792,26 @@ export default function PhotoPage() {
           setUploadError('ストレージ容量が上限（500MB）に達しています。不要な写真を削除してください。');
           break;
         }
-        const r = ref(storage, `photos/${id}/${genId()}_bulk_${i}.jpg`);
-        await uploadBytes(r, compressedFile);
-        const url = await getDownloadURL(r);
+        // リトライ付きアップロード（一時的なネットワークエラーに対処）
+        const storagePath = `photos/${id}/${genId()}_bulk_${i}.jpg`;
+        let url = '';
+        let lastError: unknown;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            if (attempt > 0) {
+              // 指数バックオフ: 1秒 → 2秒
+              await new Promise(res => setTimeout(res, 1000 * attempt));
+            }
+            const r = ref(storage, storagePath);
+            await uploadBytes(r, compressedFile);
+            url = await getDownloadURL(r);
+            lastError = null;
+            break;
+          } catch (err) {
+            lastError = err;
+          }
+        }
+        if (lastError) throw lastError;
         if (uid) {
           await trackUpload(uid, compressedFile.size);
         }
