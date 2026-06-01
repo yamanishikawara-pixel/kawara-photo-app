@@ -45,10 +45,21 @@ if (import.meta.env.DEV) {
   (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
 }
 if (import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
-  initializeAppCheck(app, {
-    provider: new ReCaptchaEnterpriseProvider(import.meta.env.VITE_RECAPTCHA_SITE_KEY),
-    isTokenAutoRefreshEnabled: true,
-  });
+  try {
+    const appCheck = initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider(import.meta.env.VITE_RECAPTCHA_SITE_KEY),
+      isTokenAutoRefreshEnabled: true,
+    });
+    // App Check トークン取得エラーを監視（診断用）
+    import('firebase/app-check').then(({ onTokenChanged }) => {
+      onTokenChanged(appCheck,
+        () => { /* トークン正常取得 */ },
+        (err) => { console.error('[App Check] トークン取得失敗:', err); }
+      );
+    }).catch(() => {/* noop */});
+  } catch (e) {
+    console.error('[App Check] 初期化失敗:', e);
+  }
 }
 
 // オフライン防衛線を起動したデータベース
