@@ -11,6 +11,7 @@ import kawaraLogo from '../assets/kawara-logo.png';
 import logoRed from '../assets/logo_red.png';
 import { A4_HEIGHT_PX, A4_WIDTH_PX, getPreviewScale, proxyUrl } from '../shared/utils';
 import { resolveMapAspect } from '../shared/mapCoords';
+import { colorForSymbol } from '../shared/symbolColor';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
@@ -1019,27 +1020,6 @@ export default function PdfExportPage() {
 
         case 'map': {
           if (!sections.map) return [];
-
-          // 案1: 符号(A, B, C...)ごとに色を割り当てる。
-          // ピンと凡例バッジで同じ色を使うことで視線移動を最小化する。
-          // 6色を順番に循環(空文字/未指定の符号は赤フォールバック)。
-          const SYMBOL_PALETTE = [
-            '#0f6e56', // 緑
-            '#185fa5', // 青
-            '#b45309', // 茶
-            '#7c2d8a', // 紫
-            '#a3185a', // 桃赤
-            '#3b4f1a', // 深緑
-          ];
-          const colorForSymbol = (sym: string | undefined): string => {
-            if (!sym || !sym.trim()) return '#d12c2c'; // フォールバック(従来の赤)
-            // 同じ符号には同じ色が返るように、文字列をハッシュ化して色IDに割り付け。
-            // 単純 charCodeAt 合算で十分(衝突しても見やすさに実害なし)。
-            const s = sym.trim();
-            let h = 0;
-            for (let i = 0; i < s.length; i++) h = (h + s.charCodeAt(i)) >>> 0;
-            return SYMBOL_PALETTE[h % SYMBOL_PALETTE.length];
-          };
 
           return mapUrlsToRender.map((u, mapIndex) => {
           const userRotation = project.mapRotations?.[mapIndex] ?? 0;

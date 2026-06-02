@@ -190,6 +190,7 @@ export function CoverPage() {
 
   const toggleHiddenField = useCallback(async (key: string) => {
     if (!id) return;
+    const prev = coverHiddenFields;
     const next = coverHiddenFields.includes(key)
       ? coverHiddenFields.filter(k => k !== key)
       : [...coverHiddenFields, key];
@@ -198,6 +199,10 @@ export function CoverPage() {
       await updateDoc(doc(db, 'projects', id), { coverHiddenFields: next });
     } catch (err) {
       logFirebaseError(err, '表紙フィールド設定保存');
+      if (mountedRef.current) {
+        setCoverHiddenFields(prev);
+        setError(firebaseErrorMessage(err, '保存'));
+      }
     }
   }, [id, coverHiddenFields]);
 

@@ -514,11 +514,18 @@ export default function PhotoPage() {
     const trimmedName = name.trim();
     if (!trimmedName) return;
     const entry: PhotoMaster = { id: existing?.id ?? nextId(), name: trimmedName, process: photo.process, description: photo.description };
+    const prevMasters = photoMasters;
     const newMasters = existing ? photoMasters.map((m) => m.id === existing.id ? entry : m) : [...photoMasters, entry];
     setPhotoMasters(newMasters);
-    await setDoc(doc(db, 'users', uid!), { photoMaster: newMasters }, { merge: true });
-    setMasterSaveSuccess(`「${entry.name}」をマスタに保存しました。`);
-    setTimeout(() => setMasterSaveSuccess(null), 3000);
+    try {
+      await setDoc(doc(db, 'users', uid!), { photoMaster: newMasters }, { merge: true });
+      setMasterSaveSuccess(`「${entry.name}」をマスタに保存しました。`);
+      setTimeout(() => setMasterSaveSuccess(null), 3000);
+    } catch (err) {
+      logFirebaseError(err, '写真マスタ保存');
+      setPhotoMasters(prevMasters);
+      setUploadError(firebaseErrorMessage(err, 'マスタの保存'));
+    }
   };
 
   /**

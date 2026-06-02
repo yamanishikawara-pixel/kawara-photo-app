@@ -77,6 +77,12 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => {
+    if (!error) return;
+    const t = window.setTimeout(() => setError(null), 8000);
+    return () => clearTimeout(t);
+  }, [error]);
+
+  useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUid(user.uid);
@@ -384,7 +390,7 @@ export default function SettingsPage() {
 
         {error && (
           <div className="mt-4">
-            <ErrorMessage message={error} />
+            <ErrorMessage message={error} onDismiss={() => setError(null)} />
           </div>
         )}
         {saveSuccess && (

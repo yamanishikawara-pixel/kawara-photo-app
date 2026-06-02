@@ -145,6 +145,12 @@ export default function MaterialPage() {
   }, [uploadError]);
 
   useEffect(() => {
+    if (!saveError) return;
+    const t = window.setTimeout(() => setSaveError(null), 8000);
+    return () => clearTimeout(t);
+  }, [saveError]);
+
+  useEffect(() => {
     if (!id) return;
     setError(null);
     const fetchProject = async () => {
@@ -259,11 +265,18 @@ export default function MaterialPage() {
       ? masters.map((m) => (m.id === existing.id ? newEntry : m))
       : [...masters, newEntry];
 
+    const prevMasters = masters;
     setMasters(newMasters);
-    await setDoc(doc(db, 'users', uid!), { materialMaster: newMasters }, { merge: true });
-    setSaveError(null);
-    setMasterSaveSuccess(`「${newEntry.name}」をマスタに保存しました。`);
-    setTimeout(() => setMasterSaveSuccess(null), 3000);
+    try {
+      await setDoc(doc(db, 'users', uid!), { materialMaster: newMasters }, { merge: true });
+      setSaveError(null);
+      setMasterSaveSuccess(`「${newEntry.name}」をマスタに保存しました。`);
+      setTimeout(() => setMasterSaveSuccess(null), 3000);
+    } catch (err) {
+      logFirebaseError(err, '材料マスタ保存');
+      setMasters(prevMasters);
+      setSaveError(firebaseErrorMessage(err, 'マスタの保存'));
+    }
   };
 
   const handleImageUpload = async (materialId: number, e: React.ChangeEvent<HTMLInputElement>) => {

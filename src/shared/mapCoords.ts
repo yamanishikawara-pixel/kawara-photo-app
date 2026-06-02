@@ -227,7 +227,7 @@ export function migrateMapToImageAspect(
 
   // mapImageAspects 配列を更新 (該当 index に自然アスペクトを記録)
   const newAspects = [...(project.mapImageAspects ?? [])];
-  while (newAspects.length <= mapIndex) newAspects.push(LEGACY_MAP_ASPECT);
+  while (newAspects.length <= mapIndex) newAspects.push(0); // 0 → isLegacyMapCoord=true → onLoad で再移行可
   newAspects[mapIndex] = naturalAspect;
 
   return {

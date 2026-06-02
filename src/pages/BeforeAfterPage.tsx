@@ -668,15 +668,25 @@ export function BeforeAfterPage() {
       }
       const path = `users/${uid}/projects/${id}/beforeafter/${itemId}_${side}.jpg`;
       const storageRef = ref(storage, path);
-      await uploadBytes(storageRef, blob);
-      const url = await getDownloadURL(storageRef);
+      let downloadUrl = '';
+      let lastErr: unknown;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          if (attempt > 0) await new Promise(res => setTimeout(res, 1000 * attempt));
+          await uploadBytes(storageRef, blob);
+          downloadUrl = await getDownloadURL(storageRef);
+          lastErr = null;
+          break;
+        } catch (err) { lastErr = err; }
+      }
+      if (lastErr) throw lastErr;
       await trackUpload(uid, blob.size);
       sessionUploadedPaths.current.add(path);
       if (!mountedRef.current) return;
       // 並び替え直後でも id で参照するため stale にならない
       setItems(prev => prev.map(it =>
         it.id === itemId
-          ? { ...it, [side === 'before' ? 'beforeImage' : 'afterImage']: url }
+          ? { ...it, [side === 'before' ? 'beforeImage' : 'afterImage']: downloadUrl }
           : it,
       ));
       isDirty.current = true;

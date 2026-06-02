@@ -8,6 +8,7 @@ import type { MapPin as MapPinT, MapRow, Project, DimensionLine, WhiteoutBox } f
 import { proxyUrl } from '../shared/utils';
 import { canUpload, trackUpload, deleteStorageFileWithAccounting, genId } from '../shared/storageUtils';
 import { resolveMapAspect, isLegacyMapCoord, migrateMapToImageAspect } from '../shared/mapCoords';
+import { colorForSymbol } from '../shared/symbolColor';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
@@ -35,14 +36,6 @@ const COLOR_PALETTE = [
   { name: "Blue", value: "#3b82f6" },
   { name: "Red", value: "#ef4444" },
 ];
-
-/** ピンラベルから一貫した色を返す（PDF出力と同じ6色パレット） */
-const SYMBOL_COLORS = ['#16a34a', '#2563eb', '#92400e', '#7c3aed', '#db2777', '#065f46'];
-function colorForSymbol(label: string): string {
-  const s = (label ?? '').trim();
-  if (!s) return SYMBOL_COLORS[0];
-  return SYMBOL_COLORS[s.charCodeAt(0) % SYMBOL_COLORS.length];
-}
 
 const getLocalPointFromRect = (clientX: number, clientY: number, rect: DOMRect, angle: number) => {
   let localX = 0, localY = 0;
@@ -810,12 +803,23 @@ export default function MapPage() {
         setUploadProgress(`アップロード中... (${i + 1}/${imageFiles.length})`);
         const f = imageFiles[i];
         if (!canUpload(virtualUsed, f.size)) {
-          setError('ストレージ容量が上限（500MB）に達しています。不要な図面を削除してください。');
+          setSaveError('ストレージ容量が上限（500MB）に達しています。不要な図面を削除してください。');
           break;
         }
-        const storageRef = ref(storage, `maps/${id}/${genId()}_${f.name}`);
-        await uploadBytes(storageRef, f);
-        const url = await getDownloadURL(storageRef);
+        const storagePath = `maps/${id}/${genId()}_${f.name}`;
+        let url = '';
+        let lastErr: unknown;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            if (attempt > 0) await new Promise(res => setTimeout(res, 1000 * attempt));
+            const storageRef = ref(storage, storagePath);
+            await uploadBytes(storageRef, f);
+            url = await getDownloadURL(storageRef);
+            lastErr = null;
+            break;
+          } catch (err) { lastErr = err; }
+        }
+        if (lastErr) throw lastErr;
         if (uid) {
           await trackUpload(uid, f.size);
         }
@@ -823,20 +827,33 @@ export default function MapPage() {
         setStorageUsedBytes(virtualUsed);
         if (mode === 'replace' && i === 0) {
           newMapUrls[insertAt] = url;
+          migratedIndicesRef.current.delete(currentMapIndex);
         } else {
           newMapUrls.splice(insertAt + i, 0, url);
           newMapLayouts.splice(insertAt + i, 0, { title: '位置図', x: 15, y: 10, rotation: 0 });
         }
       }
 
-      setProject(prev => prev ? { ...prev, mapUrls: newMapUrls } : null);
+      const finalAspects = mode === 'replace'
+        ? (() => {
+            const a = [...(project.mapImageAspects ?? [])];
+            if (currentMapIndex < a.length) a[currentMapIndex] = 0;
+            return a;
+          })()
+        : project.mapImageAspects ?? [];
+
+      setProject(prev => prev ? { ...prev, mapUrls: newMapUrls, mapImageAspects: finalAspects } : null);
       setMapLayouts(newMapLayouts);
-      await updateDoc(doc(db, 'projects', id), { mapUrls: newMapUrls, mapLayouts: newMapLayouts });
+      await updateDoc(doc(db, 'projects', id), {
+        mapUrls: newMapUrls,
+        mapLayouts: newMapLayouts,
+        mapImageAspects: finalAspects,
+      });
       setCurrentMapIndex(insertAt);
       setEditingMode('pan');
     } catch (err) {
       logFirebaseError(err, '図面アップロード');
-      setError(firebaseErrorMessage(err, '図面のアップロード'));
+      setSaveError(firebaseErrorMessage(err, '図面のアップロード'));
     } finally {
       setIsSaving(false);
       setUploadProgress('');
@@ -871,6 +888,7 @@ export default function MapPage() {
     const newRows = mapRows.filter(r => (r.mapIndex || 0) !== mapIndex).map(r => ({ ...r, mapIndex: reindex(r.mapIndex || 0) }));
     const newDimLines = mapDimensionLines.filter(l => (l.mapIndex || 0) !== mapIndex).map(l => ({ ...l, mapIndex: reindex(l.mapIndex || 0) }));
     const newWhiteouts = whiteoutBoxes.filter(b => (b.mapIndex || 0) !== mapIndex).map(b => ({ ...b, mapIndex: reindex(b.mapIndex || 0) }));
+    const newAspects = (project.mapImageAspects ?? []).filter((_, i) => i !== mapIndex);
 
     setMapPins(newPins);
     setMapRows(newRows);
@@ -879,17 +897,27 @@ export default function MapPage() {
     setWhiteoutBoxes(newWhiteouts);
     setMapTransforms(newTransforms);
     setMapLayouts(newMapLayouts);
-    setProject({ ...project, mapUrls: newMapUrls });
+    setProject({ ...project, mapUrls: newMapUrls, mapImageAspects: newAspects });
 
     const nextIndex = currentMapIndex >= newMapUrls.length ? Math.max(0, newMapUrls.length - 1) : currentMapIndex;
     setCurrentMapIndex(nextIndex);
 
     setIsSaving(true);
     try {
-      await updateDoc(doc(db, 'projects', id), { mapUrls: newMapUrls, mapRotations: newRotations, mapTransforms: newTransforms, mapLayouts: newMapLayouts, mapPins: newPins, mapRows: newRows, mapDimensionLines: newDimLines, whiteoutBoxes: newWhiteouts });
+      await updateDoc(doc(db, 'projects', id), {
+        mapUrls: newMapUrls,
+        mapRotations: newRotations,
+        mapTransforms: newTransforms,
+        mapLayouts: newMapLayouts,
+        mapPins: newPins,
+        mapRows: newRows,
+        mapDimensionLines: newDimLines,
+        whiteoutBoxes: newWhiteouts,
+        mapImageAspects: newAspects,
+      });
     } catch (err) {
       logFirebaseError(err, '位置図削除');
-      setError(firebaseErrorMessage(err, '位置図の削除'));
+      setSaveError(firebaseErrorMessage(err, '位置図の削除'));
     } finally { setIsSaving(false); }
   }, [project, id, uid, mapPins, mapRows, mapDimensionLines, whiteoutBoxes, mapRotations, mapTransforms, mapLayouts, currentMapIndex]);
 
