@@ -272,9 +272,22 @@ export default function MaterialPage() {
         setUploadError('ストレージ容量が上限（500MB）に達しています。不要な画像を削除してください。');
         return;
       }
-      const storageRef = ref(storage, `materials/${id}/${nextId()}.jpg`);
-      await uploadBytes(storageRef, compressed);
-      const url = await getDownloadURL(storageRef);
+      const storagePath = `materials/${id}/${nextId()}.jpg`;
+      let url = '';
+      let lastUploadError: unknown;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          if (attempt > 0) await new Promise(res => setTimeout(res, 1000 * attempt));
+          const storageRef = ref(storage, storagePath);
+          await uploadBytes(storageRef, compressed);
+          url = await getDownloadURL(storageRef);
+          lastUploadError = null;
+          break;
+        } catch (err) {
+          lastUploadError = err;
+        }
+      }
+      if (lastUploadError) throw lastUploadError;
       if (uid) {
         await trackUpload(uid, compressed.size);
         setStorageUsedBytes((prev) => prev + compressed.size);
