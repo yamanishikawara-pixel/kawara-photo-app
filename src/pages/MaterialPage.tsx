@@ -137,6 +137,13 @@ export default function MaterialPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // uploadError の自動消去（8秒）
+  useEffect(() => {
+    if (!uploadError) return;
+    const t = window.setTimeout(() => setUploadError(null), 8000);
+    return () => clearTimeout(t);
+  }, [uploadError]);
+
   useEffect(() => {
     if (!id) return;
     setError(null);

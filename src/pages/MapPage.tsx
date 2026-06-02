@@ -621,6 +621,13 @@ export default function MapPage() {
     return () => { abortController.abort(); };
   }, [id]);
 
+  // エラーメッセージの自動消去（他ページと統一）
+  useEffect(() => {
+    if (!saveError) return;
+    const t = window.setTimeout(() => setSaveError(null), 8000);
+    return () => clearTimeout(t);
+  }, [saveError]);
+
   // Firestore は undefined / スパース配列を直列化できないため、ホールをデフォルト値で埋める
   const cleanTransforms = (arr: { scale: number; x: number; y: number }[]) =>
     Array.from({ length: arr.length }, (_, i) => arr[i] ?? { scale: 1, x: 0, y: 0 });

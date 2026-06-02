@@ -430,6 +430,13 @@ export default function PhotoPage() {
     projectRef.current = project;
   }, [project]);
 
+  // uploadError の自動消去（8秒）
+  useEffect(() => {
+    if (!uploadError) return;
+    const t = window.setTimeout(() => setUploadError(null), 8000);
+    return () => clearTimeout(t);
+  }, [uploadError]);
+
   // タブクローズ・バックグラウンド移行時に未保存データをフラッシュする。
   // React のアンマウントはタブクローズでは発火しないため、
   // pagehide と visibilitychange で補完する。
