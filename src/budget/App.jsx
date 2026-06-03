@@ -200,49 +200,60 @@ export default function App() {
   }, [activeProject]); // 案件切替時も自動再読み込み
 
   // 写真帳からの起動: ?project={工事名} を検知して該当案件を開く
+  // ※ BudgetPage が key={projectParam} で再マウントするため毎回実行される
   useEffect(() => {
+    // params.get() はすでにデコード済みの値を返すため二重デコード不要
     const params = new URLSearchParams(window.location.search);
-    const targetProject = params.get('project');
-    if (!targetProject) return;
-    let decoded;
-    try {
-      decoded = decodeURIComponent(targetProject).trim();
-    } catch {
-      // 不正なエンコードは無視してアプリは通常起動
-      return;
-    }
-    if (!decoded) return;
-    // Firestore で禁止される文字などを含む slug を弾く
-    if (validateProjectSlug(decoded) !== null) {
-      showToast(`URL パラメータの工事名「${decoded}」は使用できない文字を含んでいます`);
-      try {
-        const url = new URL(window.location.href);
-        url.searchParams.delete('project');
-        window.history.replaceState({}, '', url.toString());
-      } catch { /* noop */ }
-      return;
-    }
-    if (projectList.includes(decoded)) {
-      setActiveProject(decoded);
-      setMode("input");
-      showToast(`📷 写真帳から「${decoded}」を開きました`);
-    } else {
-      (async () => {
-        const ok = await showConfirm(`写真帳に「${decoded}」がありますが、予算書側にはまだありません。\n新規案件として作成しますか？`);
-        if (ok) {
-          window.localStorage.setItem(`cost_${decoded}_koujiName`, JSON.stringify(decoded));
-          setProjectList([...projectList, decoded]);
-          setActiveProject(decoded);
-          setMode("input");
-          showToast(`📷 「${decoded}」を作成しました`);
-        }
-      })();
-    }
+    const decoded = (params.get('project') ?? '').trim();
+
+    // URL から project パラメータを削除（履歴を汚さない）
     try {
       const url = new URL(window.location.href);
       url.searchParams.delete('project');
       window.history.replaceState({}, '', url.toString());
     } catch { /* noop */ }
+
+    if (!decoded) return;
+    if (validateProjectSlug(decoded) !== null) {
+      showToast(`工事名「${decoded}」に使用できない文字が含まれています`);
+      return;
+    }
+
+    // Firestore を直接確認（localStorage のリストに頼らない）
+    (async () => {
+      try {
+        const cloudDoc = await getDoc(doc(db, "cost_projects", decoded));
+
+        if (cloudDoc.exists()) {
+          // Firestoreに存在 → リストに追加してから開く
+          setProjectList(prev =>
+            prev.includes(decoded) ? prev : [...prev, decoded]
+          );
+          setActiveProject(decoded);
+          setMode("input");
+          showToast(`📷 「${decoded}」を開きました`);
+        } else {
+          // Firestoreにも存在しない → 新規作成を提案
+          const ok = await showConfirm(
+            `写真帳の「${decoded}」の予算書はまだありません。\n新規作成しますか？`
+          );
+          if (!ok) return;
+          // 工事名だけ初期値としてセット
+          window.localStorage.setItem(
+            `cost_${decoded}_koujiName`,
+            JSON.stringify(decoded)
+          );
+          setProjectList(prev =>
+            prev.includes(decoded) ? prev : [...prev, decoded]
+          );
+          setActiveProject(decoded);
+          setMode("input");
+          showToast(`📷 「${decoded}」を作成しました`);
+        }
+      } catch (e) {
+        showToast(`現場の読み込みに失敗しました: ${e.message}`);
+      }
+    })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 案件切替時に履歴クリア
