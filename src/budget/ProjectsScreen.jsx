@@ -170,6 +170,11 @@ export function ProjectsScreen({ projectList, setProjectList, activeProject, set
         display: "flex", alignItems: "center", gap: 14,
         position: "sticky", top: 0, zIndex: 100,
       }}>
+        <button onClick={() => window.history.back()}
+          style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:8,
+                  color:"#ecfdf5",fontSize:12,fontWeight:700,padding:"5px 10px",cursor:"pointer"}}>
+          ← 写真台帳
+        </button>
         <img src={logoImg} alt="logo" style={{ width: 38, height: 38, objectFit: "contain" }} />
         <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: 3, color: "#ecfdf5" }}>実行予算</div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>

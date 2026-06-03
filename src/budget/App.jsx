@@ -747,6 +747,12 @@ export default function App() {
       <SectionNav />
 
       <div style={{background:"linear-gradient(90deg,#064e3b,#022c22)",borderBottom:"1px solid #065f46",padding:"14px 24px",display:"flex",alignItems:"center",flexWrap:"wrap",gap:14, position:"sticky", top:0, zIndex:100}}>
+        {/* 写真台帳に戻るボタン */}
+        <button onClick={() => window.history.back()}
+          style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:8,
+                  color:"#ecfdf5",fontSize:12,fontWeight:700,padding:"5px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+          ← 写真台帳
+        </button>
         <img src={logoImg} alt="logo" style={{width:38,height:38,objectFit:"contain"}} />
         <div style={{fontSize:17,fontWeight:700,letterSpacing:3,color:"#ecfdf5"}}>実行予算</div>
         <div style={{fontSize:12,color:"#6ee7b7",fontWeight:700,marginLeft:4,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{koujiName || "—"}</div>
