@@ -470,7 +470,7 @@ export function ProjectListPage() {
           </a>
           <button
             type="button"
-            onClick={() => window.open('https://kawara-budget.web.app', '_blank', 'noopener,noreferrer')}
+            onClick={() => navigate('/budget')}
             className="flex flex-col items-center justify-center gap-3 p-5 rounded-2xl border transition-all active:scale-95"
             style={{ background: '#1c1c30', borderColor: '#2e2e50' }}
             onPointerEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#10b981'; }}
@@ -682,7 +682,7 @@ export function ProjectListPage() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            window.open('https://kawara-budget.web.app', '_blank', 'noopener,noreferrer');
+                            navigate('/budget');
                           }}
                           className="p-1.5 rounded-lg transition-colors"
                           style={{ color: '#3d3d60' }}

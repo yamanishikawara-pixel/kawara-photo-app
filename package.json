@@ -19,12 +19,15 @@
     "browser-image-compression": "^2.0.2",
     "file-saver": "^2.0.5",
     "firebase": "^12.10.0",
+    "html2pdf.js": "^0.10.2",
     "jszip": "^3.10.1",
     "lucide-react": "^0.577.0",
+    "nanoid": "^5.1.11",
     "pdfjs-dist": "^5.6.205",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-router-dom": "^7.13.1"
+    "react-router-dom": "^7.13.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
