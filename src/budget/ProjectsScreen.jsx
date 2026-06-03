@@ -2,7 +2,7 @@
 import { useState, useMemo } from 'react';
 import logoImg from './logo-clear.png';
 import { db } from './firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { useAppDialog } from './appDialogContext';
 import { getProjectStorageKeys, hasProjectNameConflict, projectStorageKey, validateProjectSlug } from './projectStorage';
 import { I, useLocalStorage } from './utils';
@@ -98,11 +98,20 @@ export function ProjectsScreen({ projectList, setProjectList, activeProject, set
   const deleteProject = async (slug) => {
     const ok = await showConfirm(`「${slug}」を削除しますか？\nこの操作は取り消せません。`);
     if (!ok) return;
+    // localStorage から削除
     const keys = getProjectStorageKeys(window.localStorage, slug);
     keys.forEach(k => window.localStorage.removeItem(k));
     const newList = projectList.filter(p => p !== slug);
-    // 全削除の場合は空リストにする（次回起動時に自動で default が作られる）
     setProjectList(newList.length > 0 ? newList : []);
+    // Firestore からも削除（復活防止）
+    try {
+      await deleteDoc(doc(db, "cost_projects", slug));
+      if (newList.length > 0) {
+        await setDoc(doc(db, "cost_system", "meta"), { projectList: newList });
+      }
+    } catch (e) {
+      console.warn("クラウドの削除に失敗:", e.message);
+    }
     if (activeProject === slug) {
       if (newList.length > 0) {
         setActiveProject(newList[0]);

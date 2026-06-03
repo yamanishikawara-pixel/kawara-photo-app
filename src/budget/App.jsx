@@ -258,6 +258,8 @@ export default function App() {
       try {
         const raw = { koujiName, koujiAddress, clientName, date, dateJoto, dateChakko, spec, kawaraShu, kawaraColor, hanbaKakuRate, insuranceRate, unchinTanka, yochiArea, targetGrossRate, estimatePrice, grossMode, taxMode, archived, tileRows, materialRows, expenseRows, biko, tileSupplier, houseMakerName, tileOrderSupplier, tileOrderDeliveryAddress, tileOrderDeliveryDate, tileOrderDeliveryTime, tileOrderNote, tileOrderMaterialRows, tileOrderTileRows, status, _updatedAt: new Date().toISOString() };
         await setDoc(doc(db, "cost_projects", activeProject), JSON.parse(JSON.stringify(raw)));
+        // プロジェクト一覧もFirestoreに保存（削除・新規作成が正しく反映されるように）
+        await setDoc(doc(db, "cost_system", "meta"), { projectList });
         window.localStorage.setItem(`cost_${activeProject}_localUpdatedAt`, new Date().toISOString());
         setAutoSaveStatus("saved");
         setTimeout(() => setAutoSaveStatus(s => s === "saved" ? null : s), 3000);
