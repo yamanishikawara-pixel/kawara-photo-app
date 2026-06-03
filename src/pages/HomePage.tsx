@@ -177,8 +177,10 @@ export function HomePage() {
             const Icon = item.icon;
             const handleClick = () => {
               if (item.external && item.path === '__budget__') {
-                // 統合済み：同じアプリ内の /budget に遷移
-                navigate('/budget');
+                // 現場名を渡して予算書アプリを開く
+                const name = project?.projectName?.trim();
+                const url = name ? `/budget?project=${encodeURIComponent(name)}` : '/budget';
+                navigate(url);
                 return;
               }
               navigate(`/project/${id}/${item.path}`);

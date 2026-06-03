@@ -96,17 +96,21 @@ export function ProjectsScreen({ projectList, setProjectList, activeProject, set
   };
 
   const deleteProject = async (slug) => {
-    if (projectList.length <= 1) {
-      showToast("最後の現場は削除できません");
-      return;
-    }
     const ok = await showConfirm(`「${slug}」を削除しますか？\nこの操作は取り消せません。`);
     if (!ok) return;
     const keys = getProjectStorageKeys(window.localStorage, slug);
     keys.forEach(k => window.localStorage.removeItem(k));
     const newList = projectList.filter(p => p !== slug);
-    setProjectList(newList);
-    if (activeProject === slug) setActiveProject(newList[0]);
+    // 全削除の場合は空リストにする（次回起動時に自動で default が作られる）
+    setProjectList(newList.length > 0 ? newList : []);
+    if (activeProject === slug) {
+      if (newList.length > 0) {
+        setActiveProject(newList[0]);
+      } else {
+        setActiveProject("default");
+        setMode("projects");
+      }
+    }
     showToast("削除しました");
   };
 
