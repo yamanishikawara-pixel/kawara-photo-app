@@ -15,7 +15,7 @@ import { PrintSheet } from './PrintSheet';
 import { ProjectsScreen } from './ProjectsScreen';
 import { DashboardScreen } from './DashboardScreen';
 import logoImg from './logo-clear.png';
-import { projectStorageKey, validateProjectSlug } from './projectStorage';
+import { projectStorageKey, validateProjectSlug, PROJECT_FIELDS } from './projectStorage';
 import { calculateBudget, calcTaxBreakdown } from './budgetCalculations';
 import { TilePurchaseOrderSheet } from './TilePurchaseOrderSheet';
 import { SectionNav } from './SectionNav';
@@ -92,6 +92,7 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
   
   const [mode, setMode]                 = useState("projects");
   const [urlProjectLoading, setUrlProjectLoading] = useState(false);
+  const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
   const [showAutoEstimate, setShowAutoEstimate] = useState(false);
   const [catalogType, setCatalogType]   = useState(null);
 
@@ -199,6 +200,35 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
     } catch(e) { if (!silent) showToast("読込エラー: " + e.message); }
     finally { setTimeout(() => setIsLoadingCloud(false), 1000); }
   };
+
+  // ダッシュボード表示時、Firestoreから未同期の全案件をlocalStorageへ一括同期
+  useEffect(() => {
+    if (mode !== "dashboard") return;
+    (async () => {
+      try {
+        const toLoad = projectList.filter(slug =>
+          !window.localStorage.getItem(`cost_${slug}_localUpdatedAt`)
+        );
+        if (toLoad.length === 0) return;
+        await Promise.all(toLoad.map(async slug => {
+          try {
+            const snap = await getDoc(doc(db, "cost_projects", slug));
+            if (!snap.exists()) return;
+            const d = snap.data();
+            PROJECT_FIELDS.forEach(field => {
+              if (d[field] !== undefined) {
+                window.localStorage.setItem(projectStorageKey(slug, field), JSON.stringify(d[field]));
+              }
+            });
+            if (d._updatedAt) {
+              window.localStorage.setItem(`cost_${slug}_localUpdatedAt`, d._updatedAt);
+            }
+          } catch {}
+        }));
+        setDashboardRefreshKey(k => k + 1);
+      } catch {}
+    })();
+  }, [mode, projectList]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 起動時にマスター設定を Firestore から自動ロード（マルチデバイス対応）
   useEffect(() => {
@@ -547,6 +577,11 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
     return (
       <div style={{background:"#1a1a2e",minHeight:"100vh",fontFamily:"'Noto Sans JP', sans-serif"}}>
         <div className="no-print" style={{background:"#0d1b2a",padding:"12px 20px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #2a4a6a",position:"sticky",top:0,zIndex:10}}>
+          <button onClick={() => goToPhoto(koujiName?.trim())}
+            style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:8,
+                    color:"#ecfdf5",fontSize:12,fontWeight:700,padding:"5px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+            ← 写真台帳
+          </button>
           <button onClick={()=>setMode("input")} style={{background:"#1e3a5a",border:"1px solid #2a5a8a",color:"#93c5fd",padding:"7px 16px",borderRadius:7,fontSize:13,cursor:"pointer",fontWeight:600}}>← 戻る</button>
           <div style={{marginLeft:"auto",display:"flex",gap:8}}>
             <button onClick={()=>window.print()} style={{background:"#1e3a5a",border:"1px solid #2a5a8a",color:"#93c5fd",padding:"7px 16px",borderRadius:7,fontSize:13,cursor:"pointer",fontWeight:600}}>🖨️ 印刷</button>
@@ -808,6 +843,7 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
         masterHouseMakers={masterHouseMakers}
         setMode={setMode}
         showToast={showToast}
+        refreshKey={dashboardRefreshKey}
       />
       {toast && <Toast key={toast.id} message={toast.msg} onClose={() => setToast(null)} />}
     </>

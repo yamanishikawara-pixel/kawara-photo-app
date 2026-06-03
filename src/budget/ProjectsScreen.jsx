@@ -344,6 +344,8 @@ export function ProjectsScreen({ projectList, setProjectList, activeProject, set
                     {!isArchived && (
                       <button
                         onClick={async () => {
+                          const ok = await showConfirm(`「${koujiName || slug}」をアーカイブしますか？\n後から復元できます。`);
+                          if (!ok) return;
                           window.localStorage.setItem(projectStorageKey(slug, "archived"), JSON.stringify(true));
                           try { await setDoc(doc(db, "cost_projects", slug), { archived: true }, { merge: true }); } catch {}
                           setRefreshKey(k => k + 1);

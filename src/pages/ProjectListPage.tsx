@@ -482,7 +482,7 @@ export function ProjectListPage() {
             <div className="text-center">
               <div className="font-black text-sm" style={{ color: '#f0ede8' }}>実行予算書</div>
               <div className="text-xs mt-0.5 flex items-center justify-center gap-0.5" style={{ color: '#6b7280' }}>
-                別アプリで開く <ChevronRight className="w-3 h-3" />
+                全現場一覧 <ChevronRight className="w-3 h-3" />
               </div>
             </div>
           </button>

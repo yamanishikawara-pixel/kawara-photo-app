@@ -63,7 +63,7 @@ const I_btn = (bg, border, color) => ({
   borderRadius: 7, fontSize: 12, cursor: "pointer", fontWeight: 700,
 });
 
-export function DashboardScreen({ projectList, masterStdPrices, masterDiscounts, masterCompanyInfo, masterHouseMakers = [], setMode, showToast }) {
+export function DashboardScreen({ projectList, masterStdPrices, masterDiscounts, masterCompanyInfo, masterHouseMakers = [], setMode, showToast, refreshKey = 0 }) {
   const taxRate = masterCompanyInfo?.taxRate ?? 10;
   const grossRateGood = masterCompanyInfo?.grossRateGood ?? 30;
   const grossRateWarn = masterCompanyInfo?.grossRateWarn ?? 20;
@@ -117,7 +117,7 @@ export function DashboardScreen({ projectList, masterStdPrices, masterDiscounts,
 
       return { slug, koujiName, date, status, archived, totalCost, tileSub, matSub, expSub, welfareCost, unchinTotal, effectiveEstimate, grossProfit, yochiArea, fiscalYear, ...metrics };
     });
-  }, [projectList, masterStdPrices, masterDiscounts, masterHouseMakers, taxRate, fiscalYearStartMonth]);
+  }, [projectList, masterStdPrices, masterDiscounts, masterHouseMakers, taxRate, fiscalYearStartMonth, refreshKey]);
 
   // 年度一覧（表示用）
   const fiscalYears = useMemo(() => {
