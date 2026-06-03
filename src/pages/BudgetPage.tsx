@@ -1,18 +1,26 @@
 import { Suspense, lazy } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 
-// 実行予算書アプリを遅延読み込み
 const BudgetApp = lazy(() => import('../budget/BudgetEntry'));
 
 export default function BudgetPage() {
   const location = useLocation();
-  // ?project= パラメータが変わるたびに再マウント → useEffect が再実行される
+  const navigate = useNavigate();
   const projectParam = new URLSearchParams(location.search).get('project') ?? '';
+
+  // 写真台帳への遷移コールバック（budget 側から呼ばれる）
+  const goToPhotoApp = (search?: string) => {
+    if (search) {
+      navigate(`/?search=${encodeURIComponent(search)}`);
+    } else {
+      navigate('/');
+    }
+  };
 
   return (
     <Suspense fallback={<LoadingSpinner />}>
-      <BudgetApp key={projectParam} />
+      <BudgetApp key={projectParam} onNavigateToPhoto={goToPhotoApp} />
     </Suspense>
   );
 }

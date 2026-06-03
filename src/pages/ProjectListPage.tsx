@@ -682,7 +682,8 @@ export function ProjectListPage() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate('/budget');
+                            const name = p.projectName?.trim();
+                            navigate(name ? `/budget?project=${encodeURIComponent(name)}` : '/budget');
                           }}
                           className="p-1.5 rounded-lg transition-colors"
                           style={{ color: '#3d3d60' }}

@@ -14,7 +14,7 @@ const STATUS_COLORS = {
   completed:   { bg: "#0f3a1e", fg: "#86efac" },
 };
 
-export function ProjectsScreen({ projectList, setProjectList, activeProject, setActiveProject, setMode, showToast }) {
+export function ProjectsScreen({ projectList, setProjectList, activeProject, setActiveProject, setMode, showToast, onNavigateToPhoto }) {
   const { showConfirm, showPrompt } = useAppDialog();
   const [searchQuery, setSearchQuery] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -183,7 +183,7 @@ export function ProjectsScreen({ projectList, setProjectList, activeProject, set
         display: "flex", alignItems: "center", gap: 14,
         position: "sticky", top: 0, zIndex: 100,
       }}>
-        <button onClick={() => window.history.back()}
+        <button onClick={() => onNavigateToPhoto ? onNavigateToPhoto() : window.history.back()}
           style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:8,
                   color:"#ecfdf5",fontSize:12,fontWeight:700,padding:"5px 10px",cursor:"pointer"}}>
           ← 写真台帳
@@ -218,7 +218,7 @@ export function ProjectsScreen({ projectList, setProjectList, activeProject, set
             title="全案件の原価率・粗利を一覧表示"
           >📊 ダッシュボード</button>
           <button
-            onClick={() => window.open('https://kawara-photo-app.web.app/', '_blank', 'noopener,noreferrer')}
+            onClick={() => onNavigateToPhoto ? onNavigateToPhoto() : window.history.back()}
             style={{ background: "linear-gradient(135deg,#ff6b35,#e85d2a)", border: "none", color: "#fff", padding: "8px 16px", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}
             title="工事写真台帳を開く"
           >📷 写真帳</button>
@@ -327,7 +327,7 @@ export function ProjectsScreen({ projectList, setProjectList, activeProject, set
                       style={{ flex: 1, background: "#064e3b", border: "1px solid #10b981", color: "#a7f3d0", padding: "6px 0", borderRadius: 6, fontSize: 12, cursor: "pointer", fontWeight: 700 }}
                     >開く</button>
                     <button
-                      onClick={() => window.open(`https://kawara-photo-app.web.app/?search=${encodeURIComponent(koujiName || slug)}`, '_blank', 'noopener,noreferrer')}
+                      onClick={() => onNavigateToPhoto ? onNavigateToPhoto(koujiName || slug) : window.history.back()}
                       style={{ background: "transparent", border: "1px solid #ff6b35", color: "#ff6b35", padding: "6px 10px", borderRadius: 6, fontSize: 12, cursor: "pointer", fontWeight: 700 }}
                       title="この現場の写真帳を開く"
                     >📷</button>

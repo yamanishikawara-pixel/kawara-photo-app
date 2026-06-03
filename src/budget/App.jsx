@@ -26,7 +26,15 @@ const cloneRows = (rows) => rows.map(r => ({ ...r }));
 const newMaterialRow = () => ({ id: nanoid(), hinmei: "", suryo: "", tani: "巻", costPrice: "", biko: "" });
 const newExpenseRow = () => ({ id: nanoid(), hinmei: "", suryo: "", tani: "式", costPrice: "", biko: "", isLabor: false });
 
-export default function App() {
+export default function App({ onNavigateToPhoto }) {
+  // 写真台帳への戻り関数（未指定時はブラウザ履歴で戻る）
+  const goToPhoto = (search) => {
+    if (onNavigateToPhoto) {
+      onNavigateToPhoto(search);
+    } else {
+      window.history.back();
+    }
+  };
   const [masterMats, setMasterMats] = useLocalStorage("global_master_materials", INITIAL_MATERIAL_PRICES);
   const [masterDiscounts, setMasterDiscounts] = useLocalStorage("global_master_discounts", INITIAL_DISCOUNT_RATES);
   const [masterStdPrices, setMasterStdPrices] = useLocalStorage("global_master_std_prices_v2", INITIAL_STANDARD_PRICES);
@@ -466,6 +474,7 @@ export default function App() {
         setActiveProject={setActiveProject}
         setMode={setMode}
         showToast={showToast}
+        onNavigateToPhoto={onNavigateToPhoto}
       />
       {toast && <Toast key={toast.id} message={toast.msg} onClose={() => setToast(null)} />}
     </>
@@ -761,7 +770,7 @@ export default function App() {
 
       <div style={{background:"linear-gradient(90deg,#064e3b,#022c22)",borderBottom:"1px solid #065f46",padding:"14px 24px",display:"flex",alignItems:"center",flexWrap:"wrap",gap:14, position:"sticky", top:0, zIndex:100}}>
         {/* 写真台帳に戻るボタン */}
-        <button onClick={() => window.history.back()}
+        <button onClick={() => goToPhoto()}
           style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:8,
                   color:"#ecfdf5",fontSize:12,fontWeight:700,padding:"5px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
           ← 写真台帳
@@ -789,7 +798,7 @@ export default function App() {
           {history.canUndo && <button onClick={()=>{const lbl=history.lastLabel; history.undo(); showToast(`↶ 「${lbl}」を取り消しました`);}} style={{background:"#422006",border:"1px solid #a16207",color:"#fcd34d",padding:"8px 14px",borderRadius:8,fontSize:12,cursor:"pointer",fontWeight:700,whiteSpace:"nowrap"}} title={`取り消し: ${history.lastLabel}`}>↶ 元に戻す</button>}
           <button onClick={()=>setMode("master")} style={{background:"#1e3a8a",border:"1px solid #2563eb",color:"#bfdbfe",padding:"8px 14px",borderRadius:8,fontSize:12,cursor:"pointer",fontWeight:700}}>⚙️ マスター</button>
           <button onClick={()=>setMode("tile-purchase")} style={{background:"linear-gradient(135deg,#b45309,#92400e)",border:"none",color:"white",padding:"8px 18px",borderRadius:8,fontSize:13,fontWeight:700}}>🏠 瓦発注書</button>
-          <button onClick={()=>{if(!koujiName||!koujiName.trim()){showToast("工事名を入力してから開いてください");return;}window.open(`https://kawara-photo-app.web.app/?search=${encodeURIComponent(koujiName.trim())}`,'_blank','noopener,noreferrer');}} style={{background:"linear-gradient(135deg,#ff6b35,#e85d2a)",border:"none",color:"white",padding:"8px 18px",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}} title="同じ工事名で写真帳を開く">📷 写真帳</button>
+          <button onClick={()=>{if(!koujiName||!koujiName.trim()){showToast("工事名を入力してから開いてください");return;}goToPhoto(koujiName.trim());}} style={{background:"linear-gradient(135deg,#ff6b35,#e85d2a)",border:"none",color:"white",padding:"8px 18px",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}} title="同じ工事名で写真帳を開く">📷 写真帳</button>
           <button onClick={()=>setMode("preview")} style={{background:"linear-gradient(135deg,#10b981,#059669)",border:"none",color:"white",padding:"8px 18px",borderRadius:8,fontSize:13,fontWeight:700}}>📄 PDF</button>
         </div>
       </div>
