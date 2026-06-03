@@ -1323,7 +1323,7 @@ export default function PhotoPage() {
                     >
                       <Camera className="w-3.5 h-3.5" />
                       {photo.image ? '写真を変更' : '写真を選択'}
-                      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => uploadPhoto(e, index)} />
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadPhoto(e, index)} />
                     </label>
                   </div>
 
@@ -1864,7 +1864,7 @@ export default function PhotoPage() {
                     style={{ background: '#ff6b35', color: '#fff' }}
                   >
                     <Camera className="w-4 h-4" /> 写真を選択
-                    <input type="file" accept="image/*" capture="environment" className="hidden"
+                    <input type="file" accept="image/*" className="hidden"
                       onChange={(e) => { uploadPhoto(e, idx); }} />
                   </label>
                 </div>
@@ -1886,7 +1886,7 @@ export default function PhotoPage() {
                     <label className="px-3 py-1.5 rounded-lg text-xs font-black cursor-pointer"
                       style={{ background: '#ff6b35', color: '#fff' }}>
                       📷 変更
-                      <input type="file" accept="image/*" capture="environment" className="hidden"
+                      <input type="file" accept="image/*" className="hidden"
                         onChange={(e) => { uploadPhoto(e, idx); }} />
                     </label>
                   )}
