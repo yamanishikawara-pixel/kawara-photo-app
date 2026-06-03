@@ -7,7 +7,6 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import type { Circle, MapRow, MapLine, Photo, Project, Material, WhiteoutBox, UserSettings, BeforeAfterItem } from '../types';
 import { getContractorName, getReportDate } from '../types';
-import kawaraLogo from '../assets/kawara-logo.png';
 import logoRed from '../assets/logo_red.png';
 import { A4_HEIGHT_PX, A4_WIDTH_PX, getPreviewScale, proxyUrl } from '../shared/utils';
 import { resolveMapAspect } from '../shared/mapCoords';
@@ -490,10 +489,7 @@ export default function PdfExportPage() {
 
   // ─── 派生値の算出(useMemo で再計算を抑制)─────────────────
   // 早期リターン用の簡易値は以下で定義し、実際の UI 用は useMemo でメモ化
-  const logoUrl = userSettings?.logoUrl;
   const companyName = userSettings?.companyName;
-  const address = userSettings?.address;
-  const phone = userSettings?.phone;
 
   // 位置図(最大3枚)
   const mapUrlsToRender = useMemo(

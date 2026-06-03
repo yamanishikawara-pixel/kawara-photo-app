@@ -7,7 +7,9 @@ const BudgetApp = lazy(() => import('../budget/BudgetEntry'));
 export default function BudgetPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const projectParam = new URLSearchParams(location.search).get('project') ?? '';
+  const params = new URLSearchParams(location.search);
+  const projectParam = params.get('project') ?? '';
+  const addressParam = params.get('address') ?? '';
 
   // 写真台帳への遷移コールバック（budget 側から呼ばれる）
   const goToPhotoApp = (search?: string) => {
@@ -20,7 +22,11 @@ export default function BudgetPage() {
 
   return (
     <Suspense fallback={<LoadingSpinner />}>
-      <BudgetApp key={projectParam} onNavigateToPhoto={goToPhotoApp} />
+      <BudgetApp
+        key={projectParam}
+        onNavigateToPhoto={goToPhotoApp}
+        projectAddress={addressParam}
+      />
     </Suspense>
   );
 }

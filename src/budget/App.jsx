@@ -26,7 +26,7 @@ const cloneRows = (rows) => rows.map(r => ({ ...r }));
 const newMaterialRow = () => ({ id: nanoid(), hinmei: "", suryo: "", tani: "巻", costPrice: "", biko: "" });
 const newExpenseRow = () => ({ id: nanoid(), hinmei: "", suryo: "", tani: "式", costPrice: "", biko: "", isLabor: false });
 
-export default function App({ onNavigateToPhoto }) {
+export default function App({ onNavigateToPhoto, projectAddress }) {
   // 写真台帳への戻り関数（未指定時はブラウザ履歴で戻る）
   const goToPhoto = (search) => {
     if (onNavigateToPhoto) {
@@ -91,6 +91,7 @@ export default function App({ onNavigateToPhoto }) {
   const [tileOrderTileRows, setTileOrderTileRows] = useLocalStorage(pk("tileOrderTileRows"), []);
   
   const [mode, setMode]                 = useState("projects");
+  const [urlProjectLoading, setUrlProjectLoading] = useState(false);
   const [showAutoEstimate, setShowAutoEstimate] = useState(false);
   const [catalogType, setCatalogType]   = useState(null);
 
@@ -214,10 +215,11 @@ export default function App({ onNavigateToPhoto }) {
     const params = new URLSearchParams(window.location.search);
     const decoded = (params.get('project') ?? '').trim();
 
-    // URL から project パラメータを削除（履歴を汚さない）
+    // URL から project・address パラメータを削除（履歴を汚さない）
     try {
       const url = new URL(window.location.href);
       url.searchParams.delete('project');
+      url.searchParams.delete('address');
       window.history.replaceState({}, '', url.toString());
     } catch { /* noop */ }
 
@@ -226,6 +228,8 @@ export default function App({ onNavigateToPhoto }) {
       showToast(`工事名「${decoded}」に使用できない文字が含まれています`);
       return;
     }
+
+    setUrlProjectLoading(true);
 
     // Firestore を直接確認（localStorage のリストに頼らない）
     (async () => {
@@ -245,12 +249,25 @@ export default function App({ onNavigateToPhoto }) {
           const ok = await showConfirm(
             `写真帳の「${decoded}」の予算書はまだありません。\n新規作成しますか？`
           );
-          if (!ok) return;
-          // 工事名だけ初期値としてセット
+          if (!ok) {
+            setUrlProjectLoading(false);
+            return;
+          }
+          // 工事名を初期値としてセット
           window.localStorage.setItem(
             `cost_${decoded}_koujiName`,
             JSON.stringify(decoded)
           );
+          // 写真アプリの施工場所を koujiAddress に引き継ぐ（既存データは上書きしない）
+          if (projectAddress) {
+            const existingAddr = window.localStorage.getItem(`cost_${decoded}_koujiAddress`);
+            if (!existingAddr || existingAddr === '""' || existingAddr === 'null') {
+              window.localStorage.setItem(
+                `cost_${decoded}_koujiAddress`,
+                JSON.stringify(projectAddress)
+              );
+            }
+          }
           setProjectList(prev =>
             prev.includes(decoded) ? prev : [...prev, decoded]
           );
@@ -260,6 +277,8 @@ export default function App({ onNavigateToPhoto }) {
         }
       } catch (e) {
         showToast(`現場の読み込みに失敗しました: ${e.message}`);
+      } finally {
+        setUrlProjectLoading(false);
       }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -465,6 +484,14 @@ export default function App({ onNavigateToPhoto }) {
       kawaraShu, kawaraColor, hanbaKakuRate: effectiveHanbaKakuRate, insuranceRate, unchinTanka,
   }), [tileRows, materialRows, expenseRows, masterStdPrices, masterDiscounts, kawaraShu, kawaraColor, effectiveHanbaKakuRate, insuranceRate, unchinTanka]);
 
+  if (urlProjectLoading) return (
+    <div style={{minHeight:"100vh",background:"#05111f",display:"flex",justifyContent:"center",alignItems:"center",flexDirection:"column",gap:16}}>
+      <div style={{color:"#6ee7b7",fontSize:16,fontWeight:700}}>現場を確認中...</div>
+      <div style={{color:"#94a3b8",fontSize:13}}>しばらくお待ちください</div>
+      {toast && <Toast key={toast.id} message={toast.msg} onClose={() => setToast(null)} />}
+    </div>
+  );
+
   if (mode === "projects") return (
     <>
       <ProjectsScreen
@@ -541,6 +568,11 @@ export default function App({ onNavigateToPhoto }) {
     return (
       <div style={{background:"#1a1a2e",minHeight:"100vh",fontFamily:"'Noto Sans JP', sans-serif"}}>
         <div className="no-print" style={{background:"#0d1b2a",padding:"12px 20px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #2a4a6a",position:"sticky",top:0,zIndex:10}}>
+          <button onClick={() => goToPhoto(koujiName?.trim())}
+            style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:8,
+                    color:"#ecfdf5",fontSize:12,fontWeight:700,padding:"5px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+            ← 写真台帳
+          </button>
           <button onClick={()=>setMode("input")} style={{background:"#1e3a5a",border:"1px solid #2a5a8a",color:"#93c5fd",padding:"7px 16px",borderRadius:7,fontSize:13,cursor:"pointer",fontWeight:600}}>← 戻る</button>
           <div style={{fontSize:14,fontWeight:700,color:"#fbbf24",marginLeft:4}}>🏠 瓦発注書</div>
           <div style={{marginLeft:"auto",display:"flex",gap:8}}>
@@ -560,7 +592,17 @@ export default function App({ onNavigateToPhoto }) {
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:4,gridColumn:"1/-1"}}>
                 <label style={{fontSize:11,color:"#7aadcf",fontWeight:600}}>現場住所（配達先）</label>
-                <input style={I} value={tileOrderDeliveryAddress} onChange={e=>setTileOrderDeliveryAddress(e.target.value)} placeholder={koujiAddress || "配達先住所"} />
+                <input
+                  style={I}
+                  value={tileOrderDeliveryAddress}
+                  onChange={e => setTileOrderDeliveryAddress(e.target.value)}
+                  placeholder={koujiAddress || "配達先住所（例：富山県魚津市○○）"}
+                  onFocus={() => {
+                    if (!tileOrderDeliveryAddress && koujiAddress) {
+                      setTileOrderDeliveryAddress(koujiAddress);
+                    }
+                  }}
+                />
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:4}}>
                 <label style={{fontSize:11,color:"#7aadcf",fontWeight:600}}>配達日</label>

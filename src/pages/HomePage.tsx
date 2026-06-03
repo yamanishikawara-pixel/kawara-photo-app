@@ -177,9 +177,11 @@ export function HomePage() {
             const Icon = item.icon;
             const handleClick = () => {
               if (item.external && item.path === '__budget__') {
-                // 現場名を渡して予算書アプリを開く
+                // 現場名と施工場所を渡して予算書アプリを開く
                 const name = project?.projectName?.trim();
-                const url = name ? `/budget?project=${encodeURIComponent(name)}` : '/budget';
+                const addr = (project?.projectLocation ?? '').trim();
+                let url = name ? `/budget?project=${encodeURIComponent(name)}` : '/budget';
+                if (addr) url += `&address=${encodeURIComponent(addr)}`;
                 navigate(url);
                 return;
               }

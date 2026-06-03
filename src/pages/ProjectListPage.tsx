@@ -683,7 +683,10 @@ export function ProjectListPage() {
                           onClick={(e) => {
                             e.stopPropagation();
                             const name = p.projectName?.trim();
-                            navigate(name ? `/budget?project=${encodeURIComponent(name)}` : '/budget');
+                            const addr = (p.projectLocation ?? '').trim();
+                            let url = name ? `/budget?project=${encodeURIComponent(name)}` : '/budget';
+                            if (addr) url += `&address=${encodeURIComponent(addr)}`;
+                            navigate(url);
                           }}
                           className="p-1.5 rounded-lg transition-colors"
                           style={{ color: '#3d3d60' }}
