@@ -1,7 +1,7 @@
 /* src/index.css */
 @import url('https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+JP:wght@400;600;700;900&display=swap');
 
-body { margin: 0; padding: 0; background: #05111f; }
+body { margin: 0; padding: 0; }
 
 /* 🖨️ 印刷設定 */
 @page { size: A4 portrait; margin: 10mm 12mm; }

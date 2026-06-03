@@ -200,6 +200,24 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
     finally { setTimeout(() => setIsLoadingCloud(false), 1000); }
   };
 
+  // 起動時にマスター設定を Firestore から自動ロード（マルチデバイス対応）
+  useEffect(() => {
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, "cost_master", "settings"));
+        if (!snap.exists()) return;
+        const d = snap.data();
+        if (d.masterMats)        setMasterMats(d.masterMats);
+        if (d.masterDiscounts)   setMasterDiscounts(d.masterDiscounts);
+        if (d.masterStdPrices)   setMasterStdPrices(d.masterStdPrices);
+        if (d.masterSuppliers)   setMasterSuppliers(d.masterSuppliers);
+        if (d.masterSupplierMap) setMasterSupplierMap(d.masterSupplierMap);
+        if (d.masterCompanyInfo) setMasterCompanyInfo(d.masterCompanyInfo);
+        if (d.masterHouseMakers) setMasterHouseMakers(d.masterHouseMakers);
+      } catch { /* 失敗時はローカルのまま継続 */ }
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 起動時・タブが表示されたタイミングで自動的に最新データを読み込む
   useEffect(() => {
     loadProjectFromCloud(true);
