@@ -516,7 +516,7 @@ export default function SchedulePage() {
         @media print {
           .schedule-ui     { display: none !important; }
           .schedule-print  { display: block !important; }
-          @page { size: A4 portrait; margin: 0mm; }
+          @page { size: A4 landscape; margin: 0mm; }
           html, body {
             background: white !important;
             margin: 0 !important;
