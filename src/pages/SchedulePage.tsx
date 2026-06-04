@@ -5,10 +5,10 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import type { Project } from '../types';
 import {
-  type ScheduleTask, type ScheduleStatus, type ScheduleData,
+  type ScheduleTask, type ScheduleStatus, type ScheduleData, type Helper,
   cascade, postpone, toDateStr, parseDate, dateDiff, addDaysToStr,
   STATUS_LABELS, STATUS_COLORS, STATUS_BG, VENDOR_PALETTE, vendorColor,
-  newTask, makeTemplate,
+  helperTotal, newTask, makeTemplate,
 } from '../shared/scheduleUtils';
 import ScheduleA4, { scheduleA4PageCount } from './ScheduleA4';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
@@ -55,15 +55,31 @@ interface EditModalProps {
   task: ScheduleTask;
   allPhases: string[];
   allVendors: string[];
+  allHelperNames: string[];
   skipSundays: boolean;
   onSave: (updated: ScheduleTask) => void;
   onDelete: () => void;
   onClose: () => void;
 }
 
-function EditModal({ task, allPhases, allVendors, skipSundays, onSave, onDelete, onClose }: EditModalProps) {
-  const [draft, setDraft] = useState<ScheduleTask>({ ...task });
+function EditModal({ task, allPhases, allVendors, allHelperNames, skipSundays, onSave, onDelete, onClose }: EditModalProps) {
+  const [draft, setDraft] = useState<ScheduleTask>({
+    helpers: [], workerCount: 1, ...task,
+  });
   const [newPhase, setNewPhase] = useState('');
+
+  function addHelper() {
+    setDraft(prev => ({ ...prev, helpers: [...(prev.helpers ?? []), { name: '', count: 1 }] }));
+  }
+  function updHelper(i: number, key: keyof Helper, val: string | number) {
+    setDraft(prev => {
+      const next = (prev.helpers ?? []).map((h, j) => j === i ? { ...h, [key]: val } : h);
+      return { ...prev, helpers: next };
+    });
+  }
+  function removeHelper(i: number) {
+    setDraft(prev => ({ ...prev, helpers: (prev.helpers ?? []).filter((_, j) => j !== i) }));
+  }
 
   const upd = (key: keyof ScheduleTask, val: unknown) =>
     setDraft(prev => ({ ...prev, [key]: val }));
@@ -132,9 +148,56 @@ function EditModal({ task, allPhases, allVendors, skipSundays, onSave, onDelete,
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <label style={{ fontSize: 12, color: '#7aadcf', fontWeight: 600 }}>メモ</label>
-          <textarea rows={2} style={{ ...INP, resize: 'vertical' }} value={draft.note} onChange={e => upd('note', e.target.value)} placeholder="メモ・特記事項" />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 12, color: '#7aadcf', fontWeight: 600 }}>自社人員（人）</label>
+            <input type="number" min={0} style={INP} value={draft.workerCount ?? 1}
+              onChange={e => upd('workerCount', Math.max(0, Number(e.target.value)))} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 12, color: '#7aadcf', fontWeight: 600 }}>メモ</label>
+            <textarea rows={1} style={{ ...INP, resize: 'none' }} value={draft.note} onChange={e => upd('note', e.target.value)} placeholder="特記事項" />
+          </div>
+        </div>
+
+        {/* ─ 応援 ─ */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <label style={{ fontSize: 12, color: '#fbbf24', fontWeight: 700 }}>🤝 応援</label>
+            <button onClick={addHelper} style={{ background: '#451a03', border: '1px solid #fbbf24', color: '#fbbf24', padding: '3px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', fontWeight: 700 }}>
+              ＋ 追加
+            </button>
+          </div>
+          {(draft.helpers ?? []).length === 0 && (
+            <div style={{ fontSize: 11, color: '#475569', padding: '4px 0' }}>応援なし（＋ 追加で登録）</div>
+          )}
+          {(draft.helpers ?? []).map((h, i) => (
+            <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input
+                list={`helper-names-${i}`}
+                style={{ ...INP, flex: 1 }}
+                value={h.name}
+                onChange={e => updHelper(i, 'name', e.target.value)}
+                placeholder="氏名・会社名"
+              />
+              <datalist id={`helper-names-${i}`}>
+                {allHelperNames.map(n => <option key={n} value={n} />)}
+              </datalist>
+              <input
+                type="number" min={1} max={99}
+                style={{ ...INP, width: 52, textAlign: 'center', flexShrink: 0 }}
+                value={h.count}
+                onChange={e => updHelper(i, 'count', Math.max(1, Number(e.target.value)))}
+              />
+              <span style={{ fontSize: 11, color: '#94a3b8', flexShrink: 0 }}>人</span>
+              <button onClick={() => removeHelper(i)} style={{ background: 'none', border: '1px solid #334155', color: '#ef4444', padding: '4px 8px', borderRadius: 6, fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>×</button>
+            </div>
+          ))}
+          {(draft.helpers ?? []).length > 0 && (
+            <div style={{ fontSize: 11, color: '#fbbf24', paddingLeft: 2 }}>
+              合計: {(draft.helpers ?? []).reduce((s, h) => s + (Number(h.count) || 0), 0)}人の応援
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', marginTop: 4 }}>
@@ -165,7 +228,7 @@ export default function SchedulePage() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [collapsedPhases, setCollapsedPhases] = useState<Set<string>>(new Set());
-  const [colorBy, setColorBy] = useState<'status' | 'vendor'>('status');
+  const [colorBy, setColorBy] = useState<'status' | 'vendor' | 'helper'>('status');
   const [customerView, setCustomerView] = useState(false);
   const [postponeDays, setPostponeDays] = useState(1);
   const [showGantt, setShowGantt] = useState(true);
@@ -263,8 +326,9 @@ export default function SchedulePage() {
 
   // ─── Derived ────────────────────────────────────────────────
 
-  const allPhases = [...new Set(tasks.map(t => t.phase))];
-  const allVendors = [...new Set(tasks.map(t => t.vendor).filter(Boolean))];
+  const allPhases      = [...new Set(tasks.map(t => t.phase))];
+  const allVendors     = [...new Set(tasks.map(t => t.vendor).filter(Boolean))];
+  const allHelperNames = [...new Set(tasks.flatMap(t => (t.helpers ?? []).map(h => h.name)).filter(Boolean))];
 
   const ganttStart = tasks.length ? tasks.reduce((m, t) => t.startDate < m ? t.startDate : m, tasks[0].startDate) : toDateStr(new Date());
   const ganttEnd = tasks.length ? tasks.reduce((m, t) => t.endDate > m ? t.endDate : m, tasks[0].endDate) : addDaysToStr(ganttStart, 29);
@@ -397,6 +461,13 @@ export default function SchedulePage() {
 
   function taskColor(t: ScheduleTask): string {
     if (colorBy === 'vendor') return vendorColor(t.vendor, allVendors);
+    if (colorBy === 'helper') {
+      const total = helperTotal(t.helpers ?? []);
+      if (total === 0) return '#475569';
+      if (total <= 1) return '#0ea5e9';
+      if (total <= 3) return '#f59e0b';
+      return '#ef4444'; // 4人以上は赤
+    }
     return STATUS_COLORS[t.status];
   }
 
@@ -542,10 +613,12 @@ export default function SchedulePage() {
 
         <div style={{ flex: 1 }} />
 
-        {/* Color toggle */}
-        <button onClick={() => setColorBy(v => v === 'status' ? 'vendor' : 'status')}
-          style={{ background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', padding: '6px 12px', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontWeight: 700 }}>
-          🎨 {colorBy === 'status' ? '状態別' : '業者別'}
+        {/* Color toggle (3択) */}
+        <button
+          onClick={() => setColorBy(v => v === 'status' ? 'vendor' : v === 'vendor' ? 'helper' : 'status')}
+          style={{ background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', padding: '6px 12px', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontWeight: 700 }}
+        >
+          🎨 {colorBy === 'status' ? '状態別' : colorBy === 'vendor' ? '業者別' : '応援別'}
         </button>
 
         {/* Customer view */}
@@ -707,6 +780,11 @@ export default function SchedulePage() {
                                     {t.vendor}
                                   </span>
                                 )}
+                                {helperTotal(t.helpers ?? []) > 0 && (
+                                  <span style={{ fontSize: 9, background: 'rgba(251,191,36,0.9)', color: '#000', borderRadius: 3, padding: '0 4px', fontWeight: 700, flexShrink: 0, marginLeft: 2 }}>
+                                    🤝{helperTotal(t.helpers ?? [])}人
+                                  </span>
+                                )}
                                 {/* リサイズハンドル（右端） */}
                                 <div
                                   style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 12, cursor: 'ew-resize', background: 'rgba(255,255,255,0.25)', borderRadius: '0 4px 4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
@@ -782,10 +860,18 @@ export default function SchedulePage() {
                               <div style={{ fontSize: 13, fontWeight: 600, color: t.status === 'skip' ? '#475569' : '#dde8f2', textDecoration: t.status === 'skip' ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {t.name || '（未入力）'}
                               </div>
-                              <div style={{ fontSize: 11, color: '#475569', display: 'flex', gap: 8, marginTop: 2 }}>
+                              <div style={{ fontSize: 11, color: '#475569', display: 'flex', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
                                 <span>{fmtDate(t.startDate)}〜{fmtDate(t.endDate)}</span>
                                 <span>{t.days}日</span>
                                 {!customerView && t.vendor && <span style={{ color: '#7aadcf' }}>{t.vendor}</span>}
+                                {!customerView && (t.workerCount ?? 1) > 0 && (
+                                  <span style={{ color: '#94a3b8' }}>自社{t.workerCount ?? 1}人</span>
+                                )}
+                                {!customerView && helperTotal(t.helpers ?? []) > 0 && (
+                                  <span style={{ color: '#fbbf24', fontWeight: 700 }}>
+                                    🤝 {(t.helpers ?? []).map(h => `${h.name}${h.count}人`).join(' / ')}
+                                  </span>
+                                )}
                               </div>
                             </div>
                             <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, background: STATUS_BG[t.status], color: STATUS_COLORS[t.status], fontWeight: 700, whiteSpace: 'nowrap' }}>
@@ -844,6 +930,7 @@ export default function SchedulePage() {
           task={tasks[editIndex]}
           allPhases={allPhases}
           allVendors={allVendors}
+          allHelperNames={allHelperNames}
           skipSundays={skipSundays}
           onSave={handleTaskSave}
           onDelete={handleTaskDelete}

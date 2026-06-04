@@ -4,6 +4,12 @@ import type { Project } from '../types';
 
 export type ScheduleStatus = 'todo' | 'in_progress' | 'done' | 'skip';
 
+/** 応援人員 */
+export interface Helper {
+  name: string;   // 氏名
+  count: number;  // 人数
+}
+
 export interface ScheduleTask {
   id: string;
   phase: string;
@@ -15,6 +21,8 @@ export interface ScheduleTask {
   vendor: string;
   note: string;
   link: 'sequential' | 'parallel';
+  helpers: Helper[];  // 応援人員リスト
+  workerCount: number; // 自社作業員数
 }
 
 export interface ScheduleData {
@@ -138,6 +146,10 @@ export function vendorColor(vendor: string, allVendors: string[]): string {
 
 // ─── Factory ─────────────────────────────────────────────────────
 
+export function helperTotal(helpers: Helper[]): number {
+  return helpers.reduce((s, h) => s + (Number(h.count) || 0), 0);
+}
+
 export function newTask(overrides?: Partial<ScheduleTask>): ScheduleTask {
   return {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
@@ -150,6 +162,8 @@ export function newTask(overrides?: Partial<ScheduleTask>): ScheduleTask {
     vendor: '',
     note: '',
     link: 'sequential',
+    helpers: [],
+    workerCount: 1,
     ...overrides,
   };
 }
