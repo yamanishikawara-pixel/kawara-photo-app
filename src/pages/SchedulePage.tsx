@@ -15,8 +15,49 @@ import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError'
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { ErrorMessage } from '../shared/ErrorMessage';
 
-const DAY_W = 26; // px per day in gantt grid
-const LABEL_W = 200; // px for the task name panel
+const DAY_W = 26;
+const LABEL_W = 200;
+
+// ─── Apple Dark design tokens ──────────────────────────────────
+const A = {
+  bg:      '#000000',
+  s1:      '#1c1c1e',
+  s2:      '#2c2c2e',
+  s3:      '#3a3a3c',
+  sep:     'rgba(255,255,255,0.12)',
+  t1:      '#ffffff',
+  t2:      'rgba(255,255,255,0.55)',
+  t3:      'rgba(255,255,255,0.28)',
+  blue:    '#0a84ff',
+  green:   '#30d158',
+  orange:  '#ff9f0a',
+  red:     '#ff453a',
+  yellow:  '#ffd60a',
+  teal:    '#5ac8fa',
+  purple:  '#bf5af2',
+} as const;
+const FONT = '-apple-system,"SF Pro Display",system-ui,"Helvetica Neue",sans-serif';
+
+/** Appleスタイル塗りボタン */
+function ab(bg: string, fg = '#fff'): React.CSSProperties {
+  return {
+    background: bg, color: fg, border: 'none', borderRadius: 10,
+    padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+    fontFamily: FONT, display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
+    WebkitTapHighlightColor: 'transparent',
+  };
+}
+/** Appleスタイルゴーストボタン */
+function ag(active = false): React.CSSProperties {
+  return {
+    background: active ? 'rgba(10,132,255,0.18)' : 'rgba(255,255,255,0.08)',
+    color: active ? A.blue : A.t2,
+    border: `1px solid ${active ? A.blue : 'transparent'}`,
+    borderRadius: 9, padding: '7px 13px', fontSize: 12, fontWeight: 600,
+    cursor: 'pointer', fontFamily: FONT, display: 'flex', alignItems: 'center',
+    gap: 5, whiteSpace: 'nowrap', WebkitTapHighlightColor: 'transparent',
+  } as React.CSSProperties;
+}
 
 // ─── tiny helpers ──────────────────────────────────────────────
 
@@ -43,9 +84,9 @@ function datesInRange(start: string, end: string): string[] {
 
 // ─── Input style ───────────────────────────────────────────────
 const INP: React.CSSProperties = {
-  background: '#0b1929', border: '1px solid #1e3a5a', borderRadius: 6,
-  color: '#dde8f2', padding: '7px 10px', fontSize: 14, width: '100%',
-  outline: 'none',
+  background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)',
+  borderRadius: 9, color: '#fff', padding: '9px 12px', fontSize: 14, width: '100%',
+  outline: 'none', fontFamily: FONT, boxSizing: 'border-box',
 };
 const SEL: React.CSSProperties = { ...INP, cursor: 'pointer' };
 
@@ -94,35 +135,35 @@ function EditModal({ task, allPhases, allVendors, allHelperNames, skipSundays, o
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ background: '#0d1b2a', border: '1px solid #1e3a5a', borderRadius: 14, padding: 24, width: '100%', maxWidth: 480, display: 'flex', flexDirection: 'column', gap: 14, maxHeight: '90vh', overflowY: 'auto' }}>
-        <div style={{ fontWeight: 700, fontSize: 16, color: '#93c5fd' }}>工程を編集</div>
+      <div style={{ background: '#1c1c1e', borderRadius: 18, padding: 24, width: '100%', maxWidth: 500, display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.7)', fontFamily: FONT }}>
+        <div style={{ fontWeight: 700, fontSize: 17, color: '#fff', letterSpacing: '-0.02em' }}>工程を編集</div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <label style={{ fontSize: 12, color: '#7aadcf', fontWeight: 600 }}>工程名</label>
+          <label style={{ fontSize: 11, color: A.t2, fontWeight: 600, fontFamily: FONT }}>工程名</label>
           <input style={INP} value={draft.name} onChange={e => upd('name', e.target.value)} placeholder="工程名を入力" autoFocus />
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 12, color: '#7aadcf', fontWeight: 600 }}>段階（フェーズ）</label>
+            <label style={{ fontSize: 11, color: A.t2, fontWeight: 600, fontFamily: FONT }}>段階（フェーズ）</label>
             <select style={SEL} value={draft.phase} onChange={e => upd('phase', e.target.value)}>
               {allPhases.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
             <input style={{ ...INP, fontSize: 12 }} value={newPhase} onChange={e => setNewPhase(e.target.value)} placeholder="新しい段階を追加..." onKeyDown={e => { if (e.key === 'Enter' && newPhase.trim()) { upd('phase', newPhase.trim()); setNewPhase(''); } }} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 12, color: '#7aadcf', fontWeight: 600 }}>日数</label>
+            <label style={{ fontSize: 11, color: A.t2, fontWeight: 600, fontFamily: FONT }}>日数</label>
             <input type="number" min={1} style={INP} value={draft.days} onChange={e => upd('days', Number(e.target.value))} />
           </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 12, color: '#7aadcf', fontWeight: 600 }}>開始日（手動）</label>
+            <label style={{ fontSize: 11, color: A.t2, fontWeight: 600, fontFamily: FONT }}>開始日（手動）</label>
             <input type="date" style={INP} value={draft.startDate} onChange={e => upd('startDate', e.target.value)} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 12, color: '#7aadcf', fontWeight: 600 }}>前工程との関係</label>
+            <label style={{ fontSize: 11, color: A.t2, fontWeight: 600, fontFamily: FONT }}>前工程との関係</label>
             <select style={SEL} value={draft.link} onChange={e => upd('link', e.target.value as 'sequential' | 'parallel')}>
               <option value="sequential">連続（前工程の翌日）</option>
               <option value="parallel">同時（前工程と同日）</option>
@@ -132,14 +173,14 @@ function EditModal({ task, allPhases, allVendors, allHelperNames, skipSundays, o
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 12, color: '#7aadcf', fontWeight: 600 }}>担当業者</label>
+            <label style={{ fontSize: 11, color: A.t2, fontWeight: 600, fontFamily: FONT }}>担当業者</label>
             <select style={SEL} value={draft.vendor} onChange={e => upd('vendor', e.target.value)}>
               <option value="">（未設定）</option>
               {allVendors.map(v => <option key={v} value={v}>{v}</option>)}
             </select>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 12, color: '#7aadcf', fontWeight: 600 }}>ステータス</label>
+            <label style={{ fontSize: 11, color: A.t2, fontWeight: 600, fontFamily: FONT }}>ステータス</label>
             <select style={SEL} value={draft.status} onChange={e => upd('status', e.target.value as ScheduleStatus)}>
               {(Object.keys(STATUS_LABELS) as ScheduleStatus[]).map(s => (
                 <option key={s} value={s}>{STATUS_LABELS[s]}</option>
@@ -150,12 +191,12 @@ function EditModal({ task, allPhases, allVendors, allHelperNames, skipSundays, o
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 12, color: '#7aadcf', fontWeight: 600 }}>自社人員（人）</label>
+            <label style={{ fontSize: 11, color: A.t2, fontWeight: 600, fontFamily: FONT }}>自社人員（人）</label>
             <input type="number" min={0} style={INP} value={draft.workerCount ?? 1}
               onChange={e => upd('workerCount', Math.max(0, Number(e.target.value)))} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 12, color: '#7aadcf', fontWeight: 600 }}>メモ</label>
+            <label style={{ fontSize: 11, color: A.t2, fontWeight: 600, fontFamily: FONT }}>メモ</label>
             <textarea rows={1} style={{ ...INP, resize: 'none' }} value={draft.note} onChange={e => upd('note', e.target.value)} placeholder="特記事項" />
           </div>
         </div>
@@ -163,10 +204,8 @@ function EditModal({ task, allPhases, allVendors, allHelperNames, skipSundays, o
         {/* ─ 応援 ─ */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <label style={{ fontSize: 12, color: '#fbbf24', fontWeight: 700 }}>🤝 応援</label>
-            <button onClick={addHelper} style={{ background: '#451a03', border: '1px solid #fbbf24', color: '#fbbf24', padding: '3px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', fontWeight: 700 }}>
-              ＋ 追加
-            </button>
+            <label style={{ fontSize: 11, color: A.orange, fontWeight: 700, fontFamily: FONT }}>🤝 応援</label>
+            <button onClick={addHelper} style={ag()}>＋ 追加</button>
           </div>
           {(draft.helpers ?? []).length === 0 && (
             <div style={{ fontSize: 11, color: '#475569', padding: '4px 0' }}>応援なし（＋ 追加で登録）</div>
@@ -201,12 +240,12 @@ function EditModal({ task, allPhases, allVendors, allHelperNames, skipSundays, o
         </div>
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', marginTop: 4 }}>
-          <button onClick={onDelete} style={{ background: '#2d0f0f', border: '1px solid #ef4444', color: '#f87171', padding: '8px 16px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 700 }}>
-            <Trash2 size={13} style={{ display: 'inline', marginRight: 4 }} />削除
+          <button onClick={onDelete} style={ab(A.s2, A.red)}>
+            <Trash2 size={14} />削除
           </button>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={onClose} style={{ background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', padding: '8px 16px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 700 }}>キャンセル</button>
-            <button onClick={handleSave} style={{ background: '#0ea5e9', border: 'none', color: '#fff', padding: '8px 20px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 700 }}>保存</button>
+            <button onClick={onClose} style={ag()}>キャンセル</button>
+            <button onClick={handleSave} style={ab(A.blue)}>保存</button>
           </div>
         </div>
       </div>
@@ -234,6 +273,7 @@ export default function SchedulePage() {
   const [showGantt, setShowGantt] = useState(true);
   const [rainOpen, setRainOpen] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [printMode, setPrintMode] = useState<'internal' | 'customer'>('internal');
 
   // ─── Drag state ────────────────────────────────────────────
   interface DragState {
@@ -391,9 +431,9 @@ export default function SchedulePage() {
   function collapseAll() { setCollapsedPhases(new Set(allPhases)); }
   function expandAll()   { setCollapsedPhases(new Set()); }
 
-  function handlePrint() {
+  function handlePrint(mode: 'internal' | 'customer') {
+    setPrintMode(mode);
     setIsPrinting(true);
-    // RAF × 2 で印刷ビューが DOM に反映されてから print() を呼ぶ
     requestAnimationFrame(() => requestAnimationFrame(() => {
       window.print();
     }));
@@ -509,7 +549,7 @@ export default function SchedulePage() {
   const printTotalPages = printProject ? scheduleA4PageCount(printProject) : 0;
 
   return (
-    <div style={{ minHeight: '100vh', background: '#05111f', fontFamily: "'Noto Sans JP', sans-serif", color: '#dde8f2', paddingBottom: 60 }}>
+    <div style={{ minHeight: '100vh', background: A.bg, fontFamily: FONT, color: A.t1, paddingBottom: 60 }}>
 
       {/* ─ 印刷専用スタイル ─ */}
       <style>{`
@@ -546,6 +586,7 @@ export default function SchedulePage() {
             project={printProject}
             companyName={project?.contractorName ?? undefined}
             colorBy={colorBy}
+            mode={printMode}
             startPage={1}
             totalPages={printTotalPages}
           />
@@ -556,90 +597,66 @@ export default function SchedulePage() {
       <div className="schedule-ui">
 
       {/* ─ Header ─ */}
-      <div style={{ background: 'linear-gradient(90deg,#0c2340,#061628)', borderBottom: '1px solid #1e3a5a', padding: '12px 16px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12, position: 'sticky', top: 0, zIndex: 50 }}>
-        <button onClick={() => navigate(`/project/${id}`)} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', color: '#8b8ba8', cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
-          <ArrowLeft size={15} />もどる
+      <div style={{ background: 'rgba(28,28,30,0.92)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderBottom: `1px solid ${A.sep}`, padding: '12px 16px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, position: 'sticky', top: 0, zIndex: 50 } as React.CSSProperties}>
+        <button onClick={() => navigate(`/project/${id}`)} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: A.blue, cursor: 'pointer', fontSize: 15, fontWeight: 500, fontFamily: FONT }}>
+          <ArrowLeft size={16} />戻る
         </button>
-        <CalendarRange size={18} style={{ color: '#38bdf8' }} />
-        <div style={{ fontWeight: 700, fontSize: 16, color: '#f0ede8' }}>工程表</div>
-        <div style={{ fontSize: 12, color: '#38bdf8', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ width: 1, height: 18, background: A.sep, margin: '0 4px' }} />
+        <CalendarRange size={16} style={{ color: A.blue }} />
+        <div style={{ fontWeight: 700, fontSize: 16, color: A.t1, letterSpacing: '-0.02em' }}>工程表</div>
+        <div style={{ fontSize: 13, color: A.t2, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {project.projectName}
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          {saveStatus === 'saving' && <span style={{ fontSize: 11, color: '#94a3b8' }}>保存中...</span>}
-          {saveStatus === 'saved'  && <span style={{ fontSize: 11, color: '#4ade80' }}>✓ 保存済み</span>}
-          {tasks.length > 0 && (
-            <button
-              onClick={handlePrint}
-              disabled={isPrinting}
-              style={{ background: '#f59e0b', border: 'none', color: '#000', padding: '7px 16px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5, opacity: isPrinting ? 0.6 : 1 }}
-            >
-              🖨️ {isPrinting ? '準備中...' : 'PDF・印刷'}
-            </button>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {saveStatus === 'saving' && <span style={{ fontSize: 12, color: A.t3 }}>保存中…</span>}
+          {saveStatus === 'saved'  && <span style={{ fontSize: 12, color: A.green }}>✓ 保存済み</span>}
+          {tasks.length > 0 && !isPrinting && (
+            <>
+              <button onClick={() => handlePrint('internal')} style={ab(A.s2, A.t1)}>
+                🏠 自社用
+              </button>
+              <button onClick={() => handlePrint('customer')} style={ab(A.blue)}>
+                🖨️ お客様用
+              </button>
+            </>
           )}
+          {isPrinting && <span style={{ fontSize: 12, color: A.t3 }}>印刷準備中…</span>}
         </div>
       </div>
 
       {/* ─ Toolbar ─ */}
-      <div style={{ background: '#0d1b2a', borderBottom: '1px solid #1e3a5a', padding: '10px 16px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-        {/* Template */}
-        <button onClick={handleTemplate}
-          style={{ background: '#1e3a5a', border: '1px solid #2a5a8a', color: '#93c5fd', padding: '6px 12px', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontWeight: 700 }}>
-          📋 ひな形
-        </button>
-
-        {/* Add task */}
-        <button onClick={() => addTask()}
-          style={{ background: '#064e3b', border: '1px solid #065f46', color: '#6ee7b7', padding: '6px 12px', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+      <div style={{ background: A.s1, borderBottom: `1px solid ${A.sep}`, padding: '10px 16px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <button onClick={handleTemplate} style={ag()}>📋 ひな形</button>
+        <button onClick={() => addTask()} style={ag()}>
           <Plus size={13} />工程追加
         </button>
-
-        {/* Rain delay */}
-        <button onClick={() => setRainOpen(v => !v)}
-          style={{ background: '#1e3a8a', border: '1px solid #2563eb', color: '#93c5fd', padding: '6px 12px', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontWeight: 700 }}>
-          🌧 雨天順延
-        </button>
+        <button onClick={() => setRainOpen(v => !v)} style={ag(rainOpen)}>🌧 雨天順延</button>
         {rainOpen && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <input type="number" min={1} max={30} value={postponeDays} onChange={e => setPostponeDays(Number(e.target.value))}
-              style={{ ...INP, width: 52, padding: '5px 8px', fontSize: 13, textAlign: 'center' }} />
-            <span style={{ fontSize: 12, color: '#94a3b8' }}>日順延</span>
-            <button onClick={handlePostpone}
-              style={{ background: '#2563eb', border: 'none', color: '#fff', padding: '5px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer', fontWeight: 700 }}>
-              実行
-            </button>
+            <input type="number" min={1} max={30} value={postponeDays}
+              onChange={e => setPostponeDays(Number(e.target.value))}
+              style={{ ...INP, width: 56, textAlign: 'center', fontSize: 13 }} />
+            <span style={{ fontSize: 12, color: A.t2, fontFamily: FONT }}>日</span>
+            <button onClick={handlePostpone} style={ab(A.blue, '#fff')}>実行</button>
           </div>
         )}
 
         <div style={{ flex: 1 }} />
 
-        {/* Color toggle (3択) */}
-        <button
-          onClick={() => setColorBy(v => v === 'status' ? 'vendor' : v === 'vendor' ? 'helper' : 'status')}
-          style={{ background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', padding: '6px 12px', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontWeight: 700 }}
-        >
+        <button onClick={() => setColorBy(v => v === 'status' ? 'vendor' : v === 'vendor' ? 'helper' : 'status')}
+          style={ag()}>
           🎨 {colorBy === 'status' ? '状態別' : colorBy === 'vendor' ? '業者別' : '応援別'}
         </button>
-
-        {/* Customer view */}
-        <button onClick={() => setCustomerView(v => !v)}
-          style={{ background: customerView ? 'rgba(245,158,11,0.15)' : '#1e293b', border: `1px solid ${customerView ? '#f59e0b' : '#334155'}`, color: customerView ? '#f59e0b' : '#94a3b8', padding: '6px 12px', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontWeight: 700 }}>
-          👤 お客様
+        <button onClick={() => setCustomerView(v => !v)} style={ag(customerView)}>
+          👤 お客様ビュー
         </button>
-
-        {/* Gantt toggle */}
-        <button onClick={() => setShowGantt(v => !v)}
-          style={{ background: showGantt ? 'rgba(56,189,248,0.15)' : '#1e293b', border: `1px solid ${showGantt ? '#38bdf8' : '#334155'}`, color: showGantt ? '#38bdf8' : '#94a3b8', padding: '6px 12px', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontWeight: 700 }}>
-          <AlignLeft size={13} style={{ display: 'inline', marginRight: 4 }} />
-          {showGantt ? 'Gantt表示' : 'リスト表示'}
+        <button onClick={() => setShowGantt(v => !v)} style={ag(showGantt)}>
+          <AlignLeft size={13} />
+          {showGantt ? 'Gantt' : 'リスト'}
         </button>
-
-        {/* Collapse/Expand */}
-        <button onClick={collapseAll} style={{ background: 'none', border: '1px solid #334155', color: '#64748b', padding: '6px 10px', borderRadius: 7, fontSize: 11, cursor: 'pointer' }}>すべて畳む</button>
-        <button onClick={expandAll}   style={{ background: 'none', border: '1px solid #334155', color: '#64748b', padding: '6px 10px', borderRadius: 7, fontSize: 11, cursor: 'pointer' }}>すべて開く</button>
-
-        {/* Skip sundays */}
-        <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#94a3b8', cursor: 'pointer' }}>
+        <button onClick={collapseAll} style={ag()}>畳む</button>
+        <button onClick={expandAll}   style={ag()}>開く</button>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: A.t2, cursor: 'pointer', fontFamily: FONT }}>
           <input type="checkbox" checked={skipSundays} onChange={e => {
             const v = e.target.checked;
             setSkipSundays(v);
@@ -681,7 +698,7 @@ export default function SchedulePage() {
 
                 {/* Day header */}
                 <div style={{ display: 'flex', borderBottom: '1px solid #1e3a5a', background: '#0b1929' }}>
-                  <div style={{ width: LABEL_W, minWidth: LABEL_W, flexShrink: 0, fontSize: 11, color: '#475569', padding: '6px 12px', fontWeight: 700 }}>工程名</div>
+                  <div style={{ width: LABEL_W, minWidth: LABEL_W, flexShrink: 0, fontSize: 11, color: A.t3, padding: '6px 12px', fontWeight: 600, fontFamily: FONT }}>工程名</div>
                   <div style={{ display: 'flex', overflow: 'hidden' }}>
                     {headerDays.map(d => {
                       const dt = parseDate(d);
@@ -703,13 +720,13 @@ export default function SchedulePage() {
                     <div key={phase}>
                       {/* Phase header */}
                       <div
-                        style={{ display: 'flex', alignItems: 'center', background: '#0f2030', borderBottom: '1px solid #1e3a5a', cursor: 'pointer', userSelect: 'none' }}
+                        style={{ display: 'flex', alignItems: 'center', background: A.s1, borderBottom: `1px solid ${A.sep}`, cursor: 'pointer', userSelect: 'none' }}
                         onClick={() => togglePhase(phase)}
                       >
                         <div style={{ width: LABEL_W, minWidth: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px' }}>
-                          {collapsed ? <ChevronRight size={13} style={{ color: '#38bdf8' }} /> : <ChevronDown size={13} style={{ color: '#38bdf8' }} />}
-                          <span style={{ fontWeight: 700, fontSize: 13, color: '#38bdf8' }}>{phase}</span>
-                          <span style={{ fontSize: 11, color: '#475569' }}>（{pts.length}工程）</span>
+                          {collapsed ? <ChevronRight size={13} style={{ color: A.blue }} /> : <ChevronDown size={13} style={{ color: A.blue }} />}
+                          <span style={{ fontWeight: 700, fontSize: 13, color: A.blue, fontFamily: FONT }}>{phase}</span>
+                          <span style={{ fontSize: 11, color: A.t3, fontFamily: FONT }}>（{pts.length}）</span>
                         </div>
                         <div style={{ flex: 1, height: 28 }} />
                       </div>
@@ -839,12 +856,12 @@ export default function SchedulePage() {
                 return (
                   <div key={phase} style={{ marginBottom: 8 }}>
                     <div
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#0f2030', border: '1px solid #1e3a5a', borderRadius: 8, padding: '8px 14px', cursor: 'pointer' }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, background: A.s1, borderRadius: 12, padding: '10px 16px', cursor: 'pointer' }}
                       onClick={() => togglePhase(phase)}
                     >
-                      {collapsed ? <ChevronRight size={14} style={{ color: '#38bdf8' }} /> : <ChevronDown size={14} style={{ color: '#38bdf8' }} />}
-                      <span style={{ fontWeight: 700, fontSize: 14, color: '#38bdf8' }}>{phase}</span>
-                      <span style={{ fontSize: 12, color: '#475569' }}>{pts.length}工程</span>
+                      {collapsed ? <ChevronRight size={14} style={{ color: A.blue }} /> : <ChevronDown size={14} style={{ color: A.blue }} />}
+                      <span style={{ fontWeight: 700, fontSize: 14, color: A.blue, fontFamily: FONT }}>{phase}</span>
+                      <span style={{ fontSize: 12, color: A.t3, fontFamily: FONT }}>{pts.length}工程</span>
                     </div>
 
                     {!collapsed && (
@@ -916,11 +933,11 @@ export default function SchedulePage() {
 
       {/* ─ Summary ─ */}
       {tasks.length > 0 && (
-        <div style={{ margin: '12px 16px 0', padding: '12px 16px', background: '#0b1929', border: '1px solid #1e3a5a', borderRadius: 10, display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 12, color: '#7aadcf' }}>
-          <span>工程数: <b style={{ color: '#dde8f2' }}>{tasks.length}</b></span>
-          <span>期間: <b style={{ color: '#dde8f2' }}>{fmtDate(ganttStart)} 〜 {fmtDate(ganttEnd)}</b></span>
-          <span>日数: <b style={{ color: '#dde8f2' }}>{totalGanttDays}日</b></span>
-          <span>完了: <b style={{ color: '#4ade80' }}>{tasks.filter(t => t.status === 'done').length}</b> / {tasks.length}</span>
+        <div style={{ margin: '12px 16px 0', padding: '12px 16px', background: A.s1, borderRadius: 12, display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 12, color: A.t2, fontFamily: FONT }}>
+          <span>工程数: <b style={{ color: A.t1 }}>{tasks.length}</b></span>
+          <span>期間: <b style={{ color: A.t1 }}>{fmtDate(ganttStart)} 〜 {fmtDate(ganttEnd)}</b></span>
+          <span>日数: <b style={{ color: A.t1 }}>{totalGanttDays}日</b></span>
+          <span>完了: <b style={{ color: A.green }}>{tasks.filter(t => t.status === 'done').length}</b> / {tasks.length}</span>
         </div>
       )}
 

@@ -87,6 +87,7 @@ interface PageProps {
   days: string[];
   companyName: string;
   colorBy: 'status' | 'vendor' | 'helper';
+  mode: 'internal' | 'customer';
   allVendors: string[];
   pageNum: number;
   totalPages: number;
@@ -94,9 +95,10 @@ interface PageProps {
 }
 
 function GanttPage({
-  project, rows, days, companyName, colorBy, allVendors,
+  project, rows, days, companyName, colorBy, mode, allVendors,
   pageNum, totalPages, isFirstPage,
 }: PageProps) {
+  const isInternal = mode === 'internal';
   const today = new Date().toISOString().slice(0, 10);
   const spans = monthSpans(days);
   const N = days.length;
@@ -212,7 +214,7 @@ function GanttPage({
             {/* 日付 + 曜日ヘッダー */}
             <tr>
               <th style={{ ...tdName, background: '#e2e8f0', fontSize: '6pt', color: '#475569', textAlign: 'center', fontWeight: 600 }}>
-                担当 / 状態
+                {isInternal ? '担当・応援 / 状態' : '工程名'}
               </th>
               {days.map(d => {
                 const dt = parseDate(d);
@@ -270,11 +272,16 @@ function GanttPage({
                       <span style={{ fontWeight: isSkip ? 400 : 600, textDecoration: isSkip ? 'line-through' : 'none', color: isSkip ? '#9ca3af' : '#111', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {t.name || '（未入力）'}
                       </span>
-                      <span style={{ fontSize: '5.5pt', color: '#64748b' }}>
-                        {t.vendor && `${t.vendor}`}
-                        {hTotal > 0 && ` 🤝${hTotal}人`}
-                        {` ｜ ${STATUS_LABELS[t.status]}`}
-                      </span>
+                      {isInternal ? (
+                        <span style={{ fontSize: '5.5pt', color: '#64748b' }}>
+                          {t.vendor}
+                          {(t.workerCount ?? 1) > 0 && ` 自社${t.workerCount ?? 1}人`}
+                          {hTotal > 0 && ` / ${(t.helpers ?? []).map(h => `${h.name}${h.count}人`).join('・')}`}
+                          {` ｜ ${STATUS_LABELS[t.status]}`}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: '5.5pt', color: '#94a3b8' }}>{t.days}日間</span>
+                      )}
                     </div>
                   </td>
 
@@ -346,6 +353,8 @@ interface ScheduleA4Props {
   companyName?: string;
   companyPhone?: string;
   colorBy?: 'status' | 'vendor' | 'helper';
+  /** 'internal' = 自社用（応援・担当・状態すべて表示）, 'customer' = お客様用（工程名のみ・清書印刷） */
+  mode?: 'internal' | 'customer';
   startPage?: number;
   totalPages?: number;
 }
@@ -354,6 +363,7 @@ export default function ScheduleA4({
   project,
   companyName = '',
   colorBy = 'status',
+  mode = 'internal',
   startPage = 1,
   totalPages = 1,
 }: ScheduleA4Props) {
@@ -404,7 +414,8 @@ export default function ScheduleA4({
           rows={rows}
           days={days}
           companyName={companyName}
-          colorBy={colorBy}
+          colorBy={mode === 'customer' ? 'status' : colorBy}
+          mode={mode}
           allVendors={allVendors}
           pageNum={startPage + pi}
           totalPages={total}
