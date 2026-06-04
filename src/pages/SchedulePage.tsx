@@ -549,7 +549,7 @@ export default function SchedulePage() {
   const printTotalPages = printProject ? scheduleA4PageCount(printProject) : 0;
 
   return (
-    <div style={{ minHeight: '100vh', background: A.bg, fontFamily: FONT, color: A.t1, paddingBottom: 60 }}>
+    <div style={{ fontFamily: FONT }}>
 
       {/* ─ 印刷専用スタイル ─ */}
       <style>{`
@@ -557,10 +557,12 @@ export default function SchedulePage() {
           .schedule-ui     { display: none !important; }
           .schedule-print  { display: block !important; }
           @page { size: A4 landscape; margin: 0mm; }
-          html, body {
+          html, body, #root, #root > * {
             background: white !important;
             margin: 0 !important;
             padding: 0 !important;
+          }
+          html, body {
             width: 210mm !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
@@ -593,8 +595,8 @@ export default function SchedulePage() {
         </div>
       )}
 
-      {/* ─ UI（印刷時非表示） ─ */}
-      <div className="schedule-ui">
+      {/* ─ UI（印刷時非表示・黒背景はここに閉じ込める） ─ */}
+      <div className="schedule-ui" style={{ minHeight: '100vh', background: A.bg, color: A.t1, paddingBottom: 60 }}>
 
       {/* ─ Header ─ */}
       <div style={{ background: 'rgba(28,28,30,0.92)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderBottom: `1px solid ${A.sep}`, padding: '12px 16px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, position: 'sticky', top: 0, zIndex: 50 } as React.CSSProperties}>
