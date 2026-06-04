@@ -1,13 +1,19 @@
 /**
- * ScheduleA4 — A4横向きガントチャート PDF コンポーネント
+ * ScheduleA4 — 標準的な日本式工程表 (A4横向き・テーブルレイアウト)
  *
- * レイアウト（297mm × 210mm landscape）:
- *   ┌ ヘッダー（タイトル・現場名・会社名） ─────────────────────────┐
- *   ├ 月行（月またぎスパン） ────────────────────────────────────────┤
- *   ├ 日行（日付 + 曜日） ───────────────────────────────────────────┤
- *   ├ [段階ヘッダー行]  ─── ██████████████████████████████ ───────  │
- *   ├  工程名          ─── ████  ██████                    ───────  │
- *   └ フッター（ページ番号） ───────────────────────────────────────┘
+ * 構造:
+ *   ヘッダー（工事名・会社名・期間）
+ *   ┌────────┬─── 6月 ──────┬─── 7月 ──────┐
+ *   │ 工程名 │ 1│ 2│ 3│ 4│ 5│ 6│ 7│ 8│...│
+ *   │        │月│火│水│木│金│土│日│月│...│
+ *   ├────────┤                              │
+ *   │▶ 準備  │ (フェーズ帯)                  │
+ *   │近隣挨拶│█│ │ │ │ │ │ │ │...│
+ *   │足場組立│ │█│█│ │ │ │ │ │...│
+ *   ├────────┤                              │
+ *   │▶ 撤去  │                              │
+ *   │既存瓦撤│ │ │ │█│█│█│█│ │...│
+ *   └────────┴──────────────────────────────┘
  */
 import type { Project } from '../types';
 import {
@@ -19,428 +25,321 @@ import {
 
 export { scheduleA4PageCount };
 
-// ─── 定数（全て mm 単位）────────────────────────────────────────────
-const PW = 297;   // A4 landscape width
-const PH = 210;   // A4 landscape height
-const ML = 8;     // left margin
-const MR = 8;     // right margin
-const MT = 7;     // top margin
-const MB = 7;     // bottom margin
-
-const LABEL_W = 66;                          // 工程名カラム幅
-const CAL_W   = PW - ML - MR - LABEL_W;     // カレンダー幅 ≒ 215mm
-const TITLE_H = 10;                          // タイトル行高
-const MON_H   = 5;                           // 月ヘッダー行高
-const DAY_H   = 7;                           // 日付行高
-const PHASE_H = 6;                           // フェーズヘッダー行高
-const TASK_H  = 7;                           // タスク行高
-const FOOT_H  = 6;                           // フッター行高
-const CONTENT_H = PH - MT - MB - TITLE_H - MON_H - DAY_H - FOOT_H; // 使用可能な行エリア高
-
 const JP = "'Noto Sans JP','BIZ UDPGothic','Hiragino Kaku Gothic ProN',Meiryo,sans-serif";
+const DOW = ['日','月','火','水','木','金','土'];
+const STATUS_LIGHT: Record<string, string> = {
+  todo: '#c7d2fe', in_progress: '#93c5fd', done: '#86efac', skip: '#e2e8f0',
+};
 
-// ─── 日付ユーティリティ ──────────────────────────────────────────────
+// ─── ユーティリティ ────────────────────────────────────────────────────
 
-function allDaysInRange(start: string, end: string): string[] {
-  const days: string[] = [];
-  for (let i = 0; i <= dateDiff(start, end); i++) days.push(addDaysToStr(start, i));
-  return days;
+function fmtHeader(s: string) {
+  const d = parseDate(s);
+  return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
 }
 
-function dayW(total: number): number {
-  // 総日数に応じて1日あたりの幅(mm)を決める
-  return Math.max(1.5, CAL_W / total);
+function allDays(start: string, end: string): string[] {
+  const out: string[] = [];
+  for (let i = 0; i <= dateDiff(start, end); i++) out.push(addDaysToStr(start, i));
+  return out;
 }
 
-function dayX(d: string, start: string, total: number): number {
-  return LABEL_W + (dateDiff(start, d) / total) * CAL_W;
-}
-
-function barX(start: string, rangeStart: string, total: number): number {
-  return LABEL_W + Math.max(0, dateDiff(rangeStart, start)) / total * CAL_W;
-}
-
-function barW(start: string, end: string, rangeStart: string, rangeEnd: string, total: number): number {
-  const s = dateDiff(rangeStart, start);
-  const e = dateDiff(rangeStart, end);
-  const clampS = Math.max(0, s);
-  const clampE = Math.min(total - 1, e);
-  return Math.max(1, (clampE - clampS + 1) / total * CAL_W);
-}
-
-// ─── 月グループ計算 ──────────────────────────────────────────────────
-
-interface MonthSpan { label: string; startDay: string; days: number }
-
-function calcMonthSpans(start: string, end: string): MonthSpan[] {
+interface MonthSpan { label: string; count: number }
+function monthSpans(days: string[]): MonthSpan[] {
   const spans: MonthSpan[] = [];
-  let cur = parseDate(start);
-  const endD = parseDate(end);
-  while (cur <= endD) {
-    const y = cur.getFullYear(), m = cur.getMonth();
-    const monthStart = cur;
-    const nextM = new Date(y, m + 1, 1);
-    const monthEnd = nextM > endD ? endD : new Date(nextM.getTime() - 86400000);
-    const days = dateDiff(
-      `${y}-${String(m+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`,
-      `${monthEnd.getFullYear()}-${String(monthEnd.getMonth()+1).padStart(2,'0')}-${String(monthEnd.getDate()).padStart(2,'0')}`,
-    ) + 1;
-    spans.push({
-      label: `${y}年${m+1}月`,
-      startDay: `${y}-${String(m+1).padStart(2,'0')}-${String(monthStart.getDate()).padStart(2,'0')}`,
-      days,
-    });
-    cur = nextM;
+  for (const d of days) {
+    const dt = parseDate(d);
+    const lbl = `${dt.getMonth()+1}月`;
+    if (spans.length > 0 && spans[spans.length-1].label === lbl) {
+      spans[spans.length-1].count++;
+    } else {
+      spans.push({ label: lbl, count: 1 });
+    }
   }
   return spans;
 }
 
-// ─── 単色 pill ───────────────────────────────────────────────────────
+// ─── セル CSS ─────────────────────────────────────────────────────────
 
-function StatusPill({ status }: { status: ScheduleTask['status'] }) {
-  return (
-    <span style={{
-      fontSize: '5pt', fontWeight: 700, padding: '0.5px 3px', borderRadius: 2,
-      background: STATUS_COLORS[status] + '33', color: STATUS_COLORS[status],
-      fontFamily: JP,
-    }}>
-      {STATUS_LABELS[status]}
-    </span>
-  );
+/** セルの基本スタイル */
+function cellBase(extra?: React.CSSProperties): React.CSSProperties {
+  return {
+    border: '0.4pt solid #b0b0b0',
+    padding: 0,
+    boxSizing: 'border-box',
+    ...extra,
+  };
 }
 
-// ─── A4 1ページ ─────────────────────────────────────────────────────
+function dayBg(d: string, today: string): string {
+  const dow = parseDate(d).getDay();
+  if (d === today) return '#fef9c3';
+  if (dow === 0) return '#fee2e2';
+  if (dow === 6) return '#eff6ff';
+  return '#fff';
+}
 
-type GanttRow =
-  | { type: 'phase'; phase: string }
-  | { type: 'task'; task: ScheduleTask };
+// ─── 1ページ ─────────────────────────────────────────────────────────
 
-interface A4PageProps {
+interface PageProps {
   project: Project;
-  rows: GanttRow[];
-  rangeStart: string;
-  rangeEnd: string;
-  totalDays: number;
-  companyName?: string;
+  rows: Array<{ type: 'phase'; phase: string } | { type: 'task'; task: ScheduleTask }>;
+  days: string[];
+  companyName: string;
   colorBy: 'status' | 'vendor' | 'helper';
   allVendors: string[];
   pageNum: number;
   totalPages: number;
+  isFirstPage: boolean;
 }
 
-function A4Page({
-  project, rows, rangeStart, rangeEnd, totalDays,
-  companyName, colorBy, allVendors, pageNum, totalPages,
-}: A4PageProps) {
-  const allDays = allDaysInRange(rangeStart, rangeEnd);
-  const dw = dayW(totalDays);
-  const monthSpans = calcMonthSpans(rangeStart, rangeEnd);
-  const todayStr = new Date().toISOString().slice(0, 10);
+function GanttPage({
+  project, rows, days, companyName, colorBy, allVendors,
+  pageNum, totalPages, isFirstPage,
+}: PageProps) {
+  const today = new Date().toISOString().slice(0, 10);
+  const spans = monthSpans(days);
+  const N = days.length;
+
+  // 1日あたりの幅: A4横(277mm有効幅) - 工程名列(65mm) = 212mm ÷ N日
+  // 最小2mm, 最大15mm
+  const cellWmm = Math.min(15, Math.max(2, 212 / N));
+  const cellW = `${cellWmm.toFixed(1)}mm`;
+  const labelW = '65mm';
 
   function barColor(t: ScheduleTask): string {
     if (colorBy === 'vendor') return vendorColor(t.vendor, allVendors);
     if (colorBy === 'helper') {
       const n = helperTotal(t.helpers ?? []);
       if (n === 0) return '#94a3b8';
-      if (n === 1) return '#0ea5e9';
+      if (n === 1) return '#38bdf8';
       if (n <= 3) return '#f59e0b';
       return '#ef4444';
     }
     return STATUS_COLORS[t.status];
   }
 
-  // mm → px変換（印刷では1mm = 3.7795px だが、ブラウザ印刷で mm単位使用）
-  const px = (mm: number) => `${mm}mm`;
+  const tdName: React.CSSProperties = {
+    ...cellBase(),
+    width: labelW, minWidth: labelW, maxWidth: labelW,
+    padding: '1pt 3pt',
+    textAlign: 'left',
+    fontFamily: JP,
+    overflow: 'hidden',
+    verticalAlign: 'middle',
+    whiteSpace: 'nowrap',
+  };
+
+  const tdDay: React.CSSProperties = {
+    ...cellBase(),
+    width: cellW, minWidth: cellW, maxWidth: cellW,
+    textAlign: 'center',
+    verticalAlign: 'middle',
+    fontFamily: JP,
+    overflow: 'hidden',
+    padding: 0,
+  };
 
   return (
     <div
       className="pdf-page-wrapper"
       style={{
-        width: px(PW), height: px(PH),
-        position: 'relative',
+        width: '297mm', height: '210mm',
         background: '#fff',
         overflow: 'hidden',
         boxSizing: 'border-box',
+        padding: '7mm 10mm 6mm 10mm',
         fontFamily: JP,
         color: '#111',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '2mm',
+        pageBreakAfter: 'always',
       }}
     >
-      {/* ─ タイトル行 ─ */}
-      <div style={{
-        position: 'absolute', top: px(MT), left: px(ML),
-        width: px(PW - ML - MR), height: px(TITLE_H),
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        borderBottom: '1.5pt solid #1e3a8a', paddingBottom: '1mm',
-        boxSizing: 'border-box',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '4mm' }}>
-          <span style={{ fontSize: '13pt', fontWeight: 900, letterSpacing: '0.08em', color: '#1e3a8a' }}>工程表</span>
-          <span style={{ fontSize: '9pt', fontWeight: 700, color: '#333' }}>{project.projectName}</span>
-          {project.projectLocation && (
-            <span style={{ fontSize: '7pt', color: '#666' }}>📍 {project.projectLocation}</span>
-          )}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4mm' }}>
-          {companyName && <span style={{ fontSize: '7pt', color: '#555' }}>{companyName}</span>}
-          <span style={{ fontSize: '7pt', color: '#777' }}>{pageNum} / {totalPages}</span>
-        </div>
-      </div>
-
-      {/* ─ 月ヘッダー ─ */}
-      {monthSpans.map((ms, i) => {
-        const x = barX(ms.startDay, rangeStart, totalDays);
-        const w = (ms.days / totalDays) * CAL_W;
-        return (
-          <div key={i} style={{
-            position: 'absolute',
-            top: px(MT + TITLE_H),
-            left: px(ML + x),
-            width: px(w - 0.5),
-            height: px(MON_H),
-            background: '#1e3a8a',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxSizing: 'border-box',
-            borderRight: '0.3pt solid #fff',
-          }}>
-            <span style={{ fontSize: '6pt', fontWeight: 700, color: '#fff', fontFamily: JP }}>{ms.label}</span>
+      {/* ヘッダー */}
+      {isFirstPage && (
+        <div style={{ flexShrink: 0, borderBottom: '1.5pt solid #1e3a8a', paddingBottom: '2mm', marginBottom: '1mm', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1mm' }}>
+            <div style={{ fontSize: '14pt', fontWeight: 900, color: '#1e3a8a', letterSpacing: '0.08em' }}>工 程 表</div>
+            <div style={{ display: 'flex', gap: '5mm', fontSize: '8pt', color: '#333' }}>
+              <span><b>工事名：</b>{project.projectName}</span>
+              {project.projectLocation && <span><b>現場：</b>{project.projectLocation}</span>}
+            </div>
           </div>
-        );
-      })}
-
-      {/* ─ 日付ヘッダー ─ */}
-      {/* 工程名ラベル列ヘッダー */}
-      <div style={{
-        position: 'absolute', top: px(MT + TITLE_H + MON_H),
-        left: px(ML), width: px(LABEL_W), height: px(DAY_H),
-        background: '#e2e8f0',
-        display: 'flex', alignItems: 'center', paddingLeft: '3mm',
-        borderBottom: '0.5pt solid #aaa', borderRight: '0.5pt solid #aaa',
-        boxSizing: 'border-box',
-      }}>
-        <span style={{ fontSize: '6pt', fontWeight: 700, color: '#475569', fontFamily: JP }}>工程名</span>
-      </div>
-
-      {/* 各日セル */}
-      {allDays.map(d => {
-        const dt = parseDate(d);
-        const dow = dt.getDay(); // 0=Sun,6=Sat
-        const isSun = dow === 0;
-        const isSat = dow === 6;
-        const isToday = d === todayStr;
-        const x = ML + (dateDiff(rangeStart, d) / totalDays) * CAL_W;
-        const bg = isToday ? '#fef3c7' : isSun ? '#fee2e2' : isSat ? '#eff6ff' : '#e2e8f0';
-        const fg = isToday ? '#92400e' : isSun ? '#991b1b' : isSat ? '#1e40af' : '#475569';
-        const dayNum = dt.getDate();
-        return (
-          <div key={d} style={{
-            position: 'absolute',
-            top: px(MT + TITLE_H + MON_H),
-            left: px(x),
-            width: px(dw - 0.3),
-            height: px(DAY_H),
-            background: bg,
-            borderBottom: isToday ? '1.5pt solid #f59e0b' : '0.5pt solid #aaa',
-            borderRight: '0.3pt solid #ccc',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            boxSizing: 'border-box', overflow: 'hidden',
-          }}>
-            {dw >= 3 && (
-              <span style={{ fontSize: `${Math.min(6, dw * 0.85)}pt`, fontWeight: isToday ? 900 : isSun || isSat ? 700 : 400, color: fg, lineHeight: 1.1, fontFamily: JP }}>
-                {dayNum}
-              </span>
-            )}
-            {dw >= 5 && (
-              <span style={{ fontSize: `${Math.min(4.5, dw * 0.6)}pt`, color: fg, lineHeight: 1, fontFamily: JP }}>
-                {['日', '月', '火', '水', '木', '金', '土'][dow]}
-              </span>
-            )}
+          <div style={{ textAlign: 'right', fontSize: '7.5pt', color: '#555', lineHeight: 1.6 }}>
+            {companyName && <div>{companyName}</div>}
+            <div><b>期間：</b>{days.length > 0 ? `${fmtHeader(days[0])} 〜 ${fmtHeader(days[days.length-1])}` : ''}</div>
           </div>
-        );
-      })}
+        </div>
+      )}
 
-      {/* ─ タスク行 ─ */}
-      {rows.map((row, ri) => {
-        const rowTop = MT + TITLE_H + MON_H + DAY_H + ri * TASK_H;
+      {/* ガントテーブル */}
+      <div style={{ flex: 1, overflow: 'hidden' }}>
+        <table style={{
+          borderCollapse: 'collapse',
+          tableLayout: 'fixed',
+          width: '100%',
+          fontFamily: JP,
+          fontSize: '6.5pt',
+          WebkitPrintColorAdjust: 'exact',
+          printColorAdjust: 'exact',
+        } as React.CSSProperties}>
+          <colgroup>
+            <col style={{ width: labelW }} />
+            {days.map(d => <col key={d} style={{ width: cellW }} />)}
+          </colgroup>
 
-        if (row.type === 'phase') {
-          return (
-            <div key={`ph-${ri}`}>
-              {/* フェーズ名ラベル */}
-              <div style={{
-                position: 'absolute', top: px(rowTop),
-                left: px(ML), width: px(LABEL_W), height: px(PHASE_H),
-                background: '#1e40af', display: 'flex', alignItems: 'center', paddingLeft: '3mm',
-                borderBottom: '0.5pt solid #1e3a8a',
-                boxSizing: 'border-box',
-              }}>
-                <span style={{ fontSize: '7pt', fontWeight: 700, color: '#fff', fontFamily: JP }}>▶ {row.phase}</span>
-              </div>
-              {/* フェーズ行のカレンダー背景 */}
-              <div style={{
-                position: 'absolute', top: px(rowTop),
-                left: px(ML + LABEL_W), width: px(CAL_W), height: px(PHASE_H),
-                background: '#dbeafe',
-                borderBottom: '0.5pt solid #93c5fd',
-                boxSizing: 'border-box',
-              }} />
-              {/* 縦グリッド線（フェーズ行） */}
-              {allDays.map(d => {
+          {/* 月ヘッダー */}
+          <thead>
+            <tr>
+              <th style={{ ...tdName, background: '#1e3a8a', color: '#fff', fontWeight: 700, fontSize: '7pt', textAlign: 'center' }}>
+                工程名
+              </th>
+              {spans.map((s, i) => (
+                <th
+                  key={i}
+                  colSpan={s.count}
+                  style={{
+                    ...cellBase({ background: '#1e3a8a', color: '#fff', textAlign: 'center', fontWeight: 700, padding: '1.5pt 0', fontSize: '7pt', fontFamily: JP }),
+                  }}
+                >
+                  {s.label}
+                </th>
+              ))}
+            </tr>
+
+            {/* 日付 + 曜日ヘッダー */}
+            <tr>
+              <th style={{ ...tdName, background: '#e2e8f0', fontSize: '6pt', color: '#475569', textAlign: 'center', fontWeight: 600 }}>
+                担当 / 状態
+              </th>
+              {days.map(d => {
                 const dt = parseDate(d);
-                const isMon = dt.getDay() === 1;
-                const x = ML + LABEL_W + (dateDiff(rangeStart, d) / totalDays) * CAL_W;
-                return isMon ? (
-                  <div key={d} style={{
-                    position: 'absolute', top: px(rowTop),
-                    left: px(x), width: '0.3pt', height: px(PHASE_H),
-                    background: '#93c5fd',
-                  }} />
-                ) : null;
+                const dow = dt.getDay();
+                const isSun = dow === 0, isSat = dow === 6;
+                const isToday = d === today;
+                const bg = isToday ? '#fbbf24' : isSun ? '#fca5a5' : isSat ? '#93c5fd' : '#e2e8f0';
+                const fg = isToday ? '#78350f' : isSun ? '#7f1d1d' : isSat ? '#1e3a8a' : '#374151';
+                return (
+                  <th key={d} style={{ ...tdDay, background: bg, color: fg, fontWeight: isSun || isSat ? 700 : 600, padding: '0.5pt 0', fontSize: `${Math.min(6.5, cellWmm * 0.7)}pt` }}>
+                    {cellWmm >= 4 && <div style={{ lineHeight: 1.2 }}>{dt.getDate()}</div>}
+                    {cellWmm >= 5 && <div style={{ lineHeight: 1 }}>{DOW[dow]}</div>}
+                    {cellWmm < 4 && dt.getDate()}
+                  </th>
+                );
               })}
-            </div>
-          );
-        }
+            </tr>
+          </thead>
 
-        // task row
-        const { task: t } = row;
-        const isSkip = t.status === 'skip';
-        const isDone = t.status === 'done';
-        const color = barColor(t);
-        const bx = ML + LABEL_W + Math.max(0, dateDiff(rangeStart, t.startDate)) / totalDays * CAL_W;
-        const bEnd = Math.min(totalDays - 1, dateDiff(rangeStart, t.endDate));
-        const bStart = Math.max(0, dateDiff(rangeStart, t.startDate));
-        const bw = Math.max(1.5, (bEnd - bStart + 1) / totalDays * CAL_W);
-        const hTotal = helperTotal(t.helpers ?? []);
+          {/* タスク行 */}
+          <tbody>
+            {rows.map((row, ri) => {
+              if (row.type === 'phase') {
+                return (
+                  <tr key={`ph-${ri}`}>
+                    <td
+                      colSpan={N + 1}
+                      style={{
+                        ...cellBase({ background: '#1e40af', color: '#fff', padding: '2pt 4pt', fontWeight: 700, fontSize: '7.5pt', fontFamily: JP }),
+                        letterSpacing: '0.05em',
+                      }}
+                    >
+                      ▶ {row.phase}
+                    </td>
+                  </tr>
+                );
+              }
 
-        return (
-          <div key={`t-${ri}`}>
-            {/* 工程名ラベル */}
-            <div style={{
-              position: 'absolute', top: px(rowTop),
-              left: px(ML), width: px(LABEL_W), height: px(TASK_H),
-              display: 'flex', alignItems: 'center',
-              paddingLeft: '3mm', paddingRight: '1mm',
-              borderBottom: '0.3pt solid #e2e8f0',
-              background: isDone ? '#f0fdf4' : isSkip ? '#f8fafc' : '#fff',
-              boxSizing: 'border-box', overflow: 'hidden', gap: '1mm',
-            }}>
-              <span style={{ fontSize: '6pt', fontWeight: isDone ? 400 : 600, color: isSkip ? '#9ca3af' : '#111', textDecoration: isSkip ? 'line-through' : 'none', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: JP }}>
-                {t.name}
-              </span>
-              <StatusPill status={t.status} />
-            </div>
+              const { task: t } = row;
+              const isSkip = t.status === 'skip';
+              const isDone = t.status === 'done';
+              const color = barColor(t);
+              const hTotal = helperTotal(t.helpers ?? []);
 
-            {/* カレンダー行の背景 + グリッド */}
-            <div style={{
-              position: 'absolute', top: px(rowTop),
-              left: px(ML + LABEL_W), width: px(CAL_W), height: px(TASK_H),
-              background: isDone ? '#f0fdf4' : ri % 2 === 0 ? '#fafafa' : '#fff',
-              borderBottom: '0.3pt solid #e2e8f0',
-              boxSizing: 'border-box',
-            }} />
-            {allDays.map(d => {
-              const dt = parseDate(d);
-              const isSun = dt.getDay() === 0;
-              const isSat = dt.getDay() === 6;
-              const x = ML + LABEL_W + (dateDiff(rangeStart, d) / totalDays) * CAL_W;
-              if (!isSun && !isSat) return null;
               return (
-                <div key={d} style={{
-                  position: 'absolute', top: px(rowTop),
-                  left: px(x), width: px(dw - 0.3), height: px(TASK_H),
-                  background: isSun ? 'rgba(254,202,202,0.3)' : 'rgba(219,234,254,0.3)',
-                }} />
+                <tr key={t.id}>
+                  {/* 工程名セル */}
+                  <td style={{
+                    ...tdName,
+                    background: isDone ? '#f0fdf4' : isSkip ? '#f8fafc' : ri % 2 === 0 ? '#fff' : '#fafafa',
+                    height: '6mm',
+                    fontSize: '7pt',
+                  }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}>
+                      <span style={{ fontWeight: isSkip ? 400 : 600, textDecoration: isSkip ? 'line-through' : 'none', color: isSkip ? '#9ca3af' : '#111', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {t.name || '（未入力）'}
+                      </span>
+                      <span style={{ fontSize: '5.5pt', color: '#64748b' }}>
+                        {t.vendor && `${t.vendor}`}
+                        {hTotal > 0 && ` 🤝${hTotal}人`}
+                        {` ｜ ${STATUS_LABELS[t.status]}`}
+                      </span>
+                    </div>
+                  </td>
+
+                  {/* 日程セル */}
+                  {days.map(d => {
+                    const inRange = !isSkip && d >= t.startDate && d <= t.endDate;
+                    const dt = parseDate(d);
+                    const dow = dt.getDay();
+                    const isSun = dow === 0, isSat = dow === 6;
+                    const isToday = d === today;
+                    const rowBg = ri % 2 === 0 ? '#fff' : '#fafafa';
+                    const wkBg = isSun ? 'rgba(252,165,165,0.25)' : isSat ? 'rgba(147,197,253,0.25)' : null;
+
+                    let bg: string;
+                    if (inRange) {
+                      bg = isDone ? STATUS_LIGHT[t.status] ?? color : color;
+                    } else if (wkBg) {
+                      bg = wkBg;
+                    } else {
+                      bg = ri % 2 === 0 ? '#fff' : '#fafafa';
+                    }
+
+                    return (
+                      <td key={d} style={{
+                        ...tdDay,
+                        background: bg,
+                        borderLeft: isToday ? '1pt solid #f59e0b' : undefined,
+                        borderRight: isToday ? '1pt solid #f59e0b' : undefined,
+                        height: '6mm',
+                        opacity: isSkip ? 0.5 : 1,
+                      }}>
+                        {/* 開始日に日数表示 */}
+                        {inRange && d === t.startDate && t.days > 1 && cellWmm >= 4 && (
+                          <div style={{ fontSize: '4.5pt', color: '#fff', fontWeight: 700, lineHeight: 1, padding: '0.5pt', fontFamily: JP }}>
+                            {t.days}日
+                          </div>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
               );
             })}
+          </tbody>
+        </table>
+      </div>
 
-            {/* Today line */}
-            {(() => {
-              const tOff = dateDiff(rangeStart, todayStr);
-              if (tOff < 0 || tOff >= totalDays) return null;
-              const tx = ML + LABEL_W + (tOff + 0.5) / totalDays * CAL_W;
-              return <div style={{ position: 'absolute', top: px(rowTop), left: px(tx), width: '0.5pt', height: px(TASK_H), background: '#f59e0b', opacity: 0.8 }} />;
-            })()}
-
-            {/* ガントバー */}
-            {!isSkip && (
-              <div style={{
-                position: 'absolute',
-                top: px(rowTop + 1.2),
-                left: px(bx),
-                width: px(bw),
-                height: px(TASK_H - 2.4),
-                background: color,
-                opacity: isDone ? 0.55 : 0.85,
-                borderRadius: '1pt',
-                boxSizing: 'border-box',
-                display: 'flex', alignItems: 'center', overflow: 'hidden',
-                paddingLeft: '1mm', gap: '1mm',
-              }}>
-                {bw > 6 && t.vendor && (
-                  <span style={{ fontSize: '4.5pt', color: '#fff', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: JP }}>
-                    {t.vendor}
-                  </span>
-                )}
-                {bw > 4 && hTotal > 0 && (
-                  <span style={{ fontSize: '4.5pt', color: '#fff', fontWeight: 700, background: 'rgba(0,0,0,0.25)', borderRadius: 2, padding: '0 2px', whiteSpace: 'nowrap', fontFamily: JP }}>
-                    +{hTotal}
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* 日数テキスト（バー右外） */}
-            {!isSkip && bw > 0 && (
-              <div style={{
-                position: 'absolute',
-                top: px(rowTop + TASK_H * 0.2),
-                left: px(bx + bw + 0.5),
-                height: px(TASK_H * 0.6),
-                display: 'flex', alignItems: 'center',
-              }}>
-                <span style={{ fontSize: '4.5pt', color: '#94a3b8', fontFamily: JP }}>{t.days}日</span>
-              </div>
-            )}
-          </div>
-        );
-      })}
-
-      {/* ─ フッター ─ */}
-      <div style={{
-        position: 'absolute',
-        top: px(PH - MB - FOOT_H),
-        left: px(ML), width: px(PW - ML - MR), height: px(FOOT_H),
-        borderTop: '0.5pt solid #cbd5e1',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        paddingTop: '1mm',
-        boxSizing: 'border-box',
-      }}>
-        <span style={{ fontSize: '5.5pt', color: '#94a3b8', fontFamily: JP }}>{project.projectName} — 工程表</span>
+      {/* フッター */}
+      <div style={{ flexShrink: 0, borderTop: '0.5pt solid #cbd5e1', paddingTop: '1.5mm', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '6pt', color: '#94a3b8', fontFamily: JP }}>
+        <span>{project.projectName}</span>
         <div style={{ display: 'flex', gap: '4mm', alignItems: 'center' }}>
-          {/* 凡例 */}
-          {(['todo', 'in_progress', 'done'] as const).map(s => (
-            <span key={s} style={{ display: 'flex', alignItems: 'center', gap: '1mm', fontSize: '5pt', color: '#555', fontFamily: JP }}>
-              <span style={{ display: 'inline-block', width: '3mm', height: '2mm', background: STATUS_COLORS[s], borderRadius: '0.5mm' }} />
+          {(['todo','in_progress','done'] as const).map(s => (
+            <span key={s} style={{ display: 'flex', alignItems: 'center', gap: '1mm' }}>
+              <span style={{ display: 'inline-block', width: '4mm', height: '2mm', background: STATUS_COLORS[s], borderRadius: '0.5mm' }} />
               {STATUS_LABELS[s]}
             </span>
           ))}
-          <span style={{ fontSize: '5.5pt', color: '#94a3b8', fontFamily: JP }}>- {pageNum} / {totalPages} -</span>
+          <span style={{ color: '#6b7280' }}>- {pageNum} / {totalPages} -</span>
         </div>
       </div>
-
-      {/* ─ 左カラム縦罫線 ─ */}
-      <div style={{
-        position: 'absolute',
-        top: px(MT + TITLE_H + MON_H),
-        left: px(ML + LABEL_W),
-        width: '0.5pt',
-        height: px(DAY_H + rows.length * TASK_H + 1),
-        background: '#aaa',
-      }} />
     </div>
   );
 }
 
-// ─── メインエクスポート ───────────────────────────────────────────────
+// ─── メインエクスポート ────────────────────────────────────────────────
 
 interface ScheduleA4Props {
   project: Project;
@@ -453,7 +352,7 @@ interface ScheduleA4Props {
 
 export default function ScheduleA4({
   project,
-  companyName,
+  companyName = '',
   colorBy = 'status',
   startPage = 1,
   totalPages = 1,
@@ -464,9 +363,9 @@ export default function ScheduleA4({
   const allVendors = [...new Set(tasks.map(t => t.vendor).filter(Boolean))];
   const rangeStart = tasks.reduce((m, t) => t.startDate < m ? t.startDate : m, tasks[0].startDate);
   const rangeEnd   = tasks.reduce((m, t) => t.endDate   > m ? t.endDate   : m, tasks[0].endDate);
-  const totalDays  = Math.max(1, dateDiff(rangeStart, rangeEnd) + 1);
+  const days = allDays(rangeStart, rangeEnd);
 
-  // フェーズ + タスクの行リスト
+  // フェーズ + タスク行リストを構築
   type GanttRow = { type: 'phase'; phase: string } | { type: 'task'; task: ScheduleTask };
   const allRows: GanttRow[] = [];
   const phases = [...new Set(tasks.map(t => t.phase))];
@@ -475,14 +374,18 @@ export default function ScheduleA4({
     tasks.forEach(t => { if (t.phase === phase) allRows.push({ type: 'task', task: t }); });
   }
 
-  // 1ページに入る最大行数
-  const rowsPerPage = Math.floor(CONTENT_H / TASK_H) - 1; // -1 for safety
+  // 1ページあたり最大行数（A4高さ - ヘッダー - 日付2行 - フッター）÷ 行高
+  // 初ページはヘッダー分少ない（実測: A4 landscape 197mm ÷ 6mm/行 ≒ 30行、ヘッダー消費約4行）
+  const ROWS_FIRST  = 22;
+  const ROWS_OTHERS = 26;
 
-  // ページ分割：フェーズの途中では切らない
   const pages: GanttRow[][] = [];
   let cur: GanttRow[] = [];
+
   for (const row of allRows) {
-    if (cur.length >= rowsPerPage && row.type === 'phase') {
+    const limit = pages.length === 0 ? ROWS_FIRST : ROWS_OTHERS;
+    // フェーズヘッダーで改ページ
+    if (cur.length >= limit && row.type === 'phase') {
       pages.push(cur);
       cur = [];
     }
@@ -490,21 +393,22 @@ export default function ScheduleA4({
   }
   if (cur.length > 0) pages.push(cur);
 
+  const total = totalPages; // caller が計算済み
+
   return (
     <>
       {pages.map((rows, pi) => (
-        <A4Page
+        <GanttPage
           key={pi}
           project={project}
           rows={rows}
-          rangeStart={rangeStart}
-          rangeEnd={rangeEnd}
-          totalDays={totalDays}
+          days={days}
           companyName={companyName}
           colorBy={colorBy}
           allVendors={allVendors}
           pageNum={startPage + pi}
-          totalPages={totalPages}
+          totalPages={total}
+          isFirstPage={pi === 0}
         />
       ))}
     </>
