@@ -1,6 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Plus, ChevronDown, ChevronRight, CalendarRange, Trash2, AlignLeft } from 'lucide-react';
+import { ArrowLeft, Plus, ChevronDown, ChevronRight, CalendarRange, Trash2, AlignLeft, ChevronUp, GripVertical } from 'lucide-react';
+import {
+  DndContext, PointerSensor, TouchSensor, closestCenter,
+  useSensor, useSensors, type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext, arrayMove, useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import type { Project } from '../types';
@@ -57,6 +66,83 @@ function ag(active = false): React.CSSProperties {
     cursor: 'pointer', fontFamily: FONT, display: 'flex', alignItems: 'center',
     gap: 5, whiteSpace: 'nowrap', WebkitTapHighlightColor: 'transparent',
   } as React.CSSProperties;
+}
+
+// ─── SortableTaskRow（リスト表示用 dnd-kit ラッパー）──────────────
+
+interface SortableTaskRowProps {
+  task: ScheduleTask;
+  globalIdx: number;
+  totalTasks: number;
+  taskColor: string;
+  customerView: boolean;
+  onEdit: () => void;
+  onMove: (from: number, to: number) => void;
+}
+
+function SortableTaskRow({ task: t, globalIdx, totalTasks, taskColor: tColor, customerView, onEdit, onMove }: SortableTaskRowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: t.id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    display: 'flex', alignItems: 'center', gap: 8,
+    padding: '9px 12px',
+    borderBottom: `1px solid ${A.sep}`,
+    background: t.status === 'done' ? 'rgba(48,209,88,0.06)' : t.status === 'skip' ? A.s2 : 'transparent',
+    cursor: 'default',
+    userSelect: 'none',
+  };
+
+  function fmtD(s: string) {
+    const d = parseDate(s);
+    return `${d.getMonth()+1}/${d.getDate()}`;
+  }
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      {/* ドラッグハンドル */}
+      <div {...attributes} {...listeners} style={{ color: A.t3, cursor: 'grab', display: 'flex', alignItems: 'center', touchAction: 'none', padding: '0 2px' }}>
+        <GripVertical size={15} />
+      </div>
+
+      {/* 色ドット */}
+      <div style={{ width: 8, height: 8, borderRadius: 2, background: tColor, flexShrink: 0 }} />
+
+      {/* テキスト */}
+      <div style={{ flex: 1, minWidth: 0 }} onClick={onEdit} role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && onEdit()} style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: t.status === 'skip' ? A.t3 : A.t1, textDecoration: t.status === 'skip' ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: FONT }}>
+          {t.name || '（未入力）'}
+        </div>
+        <div style={{ fontSize: 11, color: A.t3, display: 'flex', gap: 8, marginTop: 2, flexWrap: 'wrap', fontFamily: FONT }}>
+          <span>{fmtD(t.startDate)}〜{fmtD(t.endDate)}</span>
+          <span>{t.days}日</span>
+          {!customerView && t.vendor && <span style={{ color: A.teal }}>{t.vendor}</span>}
+          {!customerView && (t.workerCount ?? 1) > 0 && <span>自社{t.workerCount ?? 1}人</span>}
+          {!customerView && helperTotal(t.helpers ?? []) > 0 && (
+            <span style={{ color: A.orange, fontWeight: 700 }}>
+              🤝 {(t.helpers ?? []).map(h => `${h.name}${h.count}人`).join(' / ')}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* ステータス + ↑↓ */}
+      <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: STATUS_BG[t.status], color: STATUS_COLORS[t.status], fontWeight: 700, whiteSpace: 'nowrap', fontFamily: FONT }}>
+        {STATUS_LABELS[t.status]}
+      </span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
+        <button onClick={() => onMove(globalIdx, globalIdx - 1)} disabled={globalIdx === 0}
+          style={{ background: 'none', border: 'none', color: A.t3, cursor: 'pointer', padding: 0, opacity: globalIdx === 0 ? 0.2 : 1 }}>
+          <ChevronUp size={12} />
+        </button>
+        <button onClick={() => onMove(globalIdx, globalIdx + 1)} disabled={globalIdx === totalTasks - 1}
+          style={{ background: 'none', border: 'none', color: A.t3, cursor: 'pointer', padding: 0, opacity: globalIdx === totalTasks - 1 ? 0.2 : 1 }}>
+          <ChevronDown size={12} />
+        </button>
+      </div>
+    </div>
+  );
 }
 
 // ─── tiny helpers ──────────────────────────────────────────────
@@ -431,6 +517,25 @@ export default function SchedulePage() {
   function collapseAll() { setCollapsedPhases(new Set(allPhases)); }
   function expandAll()   { setCollapsedPhases(new Set()); }
 
+  function moveTask(fromIdx: number, toIdx: number) {
+    if (toIdx < 0 || toIdx >= tasks.length) return;
+    const next = arrayMove(tasks, fromIdx, toIdx);
+    updateTasks(next);
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const fromIdx = tasks.findIndex(t => t.id === active.id);
+    const toIdx   = tasks.findIndex(t => t.id === over.id);
+    if (fromIdx !== -1 && toIdx !== -1) moveTask(fromIdx, toIdx);
+  }
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor,   { activationConstraint: { delay: 200, tolerance: 8 } }),
+  );
+
   function handlePrint(mode: 'internal' | 'customer') {
     setPrintMode(mode);
     setIsPrinting(true);
@@ -740,15 +845,22 @@ export default function SchedulePage() {
                         const color = taskColor(t);
                         return (
                           <div key={t.id} style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #0f1d2e', background: t.status === 'done' ? '#0d1b0d' : t.status === 'skip' ? '#111827' : 'transparent' }}>
-                            {/* Task name */}
-                            <div
-                              style={{ width: LABEL_W, minWidth: LABEL_W, flexShrink: 0, padding: '5px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-                              onClick={() => setEditIndex(globalIdx)}
-                            >
-                              <span style={{ fontSize: 9, padding: '2px 5px', borderRadius: 4, background: STATUS_BG[t.status], color: STATUS_COLORS[t.status], fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            {/* Task name + ↑↓ */}
+                            <div style={{ width: LABEL_W, minWidth: LABEL_W, flexShrink: 0, padding: '3px 6px 3px 12px', display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
+                                <button onClick={() => moveTask(globalIdx, globalIdx - 1)} disabled={globalIdx === 0}
+                                  style={{ background: 'none', border: 'none', color: A.t3, cursor: 'pointer', padding: 0, lineHeight: 1, opacity: globalIdx === 0 ? 0.2 : 1 }}>
+                                  <ChevronUp size={11} />
+                                </button>
+                                <button onClick={() => moveTask(globalIdx, globalIdx + 1)} disabled={globalIdx === tasks.length - 1}
+                                  style={{ background: 'none', border: 'none', color: A.t3, cursor: 'pointer', padding: 0, lineHeight: 1, opacity: globalIdx === tasks.length - 1 ? 0.2 : 1 }}>
+                                  <ChevronDown size={11} />
+                                </button>
+                              </div>
+                              <span style={{ fontSize: 9, padding: '2px 5px', borderRadius: 4, background: STATUS_BG[t.status], color: STATUS_COLORS[t.status], fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
                                 {STATUS_LABELS[t.status]}
                               </span>
-                              <span style={{ fontSize: 12, color: t.status === 'skip' ? '#475569' : '#dde8f2', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: t.status === 'skip' ? 'line-through' : 'none' }}>
+                              <span onClick={() => setEditIndex(globalIdx)} style={{ fontSize: 12, color: t.status === 'skip' ? A.t3 : A.t1, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: t.status === 'skip' ? 'line-through' : 'none', cursor: 'pointer' }}>
                                 {t.name || '（未入力）'}
                               </span>
                             </div>
@@ -851,7 +963,9 @@ export default function SchedulePage() {
               </div>
             </div>
           ) : (
-            // ─ List view ─
+            // ─ List view（dnd-kit ドラッグ並び替え）─
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
             <div style={{ padding: '0 12px', display: 'flex', flexDirection: 'column', gap: 0 }}>
               {phaseGroups.map(({ phase, tasks: pts }) => {
                 const collapsed = collapsedPhases.has(phase);
@@ -867,36 +981,18 @@ export default function SchedulePage() {
                     </div>
 
                     {!collapsed && (
-                      <div style={{ borderLeft: '2px solid #1e3a5a', marginLeft: 12, marginTop: 2 }}>
+                      <div style={{ borderLeft: `2px solid ${A.sep}`, marginLeft: 12, marginTop: 2, borderRadius: '0 0 0 8px' }}>
                         {pts.map(({ task: t, globalIdx }) => (
-                          <div
+                          <SortableTaskRow
                             key={t.id}
-                            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: '1px solid #0f1d2e', cursor: 'pointer', background: t.status === 'done' ? '#0d1b0d' : 'transparent' }}
-                            onClick={() => setEditIndex(globalIdx)}
-                          >
-                            <div style={{ width: 8, height: 8, borderRadius: 2, background: taskColor(t), flexShrink: 0 }} />
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: 600, color: t.status === 'skip' ? '#475569' : '#dde8f2', textDecoration: t.status === 'skip' ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {t.name || '（未入力）'}
-                              </div>
-                              <div style={{ fontSize: 11, color: '#475569', display: 'flex', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
-                                <span>{fmtDate(t.startDate)}〜{fmtDate(t.endDate)}</span>
-                                <span>{t.days}日</span>
-                                {!customerView && t.vendor && <span style={{ color: '#7aadcf' }}>{t.vendor}</span>}
-                                {!customerView && (t.workerCount ?? 1) > 0 && (
-                                  <span style={{ color: '#94a3b8' }}>自社{t.workerCount ?? 1}人</span>
-                                )}
-                                {!customerView && helperTotal(t.helpers ?? []) > 0 && (
-                                  <span style={{ color: '#fbbf24', fontWeight: 700 }}>
-                                    🤝 {(t.helpers ?? []).map(h => `${h.name}${h.count}人`).join(' / ')}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, background: STATUS_BG[t.status], color: STATUS_COLORS[t.status], fontWeight: 700, whiteSpace: 'nowrap' }}>
-                              {STATUS_LABELS[t.status]}
-                            </span>
-                          </div>
+                            task={t}
+                            globalIdx={globalIdx}
+                            totalTasks={tasks.length}
+                            taskColor={taskColor(t)}
+                            customerView={customerView}
+                            onEdit={() => setEditIndex(globalIdx)}
+                            onMove={moveTask}
+                          />
                         ))}
                         <button
                           onClick={() => {
@@ -907,9 +1003,9 @@ export default function SchedulePage() {
                             updateTasks(next);
                             setEditIndex(insertAt);
                           }}
-                          style={{ display: 'block', width: '100%', background: 'none', border: 'none', color: '#1e3a5a', padding: '8px 0', fontSize: 12, cursor: 'pointer', textAlign: 'left', paddingLeft: 12 }}
+                          style={{ display: 'block', width: '100%', background: 'none', border: 'none', color: A.t3, padding: '8px 12px', fontSize: 12, cursor: 'pointer', textAlign: 'left', fontFamily: FONT }}
                         >
-                          + {phase} に工程を追加
+                          ＋ {phase} に工程を追加
                         </button>
                       </div>
                     )}
@@ -917,6 +1013,8 @@ export default function SchedulePage() {
                 );
               })}
             </div>
+            </SortableContext>
+          </DndContext>
           )}
         </div>
       )}
