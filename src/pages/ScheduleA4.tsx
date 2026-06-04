@@ -27,9 +27,6 @@ export { scheduleA4PageCount };
 
 const JP = "'Noto Sans JP','BIZ UDPGothic','Hiragino Kaku Gothic ProN',Meiryo,sans-serif";
 const DOW = ['日','月','火','水','木','金','土'];
-const STATUS_LIGHT: Record<string, string> = {
-  todo: '#c7d2fe', in_progress: '#93c5fd', done: '#86efac', skip: '#e2e8f0',
-};
 
 // ─── ユーティリティ ────────────────────────────────────────────────────
 
@@ -109,16 +106,11 @@ function GanttPage({
   const cellW = `${cellWmm.toFixed(1)}mm`;
   const labelW = '65mm';
 
+  // PDF は状態によらずグレー統一（状態は文字で伝える・視認性優先）
   function barColor(t: ScheduleTask): string {
-    if (colorBy === 'vendor') return vendorColor(t.vendor, allVendors);
-    if (colorBy === 'helper') {
-      const n = helperTotal(t.helpers ?? []);
-      if (n === 0) return '#94a3b8';
-      if (n === 1) return '#38bdf8';
-      if (n <= 3) return '#f59e0b';
-      return '#ef4444';
-    }
-    return STATUS_COLORS[t.status];
+    if (t.status === 'done') return '#9ca3af'; // done = 薄グレー
+    if (t.status === 'in_progress') return '#475569'; // 施工中 = 濃いグレー
+    return '#64748b'; // 着手前 = 中間グレー
   }
 
   const tdName: React.CSSProperties = {
@@ -279,9 +271,7 @@ function GanttPage({
                           {hTotal > 0 && ` / ${(t.helpers ?? []).map(h => `${h.name}${h.count}人`).join('・')}`}
                           {` ｜ ${STATUS_LABELS[t.status]}`}
                         </span>
-                      ) : (
-                        <span style={{ fontSize: '5.5pt', color: '#94a3b8' }}>{t.days}日間</span>
-                      )}
+                      ) : null}
                     </div>
                   </td>
 
@@ -297,7 +287,7 @@ function GanttPage({
 
                     let bg: string;
                     if (inRange) {
-                      bg = isDone ? STATUS_LIGHT[t.status] ?? color : color;
+                      bg = color;
                     } else if (wkBg) {
                       bg = wkBg;
                     } else {
@@ -308,18 +298,11 @@ function GanttPage({
                       <td key={d} style={{
                         ...tdDay,
                         background: bg,
-                        borderLeft: isToday ? '1pt solid #f59e0b' : undefined,
-                        borderRight: isToday ? '1pt solid #f59e0b' : undefined,
+                        borderLeft: isToday ? '1.5pt solid #f59e0b' : undefined,
+                        borderRight: isToday ? '1.5pt solid #f59e0b' : undefined,
                         height: '6mm',
-                        opacity: isSkip ? 0.5 : 1,
-                      }}>
-                        {/* 開始日に日数表示 */}
-                        {inRange && d === t.startDate && t.days > 1 && cellWmm >= 4 && (
-                          <div style={{ fontSize: '4.5pt', color: '#fff', fontWeight: 700, lineHeight: 1, padding: '0.5pt', fontFamily: JP }}>
-                            {t.days}日
-                          </div>
-                        )}
-                      </td>
+                        opacity: isSkip ? 0.4 : 1,
+                      }} />
                     );
                   })}
                 </tr>
