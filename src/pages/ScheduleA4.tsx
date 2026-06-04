@@ -106,11 +106,9 @@ function GanttPage({
   const cellW = `${cellWmm.toFixed(1)}mm`;
   const labelW = '65mm';
 
-  // PDF は状態によらずグレー統一（状態は文字で伝える・視認性優先）
-  function barColor(t: ScheduleTask): string {
-    if (t.status === 'done') return '#9ca3af'; // done = 薄グレー
-    if (t.status === 'in_progress') return '#475569'; // 施工中 = 濃いグレー
-    return '#64748b'; // 着手前 = 中間グレー
+  // PDF は全バー単一グレー（状態は右側の文字テキストで表現、色の混乱なし）
+  function barColor(_t: ScheduleTask): string {
+    return '#64748b';
   }
 
   const tdName: React.CSSProperties = {
@@ -287,7 +285,8 @@ function GanttPage({
 
                     let bg: string;
                     if (inRange) {
-                      bg = color;
+                      // 完了は薄グレー、通常は標準グレー
+                      bg = isDone ? '#cbd5e1' : color;
                     } else if (wkBg) {
                       bg = wkBg;
                     } else {
@@ -301,7 +300,7 @@ function GanttPage({
                         borderLeft: isToday ? '1.5pt solid #f59e0b' : undefined,
                         borderRight: isToday ? '1.5pt solid #f59e0b' : undefined,
                         height: '6mm',
-                        opacity: isSkip ? 0.4 : 1,
+                        opacity: isSkip ? 0.35 : 1,
                       }} />
                     );
                   })}

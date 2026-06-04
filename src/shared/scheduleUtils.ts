@@ -120,17 +120,17 @@ export const STATUS_LABELS: Record<ScheduleStatus, string> = {
 };
 
 export const STATUS_COLORS: Record<ScheduleStatus, string> = {
-  todo: '#475569',
-  in_progress: '#2563eb',
-  done: '#16a34a',
-  skip: '#94a3b8',
+  todo:        '#8b8ba8', // 着手前  : グレー（待機）
+  in_progress: '#ff9f0a', // 施工中  : Apple オレンジ（アクティブ）
+  done:        '#30d158', // 完了    : Apple グリーン
+  skip:        '#3a3a3c', // スキップ: 暗グレー
 };
 
 export const STATUS_BG: Record<ScheduleStatus, string> = {
-  todo: '#1e293b',
-  in_progress: '#1e3a5f',
-  done: '#14532d',
-  skip: '#1e293b',
+  todo:        'rgba(139,139,168,0.15)',
+  in_progress: 'rgba(255,159,10,0.18)',
+  done:        'rgba(48,209,88,0.15)',
+  skip:        'rgba(58,58,60,0.4)',
 };
 
 export const VENDOR_PALETTE = [
