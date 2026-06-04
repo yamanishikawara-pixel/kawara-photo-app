@@ -10,6 +10,7 @@ import {
   STATUS_LABELS, STATUS_COLORS, STATUS_BG, VENDOR_PALETTE, vendorColor,
   newTask, makeTemplate,
 } from '../shared/scheduleUtils';
+import ScheduleA4, { scheduleA4PageCount } from './ScheduleA4';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { ErrorMessage } from '../shared/ErrorMessage';
@@ -169,6 +170,7 @@ export default function SchedulePage() {
   const [postponeDays, setPostponeDays] = useState(1);
   const [showGantt, setShowGantt] = useState(true);
   const [rainOpen, setRainOpen] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   const mountedRef = useRef(true);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -310,6 +312,21 @@ export default function SchedulePage() {
   function collapseAll() { setCollapsedPhases(new Set(allPhases)); }
   function expandAll()   { setCollapsedPhases(new Set()); }
 
+  function handlePrint() {
+    setIsPrinting(true);
+    // RAF × 2 で印刷ビューが DOM に反映されてから print() を呼ぶ
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      window.print();
+    }));
+  }
+
+  // afterprint で印刷ビューを非表示に戻す
+  useEffect(() => {
+    const reset = () => { if (mountedRef.current) setIsPrinting(false); };
+    window.addEventListener('afterprint', reset);
+    return () => window.removeEventListener('afterprint', reset);
+  }, []);
+
   function taskColor(t: ScheduleTask): string {
     if (colorBy === 'vendor') return vendorColor(t.vendor, allVendors);
     return STATUS_COLORS[t.status];
@@ -346,8 +363,58 @@ export default function SchedulePage() {
 
   if (!project) return <LoadingSpinner />;
 
+  // 印刷用スナップショット（現在の tasks state を使用）
+  const printProject = project
+    ? { ...project, schedule: { tasks, skipSundays } }
+    : null;
+  const printTotalPages = printProject ? scheduleA4PageCount(printProject) : 0;
+
   return (
     <div style={{ minHeight: '100vh', background: '#05111f', fontFamily: "'Noto Sans JP', sans-serif", color: '#dde8f2', paddingBottom: 60 }}>
+
+      {/* ─ 印刷専用スタイル ─ */}
+      <style>{`
+        @media print {
+          .schedule-ui     { display: none !important; }
+          .schedule-print  { display: block !important; }
+          @page { size: A4 portrait; margin: 0mm; }
+          html, body {
+            background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 210mm !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .pdf-page-wrapper {
+            break-before: page !important;
+            page-break-before: always !important;
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+          }
+          .pdf-page-wrapper:first-child {
+            break-before: auto !important;
+            page-break-before: auto !important;
+          }
+        }
+        .schedule-print { display: none; }
+      `}</style>
+
+      {/* ─ 印刷専用ビュー（画面では非表示） ─ */}
+      {isPrinting && printProject && printTotalPages > 0 && (
+        <div className="schedule-print">
+          <ScheduleA4
+            project={printProject}
+            companyName={project?.contractorName ?? undefined}
+            colorBy={colorBy}
+            startPage={1}
+            totalPages={printTotalPages}
+          />
+        </div>
+      )}
+
+      {/* ─ UI（印刷時非表示） ─ */}
+      <div className="schedule-ui">
 
       {/* ─ Header ─ */}
       <div style={{ background: 'linear-gradient(90deg,#0c2340,#061628)', borderBottom: '1px solid #1e3a5a', padding: '12px 16px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12, position: 'sticky', top: 0, zIndex: 50 }}>
@@ -359,9 +426,18 @@ export default function SchedulePage() {
         <div style={{ fontSize: 12, color: '#38bdf8', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {project.projectName}
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           {saveStatus === 'saving' && <span style={{ fontSize: 11, color: '#94a3b8' }}>保存中...</span>}
           {saveStatus === 'saved'  && <span style={{ fontSize: 11, color: '#4ade80' }}>✓ 保存済み</span>}
+          {tasks.length > 0 && (
+            <button
+              onClick={handlePrint}
+              disabled={isPrinting}
+              style={{ background: '#f59e0b', border: 'none', color: '#000', padding: '7px 16px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5, opacity: isPrinting ? 0.6 : 1 }}
+            >
+              🖨️ {isPrinting ? '準備中...' : 'PDF・印刷'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -679,6 +755,8 @@ export default function SchedulePage() {
           onClose={() => setEditIndex(null)}
         />
       )}
+
+      </div>{/* end .schedule-ui */}
     </div>
   );
 }
