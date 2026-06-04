@@ -172,6 +172,21 @@ export default function SchedulePage() {
   const [rainOpen, setRainOpen] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
 
+  // ─── Drag state ────────────────────────────────────────────
+  interface DragState {
+    type: 'move' | 'resize';
+    globalIdx: number;
+    startX: number;
+    origStartDate: string;
+    origDays: number;
+    hasMoved: boolean;
+  }
+  const draggingRef = useRef<DragState | null>(null);
+  const tasksRef    = useRef<ScheduleTask[]>([]);
+  const skipRef     = useRef(false);
+  // 再render用に dragging を state にも持つ（カーソル切替に使う）
+  const [dragActiveIdx, setDragActiveIdx] = useState<number | null>(null);
+
   const mountedRef = useRef(true);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -326,6 +341,59 @@ export default function SchedulePage() {
     window.addEventListener('afterprint', reset);
     return () => window.removeEventListener('afterprint', reset);
   }, []);
+
+  // ref を最新 state に追従させる
+  useEffect(() => { tasksRef.current = tasks; }, [tasks]);
+  useEffect(() => { skipRef.current = skipSundays; }, [skipSundays]);
+
+  // ─── Drag: window-level pointer events ─────────────────────
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const drag = draggingRef.current;
+      if (!drag) return;
+      const deltaPixels = e.clientX - drag.startX;
+      const deltaDays = Math.round(deltaPixels / DAY_W);
+      if (Math.abs(deltaPixels) > 3) drag.hasMoved = true;
+      if (!drag.hasMoved) return;
+
+      setTasks(prev => {
+        const next = prev.map((t, i) => {
+          if (i !== drag.globalIdx) return t;
+          if (drag.type === 'move') {
+            const newStart = addDaysToStr(drag.origStartDate, deltaDays);
+            return { ...t, startDate: newStart };
+          } else {
+            return { ...t, days: Math.max(1, drag.origDays + deltaDays) };
+          }
+        });
+        const cascaded = cascade(next, skipRef.current);
+        tasksRef.current = cascaded;
+        return cascaded;
+      });
+    };
+
+    const onUp = (e: PointerEvent) => {
+      const drag = draggingRef.current;
+      if (!drag) return;
+      const wasMoved = drag.hasMoved;
+      draggingRef.current = null;
+      setDragActiveIdx(null);
+      if (wasMoved) {
+        // ドラッグ終了後に保存
+        scheduleSave(tasksRef.current, skipRef.current);
+      } else {
+        // 動かなければクリック扱い → モーダルを開く
+        setEditIndex(drag.globalIdx);
+      }
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, [scheduleSave]);
 
   function taskColor(t: ScheduleTask): string {
     if (colorBy === 'vendor') return vendorColor(t.vendor, allVendors);
@@ -609,23 +677,50 @@ export default function SchedulePage() {
                                 style={{
                                   position: 'absolute',
                                   left: barLeft * DAY_W,
-                                  width: barWidth * DAY_W - 2,
+                                  width: Math.max(8, barWidth * DAY_W - 2),
                                   top: 5, bottom: 5,
                                   background: color,
                                   borderRadius: 4,
                                   opacity: t.status === 'skip' ? 0.3 : 0.85,
-                                  cursor: 'pointer',
+                                  cursor: dragActiveIdx === globalIdx ? 'grabbing' : 'grab',
                                   display: 'flex', alignItems: 'center',
-                                  padding: '0 6px',
+                                  padding: '0 20px 0 6px',
                                   overflow: 'hidden',
+                                  userSelect: 'none',
+                                  touchAction: 'none',
                                 }}
-                                onClick={() => setEditIndex(globalIdx)}
+                                onPointerDown={e => {
+                                  if (e.button !== 0) return;
+                                  // リサイズハンドル以外ならバー移動
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  const isHandle = e.clientX > rect.right - 14;
+                                  if (isHandle) return; // リサイズハンドル側で処理
+                                  e.preventDefault();
+                                  (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                                  const state: DragState = { type: 'move', globalIdx, startX: e.clientX, origStartDate: t.startDate, origDays: t.days, hasMoved: false };
+                                  draggingRef.current = state;
+                                  setDragActiveIdx(globalIdx);
+                                }}
                               >
                                 {!customerView && t.vendor && (
-                                  <span style={{ fontSize: 9, color: '#fff', opacity: 0.9, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  <span style={{ fontSize: 9, color: '#fff', opacity: 0.9, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
                                     {t.vendor}
                                   </span>
                                 )}
+                                {/* リサイズハンドル（右端） */}
+                                <div
+                                  style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 12, cursor: 'ew-resize', background: 'rgba(255,255,255,0.25)', borderRadius: '0 4px 4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                                  onPointerDown={e => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                                    const state: DragState = { type: 'resize', globalIdx, startX: e.clientX, origStartDate: t.startDate, origDays: t.days, hasMoved: false };
+                                    draggingRef.current = state;
+                                    setDragActiveIdx(globalIdx);
+                                  }}
+                                >
+                                  <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.6)', lineHeight: 1 }}>⋮</span>
+                                </div>
                               </div>
 
                               {/* Grid lines */}
