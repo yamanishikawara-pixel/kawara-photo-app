@@ -517,8 +517,9 @@ const LegendRow = React.memo(({ row, isSelected, onSelect, onChange, onRemove }:
       onPointerLeave={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
     >
       <input type="text" value={row.symbol} onChange={(e) => onChange({ symbol: e.target.value })} className="col-span-2 py-2.5 text-xs sm:text-sm text-center font-black bg-transparent outline-none border-r" style={{ color: colorForSymbol(row.symbol), borderColor: '#2e2e50' }} />
-      <input type="text" value={row.part} placeholder="軒先" onChange={(e) => onChange({ part: e.target.value })} className="col-span-4 py-2.5 px-2 text-xs sm:text-sm font-bold bg-transparent outline-none border-r" style={{ color: '#f0ede8', borderColor: '#2e2e50' }} />
-      <input type="text" value={row.remarks} placeholder="..." onChange={(e) => onChange({ remarks: e.target.value })} className="col-span-5 py-2.5 px-2 text-xs sm:text-sm font-bold bg-transparent outline-none border-r" style={{ color: '#f0ede8', borderColor: '#2e2e50' }} />
+      <input type="text" value={row.part} placeholder="軒先" onChange={(e) => onChange({ part: e.target.value })} className="col-span-3 py-2.5 px-2 text-xs sm:text-sm font-bold bg-transparent outline-none border-r" style={{ color: '#f0ede8', borderColor: '#2e2e50' }} />
+      <input type="text" value={row.photoNo ?? ''} placeholder="1" onChange={(e) => onChange({ photoNo: e.target.value })} className="col-span-2 py-2.5 px-1 text-xs sm:text-sm font-bold text-center bg-transparent outline-none border-r" style={{ color: '#f0ede8', borderColor: '#2e2e50' }} />
+      <input type="text" value={row.remarks ?? ''} placeholder="..." onChange={(e) => onChange({ remarks: e.target.value })} className="col-span-4 py-2.5 px-2 text-xs sm:text-sm font-bold bg-transparent outline-none border-r" style={{ color: '#f0ede8', borderColor: '#2e2e50' }} />
       <div className="col-span-1 flex items-center justify-center">
         <button onClick={(e) => { e.stopPropagation(); onRemove(); }} aria-label="削除" className="p-1.5 rounded-lg transition-colors" style={{ color: '#3d3d60' }} onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')} onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}><Trash2 className="w-4 h-4"/></button>
     </div>
@@ -1624,8 +1625,9 @@ export default function MapPage() {
               <div className="rounded-xl overflow-hidden border" style={{ borderColor: '#2e2e50' }}>
                 <div className="grid grid-cols-12 text-xs font-black border-b" style={{ background: '#12122a', borderColor: '#2e2e50', color: '#8b8ba8' }}>
                   <div className="col-span-2 py-2.5 text-center border-r" style={{ borderColor: '#2e2e50' }}>符号</div>
-                  <div className="col-span-4 py-2.5 text-center border-r" style={{ borderColor: '#2e2e50' }}>部位</div>
-                  <div className="col-span-5 py-2.5 text-center border-r" style={{ borderColor: '#2e2e50' }}>備考</div>
+                  <div className="col-span-3 py-2.5 text-center border-r" style={{ borderColor: '#2e2e50' }}>部位</div>
+                  <div className="col-span-2 py-2.5 text-center border-r" style={{ borderColor: '#2e2e50' }}>写真No</div>
+                  <div className="col-span-4 py-2.5 text-center border-r" style={{ borderColor: '#2e2e50' }}>備考</div>
                   <div className="col-span-1 py-2.5 text-center" style={{ color: '#3d3d60' }}>削</div>
                 </div>
                 {currentMapRows.length > 0 ? currentMapRows.map((row) => (
