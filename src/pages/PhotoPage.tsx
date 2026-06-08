@@ -545,8 +545,20 @@ export default function PhotoPage() {
   const calcMapRowPhotoNos = (photos: Photo[], mapRows: MapRow[]): MapRow[] =>
     mapRows.map(row => {
       if (!row.symbol) return row;
-      const matched = photos.filter(p => p.locationMap === row.symbol).map(p => p.photoNumber).filter(Boolean);
-      return { ...row, photoNo: matched.join('・') };
+      const nums = photos
+        .filter(p => p.locationMap === row.symbol)
+        .map(p => Number(p.photoNumber))
+        .filter(n => !isNaN(n) && n > 0)
+        .sort((a, b) => a - b);
+      if (nums.length === 0) return { ...row, photoNo: '' };
+      const ranges: string[] = [];
+      let start = nums[0], end = nums[0];
+      for (let i = 1; i < nums.length; i++) {
+        if (nums[i] === end + 1) { end = nums[i]; }
+        else { ranges.push(start === end ? `${start}` : `${start}〜${end}`); start = end = nums[i]; }
+      }
+      ranges.push(start === end ? `${start}` : `${start}〜${end}`);
+      return { ...row, photoNo: ranges.join('・') };
     });
 
   /** photos 配列を Firestore に安全に書き込む。失敗時はトーストを表示。 */
