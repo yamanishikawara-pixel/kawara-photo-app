@@ -8,7 +8,7 @@ import { proxyUrl, useDraggablePin, nextId } from '../shared/utils';
 import { canUpload, trackUpload, deleteStorageFileWithAccounting, genId } from '../shared/storageUtils';
 import { compressPhotoWithQuality } from '../shared/imageUtils';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
-import type { Circle, Photo, Project, DimensionLine, PhotoMaster } from '../types';
+import type { Circle, Photo, Project, DimensionLine, PhotoMaster, MapRow } from '../types';
 import type { ChangeEvent, MouseEvent } from 'react';
 import { ConfirmModal } from '../shared/ConfirmModal';
 import { PinSelectModal } from './photo/PinSelectModal';
@@ -542,8 +542,15 @@ export default function PhotoPage() {
     pendingPhotosRef.current = null;
   }, []);
 
+  const calcMapRowPhotoNos = (photos: Photo[], mapRows: MapRow[]): MapRow[] =>
+    mapRows.map(row => {
+      if (!row.symbol) return row;
+      const matched = photos.filter(p => p.locationMap === row.symbol).map(p => p.photoNumber).filter(Boolean);
+      return { ...row, photoNo: matched.join('・') };
+    });
+
   /** photos 配列を Firestore に安全に書き込む。失敗時はトーストを表示。 */
-  const safeUpdate = useCallback(async (photos: Photo[]): Promise<boolean> => {
+  const safeUpdate = useCallback(async (photos: Photo[], updatedMapRows?: MapRow[]): Promise<boolean> => {
     if (!id) return false;
     // Firestore 1ドキュメントの上限は 1MiB。80% を超えたら警告を出す（保存は続行）。
     const estimatedBytes = new Blob([JSON.stringify(photos)]).size;
@@ -553,7 +560,9 @@ export default function PhotoPage() {
       );
     }
     try {
-      await updateDoc(doc(db, 'projects', id), { photos });
+      const updateData: Record<string, unknown> = { photos };
+      if (updatedMapRows !== undefined) updateData.mapRows = updatedMapRows;
+      await updateDoc(doc(db, 'projects', id), updateData);
       return true;
     } catch (err) {
       logFirebaseError(err, '写真ページ保存');
@@ -606,7 +615,13 @@ export default function PhotoPage() {
         // タイマー発火時点で最新の photos を書く(他フィールドの変更も反映)
         const photosToSave = pendingPhotosRef.current ?? newPhotos;
         try {
-          await updateDoc(doc(db, 'projects', id), { photos: photosToSave });
+          const updateData: Record<string, unknown> = { photos: photosToSave };
+          if (field === 'locationMap') {
+            const newMapRows = calcMapRowPhotoNos(photosToSave, projectRef.current?.mapRows ?? []);
+            updateData.mapRows = newMapRows;
+            setProject(prev => prev ? { ...prev, mapRows: newMapRows } : prev);
+          }
+          await updateDoc(doc(db, 'projects', id), updateData);
           if (pendingPhotosRef.current === photosToSave) {
             pendingPhotosRef.current = null;
           }
@@ -659,8 +674,9 @@ export default function PhotoPage() {
     }
     const newPhotos = project.photos.filter((p) => p.id !== photoId);
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
-    setProject((prev) => prev ? { ...prev, photos: renumbered } : null);
-    await safeUpdate(renumbered);
+    const updatedMapRows = calcMapRowPhotoNos(renumbered, project.mapRows ?? []);
+    setProject((prev) => prev ? { ...prev, photos: renumbered, mapRows: updatedMapRows } : null);
+    await safeUpdate(renumbered, updatedMapRows);
   };
 
   const toggleSelectPhoto = (photoId: number) => {
@@ -683,8 +699,9 @@ export default function PhotoPage() {
 
     const newPhotos = project.photos.filter((p) => !selectedPhotoIds.includes(p.id));
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
-    setProject((prev) => prev ? { ...prev, photos: renumbered } : null);
-    await safeUpdate(renumbered);
+    const updatedMapRows = calcMapRowPhotoNos(renumbered, project.mapRows ?? []);
+    setProject((prev) => prev ? { ...prev, photos: renumbered, mapRows: updatedMapRows } : null);
+    await safeUpdate(renumbered, updatedMapRows);
     setSelectedPhotoIds([]);
     setIsSelectMode(false);
   };
@@ -727,8 +744,9 @@ export default function PhotoPage() {
     const newPhotos = [...project.photos];
     newPhotos.splice(index + 1, 0, newPhoto);
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
-    setProject((prev) => prev ? { ...prev, photos: renumbered } : null);
-    await safeUpdate(renumbered);
+    const updatedMapRows = calcMapRowPhotoNos(renumbered, project.mapRows ?? []);
+    setProject((prev) => prev ? { ...prev, photos: renumbered, mapRows: updatedMapRows } : null);
+    await safeUpdate(renumbered, updatedMapRows);
   };
 
   const movePhoto = async (index: number, direction: 'up' | 'down') => {
@@ -739,8 +757,9 @@ export default function PhotoPage() {
     const targetIdx = direction === 'up' ? index - 1 : index + 1;
     [newPhotos[index], newPhotos[targetIdx]] = [newPhotos[targetIdx], newPhotos[index]];
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
-    setProject((prev) => prev ? { ...prev, photos: renumbered } : null);
-    await safeUpdate(renumbered);
+    const updatedMapRows = calcMapRowPhotoNos(renumbered, project.mapRows ?? []);
+    setProject((prev) => prev ? { ...prev, photos: renumbered, mapRows: updatedMapRows } : null);
+    await safeUpdate(renumbered, updatedMapRows);
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -752,8 +771,9 @@ export default function PhotoPage() {
     cancelPendingPhotoDebounces();
     const newPhotos = arrayMove(project.photos, oldIndex, newIndex);
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
-    setProject(prev => prev ? { ...prev, photos: renumbered } : null);
-    await safeUpdate(renumbered);
+    const updatedMapRows = calcMapRowPhotoNos(renumbered, project.mapRows ?? []);
+    setProject(prev => prev ? { ...prev, photos: renumbered, mapRows: updatedMapRows } : null);
+    await safeUpdate(renumbered, updatedMapRows);
   };
 
   const handleGridPhotoClick = (photoId: number) => {
