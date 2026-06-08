@@ -306,6 +306,25 @@ const getTodayStr = () => {
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
 };
 
+const calcMapRowPhotoNos = (photos: Photo[], mapRows: MapRow[]): MapRow[] =>
+  mapRows.map(row => {
+    if (!row.symbol) return row;
+    const nums = photos
+      .filter(p => p.locationMap === row.symbol)
+      .map(p => Number(p.photoNumber))
+      .filter(n => !isNaN(n) && n > 0)
+      .sort((a, b) => a - b);
+    if (nums.length === 0) return row;
+    const ranges: string[] = [];
+    let start = nums[0], end = nums[0];
+    for (let i = 1; i < nums.length; i++) {
+      if (nums[i] === end + 1) { end = nums[i]; }
+      else { ranges.push(start === end ? `${start}` : `${start}〜${end}`); start = end = nums[i]; }
+    }
+    ranges.push(start === end ? `${start}` : `${start}〜${end}`);
+    return { ...row, photoNo: ranges.join('・') };
+  });
+
 // ドラッグ可能な写真カードラッパー（Render Props パターン）
 // カード本体のロジックをここに移さず、ドラッグ挙動だけを提供する
 interface SortablePhotoCardProps {
@@ -467,7 +486,17 @@ export default function PhotoPage() {
       try {
         const projectSnap = await getDoc(doc(db, "projects", id));
         if (aborted || !mountedRef.current) return;
-        if (projectSnap.exists()) setProject(projectSnap.data() as Project);
+        if (projectSnap.exists()) {
+          const snap = projectSnap.data() as Project;
+          const updatedMapRows = calcMapRowPhotoNos(snap.photos ?? [], snap.mapRows ?? []);
+          const needsSync = updatedMapRows.some((r, i) => r.photoNo !== (snap.mapRows ?? [])[i]?.photoNo);
+          if (needsSync && !aborted) {
+            void updateDoc(doc(db, 'projects', id), { mapRows: updatedMapRows });
+            setProject({ ...snap, mapRows: updatedMapRows });
+          } else {
+            setProject(snap);
+          }
+        }
 
         const user = auth.currentUser;
         if (!user) return;
@@ -541,25 +570,6 @@ export default function PhotoPage() {
     debounceTimers.current = {};
     pendingPhotosRef.current = null;
   }, []);
-
-  const calcMapRowPhotoNos = (photos: Photo[], mapRows: MapRow[]): MapRow[] =>
-    mapRows.map(row => {
-      if (!row.symbol) return row;
-      const nums = photos
-        .filter(p => p.locationMap === row.symbol)
-        .map(p => Number(p.photoNumber))
-        .filter(n => !isNaN(n) && n > 0)
-        .sort((a, b) => a - b);
-      if (nums.length === 0) return { ...row, photoNo: '' };
-      const ranges: string[] = [];
-      let start = nums[0], end = nums[0];
-      for (let i = 1; i < nums.length; i++) {
-        if (nums[i] === end + 1) { end = nums[i]; }
-        else { ranges.push(start === end ? `${start}` : `${start}〜${end}`); start = end = nums[i]; }
-      }
-      ranges.push(start === end ? `${start}` : `${start}〜${end}`);
-      return { ...row, photoNo: ranges.join('・') };
-    });
 
   /** photos 配列を Firestore に安全に書き込む。失敗時はトーストを表示。 */
   const safeUpdate = useCallback(async (photos: Photo[], updatedMapRows?: MapRow[]): Promise<boolean> => {
