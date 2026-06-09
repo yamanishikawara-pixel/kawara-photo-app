@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, Plus, Edit2, Ruler, Paintbrush, CaseUpper, Copy, CheckSquare, Calendar, BookmarkPlus, GripVertical, LayoutGrid, List, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Camera, Trash2, ArrowLeft, ArrowUp, ArrowDown, UploadCloud, MapPin, Plus, Edit2, Ruler, Paintbrush, Copy, CheckSquare, Calendar, BookmarkPlus, GripVertical, LayoutGrid, List, ChevronLeft, ChevronRight } from 'lucide-react';
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
@@ -60,9 +60,7 @@ const getLocalPointFromRect = (clientX: number, clientY: number, rect: DOMRect, 
   return { x: Math.max(0, Math.min(100, (localX / w) * 100)), y: Math.max(0, Math.min(100, (localY / h) * 100)) };
 };
 
-const DimensionLineMarker = React.memo(function DimensionLineMarker({ line, isSelected, onSelect, onRemove, onTextChange, onUpdate, onDeselect, rotation }: { line: DimensionLine; isSelected: boolean; onSelect: () => void; onRemove: () => void; onTextChange: (text: string) => void; onUpdate: (props: Partial<DimensionLine>) => void; onDeselect: () => void; rotation: number; }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-
+const DimensionLineMarker = React.memo(function DimensionLineMarker({ line, isSelected, onSelect, onUpdate, rotation }: { line: DimensionLine; isSelected: boolean; onSelect: () => void; onUpdate: (props: Partial<DimensionLine>) => void; rotation: number; }) {
   const [localStart, setLocalStart] = useState(line.start);
   const [localEnd, setLocalEnd] = useState(line.end);
   const [isDragging, setIsDragging] = useState<'start' | 'end' | null>(null);
@@ -75,12 +73,6 @@ const DimensionLineMarker = React.memo(function DimensionLineMarker({ line, isSe
     });
     return () => cancelAnimationFrame(frame);
   }, [line.start, line.end, isDragging]);
-
-  useEffect(() => {
-    if (isSelected && inputRef.current && !isDragging && !line.text) {
-      inputRef.current.focus();
-    }
-  }, [isSelected, isDragging, line.text]);
 
   const startDrag = (e: React.PointerEvent, type: 'start' | 'end') => {
     e.stopPropagation();
@@ -107,18 +99,7 @@ const DimensionLineMarker = React.memo(function DimensionLineMarker({ line, isSe
     setIsDragging(null);
   };
 
-  const addPartName = (name: string) => {
-    if (inputRef.current) {
-      const currentText = inputRef.current.value;
-      const newText = currentText.startsWith(name) ? currentText : `${name} ${currentText}`;
-      onTextChange(newText);
-      inputRef.current.focus();
-    }
-  };
-
   const midPoint = { x: (localStart.x + localEnd.x) / 2, y: (localStart.y + localEnd.y) / 2 };
-  const safePopupX = Math.max(15, Math.min(85, midPoint.x));
-  const safePopupY = Math.max(15, Math.min(85, midPoint.y));
   const color = line.color || "#FFFFFF";
   const thickness = Number(line.size || 2);
 
@@ -146,63 +127,6 @@ const DimensionLineMarker = React.memo(function DimensionLineMarker({ line, isSe
         />
       </svg>
 
-      {isSelected && !isDragging && (
-        <div
-          style={{
-            left: `${safePopupX}%`, top: `${safePopupY}%`,
-            background: '#1c1c30', borderColor: '#2e2e50',
-          }}
-          className="absolute z-30 translate-x-[-50%] translate-y-[-50%] flex flex-col items-center gap-4 p-4 sm:p-5 rounded-2xl shadow-2xl border min-w-[280px] w-[90%] max-w-[320px] sm:w-auto"
-          onClick={e => e.stopPropagation()}
-        >
-          <div className="flex w-full gap-3 items-center justify-between border-b pb-3" style={{ borderColor: '#2e2e50' }}>
-            <h4 className="text-base font-black flex items-center gap-2" style={{ color: '#f0ede8' }}>
-              <CaseUpper className="w-5 h-5" style={{ color: '#ff6b35' }} /> 部位と寸法を入力
-            </h4>
-            <button
-              onClick={(e) => { e.stopPropagation(); onRemove(); }}
-              className="p-2 rounded-xl transition-colors"
-              style={{ color: '#ef4444', background: 'rgba(239,68,68,0.12)' }}
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="flex flex-wrap gap-2 w-full">
-            {DEFAULT_ROOF_PART_NAMES.map(name => (
-              <button
-                key={name}
-                onClick={() => addPartName(name)}
-                className="text-sm font-bold px-3 py-1.5 rounded-xl transition-all active:scale-95"
-                style={{ color: '#ff6b35', background: 'rgba(255,107,53,0.12)', border: '1px solid rgba(255,107,53,0.25)' }}
-              >
-                ＋{name}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex w-full gap-2">
-            <input
-              ref={inputRef}
-              type="text"
-              value={line.text}
-              onChange={(e) => onTextChange(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onDeselect(); } }}
-              className="flex-1 p-3 text-base font-bold rounded-xl outline-none text-center"
-              style={{ background: '#12122a', border: '1px solid #3d3d60', color: '#f0ede8' }}
-              placeholder="部位 〇〇m"
-            />
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onDeselect(); }}
-              className="px-4 py-2 font-black rounded-xl transition-all whitespace-nowrap"
-              style={{ background: '#ff6b35', color: '#fff' }}
-            >
-              ✓ 完了
-            </button>
-          </div>
-        </div>
-      )}
 
       {isSelected && (
         <>
@@ -1401,10 +1325,7 @@ export default function PhotoPage() {
                                 line={line}
                                 isSelected={selectedDimensionLineId === line.id}
                                 onSelect={() => setSelectedDimensionLineId(line.id)}
-                                onRemove={() => removeDimensionLine(photo.id, line.id)}
-                                onTextChange={(text) => updateDimensionLine(photo.id, line.id, { text })}
                                 onUpdate={(newProps) => updateDimensionLine(photo.id, line.id, newProps)}
-                                onDeselect={() => setSelectedDimensionLineId(null)}
                                 rotation={Number(photo.rotation || 0)}
                               />
                             ))}
@@ -1424,6 +1345,38 @@ export default function PhotoPage() {
                         )}
                       </div>
 
+                      {/* 寸法線選択時コントロール（写真外に配置） */}
+                      {selectedDimensionLineId !== null && (() => {
+                        const sel = (photo.dimensionLines || []).find(l => l.id === selectedDimensionLineId);
+                        if (!sel) return null;
+                        const addPart = (name: string) => {
+                          const cur = sel.text || '';
+                          updateDimensionLine(photo.id, sel.id, { text: cur.startsWith(name) ? cur : `${name} ${cur}`.trim() });
+                        };
+                        return (
+                          <div className="rounded-xl border space-y-3 p-3" style={{ background: '#1c1c30', borderColor: '#3d3d60' }}>
+                            <div className="flex flex-wrap gap-2">
+                              {DEFAULT_ROOF_PART_NAMES.map(name => (
+                                <button key={name} onClick={() => addPart(name)} className="text-sm font-bold px-3 py-1.5 rounded-xl transition-all active:scale-95" style={{ color: '#ff6b35', background: 'rgba(255,107,53,0.12)', border: '1px solid rgba(255,107,53,0.25)' }}>＋{name}</button>
+                              ))}
+                            </div>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={sel.text}
+                                onChange={(e) => updateDimensionLine(photo.id, sel.id, { text: e.target.value })}
+                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setSelectedDimensionLineId(null); } }}
+                                className="flex-1 p-3 text-base font-bold rounded-xl outline-none text-center"
+                                style={{ background: '#12122a', border: '1px solid #3d3d60', color: '#f0ede8' }}
+                                placeholder="部位 〇〇m"
+                              />
+                              <button onClick={() => setSelectedDimensionLineId(null)} className="px-4 py-2 font-black rounded-xl transition-all whitespace-nowrap" style={{ background: '#ff6b35', color: '#fff' }}>✓ 完了</button>
+                              <button onClick={() => { removeDimensionLine(photo.id, sel.id); setSelectedDimensionLineId(null); }} className="p-2 rounded-xl transition-colors" style={{ color: '#ef4444', background: 'rgba(239,68,68,0.12)' }}><Trash2 className="w-4 h-4" /></button>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
                       {/* 赤丸選択時コントロール（写真外に配置） */}
                       {selectedCircleId !== null && (() => {
                         const sel = (photo.circles || []).find(c => c.id === selectedCircleId);
@@ -1432,8 +1385,8 @@ export default function PhotoPage() {
                         return (
                           <div className="flex items-center rounded-xl overflow-hidden border" style={{ background: '#1c1c30', borderColor: '#3d3d60' }}>
                             <span className="flex-1 text-center text-xs font-bold px-3" style={{ color: '#8b8ba8' }}>赤丸サイズ</span>
-                            <button onClick={(e) => { e.stopPropagation(); updateCircle(photo.id, selectedCircleId, { size: Math.max(5, Math.round(size - 5)) }); }} className="px-4 py-2.5 text-lg font-bold transition-colors" style={{ color: '#f0ede8', borderLeft: '1px solid #3d3d60' }} onPointerEnter={e => (e.currentTarget.style.background = '#2e2e50')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}>－</button>
-                            <button onClick={(e) => { e.stopPropagation(); updateCircle(photo.id, selectedCircleId, { size: Math.min(80, Math.round(size + 5)) }); }} className="px-4 py-2.5 text-lg font-bold transition-colors" style={{ color: '#f0ede8', borderLeft: '1px solid #3d3d60', borderRight: '1px solid #3d3d60' }} onPointerEnter={e => (e.currentTarget.style.background = '#2e2e50')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}>＋</button>
+                            <button onClick={(e) => { e.stopPropagation(); updateCircle(photo.id, selectedCircleId, { size: Math.min(80, Math.round(size + 5)) }); }} className="px-4 py-2.5 text-lg font-bold transition-colors" style={{ color: '#f0ede8', borderLeft: '1px solid #3d3d60' }} onPointerEnter={e => (e.currentTarget.style.background = '#2e2e50')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}>＋</button>
+                            <button onClick={(e) => { e.stopPropagation(); updateCircle(photo.id, selectedCircleId, { size: Math.max(5, Math.round(size - 5)) }); }} className="px-4 py-2.5 text-lg font-bold transition-colors" style={{ color: '#f0ede8', borderLeft: '1px solid #3d3d60', borderRight: '1px solid #3d3d60' }} onPointerEnter={e => (e.currentTarget.style.background = '#2e2e50')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}>－</button>
                             <button onClick={(e) => { e.stopPropagation(); removeCircle(photo.id, selectedCircleId); setSelectedCircleId(null); }} aria-label="削除" className="px-4 py-2.5 transition-colors" style={{ color: '#ef4444' }} onPointerEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,0.15)')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}><Trash2 className="w-4 h-4" /></button>
                           </div>
                         );
