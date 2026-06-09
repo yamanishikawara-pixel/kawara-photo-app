@@ -932,7 +932,7 @@ export default function PdfExportPage() {
             }}>
 
             <div className="cover-title" style={{
-              position: 'absolute', left: 0, right: 0, top: 96,
+              position: 'absolute', left: 0, right: 0, top: 148,
               textAlign: 'center',
               fontSize: '42pt',
               fontWeight: 800,
@@ -944,14 +944,14 @@ export default function PdfExportPage() {
             }}>{project.coverTitle?.trim() || '工事写真報告書'}</div>
 
             <div style={{
-              position: 'absolute', left: '50%', top: 210,
+              position: 'absolute', left: '50%', top: 262,
               transform: 'translateX(-50%)',
               width: 620, height: 1, background: '#111',
             }} />
 
             <div style={{
-              position: 'absolute', left: '50%', top: 280,
-              bottom: 300,
+              position: 'absolute', left: '50%', top: 330,
+              bottom: 250,
               transform: 'translateX(-50%)',
               width: 620,
               display: 'flex',
