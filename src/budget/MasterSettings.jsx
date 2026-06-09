@@ -29,8 +29,11 @@ function AddForm({ placeholderName, placeholderVal, onAdd }) {
     );
 }
 
-export function MasterSettings({ masterMats, setMasterMats, masterDiscounts, setMasterDiscounts, masterStdPrices, setMasterStdPrices, masterSuppliers = [], setMasterSuppliers, masterSupplierMap = {}, setMasterSupplierMap, masterCompanyInfo, setMasterCompanyInfo, masterHouseMakers = [], setMasterHouseMakers, projectList = [], onClose, showToast, applySupplierRename, applySupplierDelete }) {
+export function MasterSettings({ masterMats, setMasterMats, masterDiscounts, setMasterDiscounts, masterStdPrices, setMasterStdPrices, masterSuppliers = [], setMasterSuppliers, masterSupplierMap = {}, setMasterSupplierMap, masterCompanyInfo, setMasterCompanyInfo, masterHouseMakers = [], setMasterHouseMakers, masterMatCategories = {}, setMasterMatCategories, projectList = [], onClose, showToast, applySupplierRename, applySupplierDelete }) {
     const [activeTab, setActiveTab] = useState("materials");
+    const [newMatName, setNewMatName] = useState("");
+    const [newMatVal, setNewMatVal] = useState("");
+    const [newMatCat, setNewMatCat] = useState("");
     const [bulkCat, setBulkCat] = useState("");
     const [bulkSup, setBulkSup] = useState("");
     const [supplierEditTarget, setSupplierEditTarget] = useState(null);
@@ -42,7 +45,7 @@ export function MasterSettings({ masterMats, setMasterMats, masterDiscounts, set
     const saveMasterToCloud = async () => {
         try {
             showToast("クラウドへ保存中...");
-            await setDoc(doc(db, "cost_master", "settings"), { masterMats, masterDiscounts, masterStdPrices, masterSuppliers, masterSupplierMap, masterCompanyInfo, masterHouseMakers });
+            await setDoc(doc(db, "cost_master", "settings"), { masterMats, masterDiscounts, masterStdPrices, masterSuppliers, masterSupplierMap, masterCompanyInfo, masterHouseMakers, masterMatCategories });
             showToast("☁️ クラウドにマスターデータを保存しました！");
         } catch(e) { showToast("保存エラー: " + e.message); }
     };
@@ -62,6 +65,7 @@ export function MasterSettings({ masterMats, setMasterMats, masterDiscounts, set
                 if(data.masterSupplierMap) setMasterSupplierMap(data.masterSupplierMap);
                 if(data.masterCompanyInfo) setMasterCompanyInfo(data.masterCompanyInfo);
                 if(data.masterHouseMakers) setMasterHouseMakers(data.masterHouseMakers);
+                if(data.masterMatCategories) setMasterMatCategories(data.masterMatCategories);
                 showToast("読込完了！");
             } else { showToast("データがありません"); }
         } catch(e) { showToast("読込エラー: " + e.message); }
@@ -80,9 +84,12 @@ export function MasterSettings({ masterMats, setMasterMats, masterDiscounts, set
         if (!ok) return;
         setMasterMats(prev => { const c = {...prev}; delete c[key]; return c; });
     };
-    const addMaterial = (name, val) => {
+    const addMaterial = (name, val, cat) => {
         if (masterMats[name] !== undefined) { showToast("既に存在する品名です"); return; }
         setMasterMats(prev => ({...prev, [name]: toMasterNumber(val || "0", true)}));
+        if (cat && cat !== "その他") {
+            setMasterMatCategories(prev => ({...prev, [cat]: [...(prev[cat] || []), name]}));
+        }
         showToast("追加しました");
     };
 
@@ -211,8 +218,15 @@ export function MasterSettings({ masterMats, setMasterMats, masterDiscounts, set
                 <div className={`master-tab ${activeTab==="company"?"active":""}`} onClick={()=>setActiveTab("company")}>🏢 会社情報</div>
             </div>
             {activeTab === "materials" && (() => {
-                const allCatItems = new Set(Object.values(MATERIAL_CATEGORIES).flat());
-                const categorized = Object.entries(MATERIAL_CATEGORIES).map(([cat, names]) => ({
+                const allCatItems = new Set([
+                    ...Object.values(MATERIAL_CATEGORIES).flat(),
+                    ...Object.values(masterMatCategories).flat()
+                ]);
+                const allCats = { ...MATERIAL_CATEGORIES };
+                Object.entries(masterMatCategories).forEach(([cat, names]) => {
+                    allCats[cat] = [...(allCats[cat] || []), ...names];
+                });
+                const categorized = Object.entries(allCats).map(([cat, names]) => ({
                     cat,
                     entries: names.filter(n => masterMats[n] !== undefined).map(n => [n, masterMats[n]])
                 })).filter(c => c.entries.length > 0);
@@ -272,7 +286,17 @@ export function MasterSettings({ masterMats, setMasterMats, masterDiscounts, set
                             </Card>
                         )}
                         <Card title="副資材 - 新規追加" color="#fbbf24">
-                            <AddForm placeholderName="新規の副資材名" placeholderVal="単価" onAdd={(n, v) => addMaterial(n, v)} />
+                            <div style={{display:"flex", alignItems:"center", gap: 8, background:"#0f1d2e", padding:"10px", borderRadius:6, border:"1px dashed #334155", marginTop:12, flexWrap:"wrap"}}>
+                                <div style={{fontSize:11, color:"#94a3b8", fontWeight:700}}>新規追加:</div>
+                                <select value={newMatCat} onChange={e=>setNewMatCat(e.target.value)} style={{background:"#08192b",border:"1px solid #1d3d5c",borderRadius:6,padding:"6px 10px",color:"#dde8f2",fontSize:12,minWidth:150}}>
+                                    <option value="">カテゴリ選択...</option>
+                                    <option value="その他">その他</option>
+                                    {Object.keys(MATERIAL_CATEGORIES).map(cat=><option key={cat} value={cat}>{cat}</option>)}
+                                </select>
+                                <input placeholder="品名" value={newMatName} onChange={e=>setNewMatName(e.target.value)} style={{...I, flex:1, minWidth:120, padding:"6px 10px"}} />
+                                <input type="text" inputMode="decimal" placeholder="単価" value={newMatVal} onChange={e=>setNewMatVal(e.target.value)} style={{...I, width:80, padding:"6px 10px", textAlign:"right"}} />
+                                <button onClick={()=>{ const trimmed = newMatName.trim(); if(trimmed) { addMaterial(trimmed, newMatVal, newMatCat || "その他"); setNewMatName(""); setNewMatVal(""); } }} style={{background:"#10b981", border:"none", borderRadius:4, color:"#fff", padding:"6px 14px", cursor:"pointer", fontWeight:700, fontSize:12}}>追加</button>
+                            </div>
                         </Card>
                     </div>
                 );

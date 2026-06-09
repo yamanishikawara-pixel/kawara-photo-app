@@ -41,6 +41,7 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
   const [masterSuppliers, setMasterSuppliers] = useLocalStorage("global_master_suppliers", []);
   const [masterSupplierMap, setMasterSupplierMap] = useLocalStorage("global_master_supplier_map", {});
   const [masterHouseMakers, setMasterHouseMakers] = useLocalStorage("global_master_housemakers", []);
+  const [masterMatCategories, setMasterMatCategories] = useLocalStorage("global_master_mat_categories", {});
   const [masterCompanyInfo, setMasterCompanyInfo] = useLocalStorage("global_master_company_info", { companyName: "有限会社 山西瓦店", postalCode: "", address: "", tel: "", fax: "", contactPerson: "", taxRate: 10, grossRateGood: 30, grossRateWarn: 20, fiscalYearStartMonth: 4 });
 
   const [projectList, setProjectList] = useLocalStorage("cost_projectList", ["default"]);
@@ -852,7 +853,7 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
   // ★マスター設定画面の呼び出し（ここも残っています）
   if (mode === "master") return (
       <div style={{background:"#05111f", minHeight:"100vh", fontFamily:"'Noto Sans JP', sans-serif", color:"#dde8f2"}}>
-         <MasterSettings masterMats={masterMats} setMasterMats={setMasterMats} masterDiscounts={masterDiscounts} setMasterDiscounts={setMasterDiscounts} masterStdPrices={masterStdPrices} setMasterStdPrices={setMasterStdPrices} masterSuppliers={masterSuppliers} setMasterSuppliers={setMasterSuppliers} masterSupplierMap={masterSupplierMap} setMasterSupplierMap={setMasterSupplierMap} masterCompanyInfo={masterCompanyInfo} setMasterCompanyInfo={setMasterCompanyInfo} masterHouseMakers={masterHouseMakers} setMasterHouseMakers={setMasterHouseMakers} projectList={projectList} onClose={() => setMode("input")} showToast={showToast} applySupplierRename={applySupplierRename} applySupplierDelete={applySupplierDelete} />
+         <MasterSettings masterMats={masterMats} setMasterMats={setMasterMats} masterDiscounts={masterDiscounts} setMasterDiscounts={setMasterDiscounts} masterStdPrices={masterStdPrices} setMasterStdPrices={setMasterStdPrices} masterSuppliers={masterSuppliers} setMasterSuppliers={setMasterSuppliers} masterSupplierMap={masterSupplierMap} setMasterSupplierMap={setMasterSupplierMap} masterCompanyInfo={masterCompanyInfo} setMasterCompanyInfo={setMasterCompanyInfo} masterHouseMakers={masterHouseMakers} setMasterHouseMakers={setMasterHouseMakers} masterMatCategories={masterMatCategories} setMasterMatCategories={setMasterMatCategories} projectList={projectList} onClose={() => setMode("input")} showToast={showToast} applySupplierRename={applySupplierRename} applySupplierDelete={applySupplierDelete} />
          {toast && <Toast key={toast.id} message={toast.msg} onClose={() => setToast(null)} />}
       </div>
   );
