@@ -245,7 +245,7 @@ const DimensionLineMarker = React.memo(function DimensionLineMarker({ line, isSe
   );
 });
 
-function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChange, onRemove, rotation }: { circle: Circle; isSelected: boolean; onSelect: () => void; onDragEnd: (x: number, y: number) => void; onSizeChange: (size: number) => void; onRemove: () => void; rotation: number; }) {
+function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, rotation }: { circle: Circle; isSelected: boolean; onSelect: () => void; onDragEnd: (x: number, y: number) => void; rotation: number; }) {
   const handleDragEnd = (x: number, y: number) => { onDragEnd(x, y); };
   const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(circle.x, circle.y, handleDragEnd, rotation);
   const size = Number(circle.size || 20);
@@ -268,21 +268,6 @@ function PhotoCircleMarker({ circle, isSelected, onSelect, onDragEnd, onSizeChan
         className={`absolute aspect-square rounded-full border-[4px] border-red-500 shadow-sm transition-all duration-75 ${dragging ? 'z-30 opacity-80' : 'cursor-pointer hover:bg-red-500/10'} ${isSelected && !dragging ? 'border-dashed bg-red-500/10' : ''}`}
       />
 
-      {isSelected && !dragging && (
-        <div
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            left: `${position.x}%`, top: `${position.y + size/2 + 8}%`,
-            transform: 'translateX(-50%)',
-            background: '#1c1c30', border: '1px solid #3d3d60',
-          }}
-          className="absolute z-[201] flex rounded-xl shadow-2xl overflow-hidden"
-        >
-          <button onClick={(e) => { e.stopPropagation(); onSizeChange(Math.min(80, Math.round(size + 5))); }} className="px-4 py-2.5 text-lg font-bold transition-colors" style={{ color: '#f0ede8', borderRight: '1px solid #3d3d60' }} onPointerEnter={e => (e.currentTarget.style.background = '#2e2e50')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}>＋</button>
-          <button onClick={(e) => { e.stopPropagation(); onSizeChange(Math.max(5, Math.round(size - 5))); }} className="px-4 py-2.5 text-lg font-bold transition-colors" style={{ color: '#f0ede8', borderRight: '1px solid #3d3d60' }} onPointerEnter={e => (e.currentTarget.style.background = '#2e2e50')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}>－</button>
-          <button onClick={(e) => { e.stopPropagation(); onRemove(); }} aria-label="削除" className="px-4 py-2.5 transition-colors" style={{ color: '#ef4444' }} onPointerEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,0.15)')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}><Trash2 className="w-4 h-4" /></button>
-        </div>
-      )}
     </>
   );
 }
@@ -1406,8 +1391,6 @@ export default function PhotoPage() {
                                 isSelected={selectedCircleId === circle.id}
                                 onSelect={() => setSelectedCircleId(circle.id)}
                                 onDragEnd={(x, y) => updateCircle(photo.id, circle.id, { x, y })}
-                                onSizeChange={(size) => updateCircle(photo.id, circle.id, { size })}
-                                onRemove={() => removeCircle(photo.id, circle.id)}
                                 rotation={Number(photo.rotation || 0)}
                               />
                             ))}
@@ -1440,6 +1423,21 @@ export default function PhotoPage() {
                           </div>
                         )}
                       </div>
+
+                      {/* 赤丸選択時コントロール（写真外に配置） */}
+                      {selectedCircleId !== null && (() => {
+                        const sel = (photo.circles || []).find(c => c.id === selectedCircleId);
+                        if (!sel) return null;
+                        const size = Number(sel.size || 20);
+                        return (
+                          <div className="flex items-center rounded-xl overflow-hidden border" style={{ background: '#1c1c30', borderColor: '#3d3d60' }}>
+                            <button onClick={(e) => { e.stopPropagation(); updateCircle(photo.id, selectedCircleId, { size: Math.min(80, Math.round(size + 5)) }); }} className="px-4 py-2.5 text-lg font-bold transition-colors" style={{ color: '#f0ede8', borderRight: '1px solid #3d3d60' }} onPointerEnter={e => (e.currentTarget.style.background = '#2e2e50')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}>＋</button>
+                            <span className="flex-1 text-center text-xs font-bold" style={{ color: '#8b8ba8' }}>赤丸サイズ</span>
+                            <button onClick={(e) => { e.stopPropagation(); updateCircle(photo.id, selectedCircleId, { size: Math.max(5, Math.round(size - 5)) }); }} className="px-4 py-2.5 text-lg font-bold transition-colors" style={{ color: '#f0ede8', borderLeft: '1px solid #3d3d60', borderRight: '1px solid #3d3d60' }} onPointerEnter={e => (e.currentTarget.style.background = '#2e2e50')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}>－</button>
+                            <button onClick={(e) => { e.stopPropagation(); removeCircle(photo.id, selectedCircleId); setSelectedCircleId(null); }} aria-label="削除" className="px-4 py-2.5 transition-colors" style={{ color: '#ef4444' }} onPointerEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,0.15)')} onPointerLeave={e => (e.currentTarget.style.background = 'transparent')}><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        );
+                      })()}
 
                       {/* 編集ツール（写真がある場合のみ） */}
                       {photo.image && (
