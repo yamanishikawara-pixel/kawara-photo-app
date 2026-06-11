@@ -1,13 +1,11 @@
 完了しました。
 
-変更内容:
-- `resetReplacedMapAspect` を [src/shared/mapCoords.ts](/Users/yamanishikenta/kawara-photo-app/src/shared/mapCoords.ts) に追加
-- [src/pages/MapPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/MapPage.tsx) の replace 時 `finalAspects` 計算を純粋関数呼び出しに変更
-- [src/shared/mapCoords.test.ts](/Users/yamanishikenta/kawara-photo-app/src/shared/mapCoords.test.ts) に新規5件のテストを追加
-- [codex_result.md](/Users/yamanishikenta/kawara-photo-app/codex_result.md) を今回結果で更新
+[src/pages/SettingsPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/SettingsPage.tsx) に `ArrowUp` / `ArrowDown` import、`moveProcess`、工程リストの上下移動ボタンを追加しました。保存処理は変更していません。
+
+[codex_result.md](/Users/yamanishikenta/kawara-photo-app/codex_result.md) も指定フォーマットで更新済みです。
 
 検証:
 - `npm run build`: 成功
-- `npx vitest run src/shared/mapCoords.test.ts`: 成功、35件 passed
+- `npx vitest run`: 失敗扱い。ただし失敗は指定どおり既存の `No test suite found` 2件のみで、通常テストは `70 passed`
 
-補足: `npm run build` では既存の `src/pages/SchedulePage.tsx` の duplicate `style` attribute 警告が出ていますが、ビルドは成功しています。デプロイは行っていません。
+ビルド・デプロイは行っていません。

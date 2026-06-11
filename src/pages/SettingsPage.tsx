@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Plus, Trash2, Settings, Image as ImageIcon, X, Package, Camera, HardDrive, RefreshCw, Map } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, Settings, Image as ImageIcon, X, Package, Camera, HardDrive, RefreshCw, Map, ArrowUp, ArrowDown } from 'lucide-react';
 import { doc, getDoc, setDoc, updateDoc, getDocs, collection, query, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, getMetadata, listAll } from 'firebase/storage';
 import { db, auth, storage } from '../firebase';
@@ -357,6 +357,16 @@ export default function SettingsPage() {
     }
   };
 
+  const moveProcess = (index: number, direction: 'up' | 'down') => {
+    const newArr = [...processes];
+    if (direction === 'up' && index > 0) {
+      [newArr[index - 1], newArr[index]] = [newArr[index], newArr[index - 1]];
+    } else if (direction === 'down' && index < newArr.length - 1) {
+      [newArr[index], newArr[index + 1]] = [newArr[index + 1], newArr[index]];
+    }
+    setProcesses(newArr);
+  };
+
   const usageRatio = storageUsageRatio(storageUsedBytes);
 
   if (loading) return <LoadingSpinner />;
@@ -544,6 +554,30 @@ export default function SettingsPage() {
                     className={inputCls}
                     style={inputStyle}
                   />
+                  <button
+                    onClick={() => moveProcess(index, 'up')}
+                    disabled={index === 0}
+                    aria-label="上へ移動"
+                    className="p-2 rounded-xl transition-colors shrink-0 disabled:opacity-30"
+                    style={{ color: '#3d3d60' }}
+                    onPointerEnter={e => (e.currentTarget.style.color = '#ff6b35')}
+                    onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
+                    title="上へ"
+                  >
+                    <ArrowUp className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => moveProcess(index, 'down')}
+                    disabled={index === processes.length - 1}
+                    aria-label="下へ移動"
+                    className="p-2 rounded-xl transition-colors shrink-0 disabled:opacity-30"
+                    style={{ color: '#3d3d60' }}
+                    onPointerEnter={e => (e.currentTarget.style.color = '#ff6b35')}
+                    onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
+                    title="下へ"
+                  >
+                    <ArrowDown className="w-4 h-4" />
+                  </button>
                   <button
                     onClick={() => setProcesses(processes.filter((_, i) => i !== index))}
                     className="p-2 rounded-xl transition-colors shrink-0"
