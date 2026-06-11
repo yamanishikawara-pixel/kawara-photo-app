@@ -432,12 +432,10 @@ export default function PhotoPage() {
 
   const applyPhotoMaster = async (photoId: number, m: PhotoMaster) => {
     if (!project || !id) return;
-    cancelPendingPhotoDebounces();
     const newPhotos = project.photos.map((p) =>
       p.id === photoId ? { ...p, process: m.process, description: m.description } : p
     );
-    setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-    await safeUpdate(newPhotos);
+    await commitPhotos(newPhotos);
   };
 
   const saveToPhotoMaster = (photo: Photo) => {
@@ -504,6 +502,71 @@ export default function PhotoPage() {
     }
   }, [id]);
 
+  /**
+   * photos 配列の更新を一本化するコミット関数。
+   *
+   * - immediate: true（デフォルト） … 進行中のデバウンスを全キャンセルして即時保存。
+   *   ボタン操作・ドラッグ確定など「確定操作」はこちら。
+   * - immediate: false … テキスト入力用のデバウンス保存。
+   *   毎回 pendingPhotosRef を最新化し、発火時にその時点の最新配列を保存する。
+   */
+  const commitPhotos = useCallback(async (
+    newPhotos: Photo[],
+    options: {
+      immediate?: boolean;
+      mapRows?: MapRow[];
+      debounceKey?: string;
+      recomputeMapRowsOnFire?: boolean;
+    } = {}
+  ): Promise<boolean> => {
+    const { immediate = true, mapRows, debounceKey, recomputeMapRowsOnFire } = options;
+    if (!id) return false;
+
+    setProject((prev) => prev ? { ...prev, photos: newPhotos, ...(mapRows !== undefined ? { mapRows } : {}) } : prev);
+
+    if (saveStateTimer.current) clearTimeout(saveStateTimer.current);
+    setPhotoSaveState('saving');
+
+    const finishSave = (ok: boolean) => {
+      if (!mountedRef.current) return;
+      if (ok) {
+        setPhotoSaveState('saved');
+        saveStateTimer.current = setTimeout(() => {
+          if (mountedRef.current) setPhotoSaveState('idle');
+        }, 2000);
+      } else {
+        setPhotoSaveState('idle');
+      }
+    };
+
+    if (immediate) {
+      cancelPendingPhotoDebounces();
+      const ok = await safeUpdate(newPhotos, mapRows);
+      finishSave(ok);
+      return ok;
+    }
+
+    pendingPhotosRef.current = newPhotos;
+    const key = debounceKey ?? 'default';
+    const existing = debounceTimers.current[key];
+    if (existing) clearTimeout(existing);
+    debounceTimers.current[key] = setTimeout(async () => {
+      debounceTimers.current[key] = undefined;
+      const photosToSave = pendingPhotosRef.current ?? newPhotos;
+      let mapRowsToSave = mapRows;
+      if (recomputeMapRowsOnFire) {
+        mapRowsToSave = calcMapRowPhotoNos(photosToSave, projectRef.current?.mapRows ?? []);
+        setProject(prev => prev ? { ...prev, mapRows: mapRowsToSave! } : prev);
+      }
+      const ok = await safeUpdate(photosToSave, mapRowsToSave);
+      if (pendingPhotosRef.current === photosToSave) {
+        pendingPhotosRef.current = null;
+      }
+      finishSave(ok);
+    }, DEBOUNCE_MS);
+    return true;
+  }, [id, safeUpdate, cancelPendingPhotoDebounces]);
+
   // ── デバウンス保存(テキスト入力など連打されるフィールド用) ──
   const TEXT_FIELDS = new Set<keyof Photo>([
     'description', 'photoNumber', 'locationMap', 'process', 'shootingDate',
@@ -527,75 +590,24 @@ export default function PhotoPage() {
     const newPhotos = current.photos.map((p) =>
       p.id === photoId ? { ...p, [field]: value } : p,
     );
-    pendingPhotosRef.current = newPhotos;
-    setProject((prev) => prev ? { ...prev, photos: newPhotos } : prev);
-
-    // 保存中インジケータ表示
-    if (saveStateTimer.current) clearTimeout(saveStateTimer.current);
-    setPhotoSaveState('saving');
 
     if (TEXT_FIELDS.has(field)) {
       // デバウンス: 同一 photoId+field の連打は最後の1回だけ書く。
       // photoId 単位でタイマーキーを作ると、別フィールド(例: process)を
       // 触ったときに前のタイマーがキャンセルされてしまうので field も含める。
-      const key = `${photoId}:${field}`;
-      const existing = debounceTimers.current[key];
-      if (existing) clearTimeout(existing);
-      debounceTimers.current[key] = setTimeout(async () => {
-        debounceTimers.current[key] = undefined;
-        // タイマー発火時点で最新の photos を書く(他フィールドの変更も反映)
-        const photosToSave = pendingPhotosRef.current ?? newPhotos;
-        try {
-          const updateData: Record<string, unknown> = { photos: photosToSave };
-          if (field === 'locationMap') {
-            const newMapRows = calcMapRowPhotoNos(photosToSave, projectRef.current?.mapRows ?? []);
-            updateData.mapRows = newMapRows;
-            setProject(prev => prev ? { ...prev, mapRows: newMapRows } : prev);
-          }
-          await updateDoc(doc(db, 'projects', id), updateData);
-          if (pendingPhotosRef.current === photosToSave) {
-            pendingPhotosRef.current = null;
-          }
-          if (mountedRef.current) {
-            setPhotoSaveState('saved');
-            saveStateTimer.current = setTimeout(() => {
-              if (mountedRef.current) setPhotoSaveState('idle');
-            }, 2000);
-          }
-        } catch (err) {
-          logFirebaseError(err, '写真フィールド保存');
-          if (mountedRef.current) {
-            setPhotoSaveState('idle');
-            setUploadError(firebaseErrorMessage(err, '写真の保存'));
-          }
-        }
-      }, DEBOUNCE_MS);
+      await commitPhotos(newPhotos, {
+        immediate: false,
+        debounceKey: `${photoId}:${field}`,
+        recomputeMapRowsOnFire: field === 'locationMap',
+      });
     } else {
       // 即時書き込み: ボタン操作系は確定として扱う
-      try {
-        await updateDoc(doc(db, 'projects', id), { photos: newPhotos });
-        if (pendingPhotosRef.current === newPhotos) {
-          pendingPhotosRef.current = null;
-        }
-        if (mountedRef.current) {
-          setPhotoSaveState('saved');
-          saveStateTimer.current = setTimeout(() => {
-            if (mountedRef.current) setPhotoSaveState('idle');
-          }, 2000);
-        }
-      } catch (err) {
-        logFirebaseError(err, '写真フィールド保存');
-        if (mountedRef.current) {
-          setPhotoSaveState('idle');
-          setUploadError(firebaseErrorMessage(err, '写真の保存'));
-        }
-      }
+      await commitPhotos(newPhotos);
     }
-  }, [id]);
+  }, [id, commitPhotos]);
 
   const deletePhotoSlot = async (photoId: number) => {
     if (!project || !id) return;
-    cancelPendingPhotoDebounces();
     const target = project.photos.find((p) => p.id === photoId);
     // Storage 削除 + storageUsedBytes 減算を統合関数で実施。
     // 戻り値の bytes でローカル state を整合更新する(0 なら未減算)。
@@ -606,8 +618,7 @@ export default function PhotoPage() {
     const newPhotos = project.photos.filter((p) => p.id !== photoId);
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
     const updatedMapRows = calcMapRowPhotoNos(renumbered, project.mapRows ?? []);
-    setProject((prev) => prev ? { ...prev, photos: renumbered, mapRows: updatedMapRows } : null);
-    await safeUpdate(renumbered, updatedMapRows);
+    await commitPhotos(renumbered, { mapRows: updatedMapRows });
   };
 
   const toggleSelectPhoto = (photoId: number) => {
@@ -616,7 +627,6 @@ export default function PhotoPage() {
 
   const deleteSelectedPhotos = async () => {
     if (!project || !id || selectedPhotoIds.length === 0) return;
-    cancelPendingPhotoDebounces();
     const targets = project.photos.filter((p) => selectedPhotoIds.includes(p.id) && p.image);
     // 並列削除(逐次だと10枚で5秒級になりやすい)
     const results = await Promise.allSettled(
@@ -631,34 +641,28 @@ export default function PhotoPage() {
     const newPhotos = project.photos.filter((p) => !selectedPhotoIds.includes(p.id));
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
     const updatedMapRows = calcMapRowPhotoNos(renumbered, project.mapRows ?? []);
-    setProject((prev) => prev ? { ...prev, photos: renumbered, mapRows: updatedMapRows } : null);
-    await safeUpdate(renumbered, updatedMapRows);
+    await commitPhotos(renumbered, { mapRows: updatedMapRows });
     setSelectedPhotoIds([]);
     setIsSelectMode(false);
   };
 
   const applyBatchDate = async () => {
     if (!project || !id || !batchDate) return;
-    cancelPendingPhotoDebounces();
     const formatted = formatToYMDSlash(batchDate);
     const newPhotos = project.photos.map(p => ({ ...p, shootingDate: formatted }));
-    setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-    await safeUpdate(newPhotos);
+    await commitPhotos(newPhotos);
     setBatchDate("");
   };
 
   const addPhotoSlot = async () => {
     if (!project || !id) return;
-    cancelPendingPhotoDebounces();
     const newPhotos: Photo[] = [...project.photos, { id: nextId(), image: null, photoNumber: String(project.photos.length + 1), shootingDate: "", locationMap: "", process: "", description: "", circles: [], dimensionLines: [], rotation: 0 }];
-    setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-    await safeUpdate(newPhotos);
+    await commitPhotos(newPhotos);
   };
 
   const duplicatePhotoSlot = async (index: number) => {
     if (!project || !id) return;
     if (index < 0 || index >= project.photos.length) return;
-    cancelPendingPhotoDebounces();
     const source = project.photos[index];
     const newPhoto: Photo = {
       id: nextId(),
@@ -676,21 +680,18 @@ export default function PhotoPage() {
     newPhotos.splice(index + 1, 0, newPhoto);
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
     const updatedMapRows = calcMapRowPhotoNos(renumbered, project.mapRows ?? []);
-    setProject((prev) => prev ? { ...prev, photos: renumbered, mapRows: updatedMapRows } : null);
-    await safeUpdate(renumbered, updatedMapRows);
+    await commitPhotos(renumbered, { mapRows: updatedMapRows });
   };
 
   const movePhoto = async (index: number, direction: 'up' | 'down') => {
     if (!project || !id) return;
     if ((direction === 'up' && index === 0) || (direction === 'down' && index === project.photos.length - 1)) return;
-    cancelPendingPhotoDebounces();
     const newPhotos = [...project.photos];
     const targetIdx = direction === 'up' ? index - 1 : index + 1;
     [newPhotos[index], newPhotos[targetIdx]] = [newPhotos[targetIdx], newPhotos[index]];
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
     const updatedMapRows = calcMapRowPhotoNos(renumbered, project.mapRows ?? []);
-    setProject((prev) => prev ? { ...prev, photos: renumbered, mapRows: updatedMapRows } : null);
-    await safeUpdate(renumbered, updatedMapRows);
+    await commitPhotos(renumbered, { mapRows: updatedMapRows });
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -699,12 +700,10 @@ export default function PhotoPage() {
     const oldIndex = project.photos.findIndex(p => p.id === active.id);
     const newIndex = project.photos.findIndex(p => p.id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
-    cancelPendingPhotoDebounces();
     const newPhotos = arrayMove(project.photos, oldIndex, newIndex);
     const renumbered = newPhotos.map((p, i) => ({ ...p, photoNumber: String(i + 1) }));
     const updatedMapRows = calcMapRowPhotoNos(renumbered, project.mapRows ?? []);
-    setProject(prev => prev ? { ...prev, photos: renumbered, mapRows: updatedMapRows } : null);
-    await safeUpdate(renumbered, updatedMapRows);
+    await commitPhotos(renumbered, { mapRows: updatedMapRows });
   };
 
   const handleGridPhotoClick = (photoId: number) => {
@@ -793,7 +792,7 @@ export default function PhotoPage() {
       setBulkProgress(uploadedCount);
     }
     if (newPhotos.some(p => p.image)) {
-      await safeUpdate(newPhotos);
+      await commitPhotos(newPhotos);
     }
     setBulkUploading(false);
   };
@@ -835,8 +834,7 @@ export default function PhotoPage() {
         setStorageUsedBytes((prev) => prev + compressedFile.size);
       }
       const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, image: url, shootingDate: p.shootingDate || getTodayStr() } : p);
-      setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-      await safeUpdate(newPhotos);
+      await commitPhotos(newPhotos);
     } catch (err) {
       logFirebaseError(err, '写真アップロード');
       setUploadError(firebaseErrorMessage(err, '写真のアップロード'));
@@ -865,8 +863,7 @@ export default function PhotoPage() {
     if (mode === 'circle') {
       if (selectedCircleId !== null) { setSelectedCircleId(null); return; }
       const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: [...(p.circles || []), { id: nextId(), x, y, size: 20 }] } : p);
-      setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-      await safeUpdate(newPhotos);
+      await commitPhotos(newPhotos);
     } else if (mode === 'dimension') {
       if (selectedDimensionLineId !== null) { setSelectedDimensionLineId(null); return; }
       if (!drawingStartPoint) {
@@ -877,8 +874,7 @@ export default function PhotoPage() {
           ...p,
           dimensionLines: [...(p.dimensionLines || []), { id: newLineId, start: drawingStartPoint, end: { x, y }, text: "", size: 2, color: activeColor }]
         } : p);
-        setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-        await safeUpdate(newPhotos);
+        await commitPhotos(newPhotos);
         setDrawingStartPoint(null);
         setSelectedDimensionLineId(newLineId);
       }
@@ -888,30 +884,26 @@ export default function PhotoPage() {
   const updateCircle = async (photoId: number, circleId: number, newProps: Partial<Circle>) => {
     if (!project || !id) return;
     const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: (p.circles ?? []).map((c) => c.id === circleId ? { ...c, ...newProps } : c) } : p);
-    setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-    await safeUpdate(newPhotos);
+    await commitPhotos(newPhotos);
   };
 
   const removeCircle = async (photoId: number, circleId: number) => {
     if (!project || !id) return;
     const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, circles: (p.circles ?? []).filter((c) => c.id !== circleId) } : p);
-    setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-    await safeUpdate(newPhotos);
+    await commitPhotos(newPhotos);
     setSelectedCircleId(null);
   };
 
   const updateDimensionLine = async (photoId: number, lineId: number, newProps: Partial<DimensionLine>) => {
     if (!project || !id) return;
     const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, dimensionLines: p.dimensionLines?.map((c) => c.id === lineId ? { ...c, ...newProps } : c) } : p);
-    setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-    await safeUpdate(newPhotos);
+    await commitPhotos(newPhotos);
   };
 
   const removeDimensionLine = async (photoId: number, lineId: number) => {
     if (!project || !id) return;
     const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, dimensionLines: p.dimensionLines?.filter((c) => c.id !== lineId) } : p);
-    setProject((prev) => prev ? { ...prev, photos: newPhotos } : null);
-    await safeUpdate(newPhotos);
+    await commitPhotos(newPhotos);
     setSelectedDimensionLineId(null);
   };
 
