@@ -117,6 +117,17 @@ export interface PhotoMaster {
   description: string; // 説明文
 }
 
+export interface WorkTypeTemplateItem {
+  process: string;
+  description: string;
+}
+
+export interface WorkTypeTemplate {
+  id: number;
+  name: string;
+  items: WorkTypeTemplateItem[];
+}
+
 export interface UserSettings {
   companyName?: string;
   address?: string;
@@ -126,6 +137,7 @@ export interface UserSettings {
   customDescTemplates?: Array<{ label: string; text: string }>;
   materialMaster?: MaterialMaster[];
   photoMaster?: PhotoMaster[];
+  workTypeTemplates?: WorkTypeTemplate[];
   storageUsedBytes?: number;
 }
 

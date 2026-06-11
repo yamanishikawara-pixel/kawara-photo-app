@@ -18,7 +18,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { formatBytes, storageUsageRatio, STORAGE_LIMIT_BYTES, trackUpload, storagePathFromUrl, deleteStorageFileWithAccounting } from '../shared/storageUtils';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
-import type { MaterialMaster, PhotoMaster, Project } from '../types';
+import type { MaterialMaster, PhotoMaster, Project, WorkTypeTemplate } from '../types';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { isLegacyMapCoord as isLegacyMap, migrateMapToImageAspect } from '../shared/mapCoords';
 
@@ -101,6 +101,67 @@ function SortableProcessRow({ id, index, value, onChange, onDelete }: {
   );
 }
 
+function SortableWorkTypeItemRow({ id, index, process, description, onChangeProcess, onChangeDescription, onDelete }: {
+  id: string;
+  index: number;
+  process: string;
+  description: string;
+  onChangeProcess: (value: string) => void;
+  onChangeDescription: (value: string) => void;
+  onDelete: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    background: '#1c1c30',
+    borderColor: '#2e2e50',
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-start gap-2 p-2 rounded-xl border">
+      <div
+        {...attributes}
+        {...listeners}
+        className="p-2 rounded-xl shrink-0"
+        style={{ color: '#3d3d60', cursor: 'grab', touchAction: 'none' }}
+        aria-label="ドラッグして並び替え"
+      >
+        <GripVertical className="w-4 h-4" />
+      </div>
+      <span className="text-xs font-bold w-5 text-right shrink-0 mt-2.5" style={{ color: '#6b7280' }}>{index + 1}.</span>
+      <div className="flex-1 space-y-2">
+        <input
+          type="text"
+          placeholder="工程"
+          value={process}
+          onChange={(e) => onChangeProcess(e.target.value)}
+          className={inputCls}
+          style={{ ...inputStyle, background: '#12122a' }}
+        />
+        <input
+          type="text"
+          placeholder="説明文"
+          value={description}
+          onChange={(e) => onChangeDescription(e.target.value)}
+          className={inputCls}
+          style={{ ...inputStyle, background: '#12122a' }}
+        />
+      </div>
+      <button
+        onClick={onDelete}
+        className="p-1.5 mt-1 rounded-lg transition-colors shrink-0"
+        style={{ color: '#3d3d60' }}
+        onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
+        onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
+      >
+        <Trash2 className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -116,6 +177,7 @@ export default function SettingsPage() {
   const [processes, setProcesses] = useState<string[]>(DEFAULT_PROCESSES);
   const [materialMaster, setMaterialMaster] = useState<MaterialMaster[]>([]);
   const [photoMaster, setPhotoMaster] = useState<PhotoMaster[]>([]);
+  const [workTypeTemplates, setWorkTypeTemplates] = useState<WorkTypeTemplate[]>([]);
   const [storageUsedBytes, setStorageUsedBytes] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -152,6 +214,7 @@ export default function SettingsPage() {
           if (data.customProcesses && data.customProcesses.length > 0) setProcesses(data.customProcesses);
           if (Array.isArray(data.materialMaster)) setMaterialMaster(data.materialMaster);
           if (Array.isArray(data.photoMaster)) setPhotoMaster(data.photoMaster);
+          if (Array.isArray(data.workTypeTemplates)) setWorkTypeTemplates(data.workTypeTemplates);
           if (typeof data.storageUsedBytes === 'number') setStorageUsedBytes(data.storageUsedBytes);
         }
       }
@@ -190,6 +253,7 @@ export default function SettingsPage() {
         customProcesses: processes,
         materialMaster,
         photoMaster,
+        workTypeTemplates,
       }, { merge: true });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -425,6 +489,41 @@ export default function SettingsPage() {
     const toIdx = Number(over.id);
     if (Number.isNaN(fromIdx) || Number.isNaN(toIdx)) return;
     setProcesses(prev => arrayMove(prev, fromIdx, toIdx));
+  };
+
+  const handleWorkTypeItemDragEnd = (templateId: number) => (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const fromIdx = Number(active.id);
+    const toIdx = Number(over.id);
+    if (Number.isNaN(fromIdx) || Number.isNaN(toIdx)) return;
+    setWorkTypeTemplates(prev => prev.map(t => (
+      t.id === templateId ? { ...t, items: arrayMove(t.items, fromIdx, toIdx) } : t
+    )));
+  };
+
+  const applyWorkTypeTemplate = (template: WorkTypeTemplate) => {
+    const validItems = template.items.filter(item => item.process.trim() !== '');
+    if (validItems.length === 0) return;
+    const ok = window.confirm(
+      `「${template.name || '無題'}」の内容で工程プルダウンを上書きし、写真テンプレートマスタへ登録します。\nこの操作は元に戻せません。続行しますか?`
+    );
+    if (!ok) return;
+
+    setProcesses(validItems.map(item => item.process));
+
+    setPhotoMaster(prev => {
+      const next = [...prev];
+      validItems.forEach(item => {
+        const existingIdx = next.findIndex(m => m.name === item.process);
+        if (existingIdx !== -1) {
+          next[existingIdx] = { ...next[existingIdx], process: item.process, description: item.description };
+        } else {
+          next.push({ id: nextId(), name: item.process, process: item.process, description: item.description });
+        }
+      });
+      return next;
+    });
   };
 
   const usageRatio = storageUsageRatio(storageUsedBytes);
@@ -670,6 +769,83 @@ export default function SettingsPage() {
               ))}
             </div>
             <AddButton onClick={() => setPhotoMaster(prev => [...prev, { id: nextId(), name: '', process: '', description: '' }])} label="テンプレートを追加" accent="#10b981" />
+          </Section>
+
+          {/* 工事種別テンプレート */}
+          <Section title="工事種別テンプレート" icon={<Camera className="w-4 h-4" />} accent="#3b82f6">
+            <p className="text-xs mb-4" style={{ color: '#6b7280' }}>
+              「新築」「葺き替え」など工事種別ごとに、工程と説明文の組み合わせを順番どおり登録できます。
+              「一括反映」を押すと、上の「工程」プルダウンをこの内容で上書きし、写真テンプレートマスタにも登録します。
+            </p>
+            <div className="space-y-4 mb-4">
+              {workTypeTemplates.map((template) => (
+                <div key={template.id} className="p-3 rounded-xl border space-y-3" style={{ background: '#12122a', borderColor: '#2e2e50' }}>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="工事種別名（例：新築）"
+                      value={template.name}
+                      onChange={(e) => setWorkTypeTemplates(prev => prev.map(t => t.id === template.id ? { ...t, name: e.target.value } : t))}
+                      className={inputCls}
+                      style={{ ...inputStyle, fontWeight: 700 }}
+                    />
+                    <button
+                      onClick={() => setWorkTypeTemplates(prev => prev.filter(t => t.id !== template.id))}
+                      className="p-1.5 rounded-lg transition-colors shrink-0"
+                      style={{ color: '#3d3d60' }}
+                      onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                      onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {template.items.length > 0 && (
+                    <DndContext sensors={processSensors} collisionDetection={closestCenter} onDragEnd={handleWorkTypeItemDragEnd(template.id)}>
+                      <SortableContext items={template.items.map((_, i) => String(i))} strategy={verticalListSortingStrategy}>
+                        <div className="space-y-2">
+                          {template.items.map((item, index) => (
+                            <SortableWorkTypeItemRow
+                              key={index}
+                              id={String(index)}
+                              index={index}
+                              process={item.process}
+                              description={item.description}
+                              onChangeProcess={(value) => setWorkTypeTemplates(prev => prev.map(t => t.id === template.id ? { ...t, items: t.items.map((it, i) => i === index ? { ...it, process: value } : it) } : t))}
+                              onChangeDescription={(value) => setWorkTypeTemplates(prev => prev.map(t => t.id === template.id ? { ...t, items: t.items.map((it, i) => i === index ? { ...it, description: value } : it) } : t))}
+                              onDelete={() => setWorkTypeTemplates(prev => prev.map(t => t.id === template.id ? { ...t, items: t.items.filter((_, i) => i !== index) } : t))}
+                            />
+                          ))}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                  )}
+
+                  <div className="flex flex-wrap gap-2">
+                    <AddButton
+                      onClick={() => setWorkTypeTemplates(prev => prev.map(t => t.id === template.id ? { ...t, items: [...t.items, { process: '', description: '' }] } : t))}
+                      label="行を追加"
+                      accent="#3b82f6"
+                    />
+                    <button
+                      onClick={() => applyWorkTypeTemplate(template)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all"
+                      style={{ background: 'rgba(59,130,246,0.10)', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.3)' }}
+                      onPointerEnter={e => ((e.currentTarget as HTMLButtonElement).style.borderColor = '#3b82f6')}
+                      onPointerLeave={e => ((e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(59,130,246,0.3)')}
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      工程・写真テンプレートへ一括反映
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <AddButton
+              onClick={() => setWorkTypeTemplates(prev => [...prev, { id: nextId(), name: '', items: [] }])}
+              label="工事種別テンプレートを追加"
+              accent="#3b82f6"
+            />
           </Section>
 
           {/* 材料マスタ */}
