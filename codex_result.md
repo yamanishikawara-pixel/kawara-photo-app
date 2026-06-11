@@ -1,11 +1,13 @@
-完了しました。
+完了しました。`src/pages/SettingsPage.tsx` の工程プルダウンを、矢印ボタン式から `@dnd-kit` のドラッグ並び替えに変更しました。
 
-[src/pages/SettingsPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/SettingsPage.tsx) に `ArrowUp` / `ArrowDown` import、`moveProcess`、工程リストの上下移動ボタンを追加しました。保存処理は変更していません。
-
-[codex_result.md](/Users/yamanishikenta/kawara-photo-app/codex_result.md) も指定フォーマットで更新済みです。
+主な変更:
+- `ArrowUp` / `ArrowDown` と `moveProcess` を削除
+- `GripVertical` のドラッグハンドルを追加
+- `DndContext` / `SortableContext` / `useSortable` / `arrayMove` を使った並び替えに置換
+- `SortableProcessRow` コンポーネントを追加
+- `customProcesses: processes` の保存形式は変更なし
 
 検証:
-- `npm run build`: 成功
-- `npx vitest run`: 失敗扱い。ただし失敗は指定どおり既存の `No test suite found` 2件のみで、通常テストは `70 passed`
+- `npm run build` 成功
 
-ビルド・デプロイは行っていません。
+ビルド中に `SchedulePage.tsx` の既存 duplicate `style` 属性警告が出ていますが、今回の変更対象外で、ビルド自体は通っています。

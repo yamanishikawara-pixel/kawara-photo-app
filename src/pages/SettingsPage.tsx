@@ -1,6 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Plus, Trash2, Settings, Image as ImageIcon, X, Package, Camera, HardDrive, RefreshCw, Map, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, Settings, Image as ImageIcon, X, Package, Camera, HardDrive, RefreshCw, Map, GripVertical } from 'lucide-react';
+import {
+  DndContext, PointerSensor, TouchSensor, closestCenter,
+  useSensor, useSensors,
+} from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
+import {
+  SortableContext, arrayMove, useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { doc, getDoc, setDoc, updateDoc, getDocs, collection, query, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, getMetadata, listAll } from 'firebase/storage';
 import { db, auth, storage } from '../firebase';
@@ -44,6 +54,52 @@ function Section({ title, icon, accent = '#ff6b35', children }: {
 // ダークなインプット
 const inputCls = "w-full p-3 rounded-xl text-sm font-bold outline-none transition-colors";
 const inputStyle = { background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' };
+
+function SortableProcessRow({ id, index, value, onChange, onDelete }: {
+  id: string;
+  index: number;
+  value: string;
+  onChange: (value: string) => void;
+  onDelete: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex gap-2 items-center">
+      <div
+        {...attributes}
+        {...listeners}
+        className="p-2 rounded-xl shrink-0"
+        style={{ color: '#3d3d60', cursor: 'grab', touchAction: 'none' }}
+        aria-label="ドラッグして並び替え"
+      >
+        <GripVertical className="w-4 h-4" />
+      </div>
+      <span className="text-xs font-bold w-5 text-right shrink-0" style={{ color: '#6b7280' }}>{index + 1}.</span>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={inputCls}
+        style={inputStyle}
+      />
+      <button
+        onClick={onDelete}
+        className="p-2 rounded-xl transition-colors shrink-0"
+        style={{ color: '#3d3d60' }}
+        onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
+        onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
+      >
+        <Trash2 className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const navigate = useNavigate();
@@ -357,14 +413,18 @@ export default function SettingsPage() {
     }
   };
 
-  const moveProcess = (index: number, direction: 'up' | 'down') => {
-    const newArr = [...processes];
-    if (direction === 'up' && index > 0) {
-      [newArr[index - 1], newArr[index]] = [newArr[index], newArr[index - 1]];
-    } else if (direction === 'down' && index < newArr.length - 1) {
-      [newArr[index], newArr[index + 1]] = [newArr[index + 1], newArr[index]];
-    }
-    setProcesses(newArr);
+  const processSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+  );
+
+  const handleProcessDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const fromIdx = Number(active.id);
+    const toIdx = Number(over.id);
+    if (Number.isNaN(fromIdx) || Number.isNaN(toIdx)) return;
+    setProcesses(prev => arrayMove(prev, fromIdx, toIdx));
   };
 
   const usageRatio = storageUsageRatio(storageUsedBytes);
@@ -540,55 +600,24 @@ export default function SettingsPage() {
           <Section title="写真の「工程」プルダウン項目" icon={<Camera className="w-4 h-4" />} accent="#ff6b35">
             <p className="text-xs mb-4" style={{ color: '#6b7280' }}>現場でよく使う工程名を自由に追加・編集できます。</p>
             <div className="space-y-2 mb-4">
-              {processes.map((proc, index) => (
-                <div key={index} className="flex gap-2 items-center">
-                  <span className="text-xs font-bold w-5 text-right shrink-0" style={{ color: '#6b7280' }}>{index + 1}.</span>
-                  <input
-                    type="text"
-                    value={proc}
-                    onChange={(e) => {
-                      const newArr = [...processes];
-                      newArr[index] = e.target.value;
-                      setProcesses(newArr);
-                    }}
-                    className={inputCls}
-                    style={inputStyle}
-                  />
-                  <button
-                    onClick={() => moveProcess(index, 'up')}
-                    disabled={index === 0}
-                    aria-label="上へ移動"
-                    className="p-2 rounded-xl transition-colors shrink-0 disabled:opacity-30"
-                    style={{ color: '#3d3d60' }}
-                    onPointerEnter={e => (e.currentTarget.style.color = '#ff6b35')}
-                    onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
-                    title="上へ"
-                  >
-                    <ArrowUp className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => moveProcess(index, 'down')}
-                    disabled={index === processes.length - 1}
-                    aria-label="下へ移動"
-                    className="p-2 rounded-xl transition-colors shrink-0 disabled:opacity-30"
-                    style={{ color: '#3d3d60' }}
-                    onPointerEnter={e => (e.currentTarget.style.color = '#ff6b35')}
-                    onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
-                    title="下へ"
-                  >
-                    <ArrowDown className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setProcesses(processes.filter((_, i) => i !== index))}
-                    className="p-2 rounded-xl transition-colors shrink-0"
-                    style={{ color: '#3d3d60' }}
-                    onPointerEnter={e => (e.currentTarget.style.color = '#ef4444')}
-                    onPointerLeave={e => (e.currentTarget.style.color = '#3d3d60')}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
+              <DndContext sensors={processSensors} collisionDetection={closestCenter} onDragEnd={handleProcessDragEnd}>
+                <SortableContext items={processes.map((_, i) => String(i))} strategy={verticalListSortingStrategy}>
+                  {processes.map((proc, index) => (
+                    <SortableProcessRow
+                      key={index}
+                      id={String(index)}
+                      index={index}
+                      value={proc}
+                      onChange={(value) => {
+                        const newArr = [...processes];
+                        newArr[index] = value;
+                        setProcesses(newArr);
+                      }}
+                      onDelete={() => setProcesses(processes.filter((_, i) => i !== index))}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
             </div>
             <AddButton onClick={() => setProcesses([...processes, "新しい工程"])} label="工程項目を追加" />
           </Section>
