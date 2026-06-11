@@ -1,12 +1,13 @@
-対応完了しました。
+完了しました。 [ProjectListPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/ProjectListPage.tsx) に以下を反映しています。
 
-変更内容:
-- [src/types.ts](/Users/yamanishikenta/kawara-photo-app/src/types.ts:117) に `WorkTypeTemplateItem` / `WorkTypeTemplate` と `UserSettings.workTypeTemplates` を追加
-- [src/pages/SettingsPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/SettingsPage.tsx:21) に工事種別テンプレートの state、読み込み、保存、D&D 行、並び替え、写真テンプレートへの upsert 一括反映 UI を追加
-- `processSensors` は既存のものを再利用しています
+- 新規現場ボタンを即作成から作成モーダル起動へ変更
+- 現場名入力、工種テンプレート選択、「なし」選択を追加
+- `users/{uid}.workTypeTemplates` を既存のユーザー情報取得タイミングで読み込み
+- 選択テンプレートの有効行から未撮影写真枠を一括生成
+- `addProject` の関数・参照は対象ファイル内に残っていません
 
 確認:
 - `npm run build` 成功
-- `npx tsc --noEmit` 成功
+- 既存警告として `src/pages/SchedulePage.tsx` の重複 `style` 属性警告と、一部 chunk size 警告は出ていますが、ビルドは通っています
 
-補足: `npm run build` 時に既存の `src/pages/SchedulePage.tsx` について重複 `style` 属性の Vite 警告が出ていますが、今回の対象外ファイルで、ビルドは成功しています。
+作業前からの未コミット変更と思われる `.claude/settings.json`, `codex_result.md`, `src/pages/SettingsPage.tsx` は触っていません。

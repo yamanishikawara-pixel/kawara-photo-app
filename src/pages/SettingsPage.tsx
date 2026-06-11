@@ -140,12 +140,12 @@ function SortableWorkTypeItemRow({ id, index, process, description, onChangeProc
           className={inputCls}
           style={{ ...inputStyle, background: '#12122a' }}
         />
-        <input
-          type="text"
+        <textarea
           placeholder="説明文"
+          rows={2}
           value={description}
           onChange={(e) => onChangeDescription(e.target.value)}
-          className={inputCls}
+          className={`${inputCls} resize-none`}
           style={{ ...inputStyle, background: '#12122a' }}
         />
       </div>

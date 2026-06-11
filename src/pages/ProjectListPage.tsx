@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Trash2, LogOut, Settings, CheckCircle2, Circle, HardHat, Database, AlertTriangle, Calculator, Camera, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, LogOut, Settings, CheckCircle2, Circle, HardHat, Database, AlertTriangle, Calculator, Camera, ChevronRight, X } from 'lucide-react';
 import { collection, addDoc, deleteDoc, doc, getDoc, getDocs, query, where, orderBy, updateDoc, increment } from 'firebase/firestore';
 import { ref, listAll, deleteObject, getMetadata } from 'firebase/storage';
 import { signOut } from 'firebase/auth';
 
 import { db, auth, storage } from '../firebase';
-import type { Project } from '../types';
+import type { Project, WorkTypeTemplate } from '../types';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { ConfirmModal } from '../shared/ConfirmModal';
@@ -99,6 +99,11 @@ export function ProjectListPage() {
   const [hideCompleted, setHideCompleted] = useState(true);
   const [companyName, setCompanyName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
+  const [workTypeTemplates, setWorkTypeTemplates] = useState<WorkTypeTemplate[]>([]);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [selectedWorkTypeId, setSelectedWorkTypeId] = useState<number | null>(null);
+  const [creatingProject, setCreatingProject] = useState(false);
   const [storageUsed, setStorageUsed] = useState(0);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -133,6 +138,7 @@ export function ProjectListPage() {
           if (d.companyName) setCompanyName(d.companyName);
           if (d.logoUrl) setLogoUrl(d.logoUrl);
           setStorageUsed(d.storageUsedBytes ?? 0);
+          if (Array.isArray(d.workTypeTemplates)) setWorkTypeTemplates(d.workTypeTemplates);
         }
       } catch (err) {
         logFirebaseError(err, '現場一覧読込');
@@ -169,33 +175,60 @@ export function ProjectListPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const addProject = async () => {
+  const openCreateModal = () => {
+    setNewProjectName('');
+    setSelectedWorkTypeId(null);
+    setShowCreateModal(true);
+  };
+
+  const createProject = async () => {
     setError(null);
+    setCreatingProject(true);
     try {
       const user = auth.currentUser;
       if (!user) throw new Error('Not logged in');
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       const savedCompanyName = userDoc.exists() ? userDoc.data().companyName : '';
+
+      const template = workTypeTemplates.find(t => t.id === selectedWorkTypeId);
+      const validItems = (template?.items ?? []).filter(item => item.process.trim() !== '');
+      const photos = validItems.length > 0
+        ? validItems.map((item, i) => ({
+            id: Date.now() + i,
+            image: null,
+            photoNumber: String(i + 1),
+            shootingDate: '',
+            locationMap: '',
+            process: item.process,
+            description: item.description,
+            circles: [],
+            dimensionLines: [],
+          }))
+        : [
+            { id: Date.now(), image: null, photoNumber: '1', shootingDate: '', locationMap: '', process: '', description: '', circles: [], dimensionLines: [] },
+          ];
+
       const docRef = await addDoc(collection(db, 'projects'), {
         userId: user.uid,
-        projectName: '新規現場',
+        projectName: newProjectName.trim() || '新規現場',
         projectLocation: '',
         constructionPeriod: '',
         contractorName: savedCompanyName || '',
         creationDate: new Date().toLocaleDateString('ja-JP'),
-        photos: [
-          { id: Date.now(), image: null, photoNumber: '1', shootingDate: '', locationMap: '', process: '', description: '', circles: [], dimensionLines: [] },
-        ],
+        photos,
         materials: [],
         mapUrls: [],
         mapRows: [{ id: 1, symbol: '', part: '本棟', relatedPhotoNumber: '' }],
         mapPins: [],
         createdAt: new Date().toISOString(),
       });
+      setShowCreateModal(false);
       navigate(`/project/${docRef.id}`);
     } catch (err) {
       logFirebaseError(err, '新規現場作成');
       setError(firebaseErrorMessage(err, '新規現場の作成'));
+    } finally {
+      setCreatingProject(false);
     }
   };
 
@@ -507,7 +540,7 @@ export function ProjectListPage() {
             </button>
             <button
               type="button"
-              onClick={addProject}
+              onClick={openCreateModal}
               className="flex items-center gap-2 px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl font-bold text-sm transition-colors"
               style={{ background: '#ff6b35', color: '#fff', boxShadow: '0 0 16px rgba(255,107,53,0.35)' }}
               onPointerEnter={e => (e.currentTarget.style.background = '#e85d2a')}
@@ -573,7 +606,7 @@ export function ProjectListPage() {
             {!searchQuery && projects.length === 0 && (
               <button
                 type="button"
-                onClick={addProject}
+                onClick={openCreateModal}
                 className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm"
                 style={{ background: '#ff6b35', color: '#fff' }}
               >
@@ -734,6 +767,107 @@ export function ProjectListPage() {
           </p>
         )}
       </div>
+
+      {showCreateModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+          style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setShowCreateModal(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-project-modal-title"
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl p-5 sm:p-6 text-left"
+            style={{ background: '#1c1c30', border: '1px solid #2e2e50', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h2 id="create-project-modal-title" className="text-lg font-bold" style={{ color: '#f0ede8' }}>
+                新規現場を作成
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                className="p-1 rounded transition-colors"
+                style={{ color: '#8b8ba8' }}
+                onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')}
+                onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}
+                aria-label="閉じる"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <label className="block text-xs font-bold mb-1.5" style={{ color: '#6b7280' }}>現場名</label>
+            <input
+              type="text"
+              value={newProjectName}
+              onChange={e => setNewProjectName(e.target.value)}
+              placeholder="例：○○邸新築工事"
+              className="w-full p-3 rounded-xl text-sm font-bold outline-none transition-colors mb-4"
+              style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }}
+            />
+
+            {workTypeTemplates.length > 0 && (
+              <>
+                <label className="block text-xs font-bold mb-1.5" style={{ color: '#6b7280' }}>
+                  工種（選択すると工程・説明を自動でセットします）
+                </label>
+                <div className="flex flex-wrap gap-2 mb-5">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedWorkTypeId(null)}
+                    className="px-3 py-1.5 rounded-full text-xs font-bold border transition-colors"
+                    style={selectedWorkTypeId === null
+                      ? { borderColor: '#ff6b35', color: '#ff6b35', background: 'rgba(255,107,53,0.08)' }
+                      : { borderColor: '#2e2e50', color: '#8b8ba8', background: 'transparent' }}
+                  >
+                    なし
+                  </button>
+                  {workTypeTemplates.map(t => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setSelectedWorkTypeId(t.id)}
+                      className="px-3 py-1.5 rounded-full text-xs font-bold border transition-colors"
+                      style={selectedWorkTypeId === t.id
+                        ? { borderColor: '#ff6b35', color: '#ff6b35', background: 'rgba(255,107,53,0.08)' }
+                        : { borderColor: '#2e2e50', color: '#8b8ba8', background: 'transparent' }}
+                    >
+                      {t.name || '無題'}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                className="flex-1 py-3 font-bold rounded-xl border transition-colors text-sm"
+                style={{ borderColor: '#2e2e50', color: '#8b8ba8', background: 'transparent' }}
+                onPointerEnter={e => { e.currentTarget.style.borderColor = '#f0ede8'; e.currentTarget.style.color = '#f0ede8'; }}
+                onPointerLeave={e => { e.currentTarget.style.borderColor = '#2e2e50'; e.currentTarget.style.color = '#8b8ba8'; }}
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={createProject}
+                disabled={creatingProject}
+                className="flex-1 py-3 font-bold rounded-xl text-sm transition-colors disabled:opacity-50"
+                style={{ background: '#ff6b35', color: '#fff' }}
+                onPointerEnter={e => { if (!creatingProject) e.currentTarget.style.opacity = '0.85'; }}
+                onPointerLeave={e => (e.currentTarget.style.opacity = '1')}
+              >
+                {creatingProject ? '作成中...' : '作成'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmModal
         isOpen={!!confirmDelete}
