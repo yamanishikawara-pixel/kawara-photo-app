@@ -23,14 +23,28 @@ export function CatalogModal({ type, kawaraShu, masterMats, masterStdPrices, onA
     if (type === 'tile') {
         title = `瓦 カタログ（${kawaraShu}）`;
         const data = PRODUCT_DATA[kawaraShu] || {};
-        catalogUI = Object.keys(data).map(cat => (
-            <div key={cat} style={{marginBottom:16}}>
-                <div style={{fontSize:12, color:"#38bdf8", fontWeight:700, marginBottom:8}}>{cat}</div>
-                <div style={{display:"flex", flexWrap:"wrap", gap:8}}>
-                    {data[cat].map(h => <button key={h} onClick={()=>addToCart({hinmei:h, category:cat, tani:"枚", unitPrice: masterStdPrices[kawaraShu]?.[h]||0})} style={catBtn}>＋ {h}</button>)}
-                </div>
+        const allTileItems = new Set(Object.values(data).flat());
+        const uncategorizedTiles = Object.keys(masterStdPrices[kawaraShu] || {}).filter(h => !allTileItems.has(h));
+        catalogUI = (
+            <div>
+                {Object.keys(data).map(cat => (
+                    <div key={cat} style={{marginBottom:16}}>
+                        <div style={{fontSize:12, color:"#38bdf8", fontWeight:700, marginBottom:8}}>{cat}</div>
+                        <div style={{display:"flex", flexWrap:"wrap", gap:8}}>
+                            {data[cat].map(h => <button key={h} onClick={()=>addToCart({hinmei:h, category:cat, tani:"枚", unitPrice: masterStdPrices[kawaraShu]?.[h]||0})} style={catBtn}>＋ {h}</button>)}
+                        </div>
+                    </div>
+                ))}
+                {uncategorizedTiles.length > 0 && (
+                    <div style={{marginBottom:16}}>
+                        <div style={{fontSize:12, color:"#38bdf8", fontWeight:700, marginBottom:8}}>その他</div>
+                        <div style={{display:"flex", flexWrap:"wrap", gap:8}}>
+                            {uncategorizedTiles.map(h => <button key={h} onClick={()=>addToCart({hinmei:h, category:"その他", tani:"枚", unitPrice: masterStdPrices[kawaraShu]?.[h]||0})} style={catBtn}>＋ {h}</button>)}
+                        </div>
+                    </div>
+                )}
             </div>
-        ));
+        );
     } else if (type === 'material') {
         title = "副資材 カタログ";
         const allCatItems = new Set(Object.values(MATERIAL_CATEGORIES).flat());
