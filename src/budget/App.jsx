@@ -528,6 +528,14 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
     return hm !== undefined ? hm.kakuRate : "";
   }, [hanbaKakuRate, masterHouseMakers, houseMakerName]);
 
+  const tileHinmeiOptions = useMemo(() => {
+    const data = PRODUCT_DATA[kawaraShu] || {};
+    const categorized = Object.values(data).flat();
+    const allItems = new Set(categorized);
+    const uncategorized = Object.keys(masterStdPrices[kawaraShu] || {}).filter(h => !allItems.has(h));
+    return [...categorized, ...uncategorized];
+  }, [kawaraShu, masterStdPrices]);
+
   const { totalCost, tileSub, matSub, expSub, welfareCost, unchinTotal } = useMemo(() => calculateBudget({
       tileRows, materialRows, expenseRows, masterStdPrices, masterDiscounts,
       kawaraShu, kawaraColor, hanbaKakuRate: effectiveHanbaKakuRate, insuranceRate, unchinTanka,
@@ -1092,7 +1100,7 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
           </thead>
           <tbody>{tileRows.map((row,idx)=>{
             const { costPrice, rowTotal } = calcTileRowCost({ row, kawaraShu, kawaraColor, hanbaKakuRate: effectiveHanbaKakuRate, masterStdPrices, masterDiscounts });
-            return (<tr key={row.id}><td><button onClick={()=>moveTileRow(idx,-1)}>▲</button></td><td><FilterInput value={row.hinmei} onChange={v=>updTileRow(row.id,"hinmei",v)} items={PRODUCT_DATA[kawaraShu]?.[row.category]||[]} onKeyDown={focusNextInput} /></td><td><input type="text" inputMode="decimal" value={row.suryo} onChange={e=>updTileRow(row.id,"suryo",toHalfWidth(e.target.value))} onFocus={e=>e.target.select()} onKeyDown={focusNextInput} style={{...I, textAlign:"right"}}/></td><td><input value={row.tani} onChange={e=>updTileRow(row.id,"tani",e.target.value)} onFocus={e=>e.target.select()} onKeyDown={focusNextInput} style={{...I, width:52, textAlign:"center", padding:"4px 4px"}}/></td><td style={{textAlign:"right"}}>¥{costPrice.toLocaleString()}</td><td style={{textAlign:"right"}}>¥{rowTotal.toLocaleString()}</td><td><button onClick={()=>removeTileRow(row.id)}>×</button></td></tr>);
+            return (<tr key={row.id}><td><button onClick={()=>moveTileRow(idx,-1)}>▲</button></td><td><FilterInput value={row.hinmei} onChange={v=>updTileRow(row.id,"hinmei",v)} items={tileHinmeiOptions} onKeyDown={focusNextInput} /></td><td><input type="text" inputMode="decimal" value={row.suryo} onChange={e=>updTileRow(row.id,"suryo",toHalfWidth(e.target.value))} onFocus={e=>e.target.select()} onKeyDown={focusNextInput} style={{...I, textAlign:"right"}}/></td><td><input value={row.tani} onChange={e=>updTileRow(row.id,"tani",e.target.value)} onFocus={e=>e.target.select()} onKeyDown={focusNextInput} style={{...I, width:52, textAlign:"center", padding:"4px 4px"}}/></td><td style={{textAlign:"right"}}>¥{costPrice.toLocaleString()}</td><td style={{textAlign:"right"}}>¥{rowTotal.toLocaleString()}</td><td><button onClick={()=>removeTileRow(row.id)}>×</button></td></tr>);
           })}</tbody></table></div>
         </Card>
 
