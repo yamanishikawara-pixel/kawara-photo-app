@@ -27,7 +27,7 @@
 //     コンテナにぴったり一致 (レターボックスなし)
 // ============================================================================
 
-import type { Project, MapPin, DimensionLine, MapLine, WhiteoutBox } from '../types';
+import type { Project, MapPin, MapRow, DimensionLine, MapLine, WhiteoutBox } from '../types';
 
 /** 旧コンテナのアスペクト比 (194:120)。マジックナンバーを1箇所に集約。 */
 export const LEGACY_MAP_ASPECT = 194 / 120;
@@ -237,4 +237,131 @@ export function migrateMapToImageAspect(
     whiteoutBoxes: newWhiteouts,
     mapImageAspects: newAspects,
   };
+}
+
+/**
+ * 指定した mapIndex の地図を、平行配列・全オーバーレイから一括削除する。
+ *
+ * - mapUrls / mapRotations / mapTransforms / mapLayouts / mapImageAspects:
+ *   該当 index を filter で除去する (filter なのでホールは作らない)。
+ * - mapPins / mapRows / mapDimensionLines / whiteoutBoxes / mapLines:
+ *   mapIndex === 対象 の要素を除去し、mapIndex > 対象 の要素は -1 して
+ *   振り直す。mapIndex 未指定の要素は 0 として扱う。
+ *
+ * mapRotations / mapTransforms / mapLayouts / mapImageAspects /
+ * mapPins / mapRows / mapDimensionLines / whiteoutBoxes / mapLines は
+ * すべて省略可能 (未指定なら結果は空配列)。
+ */
+function dropAt<T>(arr: T[] | undefined, index: number): T[] {
+  return (arr ?? []).filter((_, i) => i !== index);
+}
+
+export function removeMapAtIndex(
+  data: {
+    mapUrls: string[];
+    mapRotations?: number[];
+    mapTransforms?: { scale: number; x: number; y: number }[];
+    mapLayouts?: { title: string; x?: number; y?: number; rotation?: number }[];
+    mapImageAspects?: number[];
+    mapPins?: MapPin[];
+    mapRows?: MapRow[];
+    mapDimensionLines?: DimensionLine[];
+    whiteoutBoxes?: WhiteoutBox[];
+    mapLines?: MapLine[];
+  },
+  mapIndex: number,
+): {
+  mapUrls: string[];
+  mapRotations: number[];
+  mapTransforms: { scale: number; x: number; y: number }[];
+  mapLayouts: { title: string; x?: number; y?: number; rotation?: number }[];
+  mapImageAspects: number[];
+  mapPins: MapPin[];
+  mapRows: MapRow[];
+  mapDimensionLines: DimensionLine[];
+  whiteoutBoxes: WhiteoutBox[];
+  mapLines: MapLine[];
+} {
+  const reindex = (idx: number) => (idx > mapIndex ? idx - 1 : idx);
+
+  return {
+    mapUrls: dropAt(data.mapUrls, mapIndex),
+    mapRotations: dropAt(data.mapRotations, mapIndex),
+    mapTransforms: dropAt(data.mapTransforms, mapIndex),
+    mapLayouts: dropAt(data.mapLayouts, mapIndex),
+    mapImageAspects: dropAt(data.mapImageAspects, mapIndex),
+    mapPins: (data.mapPins ?? [])
+      .filter((p) => (p.mapIndex ?? 0) !== mapIndex)
+      .map((p) => ({ ...p, mapIndex: reindex(p.mapIndex ?? 0) })),
+    mapRows: (data.mapRows ?? [])
+      .filter((r) => (r.mapIndex ?? 0) !== mapIndex)
+      .map((r) => ({ ...r, mapIndex: reindex(r.mapIndex ?? 0) })),
+    mapDimensionLines: (data.mapDimensionLines ?? [])
+      .filter((l) => (l.mapIndex ?? 0) !== mapIndex)
+      .map((l) => ({ ...l, mapIndex: reindex(l.mapIndex ?? 0) })),
+    whiteoutBoxes: (data.whiteoutBoxes ?? [])
+      .filter((b) => (b.mapIndex ?? 0) !== mapIndex)
+      .map((b) => ({ ...b, mapIndex: reindex(b.mapIndex ?? 0) })),
+    mapLines: (data.mapLines ?? [])
+      .filter((l) => (l.mapIndex ?? 0) !== mapIndex)
+      .map((l) => ({ ...l, mapIndex: reindex(l.mapIndex ?? 0) })),
+  };
+}
+
+/**
+ * uploadMapImage の replace モードにおける mapUrls / mapLayouts 配列の
+ * 更新後の状態を計算する。
+ *
+ * 1ページ目 (newUrls[0]) は currentMapIndex の地図を置換する。
+ * 2ページ目以降 (newUrls[1..]) は配列の末尾に追加する (中間挿入しない)。
+ *
+ * 中間挿入をしないことで、currentMapIndex 以外の既存地図の index は
+ * 一切変化しない。これにより mapPins / mapRows / mapDimensionLines /
+ * whiteoutBoxes / mapLines が保持する mapIndex を振り直す必要がなくなり、
+ * オーバーレイのズレを防ぐ。
+ *
+ * newUrls が空の場合は何も変更しない。
+ */
+export function applyReplacedMapPages(
+  mapUrls: string[],
+  mapLayouts: { title: string; x?: number; y?: number; rotation?: number }[],
+  currentMapIndex: number,
+  newUrls: string[],
+): {
+  mapUrls: string[];
+  mapLayouts: { title: string; x?: number; y?: number; rotation?: number }[];
+} {
+  const resultUrls = [...mapUrls];
+  const resultLayouts = [...mapLayouts];
+  newUrls.forEach((url, i) => {
+    if (i === 0) {
+      resultUrls[currentMapIndex] = url;
+    } else {
+      resultUrls.push(url);
+      resultLayouts.push({ title: '位置図', x: 15, y: 10, rotation: 0 });
+    }
+  });
+  return { mapUrls: resultUrls, mapLayouts: resultLayouts };
+}
+
+/**
+ * uploadMapImage の replace モードで、置換した index の画像アスペクトを
+ * リセットする。
+ *
+ * 置換後の新しい画像は旧画像とアスペクト比が異なる可能性があるため、
+ * mapImageAspects[mapIndex] を一旦 0 にリセットする。0 は
+ * isLegacyMapCoord / resolveMapAspect から「旧形式 (未記録)」として扱われ、
+ * 次回の画像 onLoad 時に migrateLegacyMap が新画像の naturalAspect で
+ * mapImageAspects[mapIndex] を更新する (呼び出し側で migratedIndicesRef
+ * のリセットとセットで使うこと)。
+ *
+ * mapIndex が配列範囲外の場合は何もしない。
+ */
+export function resetReplacedMapAspect(
+  mapImageAspects: number[] | undefined,
+  mapIndex: number,
+): number[] {
+  const a = [...(mapImageAspects ?? [])];
+  if (mapIndex >= 0 && mapIndex < a.length) a[mapIndex] = 0;
+  return a;
 }

@@ -7,7 +7,7 @@ import { db, storage, auth } from '../firebase';
 import type { MapPin as MapPinT, MapRow, Project, DimensionLine, WhiteoutBox } from '../types';
 import { proxyUrl } from '../shared/utils';
 import { canUpload, trackUpload, deleteStorageFileWithAccounting, genId } from '../shared/storageUtils';
-import { resolveMapAspect, isLegacyMapCoord, migrateMapToImageAspect } from '../shared/mapCoords';
+import { resolveMapAspect, isLegacyMapCoord, migrateMapToImageAspect, removeMapAtIndex, applyReplacedMapPages, resetReplacedMapAspect } from '../shared/mapCoords';
 import { colorForSymbol } from '../shared/symbolColor';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
@@ -799,6 +799,7 @@ export default function MapPage() {
       const insertAt = mode === 'replace' ? currentMapIndex : newMapUrls.length;
       // ループ内で state が古いままにならないよう累積をローカルに持つ
       let virtualUsed = storageUsedBytes;
+      const uploadedUrls: string[] = [];
 
       for (let i = 0; i < imageFiles.length; i++) {
         setUploadProgress(`アップロード中... (${i + 1}/${imageFiles.length})`);
@@ -826,28 +827,38 @@ export default function MapPage() {
         }
         virtualUsed += f.size;
         setStorageUsedBytes(virtualUsed);
-        if (mode === 'replace' && i === 0) {
-          newMapUrls[insertAt] = url;
-          migratedIndicesRef.current.delete(currentMapIndex);
-        } else {
-          newMapUrls.splice(insertAt + i, 0, url);
-          newMapLayouts.splice(insertAt + i, 0, { title: '位置図', x: 15, y: 10, rotation: 0 });
-        }
+        uploadedUrls.push(url);
+      }
+
+      // replace: 1ページ目は currentMapIndex を置換、2ページ目以降は末尾に
+      // 追加する (中間挿入すると既存地図の mapIndex が全てズレ、
+      // mapPins/mapRows/.../mapLines の参照が壊れるため)。
+      // add: 常に insertAt 以降に順番に挿入する。
+      let finalMapUrls: string[];
+      let finalMapLayouts: { title: string; x?: number; y?: number; rotation?: number }[];
+      if (mode === 'replace') {
+        if (uploadedUrls.length > 0) migratedIndicesRef.current.delete(currentMapIndex);
+        const applied = applyReplacedMapPages(newMapUrls, newMapLayouts, insertAt, uploadedUrls);
+        finalMapUrls = applied.mapUrls;
+        finalMapLayouts = applied.mapLayouts;
+      } else {
+        finalMapUrls = [...newMapUrls];
+        finalMapLayouts = [...newMapLayouts];
+        uploadedUrls.forEach((url, i) => {
+          finalMapUrls.splice(insertAt + i, 0, url);
+          finalMapLayouts.splice(insertAt + i, 0, { title: '位置図', x: 15, y: 10, rotation: 0 });
+        });
       }
 
       const finalAspects = mode === 'replace'
-        ? (() => {
-            const a = [...(project.mapImageAspects ?? [])];
-            if (currentMapIndex < a.length) a[currentMapIndex] = 0;
-            return a;
-          })()
+        ? resetReplacedMapAspect(project.mapImageAspects, currentMapIndex)
         : project.mapImageAspects ?? [];
 
-      setProject(prev => prev ? { ...prev, mapUrls: newMapUrls, mapImageAspects: finalAspects } : null);
-      setMapLayouts(newMapLayouts);
+      setProject(prev => prev ? { ...prev, mapUrls: finalMapUrls, mapImageAspects: finalAspects } : null);
+      setMapLayouts(finalMapLayouts);
       await updateDoc(doc(db, 'projects', id), {
-        mapUrls: newMapUrls,
-        mapLayouts: newMapLayouts,
+        mapUrls: finalMapUrls,
+        mapLayouts: finalMapLayouts,
         mapImageAspects: finalAspects,
       });
       setCurrentMapIndex(insertAt);
@@ -880,41 +891,49 @@ export default function MapPage() {
       if (bytes > 0) setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
     }
 
-    const newMapUrls = (project.mapUrls || []).filter((_, i) => i !== mapIndex);
-    const newRotations = mapRotations.filter((_, i) => i !== mapIndex);
-    const newTransforms = mapTransforms.filter((_, i) => i !== mapIndex);
-    const newMapLayouts = mapLayouts.filter((_, i) => i !== mapIndex);
-    const reindex = (idx: number) => idx > mapIndex ? idx - 1 : idx;
-    const newPins = mapPins.filter(p => (p.mapIndex || 0) !== mapIndex).map(p => ({ ...p, mapIndex: reindex(p.mapIndex || 0) }));
-    const newRows = mapRows.filter(r => (r.mapIndex || 0) !== mapIndex).map(r => ({ ...r, mapIndex: reindex(r.mapIndex || 0) }));
-    const newDimLines = mapDimensionLines.filter(l => (l.mapIndex || 0) !== mapIndex).map(l => ({ ...l, mapIndex: reindex(l.mapIndex || 0) }));
-    const newWhiteouts = whiteoutBoxes.filter(b => (b.mapIndex || 0) !== mapIndex).map(b => ({ ...b, mapIndex: reindex(b.mapIndex || 0) }));
-    const newAspects = (project.mapImageAspects ?? []).filter((_, i) => i !== mapIndex);
+    const result = removeMapAtIndex({
+      mapUrls: project.mapUrls || [],
+      mapRotations,
+      mapTransforms,
+      mapLayouts,
+      mapImageAspects: project.mapImageAspects,
+      mapPins,
+      mapRows,
+      mapDimensionLines,
+      whiteoutBoxes,
+      mapLines: project.mapLines,
+    }, mapIndex);
 
-    setMapPins(newPins);
-    setMapRows(newRows);
-    setMapDimensionLines(newDimLines);
-    setMapRotations(newRotations);
-    setWhiteoutBoxes(newWhiteouts);
-    setMapTransforms(newTransforms);
-    setMapLayouts(newMapLayouts);
-    setProject({ ...project, mapUrls: newMapUrls, mapImageAspects: newAspects });
+    setMapPins(result.mapPins);
+    setMapRows(result.mapRows);
+    setMapDimensionLines(result.mapDimensionLines);
+    setMapRotations(result.mapRotations);
+    setWhiteoutBoxes(result.whiteoutBoxes);
+    setMapTransforms(result.mapTransforms);
+    setMapLayouts(result.mapLayouts);
+    setProject({
+      ...project,
+      mapUrls: result.mapUrls,
+      mapImageAspects: result.mapImageAspects,
+      mapLines: result.mapLines,
+    });
 
-    const nextIndex = currentMapIndex >= newMapUrls.length ? Math.max(0, newMapUrls.length - 1) : currentMapIndex;
+    const nextIndex = currentMapIndex >= result.mapUrls.length ? Math.max(0, result.mapUrls.length - 1) : currentMapIndex;
     setCurrentMapIndex(nextIndex);
 
     setIsSaving(true);
     try {
       await updateDoc(doc(db, 'projects', id), {
-        mapUrls: newMapUrls,
-        mapRotations: newRotations,
-        mapTransforms: newTransforms,
-        mapLayouts: newMapLayouts,
-        mapPins: newPins,
-        mapRows: newRows,
-        mapDimensionLines: newDimLines,
-        whiteoutBoxes: newWhiteouts,
-        mapImageAspects: newAspects,
+        mapUrls: result.mapUrls,
+        mapRotations: result.mapRotations,
+        mapTransforms: result.mapTransforms,
+        mapLayouts: result.mapLayouts,
+        mapPins: result.mapPins,
+        mapRows: result.mapRows,
+        mapDimensionLines: result.mapDimensionLines,
+        whiteoutBoxes: result.whiteoutBoxes,
+        mapImageAspects: result.mapImageAspects,
+        mapLines: result.mapLines,
       });
     } catch (err) {
       logFirebaseError(err, '位置図削除');

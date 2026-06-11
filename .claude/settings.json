@@ -3,7 +3,12 @@
     "allow": [
       "Bash(git -C /Users/yamanishikenta/kawara-photo-app add src/pages/HomePage.tsx)",
       "Bash(git -C /Users/yamanishikenta/kawara-photo-app commit -m ' *)",
-      "Bash(git -C /Users/yamanishikenta/kawara-photo-app add -A)"
+      "Bash(git -C /Users/yamanishikenta/kawara-photo-app add -A)",
+      "Bash(cd /tmp && echo \"Say OK\" | codex exec --full-auto -c model=\\\\\"gpt-5.4\\\\\" - 2>&1 | tail -20)",
+      "Read(//private/tmp/**)"
+    ],
+    "additionalDirectories": [
+      "/Users/yamanishikenta/.codex"
     ]
   },
   "hooks": {
