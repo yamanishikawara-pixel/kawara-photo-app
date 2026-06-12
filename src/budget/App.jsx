@@ -23,7 +23,7 @@ import html2pdf from 'html2pdf.js';
 
 const newTileRow = () => ({ id: nanoid(), category: "", hinmei: "", suryo: "", tani: "枚", unitPrice: "", unitRate: "", biko: "" });
 const cloneRows = (rows) => rows.map(r => ({ ...r }));
-const newMaterialRow = () => ({ id: nanoid(), hinmei: "", suryo: "", tani: "巻", costPrice: "", biko: "" });
+const newMaterialRow = () => ({ id: nanoid(), hinmei: "", suryo: "", tani: "", costPrice: "", biko: "" });
 const newExpenseRow = () => ({ id: nanoid(), hinmei: "", suryo: "", tani: "式", costPrice: "", biko: "", isLabor: false });
 
 export default function App({ onNavigateToPhoto, projectAddress }) {
