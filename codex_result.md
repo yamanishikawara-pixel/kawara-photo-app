@@ -1,9 +1,10 @@
-完了しました。変更は [src/pages/SchedulePage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/SchedulePage.tsx:241) のみです。
+対応完了しました。対象は [src/pages/SchedulePage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/SchedulePage.tsx) のみです。
 
-工程開始日を含む月では `gridStartDay` を工程開始日にし、`monthStart` / `daysInMonth` / `todayIdx` をその左端基準で計算するようにしました。日付ヘッダーも [該当箇所](/Users/yamanishikenta/kawara-photo-app/src/pages/SchedulePage.tsx:618) で `gridStartDay + i` を表示します。
+工程表はタスクの実働日ベースで最早開始日から最遅終了日までを連続表示するようになり、月送り UI と `viewYear` / `viewMonth` 関連 state は削除しました。書類ヘッダーの工期も実際の表示範囲に変わっています。
 
 確認結果:
-- `npx vitest run`: 7 files / 74 tests passed
-- `npm run build`: 成功
+- `grep -n "viewYear\|viewMonth\|moveMonth\|gridStartDay\|daysInMonthTotal" src/pages/SchedulePage.tsx` 該当なし
+- `npx vitest run` 成功: 7 files / 74 tests passed
+- `npm run build` 成功
 
-ビルド時に既存の Vite chunk warning と Firebase App Check の dynamic/static import warning は出ていますが、ビルド自体は成功しています。
+ビルド時に既存の chunk size / Firebase App Check import 警告は出ていますが、今回変更による失敗はありません。

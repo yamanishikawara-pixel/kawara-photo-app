@@ -134,8 +134,6 @@ export default function SchedulePage() {
   const navigate = useNavigate();
 
   const today = new Date();
-  const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth()); // 0-11
   const [tasks, setTasks] = useState<GanttTask[]>([]);
   const [colorPickerFor, setColorPickerFor] = useState<number | null>(null);
 
@@ -238,36 +236,27 @@ export default function SchedulePage() {
     saveProjectField("projectLocation", value);
   };
 
-  // 工程開始日（タスクの中で最も早い開始日）。表示中の月がその開始月であれば、
-  // 月初ではなく工程開始日からグリッドを表示する。
-  const scheduleStartDate = tasks.reduce<Date | null>((earliest, t) => {
-    if (!t.start) return earliest;
-    const d = parse(t.start);
-    return !earliest || d < earliest ? d : earliest;
-  }, null);
-  const gridStartDay =
-    scheduleStartDate &&
-    scheduleStartDate.getFullYear() === viewYear &&
-    scheduleStartDate.getMonth() === viewMonth
-      ? scheduleStartDate.getDate()
-      : 1;
+  // ---------- 表示範囲（工程開始日〜工程終了日を月をまたいで連続表示） ----------
+  const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-  const monthStart = new Date(viewYear, viewMonth, gridStartDay);
-  const daysInMonthTotal = new Date(viewYear, viewMonth + 1, 0).getDate();
-  const daysInMonth = daysInMonthTotal - gridStartDay + 1;
-  const todayIdx =
-    today.getFullYear() === viewYear &&
-    today.getMonth() === viewMonth &&
-    today.getDate() >= gridStartDay
-      ? today.getDate() - gridStartDay
-      : -1;
+  // 工程開始日・終了日をタスクの実働日数（休日スキップ後）から算出
+  let scheduleStartDate: Date | null = null;
+  let scheduleEndDate: Date | null = null;
+  for (const t of tasks) {
+    if (!t.start || t.duration <= 0) continue;
+    const span = workdaySpan(parse(t.start), t.duration);
+    const s = span[0];
+    const e = span[span.length - 1];
+    if (!scheduleStartDate || s < scheduleStartDate) scheduleStartDate = s;
+    if (!scheduleEndDate || e > scheduleEndDate) scheduleEndDate = e;
+  }
 
-  // ---------- 月送り ----------
-  const moveMonth = (delta: number) => {
-    const d = new Date(viewYear, viewMonth + delta, 1);
-    setViewYear(d.getFullYear());
-    setViewMonth(d.getMonth());
-  };
+  // タスクが未登録の場合は、本日から30日間を仮の表示範囲とする
+  const monthStart = scheduleStartDate ?? todayDateOnly;
+  const rangeEnd = scheduleEndDate ?? addDays(todayDateOnly, 29);
+  const daysInMonth = diffDays(rangeEnd, monthStart) + 1;
+  const todayIdxRaw = diffDays(todayDateOnly, monthStart);
+  const todayIdx = todayIdxRaw >= 0 && todayIdxRaw < daysInMonth ? todayIdxRaw : -1;
 
   // ---------- タスク操作 ----------
   const updateTask = (taskId: number, patch: Partial<GanttTask>) =>
@@ -407,25 +396,6 @@ export default function SchedulePage() {
           <h1 className="text-2xl font-semibold tracking-tight mr-auto">
             工程表
           </h1>
-          <div className="flex items-center bg-white rounded-full shadow-sm border border-gray-100">
-            <button
-              onClick={() => moveMonth(-1)}
-              className="px-4 py-2 text-blue-500 text-lg active:opacity-50"
-              aria-label="前の月"
-            >
-              ‹
-            </button>
-            <span className="px-2 font-medium tabular-nums whitespace-nowrap">
-              {viewYear}年{viewMonth + 1}月
-            </span>
-            <button
-              onClick={() => moveMonth(1)}
-              className="px-4 py-2 text-blue-500 text-lg active:opacity-50"
-              aria-label="次の月"
-            >
-              ›
-            </button>
-          </div>
           <button
             onClick={addRow}
             className="px-4 py-2 rounded-full bg-blue-500 text-white text-sm font-medium shadow-sm active:opacity-70"
@@ -466,7 +436,9 @@ export default function SchedulePage() {
                 />
               </div>
               <div className="text-sm text-gray-500 tabular-nums shrink-0">
-                工期：{viewYear}年{viewMonth + 1}月
+                工期：{monthStart.getFullYear()}年{monthStart.getMonth() + 1}月{monthStart.getDate()}日
+                {" "}〜{" "}
+                {rangeEnd.getFullYear()}年{rangeEnd.getMonth() + 1}月{rangeEnd.getDate()}日
               </div>
             </div>
           </div>
@@ -615,7 +587,7 @@ export default function SchedulePage() {
                                 : "text-gray-600"
                             }`}
                           >
-                            {gridStartDay + i}
+                            {d.getDate() === 1 ? `${d.getMonth() + 1}/${d.getDate()}` : d.getDate()}
                           </span>
                           {/* 日曜・祝日の赤ライン */}
                           {isRed && (
