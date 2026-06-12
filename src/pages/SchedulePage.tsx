@@ -145,9 +145,10 @@ export default function SchedulePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ---------- 工事件名・現場住所（project連動） ----------
+  // ---------- 工事件名・現場住所・工期（project連動） ----------
   const [projectName, setProjectName] = useState("");
   const [siteAddress, setSiteAddress] = useState("");
+  const [constructionPeriod, setConstructionPeriod] = useState("");
 
   const mountedRef = useRef(true);
   const tasksLoadedRef = useRef(false);
@@ -180,6 +181,7 @@ export default function SchedulePage() {
           setProject(data);
           setProjectName(data.projectName ?? "");
           setSiteAddress(data.projectLocation ?? "");
+          setConstructionPeriod(data.constructionPeriod ?? "");
           const loaded = (data.ganttTasks ?? []) as GanttTask[];
           setTasks(loaded);
           uid = loaded.reduce((m, t) => Math.max(m, t.id), uid);
@@ -218,8 +220,8 @@ export default function SchedulePage() {
     return () => { if (tasksDebounceRef.current) clearTimeout(tasksDebounceRef.current); };
   }, [tasks, id]);
 
-  // ---------- 工事件名・現場住所 保存（デバウンス） ----------
-  const saveProjectField = useCallback((field: "projectName" | "projectLocation", value: string) => {
+  // ---------- 工事件名・現場住所・工期 保存（デバウンス） ----------
+  const saveProjectField = useCallback((field: "projectName" | "projectLocation" | "constructionPeriod", value: string) => {
     if (!id) return;
     if (fieldDebounceRef.current[field]) clearTimeout(fieldDebounceRef.current[field]);
     fieldDebounceRef.current[field] = setTimeout(() => {
@@ -253,13 +255,32 @@ export default function SchedulePage() {
     if (!scheduleEndDate || e > scheduleEndDate) scheduleEndDate = e;
   }
 
-  // タスクが未登録の場合は、本日から30日間を仮の表示範囲とする。
-  // タスクがある場合は、最終タスクの終了日より BUFFER_DAYS 日分多く表示し、
-  // 新しい工程を追加できる空セルを確保する。
+  // 工期（実際の工程開始日〜終了日）。表紙の工期欄(project.constructionPeriod)と共有する。
+  const formatPeriodDate = (d: Date) => `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+  const computedPeriod =
+    scheduleStartDate && scheduleEndDate
+      ? `${formatPeriodDate(scheduleStartDate)}〜${formatPeriodDate(scheduleEndDate)}`
+      : null;
+
+  // 工程の期間が変わったら、表紙の工期欄にも自動反映する
+  useEffect(() => {
+    if (!tasksLoadedRef.current) return;
+    if (!computedPeriod || computedPeriod === constructionPeriod) return;
+    setConstructionPeriod(computedPeriod);
+    saveProjectField("constructionPeriod", computedPeriod);
+  }, [computedPeriod, constructionPeriod, saveProjectField]);
+
+  // 表示範囲は「開始日（工程未登録なら本日）から最低1ヶ月分」を確保し、
+  // その期間内の空セルは自由に工程を追加できる。
+  // 登録済みタスクの実働範囲が1ヶ月を超える場合は、最終タスクの終了日 + BUFFER_DAYS まで表示する。
   const monthStart = scheduleStartDate ?? todayDateOnly;
-  const rangeEnd = scheduleEndDate
-    ? addDays(scheduleEndDate, BUFFER_DAYS)
-    : addDays(todayDateOnly, 29);
+  const oneMonthLater = new Date(
+    monthStart.getFullYear(),
+    monthStart.getMonth() + 1,
+    monthStart.getDate()
+  );
+  const taskEnd = scheduleEndDate ? addDays(scheduleEndDate, BUFFER_DAYS) : oneMonthLater;
+  const rangeEnd = taskEnd > oneMonthLater ? taskEnd : oneMonthLater;
   const daysInMonth = diffDays(rangeEnd, monthStart) + 1;
   const todayIdxRaw = diffDays(todayDateOnly, monthStart);
   const todayIdx = todayIdxRaw >= 0 && todayIdxRaw < daysInMonth ? todayIdxRaw : -1;
@@ -442,9 +463,7 @@ export default function SchedulePage() {
                 />
               </div>
               <div className="text-sm text-gray-500 tabular-nums shrink-0">
-                工期：{monthStart.getFullYear()}年{monthStart.getMonth() + 1}月{monthStart.getDate()}日
-                {" "}〜{" "}
-                {rangeEnd.getFullYear()}年{rangeEnd.getMonth() + 1}月{rangeEnd.getDate()}日
+                工期：{computedPeriod ?? (constructionPeriod || "未設定")}
               </div>
             </div>
           </div>
