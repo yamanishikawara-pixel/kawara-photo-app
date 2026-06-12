@@ -243,18 +243,9 @@ function EditModal({ task, allPhases, allVendors, allHelperNames, skipSundays, o
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 11, color: A.t2, fontWeight: 600, fontFamily: FONT }}>開始日（手動）</label>
-            <input type="date" style={INP} value={draft.startDate} onChange={e => upd('startDate', e.target.value)} />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 11, color: A.t2, fontWeight: 600, fontFamily: FONT }}>前工程との関係</label>
-            <select style={SEL} value={draft.link} onChange={e => upd('link', e.target.value as 'sequential' | 'parallel')}>
-              <option value="sequential">連続（前工程の翌日）</option>
-              <option value="parallel">同時（前工程と同日）</option>
-            </select>
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <label style={{ fontSize: 11, color: A.t2, fontWeight: 600, fontFamily: FONT }}>開始日</label>
+          <input type="date" style={INP} value={draft.startDate} onChange={e => upd('startDate', e.target.value)} />
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -485,7 +476,7 @@ export default function SchedulePage() {
     const refTask = afterIndex !== undefined ? tasks[afterIndex] : tasks[tasks.length - 1];
     const phase = refTask?.phase ?? allPhases[0] ?? '工事';
     const insertAt = afterIndex !== undefined ? afterIndex + 1 : tasks.length;
-    const draft = newTask({ phase, link: 'sequential', startDate: ganttEnd, endDate: ganttEnd });
+    const draft = newTask({ phase, startDate: ganttEnd, endDate: ganttEnd });
     const next = [...tasks.slice(0, insertAt), draft, ...tasks.slice(insertAt)];
     updateTasks(next);
     setEditIndex(insertAt);
@@ -946,7 +937,7 @@ export default function SchedulePage() {
                         <button
                           onClick={() => {
                             const lastIdx = pts[pts.length - 1]?.globalIdx;
-                            const draft = newTask({ phase, link: 'sequential' });
+                            const draft = newTask({ phase });
                             const insertAt = lastIdx !== undefined ? lastIdx + 1 : tasks.length;
                             const next = [...tasks.slice(0, insertAt), draft, ...tasks.slice(insertAt)];
                             updateTasks(next);
@@ -997,7 +988,7 @@ export default function SchedulePage() {
                         <button
                           onClick={() => {
                             const lastIdx = pts[pts.length - 1]?.globalIdx;
-                            const draft = newTask({ phase, link: 'sequential' });
+                            const draft = newTask({ phase });
                             const insertAt = lastIdx !== undefined ? lastIdx + 1 : tasks.length;
                             const next = [...tasks.slice(0, insertAt), draft, ...tasks.slice(insertAt)];
                             updateTasks(next);

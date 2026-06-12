@@ -20,7 +20,6 @@ export interface ScheduleTask {
   status: ScheduleStatus;
   vendor: string;
   note: string;
-  link: 'sequential' | 'parallel';
   helpers: Helper[];  // 応援人員リスト
   workerCount: number; // 自社作業員数
 }
@@ -75,23 +74,12 @@ function nextWorkDay(dateStr: string, skipSun: boolean): string {
 
 // ─── Core algorithms ─────────────────────────────────────────────
 
-/** 全タスクの開始・終了日を link 関係に基づいて再計算する */
+/** 各タスクの終了日を startDate + days から再計算する（タスク間の依存関係は持たない） */
 export function cascade(tasks: ScheduleTask[], skipSun = false): ScheduleTask[] {
-  if (tasks.length === 0) return [];
-  const result: ScheduleTask[] = [];
-  for (let i = 0; i < tasks.length; i++) {
-    const task = { ...tasks[i] };
-    if (i === 0) {
-      task.endDate = calcEnd(task.startDate, task.days, skipSun);
-    } else {
-      const prev = result[i - 1];
-      task.startDate =
-        task.link === 'parallel' ? prev.startDate : nextWorkDay(prev.endDate, skipSun);
-      task.endDate = calcEnd(task.startDate, task.days, skipSun);
-    }
-    result.push(task);
-  }
-  return result;
+  return tasks.map(task => ({
+    ...task,
+    endDate: calcEnd(task.startDate, task.days, skipSun),
+  }));
 }
 
 /** 未完了タスクを n 日順延し再 cascade する（雨天順延等） */
@@ -161,7 +149,6 @@ export function newTask(overrides?: Partial<ScheduleTask>): ScheduleTask {
     status: 'todo',
     vendor: '',
     note: '',
-    link: 'sequential',
     helpers: [],
     workerCount: 1,
     ...overrides,
@@ -169,25 +156,38 @@ export function newTask(overrides?: Partial<ScheduleTask>): ScheduleTask {
 }
 
 export function makeTemplate(startDate: string): ScheduleTask[] {
-  const templates: Omit<ScheduleTask, 'id' | 'startDate' | 'endDate'>[] = [
-    { phase: '準備', name: '近隣挨拶・安全設置', days: 1, status: 'todo', vendor: '', note: '', link: 'sequential' },
-    { phase: '準備', name: '仮設足場組立', days: 1, status: 'todo', vendor: '', note: '', link: 'sequential' },
-    { phase: '撤去', name: '既存瓦撤去', days: 2, status: 'todo', vendor: '', note: '', link: 'sequential' },
-    { phase: '撤去', name: '野地板解体', days: 1, status: 'todo', vendor: '', note: '', link: 'sequential' },
-    { phase: '下地', name: '新野地板施工', days: 1, status: 'todo', vendor: '', note: '', link: 'sequential' },
-    { phase: '下地', name: '防水ルーフィング施工', days: 1, status: 'todo', vendor: '', note: '', link: 'sequential' },
-    { phase: '下地', name: '瓦桟施工', days: 1, status: 'todo', vendor: '', note: '', link: 'parallel' },
-    { phase: '瓦葺', name: '瓦葺き', days: 3, status: 'todo', vendor: '', note: '', link: 'sequential' },
-    { phase: '瓦葺', name: '棟施工', days: 1, status: 'todo', vendor: '', note: '', link: 'sequential' },
-    { phase: '仕上', name: '雨押さえ板金施工', days: 1, status: 'todo', vendor: '', note: '', link: 'sequential' },
-    { phase: '仕上', name: '清掃・点検', days: 1, status: 'todo', vendor: '', note: '', link: 'sequential' },
-    { phase: '完了', name: '仮設足場解体', days: 1, status: 'todo', vendor: '', note: '', link: 'sequential' },
-    { phase: '完了', name: '最終確認・引き渡し', days: 1, status: 'todo', vendor: '', note: '', link: 'sequential' },
+  const templates: (Omit<ScheduleTask, 'id' | 'startDate' | 'endDate'> & { _parallel?: boolean })[] = [
+    { phase: '準備', name: '近隣挨拶・安全設置', days: 1, status: 'todo', vendor: '', note: '', helpers: [], workerCount: 1 },
+    { phase: '準備', name: '仮設足場組立', days: 1, status: 'todo', vendor: '', note: '', helpers: [], workerCount: 1 },
+    { phase: '撤去', name: '既存瓦撤去', days: 2, status: 'todo', vendor: '', note: '', helpers: [], workerCount: 1 },
+    { phase: '撤去', name: '野地板解体', days: 1, status: 'todo', vendor: '', note: '', helpers: [], workerCount: 1 },
+    { phase: '下地', name: '新野地板施工', days: 1, status: 'todo', vendor: '', note: '', helpers: [], workerCount: 1 },
+    { phase: '下地', name: '防水ルーフィング施工', days: 1, status: 'todo', vendor: '', note: '', helpers: [], workerCount: 1 },
+    { phase: '下地', name: '瓦桟施工', days: 1, status: 'todo', vendor: '', note: '', helpers: [], workerCount: 1, _parallel: true },
+    { phase: '瓦葺', name: '瓦葺き', days: 3, status: 'todo', vendor: '', note: '', helpers: [], workerCount: 1 },
+    { phase: '瓦葺', name: '棟施工', days: 1, status: 'todo', vendor: '', note: '', helpers: [], workerCount: 1 },
+    { phase: '仕上', name: '雨押さえ板金施工', days: 1, status: 'todo', vendor: '', note: '', helpers: [], workerCount: 1 },
+    { phase: '仕上', name: '清掃・点検', days: 1, status: 'todo', vendor: '', note: '', helpers: [], workerCount: 1 },
+    { phase: '完了', name: '仮設足場解体', days: 1, status: 'todo', vendor: '', note: '', helpers: [], workerCount: 1 },
+    { phase: '完了', name: '最終確認・引き渡し', days: 1, status: 'todo', vendor: '', note: '', helpers: [], workerCount: 1 },
   ];
-  const seed = templates.map((t, i) => ({
-    ...newTask({ ...t, id: String(i + 1), startDate, endDate: startDate }),
-  }));
-  return cascade(seed, false);
+  let prevStart = startDate;
+  let prevEnd = startDate;
+  return templates.map((t, i) => {
+    const { _parallel, ...rest } = t;
+    let taskStart: string;
+    if (i === 0) {
+      taskStart = startDate;
+    } else if (_parallel) {
+      taskStart = prevStart;
+    } else {
+      taskStart = nextWorkDay(prevEnd, false);
+    }
+    const taskEnd = calcEnd(taskStart, t.days, false);
+    prevStart = taskStart;
+    prevEnd = taskEnd;
+    return newTask({ ...rest, id: String(i + 1), startDate: taskStart, endDate: taskEnd });
+  });
 }
 
 // ─── PDF helpers ──────────────────────────────────────────────────

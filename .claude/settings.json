@@ -7,7 +7,8 @@
       "Bash(cd /tmp && echo \"Say OK\" | codex exec --full-auto -c model=\\\\\"gpt-5.4\\\\\" - 2>&1 | tail -20)",
       "Read(//private/tmp/**)",
       "Bash(npx vitest *)",
-      "Bash(grep -n \"addPhoto\\\\|const handleAdd\\\\|photos: \\\\[\\\\|setProject\\(prev => \\({ ...prev, photos\\\\|newPhoto\\\\|process:.*''\\\\|description:.*''\" src/pages/PhotoPage.tsx)"
+      "Bash(grep -n \"addPhoto\\\\|const handleAdd\\\\|photos: \\\\[\\\\|setProject\\(prev => \\({ ...prev, photos\\\\|newPhoto\\\\|process:.*''\\\\|description:.*''\" src/pages/PhotoPage.tsx)",
+      "Bash(git -C /Users/yamanishikenta/kawara-photo-app diff --stat)"
     ],
     "additionalDirectories": [
       "/Users/yamanishikenta/.codex"
