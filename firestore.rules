@@ -2,6 +2,13 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // 実行予算書アプリ（kawara-budget）用: 許可されたスタッフのUIDのみ
+    function isStaff() {
+      return request.auth != null && request.auth.uid in [
+        "rN33HdI5AZdHauyRHDKkWI5FSvo1"
+      ];
+    }
+
     // ユーザー設定: 本人のみアクセス可
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
@@ -19,13 +26,13 @@ service cloud.firestore {
 
     // 実行予算書アプリ（kawara-budget）用コレクション
     match /cost_projects/{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isStaff();
     }
     match /cost_master/{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isStaff();
     }
     match /cost_system/{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isStaff();
     }
 
   }
