@@ -192,14 +192,36 @@ export function makeTemplate(startDate: string): ScheduleTask[] {
 
 // ─── PDF helpers ──────────────────────────────────────────────────
 
-/** A4 1ページあたりの最大タスク行数（フェーズヘッダ含む） */
-const ROWS_PER_A4 = 28;
+/** A4横1ページあたりの最大行数（フェーズヘッダ含む）。ScheduleA4.tsx の描画と必ず一致させること */
+export const SCHEDULE_A4_ROWS_FIRST = 22;
+export const SCHEDULE_A4_ROWS_OTHERS = 26;
 
+/**
+ * ScheduleA4.tsx と同じアルゴリズムでページ数を計算する。
+ * フェーズ行＋タスク行を順に積み、フェーズの先頭行でのみ改ページする。
+ */
 export function scheduleA4PageCount(project: Project): number {
   const tasks = project.schedule?.tasks ?? [];
   if (tasks.length === 0) return 0;
-  // タスク行 + フェーズヘッダ行（フェーズが変わるたびに1行）
+
   const phases = [...new Set(tasks.map(t => t.phase))];
-  const totalRows = tasks.length + phases.length + 1; // +1 for table header
-  return Math.max(1, Math.ceil(totalRows / ROWS_PER_A4));
+  const rows: boolean[] = []; // true = フェーズ見出し行
+  for (const phase of phases) {
+    rows.push(true);
+    tasks.forEach(t => { if (t.phase === phase) rows.push(false); });
+  }
+
+  let pages = 0;
+  let cur = 0;
+  for (const isPhaseRow of rows) {
+    const limit = pages === 0 ? SCHEDULE_A4_ROWS_FIRST : SCHEDULE_A4_ROWS_OTHERS;
+    if (cur >= limit && isPhaseRow) {
+      pages++;
+      cur = 0;
+    }
+    cur++;
+  }
+  if (cur > 0) pages++;
+
+  return Math.max(1, pages);
 }

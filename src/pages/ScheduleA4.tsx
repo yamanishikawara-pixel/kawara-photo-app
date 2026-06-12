@@ -21,6 +21,7 @@ import {
   STATUS_LABELS, STATUS_COLORS, VENDOR_PALETTE, vendorColor,
   parseDate, addDaysToStr, dateDiff, helperTotal,
   scheduleA4PageCount,
+  SCHEDULE_A4_ROWS_FIRST, SCHEDULE_A4_ROWS_OTHERS,
 } from '../shared/scheduleUtils';
 
 export { scheduleA4PageCount };
@@ -368,8 +369,9 @@ export default function ScheduleA4({
 
   // 1ページあたり最大行数（A4高さ - ヘッダー - 日付2行 - フッター）÷ 行高
   // 初ページはヘッダー分少ない（実測: A4 landscape 197mm ÷ 6mm/行 ≒ 30行、ヘッダー消費約4行）
-  const ROWS_FIRST  = 22;
-  const ROWS_OTHERS = 26;
+  // ※ scheduleA4PageCount() と必ず一致させるため、値は scheduleUtils.ts の共有定数を使う
+  const ROWS_FIRST  = SCHEDULE_A4_ROWS_FIRST;
+  const ROWS_OTHERS = SCHEDULE_A4_ROWS_OTHERS;
 
   const pages: GanttRow[][] = [];
   let cur: GanttRow[] = [];

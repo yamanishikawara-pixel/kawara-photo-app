@@ -90,6 +90,16 @@ function pickLongTextStyle(text: string | undefined | null): LongTextStyle {
   return                       { fontSize: '8.5px', lineHeight: '1.2',  isLong: true  };
 }
 
+/** 写真カード「工程」欄（1行ラベル）用：文字数に応じてフォントサイズを段階的に縮小する */
+function pickProcessLabelStyle(text: string | undefined | null): { fontSize: string } {
+  const len = (text ?? '').length;
+  if (len <= 8)  return { fontSize: '13px' };
+  if (len <= 11) return { fontSize: '11px' };
+  if (len <= 14) return { fontSize: '9.5px' };
+  if (len <= 18) return { fontSize: '8px' };
+  return               { fontSize: '7px' };
+}
+
 
 
 export default function PdfExportPage() {
@@ -1385,7 +1395,7 @@ export default function PdfExportPage() {
                         {sections.map && (
                           <div className="flex flex-1 min-h-0 border-b border-gray-400 shrink-0 print:border-black"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">位置図</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden text-red-700 whitespace-nowrap">{p.locationMap || '　'}</div></div>
                         )}
-                        <div className="flex flex-1 min-h-0 border-b border-gray-400 shrink-0 print:border-black"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">工程</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.process || '　'}</div></div>
+                        <div className="flex flex-1 min-h-0 border-b border-gray-400 shrink-0 print:border-black"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">工程</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap" style={pickProcessLabelStyle(p.process)}>{p.process || '　'}</div></div>
                         {/* 写真説明欄: 文字数に応じて段階的にフォントサイズを縮める。
                             短文は現状維持、長文は 10px まで縮小。極端な長文は末尾切れ。 */}
                         {(() => {
