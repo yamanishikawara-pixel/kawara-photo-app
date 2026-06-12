@@ -93,10 +93,10 @@ function pickLongTextStyle(text: string | undefined | null): LongTextStyle {
 /** 写真カード「工程」欄（1行ラベル）用：文字数に応じてフォントサイズを段階的に縮小する */
 function pickProcessLabelStyle(text: string | undefined | null): { fontSize: string } {
   const len = (text ?? '').length;
-  if (len <= 18) return { fontSize: '13px' };
-  if (len <= 24) return { fontSize: '11px' };
-  if (len <= 30) return { fontSize: '9.5px' };
-  if (len <= 38) return { fontSize: '8px' };
+  if (len <= 13) return { fontSize: '13px' };
+  if (len <= 16) return { fontSize: '11px' };
+  if (len <= 20) return { fontSize: '9px' };
+  if (len <= 25) return { fontSize: '8px' };
   return               { fontSize: '7px' };
 }
 
