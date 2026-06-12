@@ -1,20 +1,12 @@
-実装完了しました。対象は [src/pages/SchedulePage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/SchedulePage.tsx) です。
+完了しました。ロジック変更は行わず、以下のみ対応しています。
 
-対応内容:
-- ドラッグ中の表示範囲固定、前方バッファ追加
-- デバウンス保存のアンマウント時フラッシュ
-- タスクIDをUUID文字列化し、既存number IDをロード時にサニタイズ
-- 閲覧のみではFirestore書き込みしないよう制御
-- 祝日範囲外警告、月帯ラベル、日付表示修正
-- 46日以上の印刷時に月ごと改ページするチャート分割
+- `src/utils/workdays.ts` を指定内容で追加
+- `src/utils/workdays.test.ts` を指定内容で追加
+- `src/pages/SchedulePage.tsx` の日付・祝日・営業日計算定義を削除し、`../utils/workdays` から import する形に変更
 
-確認:
-- `npx vitest run` 成功: 7 files / 74 tests passed
-- `npm run build` 成功
-- `git diff --check -- src/pages/SchedulePage.tsx` 成功
+検証結果:
 
-開発サーバーは `vite` の listen がこの環境で `EPERM` になり起動できませんでした。
-- `0.0.0.0:5173` 失敗
-- `127.0.0.1:5173` 失敗
+- `npx tsc --noEmit`：エラーなし
+- `npx vitest run`：8 files / 94 tests すべて pass
 
-ビルド時にViteの通常警告として、Firebase App Checkの重複import警告と500kB超チャンク警告が出ていますが、ビルド自体は成功しています。
+コミットはしていません。

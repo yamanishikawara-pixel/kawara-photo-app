@@ -7,6 +7,12 @@ import type { Project, UserSettings } from '../types';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
+import {
+  fmt, parse, addDays, diffDays, WEEKDAYS,
+  holidayName, isOff, nextWorkday, prevWorkday,
+  workdaySpan, countWorkdays,
+  HOLIDAY_YEAR_MIN, HOLIDAY_YEAR_MAX,
+} from "../utils/workdays";
 
 /* ============================================================
    工程表（ガントチャート）
@@ -17,81 +23,6 @@ import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError'
    - タスクごとの色選択(iOSカラーパレット)
    - 印刷ボタン → A4横に最適化された@media printを適用
    ============================================================ */
-
-// ---------- 日付ユーティリティ ----------
-const fmt = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate()
-  ).padStart(2, "0")}`;
-const parse = (s: string) => {
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(y, m - 1, d);
-};
-const addDays = (date: Date, n: number) => {
-  const x = new Date(date);
-  x.setDate(x.getDate() + n);
-  return x;
-};
-const diffDays = (a: Date, b: Date) => Math.round((a.getTime() - b.getTime()) / 86400000);
-const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
-
-// ---------- 日本の祝日（2025〜2027年・振替休日含む） ----------
-const HOLIDAYS: Record<string, string> = {
-  // 2025
-  "2025-01-01": "元日", "2025-01-13": "成人の日", "2025-02-11": "建国記念の日",
-  "2025-02-23": "天皇誕生日", "2025-02-24": "振替休日", "2025-03-20": "春分の日",
-  "2025-04-29": "昭和の日", "2025-05-03": "憲法記念日", "2025-05-04": "みどりの日",
-  "2025-05-05": "こどもの日", "2025-05-06": "振替休日", "2025-07-21": "海の日",
-  "2025-08-11": "山の日", "2025-09-15": "敬老の日", "2025-09-23": "秋分の日",
-  "2025-10-13": "スポーツの日", "2025-11-03": "文化の日", "2025-11-23": "勤労感謝の日",
-  "2025-11-24": "振替休日",
-  // 2026
-  "2026-01-01": "元日", "2026-01-12": "成人の日", "2026-02-11": "建国記念の日",
-  "2026-02-23": "天皇誕生日", "2026-03-20": "春分の日", "2026-04-29": "昭和の日",
-  "2026-05-03": "憲法記念日", "2026-05-04": "みどりの日", "2026-05-05": "こどもの日",
-  "2026-05-06": "振替休日", "2026-07-20": "海の日", "2026-08-11": "山の日",
-  "2026-09-21": "敬老の日", "2026-09-22": "国民の休日", "2026-09-23": "秋分の日",
-  "2026-10-12": "スポーツの日", "2026-11-03": "文化の日", "2026-11-23": "勤労感謝の日",
-  // 2027
-  "2027-01-01": "元日", "2027-01-11": "成人の日", "2027-02-11": "建国記念の日",
-  "2027-02-23": "天皇誕生日", "2027-03-21": "春分の日", "2027-03-22": "振替休日",
-  "2027-04-29": "昭和の日", "2027-05-03": "憲法記念日", "2027-05-04": "みどりの日",
-  "2027-05-05": "こどもの日", "2027-07-19": "海の日", "2027-08-11": "山の日",
-  "2027-09-20": "敬老の日", "2027-09-23": "秋分の日", "2027-10-11": "スポーツの日",
-  "2027-11-03": "文化の日", "2027-11-23": "勤労感謝の日",
-};
-const HOLIDAY_YEAR_MIN = 2025;
-const HOLIDAY_YEAR_MAX = 2027;
-const holidayName = (date: Date) => HOLIDAYS[fmt(date)] || null;
-
-// ---------- 休日（日曜・祝日）を除いた営業日計算 ----------
-const isOff = (date: Date) => date.getDay() === 0 || !!holidayName(date);
-const nextWorkday = (date: Date) => {
-  let d = new Date(date);
-  while (isOff(d)) d = addDays(d, 1);
-  return d;
-};
-const prevWorkday = (date: Date) => {
-  let d = new Date(date);
-  while (isOff(d)) d = addDays(d, -1);
-  return d;
-};
-// 開始日から実働n日分の日付リスト（休日はスキップ）
-const workdaySpan = (startDate: Date, workDays: number) => {
-  const out: Date[] = [];
-  let d = new Date(startDate);
-  while (out.length < workDays) {
-    if (!isOff(d)) out.push(new Date(d));
-    d = addDays(d, 1);
-  }
-  return out;
-};
-// from〜to（両端含む）の実働日数
-const countWorkdays = (from: Date, to: Date) => {
-  let c = 0;
-  for (let d = new Date(from); d <= to; d = addDays(d, 1)) if (!isOff(d)) c++;
-  return c;
-};
 
 // ---------- iOS風カラーパレット ----------
 const COLORS = [
