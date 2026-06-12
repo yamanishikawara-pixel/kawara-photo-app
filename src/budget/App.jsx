@@ -970,6 +970,7 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
             <div style={{background:"#0b1e30", border:"1px solid #1d3d5c", borderRadius:8, padding:"8px 16px", textAlign:"right"}}><div style={{fontSize:10, color:"#94a3b8"}}>副資材</div><div style={{fontSize:14, fontWeight:700, color:"#fbbf24"}}>¥{matSub.toLocaleString()}</div></div>
             <div style={{background:"#0b1e30", border:"1px solid #1d3d5c", borderRadius:8, padding:"8px 16px", textAlign:"right"}}><div style={{fontSize:10, color:"#94a3b8"}}>労務経費</div><div style={{fontSize:14, fontWeight:700, color:"#f9a8d4"}}>¥{expSub.toLocaleString()}</div></div>
             <div style={{background:"#0b1e30", border:"1px solid #1d3d5c", borderRadius:8, padding:"8px 16px", textAlign:"right"}}><div style={{fontSize:10, color:"#94a3b8"}}>資材運賃</div><div style={{fontSize:14, fontWeight:700, color:"#34d399"}}>¥{unchinTotal.toLocaleString()}</div></div>
+            <div style={{background:"#0b1e30", border:"1px solid #1d3d5c", borderRadius:8, padding:"8px 16px", textAlign:"right"}}><div style={{fontSize:10, color:"#94a3b8"}}>社保</div><div style={{fontSize:14, fontWeight:700, color:"#c084fc"}}>¥{welfareCost.toLocaleString()}</div></div>
             <div style={{background:"#831843", border:"1px solid #f43f5e", borderRadius:8, padding:"8px 20px", textAlign:"right", flex:"1 1 100%", maxWidth:"300px"}}><div style={{fontSize:10, color:"#fecdd3"}}>実行予算（合計）</div><div style={{fontSize:22, fontWeight:900, color:"#fff1f2"}}>¥{totalCost.toLocaleString()}</div></div>
         </div>
 
