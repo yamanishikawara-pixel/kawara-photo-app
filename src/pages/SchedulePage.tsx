@@ -401,6 +401,20 @@ export default function SchedulePage() {
     setTasks((ts) => ts.filter((t) => t.id !== taskId));
   };
 
+  // 工程の並べ替え（▲▼）
+  const moveRow = (id: string, dir: -1 | 1) => {
+    const idx = tasksRef.current.findIndex((t) => t.id === id);
+    const to = idx + dir;
+    if (idx < 0 || to < 0 || to >= tasksRef.current.length) return;
+    pushUndo(); // 並べ替えもUndo対象
+    userEditedTasksRef.current = true;
+    setTasks((ts) => {
+      const next = [...ts];
+      [next[idx], next[to]] = [next[to], next[idx]];
+      return next;
+    });
+  };
+
   // セルをタップ → バー作成（バー未設定の行のみ・休日は不可）
   const handleCellClick = (task: GanttTask, dayIdx: number) => {
     if (task.start) return; // 既にバーがある行はドラッグで操作
@@ -519,7 +533,7 @@ export default function SchedulePage() {
             <div className="h-12 flex items-end px-4 pb-2 text-xs text-gray-400 font-medium border-b border-gray-100">
               工程 / 担当
             </div>
-            {tasks.map((t) => (
+            {tasks.map((t, index) => (
               <div
                 key={t.id}
                 className="relative h-14 px-3 flex items-center gap-2 border-b border-gray-50 group"
@@ -552,6 +566,25 @@ export default function SchedulePage() {
                     className="w-full text-xs text-gray-400 bg-transparent truncate"
                     placeholder="担当者"
                   />
+                </div>
+                {/* 並べ替え */}
+                <div className="no-print flex flex-col shrink-0">
+                  <button
+                    onClick={() => moveRow(t.id, -1)}
+                    disabled={index === 0}
+                    className="w-5 h-4 text-[9px] leading-none text-gray-300 hover:text-blue-500 disabled:opacity-30"
+                    aria-label="上へ移動"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    onClick={() => moveRow(t.id, 1)}
+                    disabled={index === tasks.length - 1}
+                    className="w-5 h-4 text-[9px] leading-none text-gray-300 hover:text-blue-500 disabled:opacity-30"
+                    aria-label="下へ移動"
+                  >
+                    ▼
+                  </button>
                 </div>
                 {/* 行削除 */}
                 <button
