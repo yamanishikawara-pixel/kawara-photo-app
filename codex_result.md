@@ -1,17 +1,8 @@
-対応しました。
+完了しました。対象は [src/pages/SettingsPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/SettingsPage.tsx) のみです。
 
-変更内容:
-- [src/shared/scheduleUtils.ts](/Users/yamanishikenta/kawara-photo-app/src/shared/scheduleUtils.ts)
-  - `ScheduleTask.link`を削除
-  - `cascade()`を各タスク独立の終了日再計算に変更
-  - `newTask()`の`link`デフォルト削除
-  - `makeTemplate()`は内部フラグ`_parallel`で初期日付だけ生成時に計算
+工事種別テンプレートだけを `localStorage` に自動保存し、SettingsPage 読み込み時に Firestore 保存済み内容と違うドラフトがあれば復元するようにしました。保存成功時にはドラフトを削除し、復元時にはセクション内に通知バナーを表示します。
 
-- [src/pages/SchedulePage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/SchedulePage.tsx)
-  - 編集モーダルから「前工程との関係」を削除
-  - 「開始日」単独フィールドに変更
-  - `newTask({ ..., link: 'sequential' })`の3箇所を削除
-
-確認:
+検証結果:
+- `npx eslint src/pages/SettingsPage.tsx` 成功
 - `npm run build` 成功
-- `npm test` は既存の `src/budget/*.test.js` 2ファイルで「No test suite found」により失敗しました。全体では70テストはpassしており、今回変更した工程表まわりの型・ビルドエラーは出ていません。
+- `npm run lint` は失敗。ただし既存の別ファイルと `src.backup-*` 配下のエラーによるもので、今回変更した `SettingsPage.tsx` 単体では問題ありません。
