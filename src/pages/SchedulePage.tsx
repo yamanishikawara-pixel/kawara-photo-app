@@ -104,6 +104,8 @@ const COLORS = [
 ];
 
 const DEBOUNCE_MS = 600;
+// 最終タスクの終了日より後に表示する空き日数（新しい工程を追加できるようにするため）
+const BUFFER_DAYS = 7;
 
 export interface GanttTask {
   id: number;
@@ -251,9 +253,13 @@ export default function SchedulePage() {
     if (!scheduleEndDate || e > scheduleEndDate) scheduleEndDate = e;
   }
 
-  // タスクが未登録の場合は、本日から30日間を仮の表示範囲とする
+  // タスクが未登録の場合は、本日から30日間を仮の表示範囲とする。
+  // タスクがある場合は、最終タスクの終了日より BUFFER_DAYS 日分多く表示し、
+  // 新しい工程を追加できる空セルを確保する。
   const monthStart = scheduleStartDate ?? todayDateOnly;
-  const rangeEnd = scheduleEndDate ?? addDays(todayDateOnly, 29);
+  const rangeEnd = scheduleEndDate
+    ? addDays(scheduleEndDate, BUFFER_DAYS)
+    : addDays(todayDateOnly, 29);
   const daysInMonth = diffDays(rangeEnd, monthStart) + 1;
   const todayIdxRaw = diffDays(todayDateOnly, monthStart);
   const todayIdx = todayIdxRaw >= 0 && todayIdxRaw < daysInMonth ? todayIdxRaw : -1;
