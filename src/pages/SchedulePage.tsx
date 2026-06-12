@@ -60,6 +60,8 @@ const HOLIDAYS: Record<string, string> = {
   "2027-09-20": "敬老の日", "2027-09-23": "秋分の日", "2027-10-11": "スポーツの日",
   "2027-11-03": "文化の日", "2027-11-23": "勤労感謝の日",
 };
+const HOLIDAY_YEAR_MIN = 2025;
+const HOLIDAY_YEAR_MAX = 2027;
 const holidayName = (date: Date) => HOLIDAYS[fmt(date)] || null;
 
 // ---------- 休日（日曜・祝日）を除いた営業日計算 ----------
@@ -108,7 +110,7 @@ const DEBOUNCE_MS = 600;
 const BUFFER_DAYS = 7;
 
 export interface GanttTask {
-  id: number;
+  id: string;
   name: string;
   assignee: string;
   color: string;
@@ -118,18 +120,13 @@ export interface GanttTask {
 
 type DragMode = "move" | "resize-l" | "resize-r";
 interface DragState {
-  taskId: number;
+  taskId: string;
   mode: DragMode;
   startX: number;
-  gridLeft: number;
-  pxPerDay: number;
   origStartDate: Date;
   origEndDate: Date;
   origDur: number;
 }
-
-let uid = 100;
-const newId = () => ++uid;
 
 export default function SchedulePage() {
   const { id } = useParams<{ id: string }>();
@@ -137,10 +134,11 @@ export default function SchedulePage() {
 
   const today = new Date();
   const [tasks, setTasks] = useState<GanttTask[]>([]);
-  const [colorPickerFor, setColorPickerFor] = useState<number | null>(null);
+  const [colorPickerFor, setColorPickerFor] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const rangeRef = useRef<{ start: Date; days: number } | null>(null);
 
   // ---------- Firestore連携 ----------
-  const [, setProject] = useState<Project | null>(null);
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -154,6 +152,13 @@ export default function SchedulePage() {
   const tasksLoadedRef = useRef(false);
   const tasksDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const fieldDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout> | undefined>>({});
+  const tasksRef = useRef<GanttTask[]>([]);
+  tasksRef.current = tasks;
+  const tasksDirtyRef = useRef(false);
+  const pendingFieldsRef = useRef<Record<string, string>>({});
+  const idRef = useRef(id);
+  idRef.current = id;
+  const userEditedTasksRef = useRef(false);
 
   const gridRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -165,6 +170,20 @@ export default function SchedulePage() {
       mountedRef.current = false;
       if (tasksDebounceRef.current) clearTimeout(tasksDebounceRef.current);
       Object.values(fieldDebounceRef.current).forEach((t) => { if (t) clearTimeout(t); });
+      // 未保存分をフラッシュしてから離脱する
+      const pid = idRef.current;
+      if (pid && tasksLoadedRef.current) {
+        if (tasksDirtyRef.current) {
+          updateDoc(doc(db, "projects", pid), { ganttTasks: tasksRef.current })
+            .catch((err) => logFirebaseError(err, "工程表の保存"));
+        }
+        const pending = { ...pendingFieldsRef.current };
+        if (Object.keys(pending).length > 0) {
+          pendingFieldsRef.current = {};
+          updateDoc(doc(db, "projects", pid), pending)
+            .catch((err) => logFirebaseError(err, "工程表データの保存"));
+        }
+      }
     };
   }, []);
 
@@ -178,13 +197,23 @@ export default function SchedulePage() {
         if (aborted || !mountedRef.current) return;
         if (d.exists()) {
           const data = d.data() as Project;
-          setProject(data);
           setProjectName(data.projectName ?? "");
           setSiteAddress(data.projectLocation ?? "");
           setConstructionPeriod(data.constructionPeriod ?? "");
-          const loaded = (data.ganttTasks ?? []) as GanttTask[];
+          const raw = (data.ganttTasks ?? []) as Partial<GanttTask>[];
+          const loaded: GanttTask[] = raw
+            .filter((t) => t && typeof t === "object")
+            .map((t) => ({
+              id: String(t.id ?? crypto.randomUUID()),
+              name: typeof t.name === "string" ? t.name : "",
+              assignee: typeof t.assignee === "string" ? t.assignee : "",
+              color: typeof t.color === "string" ? t.color : COLORS[0],
+              start: typeof t.start === "string" ? t.start : null,
+              duration: Number.isFinite(t.duration) && (t.duration as number) > 0
+                ? Math.floor(t.duration as number)
+                : 0,
+            }));
           setTasks(loaded);
-          uid = loaded.reduce((m, t) => Math.max(m, t.id), uid);
         } else {
           setError("工程表データが見つかりません。");
         }
@@ -210,10 +239,13 @@ export default function SchedulePage() {
 
   // ---------- tasks 保存（デバウンス） ----------
   useEffect(() => {
-    if (!id || !tasksLoadedRef.current) return;
+    if (!id || !tasksLoadedRef.current || !userEditedTasksRef.current) return;
+    tasksDirtyRef.current = true;
     if (tasksDebounceRef.current) clearTimeout(tasksDebounceRef.current);
     tasksDebounceRef.current = setTimeout(() => {
-      updateDoc(doc(db, "projects", id), { ganttTasks: tasks }).catch((err) => {
+      tasksDirtyRef.current = false;
+      updateDoc(doc(db, "projects", id), { ganttTasks: tasksRef.current }).catch((err) => {
+        tasksDirtyRef.current = true;
         logFirebaseError(err, "工程表の保存");
       });
     }, DEBOUNCE_MS);
@@ -223,8 +255,10 @@ export default function SchedulePage() {
   // ---------- 工事件名・現場住所・工期 保存（デバウンス） ----------
   const saveProjectField = useCallback((field: "projectName" | "projectLocation" | "constructionPeriod", value: string) => {
     if (!id) return;
+    pendingFieldsRef.current[field] = value;
     if (fieldDebounceRef.current[field]) clearTimeout(fieldDebounceRef.current[field]);
     fieldDebounceRef.current[field] = setTimeout(() => {
+      delete pendingFieldsRef.current[field];
       updateDoc(doc(db, "projects", id), { [field]: value }).catch((err) => {
         logFirebaseError(err, "工程表データの保存");
       });
@@ -264,7 +298,7 @@ export default function SchedulePage() {
 
   // 工程の期間が変わったら、表紙の工期欄にも自動反映する
   useEffect(() => {
-    if (!tasksLoadedRef.current) return;
+    if (!tasksLoadedRef.current || !userEditedTasksRef.current) return;
     if (!computedPeriod || computedPeriod === constructionPeriod) return;
     setConstructionPeriod(computedPeriod);
     saveProjectField("constructionPeriod", computedPeriod);
@@ -273,27 +307,66 @@ export default function SchedulePage() {
   // 表示範囲は「開始日（工程未登録なら本日）から最低1ヶ月分」を確保し、
   // その期間内の空セルは自由に工程を追加できる。
   // 登録済みタスクの実働範囲が1ヶ月を超える場合は、最終タスクの終了日 + BUFFER_DAYS まで表示する。
-  const monthStart = scheduleStartDate ?? todayDateOnly;
+  // 起点：最先頭タスクの BUFFER_DAYS 前（前倒し操作の余白）。タスク未登録なら本日。
+  const computedStart = scheduleStartDate
+    ? addDays(scheduleStartDate, -BUFFER_DAYS)
+    : todayDateOnly;
   const oneMonthLater = new Date(
-    monthStart.getFullYear(),
-    monthStart.getMonth() + 1,
-    monthStart.getDate()
+    computedStart.getFullYear(),
+    computedStart.getMonth() + 1,
+    computedStart.getDate()
   );
   const taskEnd = scheduleEndDate ? addDays(scheduleEndDate, BUFFER_DAYS) : oneMonthLater;
-  const rangeEnd = taskEnd > oneMonthLater ? taskEnd : oneMonthLater;
-  const daysInMonth = diffDays(rangeEnd, monthStart) + 1;
+  const rangeEndDate = taskEnd > oneMonthLater ? taskEnd : oneMonthLater;
+  const computedRange = {
+    start: computedStart,
+    days: diffDays(rangeEndDate, computedStart) + 1,
+  };
+  // ドラッグ中は範囲を凍結し、グリッド原点・幅が動かないようにする
+  const range = isDragging && rangeRef.current ? rangeRef.current : computedRange;
+  rangeRef.current = range;
+  const monthStart = range.start;
+  const daysInMonth = range.days;
   const todayIdxRaw = diffDays(todayDateOnly, monthStart);
   const todayIdx = todayIdxRaw >= 0 && todayIdxRaw < daysInMonth ? todayIdxRaw : -1;
+  const rangeEndYear = addDays(monthStart, daysInMonth - 1).getFullYear();
+  const holidayCoverageOk =
+    monthStart.getFullYear() >= HOLIDAY_YEAR_MIN && rangeEndYear <= HOLIDAY_YEAR_MAX;
+  const monthBands: { label: string; days: number }[] = [];
+  for (let i = 0; i < daysInMonth; i++) {
+    const d = addDays(monthStart, i);
+    const label = `${d.getFullYear()}年${d.getMonth() + 1}月`;
+    const last = monthBands[monthBands.length - 1];
+    if (last && last.label === label) last.days++;
+    else monthBands.push({ label, days: 1 });
+  }
+  const printChunks: { start: Date; days: number }[] = [];
+  if (daysInMonth > 45) {
+    let chunkStart = new Date(monthStart);
+    const rangeEnd = addDays(monthStart, daysInMonth - 1);
+    while (chunkStart <= rangeEnd) {
+      const nextMonthStart = new Date(chunkStart.getFullYear(), chunkStart.getMonth() + 1, 1);
+      const chunkEnd = addDays(nextMonthStart, -1) < rangeEnd ? addDays(nextMonthStart, -1) : rangeEnd;
+      printChunks.push({
+        start: new Date(chunkStart),
+        days: diffDays(chunkEnd, chunkStart) + 1,
+      });
+      chunkStart = addDays(chunkEnd, 1);
+    }
+  }
 
   // ---------- タスク操作 ----------
-  const updateTask = (taskId: number, patch: Partial<GanttTask>) =>
+  const updateTask = (taskId: string, patch: Partial<GanttTask>) => {
+    userEditedTasksRef.current = true;
     setTasks((ts) => ts.map((t) => (t.id === taskId ? { ...t, ...patch } : t)));
+  };
 
-  const addRow = () =>
+  const addRow = () => {
+    userEditedTasksRef.current = true;
     setTasks((ts) => [
       ...ts,
       {
-        id: newId(),
+        id: crypto.randomUUID(),
         name: "新しい工程",
         assignee: "",
         color: COLORS[ts.length % COLORS.length],
@@ -301,8 +374,12 @@ export default function SchedulePage() {
         duration: 0,
       },
     ]);
+  };
 
-  const removeRow = (taskId: number) => setTasks((ts) => ts.filter((t) => t.id !== taskId));
+  const removeRow = (taskId: string) => {
+    userEditedTasksRef.current = true;
+    setTasks((ts) => ts.filter((t) => t.id !== taskId));
+  };
 
   // セルをタップ → バー作成（バー未設定の行のみ・休日は不可）
   const handleCellClick = (task: GanttTask, dayIdx: number) => {
@@ -319,34 +396,34 @@ export default function SchedulePage() {
   const startDrag = (e: React.PointerEvent<HTMLDivElement>, task: GanttTask, mode: DragMode) => {
     e.stopPropagation();
     e.preventDefault();
-    if (!gridRef.current || !task.start) return;
-    const rect = gridRef.current.getBoundingClientRect();
+    if (!gridRef.current || !task.start || task.duration <= 0) return;
     const span = workdaySpan(parse(task.start), task.duration);
     dragRef.current = {
       taskId: task.id,
       mode,
       startX: e.clientX,
-      gridLeft: rect.left,
-      pxPerDay: rect.width / daysInMonth,
       origStartDate: span[0],
       origEndDate: span[span.length - 1],
       origDur: task.duration,
     };
+    setIsDragging(true);
     e.currentTarget.setPointerCapture(e.pointerId);
   };
 
   const onDragMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       const d = dragRef.current;
-      if (!d) return;
+      if (!d || !gridRef.current) return;
+      const rect = gridRef.current.getBoundingClientRect();
+      const pxPerDay = rect.width / daysInMonth;
       const idx = Math.min(
-        Math.max(Math.floor((e.clientX - d.gridLeft) / d.pxPerDay), 0),
+        Math.max(Math.floor((e.clientX - rect.left) / pxPerDay), 0),
         daysInMonth - 1
       );
       const pointerDate = addDays(monthStart, idx);
 
       if (d.mode === "move") {
-        const delta = Math.round((e.clientX - d.startX) / d.pxPerDay);
+        const delta = Math.round((e.clientX - d.startX) / pxPerDay);
         let ns = addDays(d.origStartDate, delta);
         if (ns < monthStart) ns = new Date(monthStart);
         ns = nextWorkday(ns); // 休日には置けないので翌営業日へスナップ
@@ -372,7 +449,320 @@ export default function SchedulePage() {
     [daysInMonth, monthStart] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const endDrag = () => (dragRef.current = null);
+  const endDrag = () => {
+    dragRef.current = null;
+    setIsDragging(false);
+  };
+
+  const renderChart = (start: Date, days: number, interactive: boolean): React.ReactElement => {
+    const chartTodayIdxRaw = diffDays(todayDateOnly, start);
+    const chartTodayIdx =
+      start.getTime() === monthStart.getTime() && days === daysInMonth
+        ? todayIdx
+        : chartTodayIdxRaw >= 0 && chartTodayIdxRaw < days ? chartTodayIdxRaw : -1;
+    const chartMonthBands =
+      start.getTime() === monthStart.getTime() && days === daysInMonth
+        ? monthBands
+        : (() => {
+            const bands: { label: string; days: number }[] = [];
+            for (let i = 0; i < days; i++) {
+              const d = addDays(start, i);
+              const label = `${d.getFullYear()}年${d.getMonth() + 1}月`;
+              const last = bands[bands.length - 1];
+              if (last && last.label === label) last.days++;
+              else bands.push({ label, days: 1 });
+            }
+            return bands;
+          })();
+
+    return (
+      <div className="chart-scroll overflow-x-auto">
+        <div className="flex" style={{ minWidth: 640 }}>
+          {/* --- 左：タスク列 --- */}
+          <div className="w-44 sm:w-56 shrink-0 border-r border-gray-100">
+            <div className="h-6 border-b border-gray-100" />
+            <div className="h-12 flex items-end px-4 pb-2 text-xs text-gray-400 font-medium border-b border-gray-100">
+              工程 / 担当
+            </div>
+            {tasks.map((t) => (
+              <div
+                key={t.id}
+                className="relative h-14 px-3 flex items-center gap-2 border-b border-gray-50 group"
+              >
+                {/* 色変更ボタン */}
+                <button
+                  className="no-print w-4 h-4 rounded-full shrink-0 ring-2 ring-white shadow"
+                  style={{ background: t.color }}
+                  onClick={() =>
+                    setColorPickerFor(colorPickerFor === t.id ? null : t.id)
+                  }
+                  aria-label="色を変更"
+                />
+                <div className="min-w-0 flex-1">
+                  <input
+                    value={t.name}
+                    onChange={(e) =>
+                      updateTask(t.id, { name: e.target.value })
+                    }
+                    className="w-full text-sm font-medium bg-transparent truncate"
+                    placeholder="工程名"
+                  />
+                  <input
+                    value={t.assignee}
+                    onChange={(e) =>
+                      updateTask(t.id, { assignee: e.target.value })
+                    }
+                    className="w-full text-xs text-gray-400 bg-transparent truncate"
+                    placeholder="担当者"
+                  />
+                </div>
+                {/* 行削除 */}
+                <button
+                  onClick={() => removeRow(t.id)}
+                  className="no-print w-6 h-6 rounded-full text-gray-300 hover:text-red-400 hover:bg-red-50 text-sm leading-none opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                  aria-label="行を削除"
+                >
+                  ×
+                </button>
+                {/* カラーピッカー */}
+                {colorPickerFor === t.id && (
+                  <div className="no-print absolute left-2 top-12 z-20 flex gap-2 p-2.5 bg-white rounded-xl shadow-lg border border-gray-100">
+                    {COLORS.map((c) => (
+                      <button
+                        key={c}
+                        className="w-6 h-6 rounded-full active:scale-90 transition-transform"
+                        style={{
+                          background: c,
+                          boxShadow:
+                            t.color === c ? `0 0 0 2px #fff, 0 0 0 4px ${c}` : "none",
+                        }}
+                        onClick={() => {
+                          updateTask(t.id, { color: c });
+                          setColorPickerFor(null);
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* --- 右：日付グリッド --- */}
+          <div className="flex-1">
+            <div
+              ref={interactive ? gridRef : undefined}
+              className="chart-grid relative"
+              style={{ minWidth: days * 34 }}
+              onPointerMove={interactive ? onDragMove : undefined}
+              onPointerUp={interactive ? endDrag : undefined}
+              onPointerCancel={interactive ? endDrag : undefined}
+            >
+              <div className="flex h-6 border-b border-gray-100">
+                {chartMonthBands.map((b, i) => (
+                  <div
+                    key={i}
+                    style={{ width: `${(b.days / days) * 100}%` }}
+                    className="px-2 flex items-center border-r border-gray-100 overflow-hidden whitespace-nowrap text-[10px] font-medium text-gray-400"
+                  >
+                    {b.label}
+                  </div>
+                ))}
+              </div>
+              {/* 日付ヘッダー */}
+              <div className="flex h-12 border-b border-gray-100">
+                {Array.from({ length: days }, (_, i) => {
+                  const d = addDays(start, i);
+                  const dow = d.getDay();
+                  const hol = holidayName(d);
+                  const isRed = dow === 0 || hol; // 日曜・祝日
+                  const isSat = dow === 6;
+                  return (
+                    <div
+                      key={i}
+                      title={hol || ""}
+                      className={`relative flex-1 flex flex-col items-center justify-end pb-1.5 text-center ${
+                        isRed ? "bg-red-50/80" : isSat ? "bg-blue-50/50" : ""
+                      }`}
+                    >
+                      <span
+                        className={`text-[10px] ${
+                          isRed
+                            ? "text-red-500"
+                            : isSat
+                            ? "text-blue-400"
+                            : "text-gray-400"
+                        }`}
+                      >
+                        {hol ? "祝" : WEEKDAYS[dow]}
+                      </span>
+                      <span
+                        className={`text-xs tabular-nums ${
+                          i === chartTodayIdx
+                            ? "w-5 h-5 flex items-center justify-center rounded-full bg-blue-500 text-white font-semibold"
+                            : isRed
+                            ? "text-red-500 font-medium"
+                            : isSat
+                            ? "text-blue-500"
+                            : "text-gray-600"
+                        }`}
+                      >
+                        {d.getDate()}
+                      </span>
+                      {/* 日曜・祝日の赤ライン */}
+                      {isRed && (
+                        <span className="absolute bottom-0 left-0.5 right-0.5 h-0.5 rounded-full bg-red-400" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 行 */}
+              {tasks.map((t) => {
+                // 実働日のみのセグメントを算出（休日で分断）
+                const segments: { start: number; end: number }[] = [];
+                let trueStartIdx: number | null = null;
+                let trueEndIdx: number | null = null;
+                if (t.start && t.duration > 0) {
+                  const span = workdaySpan(parse(t.start), t.duration);
+                  trueStartIdx = diffDays(span[0], start);
+                  trueEndIdx = diffDays(span[span.length - 1], start);
+                  span
+                    .map((dd) => diffDays(dd, start))
+                    .filter((i) => i >= 0 && i < days)
+                    .forEach((i) => {
+                      const last = segments[segments.length - 1];
+                      if (last && i === last.end + 1) last.end = i;
+                      else segments.push({ start: i, end: i });
+                    });
+                }
+                const widest = segments.reduce<{ start: number; end: number } | null>(
+                  (a, s) =>
+                    !a || s.end - s.start > a.end - a.start ? s : a,
+                  null
+                );
+
+                return (
+                  <div
+                    key={t.id}
+                    className="relative h-14 border-b border-gray-50"
+                  >
+                    {/* 背景セル（タップでバー作成） */}
+                    <div className="absolute inset-0 flex">
+                      {Array.from({ length: days }, (_, i) => {
+                        const cd = addDays(start, i);
+                        const dow = cd.getDay();
+                        const isRed = dow === 0 || holidayName(cd);
+                        const isSat = dow === 6;
+                        return (
+                          <div
+                            key={i}
+                            onClick={interactive ? () => handleCellClick(t, i) : undefined}
+                            className={`flex-1 border-r border-gray-50 ${
+                              isRed
+                                ? "bg-red-50/80"
+                                : isSat
+                                ? "bg-blue-50/50"
+                                : ""
+                            } ${
+                              interactive && !t.start && !isRed
+                                ? "cursor-pointer hover:bg-blue-50/60 active:bg-blue-100/60"
+                                : ""
+                            }`}
+                          />
+                        );
+                      })}
+                    </div>
+
+                    {/* 今日のライン */}
+                    {chartTodayIdx >= 0 && (
+                      <div
+                        className="absolute top-0 bottom-0 w-px bg-blue-400/50 pointer-events-none"
+                        style={{
+                          left: `${((chartTodayIdx + 0.5) / days) * 100}%`,
+                        }}
+                      />
+                    )}
+
+                    {/* 休日をまたぐ際の接続ライン */}
+                    {segments.length > 1 && (
+                      <div
+                        className="absolute top-1/2 -translate-y-1/2 h-0.5 rounded-full pointer-events-none"
+                        style={{
+                          left: `${(segments[0].start / days) * 100}%`,
+                          width: `${
+                            ((segments[segments.length - 1].end -
+                              segments[0].start +
+                              1) /
+                              days) *
+                            100
+                          }%`,
+                          background: t.color,
+                          opacity: 0.35,
+                        }}
+                      />
+                    )}
+
+                    {/* タスクバー（実働日のみ・休日はスキップ） */}
+                    {segments.map((seg, si) => (
+                      <div
+                        key={si}
+                        className={`bar-handle absolute top-1/2 -translate-y-1/2 h-8 flex items-center select-none ${
+                          interactive ? "cursor-grab active:cursor-grabbing" : ""
+                        }`}
+                        style={{
+                          left: `${(seg.start / days) * 100}%`,
+                          width: `${
+                            ((seg.end - seg.start + 1) / days) * 100
+                          }%`,
+                          background: t.color,
+                          borderRadius: 10,
+                          boxShadow: `0 2px 8px ${t.color}55`,
+                        }}
+                        onPointerDown={interactive ? (e) => startDrag(e, t, "move") : undefined}
+                      >
+                        {/* 左ハンドル（先頭セグメントのみ） */}
+                        {interactive && si === 0 && seg.start === trueStartIdx && (
+                          <div
+                            className="bar-handle no-print absolute left-0 top-0 bottom-0 w-4 flex items-center justify-center cursor-ew-resize"
+                            onPointerDown={(e) =>
+                              startDrag(e, t, "resize-l")
+                            }
+                          >
+                            <div className="w-1 h-4 rounded-full bg-white/70" />
+                          </div>
+                        )}
+                        {/* 期間ラベル（最長セグメントに表示） */}
+                        {seg === widest && (
+                          <span className="mx-auto px-1 text-[11px] font-semibold text-white whitespace-nowrap overflow-hidden pointer-events-none">
+                            実働{t.duration}日
+                          </span>
+                        )}
+                        {/* 右ハンドル（末尾セグメントのみ） */}
+                        {interactive &&
+                          si === segments.length - 1 &&
+                          seg.end === trueEndIdx && (
+                            <div
+                              className="bar-handle no-print absolute right-0 top-0 bottom-0 w-4 flex items-center justify-center cursor-ew-resize"
+                              onPointerDown={(e) =>
+                                startDrag(e, t, "resize-r")
+                              }
+                            >
+                              <div className="w-1 h-4 rounded-full bg-white/70" />
+                            </div>
+                          )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // ---------- 読込中・エラー ----------
   if (loading) return <LoadingSpinner />;
@@ -387,7 +777,7 @@ export default function SchedulePage() {
   // ---------- 描画 ----------
   return (
     <div
-      className="min-h-screen bg-gray-50 text-gray-900"
+      className={`min-h-screen bg-gray-50 text-gray-900 ${printChunks.length > 0 ? "has-print-chunks" : ""}`}
       style={{
         fontFamily:
           '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Segoe UI", sans-serif',
@@ -395,9 +785,12 @@ export default function SchedulePage() {
     >
       {/* 印刷用CSS：A4横・不要要素の非表示 */}
       <style>{`
+        .print-only { display: none; }
         @media print {
           @page { size: A4 landscape; margin: 10mm; }
           body { background: #fff !important; }
+          .print-only { display: block; }
+          .has-print-chunks .screen-only { display: none; }
           .no-print { display: none !important; }
           .chart-card, .doc-header { box-shadow: none !important; border: none !important; border-radius: 0 !important; }
           .doc-header { padding: 0 0 12px 0 !important; margin-bottom: 8px !important; border-bottom: 2px solid #111 !important; }
@@ -469,7 +862,7 @@ export default function SchedulePage() {
           </div>
 
           {/* 会社ロゴ + 自社情報（設定画面の情報を表示） */}
-          <div className="flex items-center gap-4 ml-auto">
+          <div className="flex items-end gap-4 ml-auto self-end">
             {userSettings?.logoUrl && (
               <img
                 src={userSettings.logoUrl}
@@ -492,278 +885,23 @@ export default function SchedulePage() {
         </div>
 
         {/* ===== チャート本体 ===== */}
-        <div className="chart-card bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="chart-scroll overflow-x-auto">
-            <div className="flex" style={{ minWidth: 640 }}>
-              {/* --- 左：タスク列 --- */}
-              <div className="w-44 sm:w-56 shrink-0 border-r border-gray-100">
-                <div className="h-12 flex items-end px-4 pb-2 text-xs text-gray-400 font-medium border-b border-gray-100">
-                  工程 / 担当
-                </div>
-                {tasks.map((t) => (
-                  <div
-                    key={t.id}
-                    className="relative h-14 px-3 flex items-center gap-2 border-b border-gray-50 group"
-                  >
-                    {/* 色変更ボタン */}
-                    <button
-                      className="no-print w-4 h-4 rounded-full shrink-0 ring-2 ring-white shadow"
-                      style={{ background: t.color }}
-                      onClick={() =>
-                        setColorPickerFor(colorPickerFor === t.id ? null : t.id)
-                      }
-                      aria-label="色を変更"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <input
-                        value={t.name}
-                        onChange={(e) =>
-                          updateTask(t.id, { name: e.target.value })
-                        }
-                        className="w-full text-sm font-medium bg-transparent truncate"
-                        placeholder="工程名"
-                      />
-                      <input
-                        value={t.assignee}
-                        onChange={(e) =>
-                          updateTask(t.id, { assignee: e.target.value })
-                        }
-                        className="w-full text-xs text-gray-400 bg-transparent truncate"
-                        placeholder="担当者"
-                      />
-                    </div>
-                    {/* 行削除 */}
-                    <button
-                      onClick={() => removeRow(t.id)}
-                      className="no-print w-6 h-6 rounded-full text-gray-300 hover:text-red-400 hover:bg-red-50 text-sm leading-none opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
-                      aria-label="行を削除"
-                    >
-                      ×
-                    </button>
-                    {/* カラーピッカー */}
-                    {colorPickerFor === t.id && (
-                      <div className="no-print absolute left-2 top-12 z-20 flex gap-2 p-2.5 bg-white rounded-xl shadow-lg border border-gray-100">
-                        {COLORS.map((c) => (
-                          <button
-                            key={c}
-                            className="w-6 h-6 rounded-full active:scale-90 transition-transform"
-                            style={{
-                              background: c,
-                              boxShadow:
-                                t.color === c ? `0 0 0 2px #fff, 0 0 0 4px ${c}` : "none",
-                            }}
-                            onClick={() => {
-                              updateTask(t.id, { color: c });
-                              setColorPickerFor(null);
-                            }}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* --- 右：日付グリッド --- */}
-              <div className="flex-1">
-                <div
-                  ref={gridRef}
-                  className="chart-grid relative"
-                  style={{ minWidth: daysInMonth * 34 }}
-                  onPointerMove={onDragMove}
-                  onPointerUp={endDrag}
-                  onPointerCancel={endDrag}
-                >
-                  {/* 日付ヘッダー */}
-                  <div className="flex h-12 border-b border-gray-100">
-                    {Array.from({ length: daysInMonth }, (_, i) => {
-                      const d = addDays(monthStart, i);
-                      const dow = d.getDay();
-                      const hol = holidayName(d);
-                      const isRed = dow === 0 || hol; // 日曜・祝日
-                      const isSat = dow === 6;
-                      return (
-                        <div
-                          key={i}
-                          title={hol || ""}
-                          className={`relative flex-1 flex flex-col items-center justify-end pb-1.5 text-center ${
-                            isRed ? "bg-red-50/80" : isSat ? "bg-blue-50/50" : ""
-                          }`}
-                        >
-                          <span
-                            className={`text-[10px] ${
-                              isRed
-                                ? "text-red-500"
-                                : isSat
-                                ? "text-blue-400"
-                                : "text-gray-400"
-                            }`}
-                          >
-                            {hol ? "祝" : WEEKDAYS[dow]}
-                          </span>
-                          <span
-                            className={`text-xs tabular-nums ${
-                              i === todayIdx
-                                ? "w-5 h-5 flex items-center justify-center rounded-full bg-blue-500 text-white font-semibold"
-                                : isRed
-                                ? "text-red-500 font-medium"
-                                : isSat
-                                ? "text-blue-500"
-                                : "text-gray-600"
-                            }`}
-                          >
-                            {d.getDate() === 1 ? `${d.getMonth() + 1}/${d.getDate()}` : d.getDate()}
-                          </span>
-                          {/* 日曜・祝日の赤ライン */}
-                          {isRed && (
-                            <span className="absolute bottom-0 left-0.5 right-0.5 h-0.5 rounded-full bg-red-400" />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* 行 */}
-                  {tasks.map((t) => {
-                    // 実働日のみのセグメントを算出（休日で分断）
-                    const segments: { start: number; end: number }[] = [];
-                    let trueStartIdx: number | null = null;
-                    let trueEndIdx: number | null = null;
-                    if (t.start && t.duration > 0) {
-                      const span = workdaySpan(parse(t.start), t.duration);
-                      trueStartIdx = diffDays(span[0], monthStart);
-                      trueEndIdx = diffDays(span[span.length - 1], monthStart);
-                      span
-                        .map((dd) => diffDays(dd, monthStart))
-                        .filter((i) => i >= 0 && i < daysInMonth)
-                        .forEach((i) => {
-                          const last = segments[segments.length - 1];
-                          if (last && i === last.end + 1) last.end = i;
-                          else segments.push({ start: i, end: i });
-                        });
-                    }
-                    const widest = segments.reduce<{ start: number; end: number } | null>(
-                      (a, s) =>
-                        !a || s.end - s.start > a.end - a.start ? s : a,
-                      null
-                    );
-
-                    return (
-                      <div
-                        key={t.id}
-                        className="relative h-14 border-b border-gray-50"
-                      >
-                        {/* 背景セル（タップでバー作成） */}
-                        <div className="absolute inset-0 flex">
-                          {Array.from({ length: daysInMonth }, (_, i) => {
-                            const cd = addDays(monthStart, i);
-                            const dow = cd.getDay();
-                            const isRed = dow === 0 || holidayName(cd);
-                            const isSat = dow === 6;
-                            return (
-                              <div
-                                key={i}
-                                onClick={() => handleCellClick(t, i)}
-                                className={`flex-1 border-r border-gray-50 ${
-                                  isRed
-                                    ? "bg-red-50/80"
-                                    : isSat
-                                    ? "bg-blue-50/50"
-                                    : ""
-                                } ${
-                                  !t.start && !isRed
-                                    ? "cursor-pointer hover:bg-blue-50/60 active:bg-blue-100/60"
-                                    : ""
-                                }`}
-                              />
-                            );
-                          })}
-                        </div>
-
-                        {/* 今日のライン */}
-                        {todayIdx >= 0 && (
-                          <div
-                            className="absolute top-0 bottom-0 w-px bg-blue-400/50 pointer-events-none"
-                            style={{
-                              left: `${((todayIdx + 0.5) / daysInMonth) * 100}%`,
-                            }}
-                          />
-                        )}
-
-                        {/* 休日をまたぐ際の接続ライン */}
-                        {segments.length > 1 && (
-                          <div
-                            className="absolute top-1/2 -translate-y-1/2 h-0.5 rounded-full pointer-events-none"
-                            style={{
-                              left: `${(segments[0].start / daysInMonth) * 100}%`,
-                              width: `${
-                                ((segments[segments.length - 1].end -
-                                  segments[0].start +
-                                  1) /
-                                  daysInMonth) *
-                                100
-                              }%`,
-                              background: t.color,
-                              opacity: 0.35,
-                            }}
-                          />
-                        )}
-
-                        {/* タスクバー（実働日のみ・休日はスキップ） */}
-                        {segments.map((seg, si) => (
-                          <div
-                            key={si}
-                            className="bar-handle absolute top-1/2 -translate-y-1/2 h-8 flex items-center cursor-grab active:cursor-grabbing select-none"
-                            style={{
-                              left: `${(seg.start / daysInMonth) * 100}%`,
-                              width: `${
-                                ((seg.end - seg.start + 1) / daysInMonth) * 100
-                              }%`,
-                              background: t.color,
-                              borderRadius: 10,
-                              boxShadow: `0 2px 8px ${t.color}55`,
-                            }}
-                            onPointerDown={(e) => startDrag(e, t, "move")}
-                          >
-                            {/* 左ハンドル（先頭セグメントのみ） */}
-                            {si === 0 && seg.start === trueStartIdx && (
-                              <div
-                                className="bar-handle no-print absolute left-0 top-0 bottom-0 w-4 flex items-center justify-center cursor-ew-resize"
-                                onPointerDown={(e) =>
-                                  startDrag(e, t, "resize-l")
-                                }
-                              >
-                                <div className="w-1 h-4 rounded-full bg-white/70" />
-                              </div>
-                            )}
-                            {/* 期間ラベル（最長セグメントに表示） */}
-                            {seg === widest && (
-                              <span className="mx-auto px-1 text-[11px] font-semibold text-white whitespace-nowrap overflow-hidden pointer-events-none">
-                                実働{t.duration}日
-                              </span>
-                            )}
-                            {/* 右ハンドル（末尾セグメントのみ） */}
-                            {si === segments.length - 1 &&
-                              seg.end === trueEndIdx && (
-                                <div
-                                  className="bar-handle no-print absolute right-0 top-0 bottom-0 w-4 flex items-center justify-center cursor-ew-resize"
-                                  onPointerDown={(e) =>
-                                    startDrag(e, t, "resize-r")
-                                  }
-                                >
-                                  <div className="w-1 h-4 rounded-full bg-white/70" />
-                                </div>
-                              )}
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+        {!holidayCoverageOk && (
+          <div className="no-print mb-3 px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-700">
+            表示期間に祝日データの対応範囲（{HOLIDAY_YEAR_MIN}〜{HOLIDAY_YEAR_MAX}年）外の日付が含まれています。範囲外の祝日は平日として扱われます。
           </div>
-        </div>
+        )}
+        <div className="chart-card bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="screen-only">{renderChart(monthStart, daysInMonth, true)}</div>
+          {printChunks.length > 0 && (
+            <div className="print-only">
+              {printChunks.map((c, i) => (
+                <div key={i} style={{ breakAfter: i < printChunks.length - 1 ? "page" : "auto" }}>
+                  {renderChart(c.start, c.days, false)}
+                </div>
+              ))}
+            </div>
+          )}
+          </div>
 
         {/* 操作ヒント */}
         <p className="no-print mt-4 text-xs text-gray-400 leading-relaxed">
