@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Camera, FileDown, MapPin, Wrench, ClipboardList, ChevronRight, ArrowLeftRight, Calculator, CalendarRange } from 'lucide-react';
+import { ArrowLeft, Camera, FileDown, MapPin, Wrench, ClipboardList, ChevronRight, ArrowLeftRight, Calculator } from 'lucide-react';
 
 import type { Project } from '../types';
 import { db } from '../firebase';
@@ -62,13 +62,6 @@ const MENU_ITEMS: MenuItem[] = [
     icon: FileDown,
     path: 'pdf',
     accent: '#6366f1',
-  },
-  {
-    title: '工程表',
-    subtitle: '工程・日程・担当の管理',
-    icon: CalendarRange,
-    path: 'schedule',
-    accent: '#38bdf8',
   },
   {
     title: '実行予算書',

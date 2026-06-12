@@ -234,9 +234,6 @@ export interface Project {
    */
   appendixPdfSize?: number;
 
-  // ── 工程表 ──────────────────────────────────────────────────
-  schedule?: import('./shared/scheduleUtils').ScheduleData;
-
   // ── メタ情報 ────────────────────────────────────────────────
   createdAt?: string;
   /** 表紙タイトル。未設定時は「工事写真報告書」 */

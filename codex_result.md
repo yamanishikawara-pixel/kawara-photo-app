@@ -1,10 +1,20 @@
-[src/pages/PdfExportPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/PdfExportPage.tsx:94) の `pickProcessLabelStyle` だけを指定どおり変更しました。
+工程表機能の削除を完了しました。
 
 変更内容:
-- `<= 13`: `13px`
-- `<= 16`: `11px`
-- `<= 20`: `9px`
-- `<= 25`: `8px`
-- それ以上: `7px`
+- `src/shared/scheduleUtils.ts`
+- `src/pages/SchedulePage.tsx`
+- `src/pages/ScheduleA4.tsx`
 
-呼び出し部分、`pickLongTextStyle`、説明欄は変更していません。
+上記3ファイルを削除しました。
+
+あわせて以下から工程表関連を除去しました。
+- `src/App.tsx`
+- `src/pages/HomePage.tsx`
+- `src/types.ts`
+- `src/pages/PdfExportPage.tsx`
+
+確認:
+- `rg -n "schedule|ScheduleA4|scheduleUtils" src` は一致なし
+- `npm run build` 成功
+
+ビルド時に Vite の既存警告として chunk size と Firebase App Check import 警告は出ていますが、今回の削除に伴うエラーはありません。

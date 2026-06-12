@@ -8,7 +8,6 @@ import { saveAs } from 'file-saver';
 import type { Circle, MapRow, MapLine, Photo, Project, Material, WhiteoutBox, UserSettings, BeforeAfterItem } from '../types';
 import { getContractorName, getReportDate } from '../types';
 import logoRed from '../assets/logo_red.png';
-import ScheduleA4, { scheduleA4PageCount } from './ScheduleA4';
 import { A4_HEIGHT_PX, A4_WIDTH_PX, getPreviewScale, proxyUrl } from '../shared/utils';
 import { resolveMapAspect } from '../shared/mapCoords';
 import { colorForSymbol } from '../shared/symbolColor';
@@ -26,12 +25,11 @@ function safeStyleLine(val: string | number | undefined | null, defaultUnit: str
 
 // ── セクション定義（モジュールスコープ）────────────────
 // Hooks や order の比較で参照が安定している必要があるため、モジュール直下で定義する。
-const SECTION_KEYS = ['cover', 'schedule', 'map', 'photo', 'beforeAfter', 'material', 'appendix'] as const;
+const SECTION_KEYS = ['cover', 'map', 'photo', 'beforeAfter', 'material', 'appendix'] as const;
 type SectionKey = (typeof SECTION_KEYS)[number];
 
 const SECTION_META: Record<SectionKey, { label: string; icon: string }> = {
   cover:       { label: '表紙',             icon: '📋' },
-  schedule:    { label: '工程表',           icon: '📅' },
   map:         { label: '位置図',           icon: '📍' },
   photo:       { label: '工事写真',         icon: '📷' },
   beforeAfter: { label: 'ビフォーアフター', icon: '🔄' },
@@ -133,7 +131,6 @@ export default function PdfExportPage() {
   // ── セクションON/OFF制御 ──
   const [sections, setSections] = useState<Record<SectionKey, boolean>>({
     cover: true,
-    schedule: true,
     map: true,
     photo: true,
     beforeAfter: true,
@@ -155,15 +152,15 @@ export default function PdfExportPage() {
   const PRESETS: { label: string; icon: string; sub: string; value: Record<SectionKey, boolean> }[] = useMemo(() => [
     {
       label: '施主提出用', icon: '🏠', sub: '表紙・ビフォーアフター',
-      value: { cover: true, schedule: false, map: false, photo: false, beforeAfter: true, material: false, appendix: false },
+      value: { cover: true, map: false, photo: false, beforeAfter: true, material: false, appendix: false },
     },
     {
       label: '役所提出用', icon: '🏛️', sub: '表紙・位置図・写真・材料',
-      value: { cover: true, schedule: false, map: true, photo: true, beforeAfter: true, material: true, appendix: false },
+      value: { cover: true, map: true, photo: true, beforeAfter: true, material: true, appendix: false },
     },
     {
       label: '全部',       icon: '📋', sub: '全セクション',
-      value: { cover: true, schedule: true, map: true, photo: true, beforeAfter: true, material: true, appendix: true },
+      value: { cover: true, map: true, photo: true, beforeAfter: true, material: true, appendix: true },
     },
   ], []);
 
@@ -560,7 +557,6 @@ export default function PdfExportPage() {
 
   const sectionPageCounts: Record<SectionKey, number> = useMemo(() => ({
     cover: 1,
-    schedule: project ? scheduleA4PageCount(project) : 0,
     map: mapCount,
     photo: photoPages.length,
     beforeAfter: beforeAfterPages.length,
@@ -899,22 +895,6 @@ export default function PdfExportPage() {
         )}
 
         {sectionOrder.flatMap(secKey => { switch (secKey) {
-
-        // ① 工程表
-        case 'schedule': {
-          if (!sections.schedule || !project.schedule?.tasks?.length) return [];
-          return [(
-            <ScheduleA4
-              key="schedule"
-              project={project}
-              companyName={companyName ?? undefined}
-              companyPhone={userSettings?.phone ?? undefined}
-              colorBy="status"
-              startPage={pageOffset('schedule') + 1}
-              totalPages={totalPages}
-            />
-          )];
-        }
 
         // ② 表紙
         case 'cover': {
