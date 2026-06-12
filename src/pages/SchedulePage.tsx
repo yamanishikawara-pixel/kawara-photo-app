@@ -39,6 +39,7 @@ const COLORS = [
 const DEBOUNCE_MS = 600;
 // 最終タスクの終了日より後に表示する空き日数（新しい工程を追加できるようにするため）
 const BUFFER_DAYS = 7;
+type SaveState = "idle" | "saving" | "saved" | "error";
 
 export interface GanttTask {
   id: string;
@@ -67,6 +68,7 @@ export default function SchedulePage() {
   const [tasks, setTasks] = useState<GanttTask[]>([]);
   const [colorPickerFor, setColorPickerFor] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
   const rangeRef = useRef<{ start: Date; days: number } | null>(null);
 
   // ---------- Firestore連携 ----------
@@ -87,12 +89,23 @@ export default function SchedulePage() {
   tasksRef.current = tasks;
   const tasksDirtyRef = useRef(false);
   const pendingFieldsRef = useRef<Record<string, string>>({});
+  const pendingSourcesRef = useRef<Set<string>>(new Set());
   const idRef = useRef(id);
   idRef.current = id;
   const userEditedTasksRef = useRef(false);
 
   const gridRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
+
+  const markPending = useCallback((source: string) => {
+    pendingSourcesRef.current.add(source);
+    setSaveState("saving");
+  }, []);
+  const markDone = useCallback((source: string, ok: boolean) => {
+    pendingSourcesRef.current.delete(source);
+    if (!ok) setSaveState("error");
+    else if (pendingSourcesRef.current.size === 0) setSaveState("saved");
+  }, []);
 
   // ---------- マウント管理 ----------
   useEffect(() => {
@@ -172,29 +185,37 @@ export default function SchedulePage() {
   useEffect(() => {
     if (!id || !tasksLoadedRef.current || !userEditedTasksRef.current) return;
     tasksDirtyRef.current = true;
+    markPending("tasks");
     if (tasksDebounceRef.current) clearTimeout(tasksDebounceRef.current);
     tasksDebounceRef.current = setTimeout(() => {
       tasksDirtyRef.current = false;
-      updateDoc(doc(db, "projects", id), { ganttTasks: tasksRef.current }).catch((err) => {
-        tasksDirtyRef.current = true;
-        logFirebaseError(err, "工程表の保存");
-      });
+      updateDoc(doc(db, "projects", id), { ganttTasks: tasksRef.current })
+        .then(() => { if (mountedRef.current) markDone("tasks", true); })
+        .catch((err) => {
+          tasksDirtyRef.current = true;
+          logFirebaseError(err, "工程表の保存");
+          if (mountedRef.current) markDone("tasks", false);
+        });
     }, DEBOUNCE_MS);
     return () => { if (tasksDebounceRef.current) clearTimeout(tasksDebounceRef.current); };
-  }, [tasks, id]);
+  }, [tasks, id, markPending, markDone]);
 
   // ---------- 工事件名・現場住所・工期 保存（デバウンス） ----------
   const saveProjectField = useCallback((field: "projectName" | "projectLocation" | "constructionPeriod", value: string) => {
     if (!id) return;
     pendingFieldsRef.current[field] = value;
+    markPending(field);
     if (fieldDebounceRef.current[field]) clearTimeout(fieldDebounceRef.current[field]);
     fieldDebounceRef.current[field] = setTimeout(() => {
       delete pendingFieldsRef.current[field];
-      updateDoc(doc(db, "projects", id), { [field]: value }).catch((err) => {
-        logFirebaseError(err, "工程表データの保存");
-      });
+      updateDoc(doc(db, "projects", id), { [field]: value })
+        .then(() => { if (mountedRef.current) markDone(field, true); })
+        .catch((err) => {
+          logFirebaseError(err, "工程表データの保存");
+          if (mountedRef.current) markDone(field, false);
+        });
     }, DEBOUNCE_MS);
-  }, [id]);
+  }, [id, markPending, markDone]);
 
   const handleProjectNameChange = (value: string) => {
     setProjectName(value);
@@ -747,6 +768,19 @@ export default function SchedulePage() {
           <h1 className="text-2xl font-semibold tracking-tight mr-auto">
             工程表
           </h1>
+          <span
+            className={`no-print text-xs font-medium ${
+              saveState === "saving" ? "text-gray-400"
+              : saveState === "saved" ? "text-green-600"
+              : saveState === "error" ? "text-red-500"
+              : "text-transparent"
+            }`}
+            aria-live="polite"
+          >
+            {saveState === "saving" && "保存中…"}
+            {saveState === "saved" && "✓ 保存済み"}
+            {saveState === "error" && "⚠ 保存に失敗しました"}
+          </span>
           <button
             onClick={addRow}
             className="px-4 py-2 rounded-full bg-blue-500 text-white text-sm font-medium shadow-sm active:opacity-70"
