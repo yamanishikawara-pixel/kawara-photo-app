@@ -238,11 +238,28 @@ export default function SchedulePage() {
     saveProjectField("projectLocation", value);
   };
 
-  const monthStart = new Date(viewYear, viewMonth, 1);
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  // 工程開始日（タスクの中で最も早い開始日）。表示中の月がその開始月であれば、
+  // 月初ではなく工程開始日からグリッドを表示する。
+  const scheduleStartDate = tasks.reduce<Date | null>((earliest, t) => {
+    if (!t.start) return earliest;
+    const d = parse(t.start);
+    return !earliest || d < earliest ? d : earliest;
+  }, null);
+  const gridStartDay =
+    scheduleStartDate &&
+    scheduleStartDate.getFullYear() === viewYear &&
+    scheduleStartDate.getMonth() === viewMonth
+      ? scheduleStartDate.getDate()
+      : 1;
+
+  const monthStart = new Date(viewYear, viewMonth, gridStartDay);
+  const daysInMonthTotal = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const daysInMonth = daysInMonthTotal - gridStartDay + 1;
   const todayIdx =
-    today.getFullYear() === viewYear && today.getMonth() === viewMonth
-      ? today.getDate() - 1
+    today.getFullYear() === viewYear &&
+    today.getMonth() === viewMonth &&
+    today.getDate() >= gridStartDay
+      ? today.getDate() - gridStartDay
       : -1;
 
   // ---------- 月送り ----------
@@ -598,7 +615,7 @@ export default function SchedulePage() {
                                 : "text-gray-600"
                             }`}
                           >
-                            {i + 1}
+                            {gridStartDay + i}
                           </span>
                           {/* 日曜・祝日の赤ライン */}
                           {isRed && (

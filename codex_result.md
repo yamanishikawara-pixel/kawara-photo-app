@@ -1,12 +1,9 @@
-実装完了しました。
+完了しました。変更は [src/pages/SchedulePage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/SchedulePage.tsx:241) のみです。
 
-追加・変更した内容:
-- [SchedulePage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/SchedulePage.tsx) を新規作成
-- [types.ts](/Users/yamanishikenta/kawara-photo-app/src/types.ts) に `Project.ganttTasks` を追加
-- [App.tsx](/Users/yamanishikenta/kawara-photo-app/src/App.tsx) に `/project/:id/schedule` ルートを追加
-- [HomePage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/HomePage.tsx) に「工程表」メニューを追加
-- 既存の `node:test` 形式テスト 2 件を Vitest 形式に修正し、`npx vitest run` が通る状態にしました
+工程開始日を含む月では `gridStartDay` を工程開始日にし、`monthStart` / `daysInMonth` / `todayIdx` をその左端基準で計算するようにしました。日付ヘッダーも [該当箇所](/Users/yamanishikenta/kawara-photo-app/src/pages/SchedulePage.tsx:618) で `gridStartDay + i` を表示します。
 
 確認結果:
-- `npm run build` 成功
-- `npx vitest run` 成功、`7 passed / 74 passed`
+- `npx vitest run`: 7 files / 74 tests passed
+- `npm run build`: 成功
+
+ビルド時に既存の Vite chunk warning と Firebase App Check の dynamic/static import warning は出ていますが、ビルド自体は成功しています。
