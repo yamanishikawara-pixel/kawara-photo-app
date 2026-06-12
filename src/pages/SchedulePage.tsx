@@ -39,6 +39,7 @@ const COLORS = [
 const DEBOUNCE_MS = 600;
 // 最終タスクの終了日より後に表示する空き日数（新しい工程を追加できるようにするため）
 const BUFFER_DAYS = 7;
+const UNDO_LIMIT = 50;
 type SaveState = "idle" | "saving" | "saved" | "error";
 
 export interface GanttTask {
@@ -58,6 +59,8 @@ interface DragState {
   origStartDate: Date;
   origEndDate: Date;
   origDur: number;
+  snapshot: GanttTask[];
+  undoPushed: boolean;
 }
 
 export default function SchedulePage() {
@@ -69,6 +72,7 @@ export default function SchedulePage() {
   const [colorPickerFor, setColorPickerFor] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [undoStack, setUndoStack] = useState<GanttTask[][]>([]);
   const rangeRef = useRef<{ start: Date; days: number } | null>(null);
 
   // ---------- Firestore連携 ----------
@@ -87,6 +91,8 @@ export default function SchedulePage() {
   const fieldDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout> | undefined>>({});
   const tasksRef = useRef<GanttTask[]>([]);
   tasksRef.current = tasks;
+  const undoStackRef = useRef(undoStack);
+  undoStackRef.current = undoStack;
   const tasksDirtyRef = useRef(false);
   const pendingFieldsRef = useRef<Record<string, string>>({});
   const pendingSourcesRef = useRef<Set<string>>(new Set());
@@ -106,6 +112,26 @@ export default function SchedulePage() {
     if (!ok) setSaveState("error");
     else if (pendingSourcesRef.current.size === 0) setSaveState("saved");
   }, []);
+
+  // 変更「前」のスナップショットを積む
+  const pushUndo = useCallback(() => {
+    setUndoStack((s) => [
+      ...s.slice(-(UNDO_LIMIT - 1)),
+      tasksRef.current.map((t) => ({ ...t })),
+    ]);
+  }, []);
+
+  const undo = useCallback(() => {
+    const s = undoStackRef.current;
+    if (s.length === 0) return;
+    const prev = s[s.length - 1];
+    setUndoStack(s.slice(0, -1));
+    userEditedTasksRef.current = true; // 工期同期・保存を発火させる
+    setTasks(prev);
+  }, []);
+
+  const undoFnRef = useRef(undo);
+  undoFnRef.current = undo;
 
   // ---------- マウント管理 ----------
   useEffect(() => {
@@ -129,6 +155,19 @@ export default function SchedulePage() {
         }
       }
     };
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z") {
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA") return; // 入力中はブラウザ標準Undoを優先
+        e.preventDefault();
+        undoFnRef.current();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, []);
 
   // ---------- データロード ----------
@@ -314,6 +353,7 @@ export default function SchedulePage() {
   };
 
   const addRow = () => {
+    pushUndo();
     userEditedTasksRef.current = true;
     setTasks((ts) => [
       ...ts,
@@ -329,6 +369,7 @@ export default function SchedulePage() {
   };
 
   const removeRow = (taskId: string) => {
+    pushUndo();
     userEditedTasksRef.current = true;
     setTasks((ts) => ts.filter((t) => t.id !== taskId));
   };
@@ -338,6 +379,7 @@ export default function SchedulePage() {
     if (task.start) return; // 既にバーがある行はドラッグで操作
     const date = addDays(monthStart, dayIdx);
     if (isOff(date)) return; // 日曜・祝日は休みのため開始不可
+    pushUndo();
     updateTask(task.id, {
       start: fmt(date),
       duration: 1,
@@ -357,6 +399,8 @@ export default function SchedulePage() {
       origStartDate: span[0],
       origEndDate: span[span.length - 1],
       origDur: task.duration,
+      snapshot: tasksRef.current.map((t) => ({ ...t })),
+      undoPushed: false,
     };
     setIsDragging(true);
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -379,6 +423,10 @@ export default function SchedulePage() {
         let ns = addDays(d.origStartDate, delta);
         if (ns < monthStart) ns = new Date(monthStart);
         ns = nextWorkday(ns); // 休日には置けないので翌営業日へスナップ
+        if (!d.undoPushed) {
+          d.undoPushed = true;
+          setUndoStack((s) => [...s.slice(-(UNDO_LIMIT - 1)), d.snapshot]);
+        }
         updateTask(d.taskId, { start: fmt(ns) });
       } else if (d.mode === "resize-r") {
         // ポインタ位置までの実働日数を期間にする
@@ -386,6 +434,10 @@ export default function SchedulePage() {
           pointerDate < d.origStartDate
             ? 1
             : Math.max(1, countWorkdays(d.origStartDate, pointerDate));
+        if (!d.undoPushed) {
+          d.undoPushed = true;
+          setUndoStack((s) => [...s.slice(-(UNDO_LIMIT - 1)), d.snapshot]);
+        }
         updateTask(d.taskId, { duration: dur });
       } else if (d.mode === "resize-l") {
         // 終了日を固定したまま開始側を伸縮（休日は開始日にしない）
@@ -395,6 +447,10 @@ export default function SchedulePage() {
             : nextWorkday(pointerDate);
         if (ns > d.origEndDate) ns = prevWorkday(d.origEndDate);
         const dur = Math.max(1, countWorkdays(ns, d.origEndDate));
+        if (!d.undoPushed) {
+          d.undoPushed = true;
+          setUndoStack((s) => [...s.slice(-(UNDO_LIMIT - 1)), d.snapshot]);
+        }
         updateTask(d.taskId, { start: fmt(ns), duration: dur });
       }
     },
@@ -453,6 +509,7 @@ export default function SchedulePage() {
                 <div className="min-w-0 flex-1">
                   <input
                     value={t.name}
+                    onFocus={pushUndo}
                     onChange={(e) =>
                       updateTask(t.id, { name: e.target.value })
                     }
@@ -461,6 +518,7 @@ export default function SchedulePage() {
                   />
                   <input
                     value={t.assignee}
+                    onFocus={pushUndo}
                     onChange={(e) =>
                       updateTask(t.id, { assignee: e.target.value })
                     }
@@ -489,6 +547,7 @@ export default function SchedulePage() {
                             t.color === c ? `0 0 0 2px #fff, 0 0 0 4px ${c}` : "none",
                         }}
                         onClick={() => {
+                          pushUndo();
                           updateTask(t.id, { color: c });
                           setColorPickerFor(null);
                         }}
@@ -781,6 +840,13 @@ export default function SchedulePage() {
             {saveState === "saved" && "✓ 保存済み"}
             {saveState === "error" && "⚠ 保存に失敗しました"}
           </span>
+          <button
+            onClick={undo}
+            disabled={undoStack.length === 0}
+            className="px-4 py-2 rounded-full bg-white text-gray-600 text-sm font-medium shadow-sm border border-gray-100 active:opacity-70 disabled:opacity-40"
+          >
+            ↩ 元に戻す
+          </button>
           <button
             onClick={addRow}
             className="px-4 py-2 rounded-full bg-blue-500 text-white text-sm font-medium shadow-sm active:opacity-70"
