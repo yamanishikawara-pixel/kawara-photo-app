@@ -8,7 +8,8 @@
       "Read(//private/tmp/**)",
       "Bash(npx vitest *)",
       "Bash(grep -n \"addPhoto\\\\|const handleAdd\\\\|photos: \\\\[\\\\|setProject\\(prev => \\({ ...prev, photos\\\\|newPhoto\\\\|process:.*''\\\\|description:.*''\" src/pages/PhotoPage.tsx)",
-      "Bash(git -C /Users/yamanishikenta/kawara-photo-app diff --stat)"
+      "Bash(git -C /Users/yamanishikenta/kawara-photo-app diff --stat)",
+      "Bash(git -C /Users/yamanishikenta/kawara-photo-app diff)"
     ],
     "additionalDirectories": [
       "/Users/yamanishikenta/.codex"
