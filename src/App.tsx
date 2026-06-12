@@ -16,6 +16,7 @@ const ProjectListPage = lazy(() => import('./pages/ProjectListPage').then(module
 const HomePage = lazy(() => import('./pages/HomePage').then(module => ({ default: module.HomePage })));
 const CoverPage = lazy(() => import('./pages/CoverPage').then(module => ({ default: module.CoverPage })));
 const BeforeAfterPage = lazy(() => import('./pages/BeforeAfterPage').then(m => ({ default: m.BeforeAfterPage })));
+const SchedulePage = lazy(() => import('./pages/SchedulePage'));
 const BudgetPage = lazy(() => import('./pages/BudgetPage'));
 
 
@@ -98,6 +99,7 @@ export default function App() {
           <Route path="/project/:id/map" element={<ProtectedRoute user={user}><MapPage /></ProtectedRoute>} />
           <Route path="/project/:id/pdf" element={<ProtectedRoute user={user}><PdfExportPage /></ProtectedRoute>} />
           <Route path="/project/:id/before-after" element={<ProtectedRoute user={user}><BeforeAfterPage /></ProtectedRoute>} />
+          <Route path="/project/:id/schedule" element={<ProtectedRoute user={user}><SchedulePage /></ProtectedRoute>} />
           <Route path="/budget/*" element={<ProtectedRoute user={user}><BudgetPage /></ProtectedRoute>} />
         </Routes>
       </Suspense>

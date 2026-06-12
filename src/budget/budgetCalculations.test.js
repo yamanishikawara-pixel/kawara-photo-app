@@ -1,5 +1,4 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import { test, expect } from 'vitest';
 import { calculateBudget } from './budgetCalculations.js';
 
 const baseInput = {
@@ -28,7 +27,7 @@ test('calculateBudget totals tile, material, expense, freight, and welfare costs
     expenseRows: [{ hinmei: '労務A', suryo: 3, costPrice: 1000, isLabor: true }],
   });
 
-  assert.deepEqual(result, {
+  expect(result).toEqual({
     tileSub: 500,
     matSub: 600,
     expSub: 3000,
@@ -48,5 +47,5 @@ test('calculateBudget uses manual selling rate before master discount rate', () 
     expenseRows: [],
   });
 
-  assert.equal(result.tileSub, 80);
+  expect(result.tileSub).toBe(80);
 });

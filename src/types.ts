@@ -220,6 +220,9 @@ export interface Project {
   // ── ビフォーアフター ────────────────────────────────────────
   beforeAfterItems?: BeforeAfterItem[];
 
+  // ── 工程表（ガントチャート） ──────────────────────────────────
+  ganttTasks?: import('./pages/SchedulePage').GanttTask[];
+
   // ── 施工保証 ────────────────────────────────────────────────
   warrantyYears?: string;
   warrantyStartDate?: string;

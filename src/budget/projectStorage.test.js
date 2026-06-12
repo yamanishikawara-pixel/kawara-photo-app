@@ -1,5 +1,4 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import { test, expect } from 'vitest';
 import { getProjectStorageKeys, hasProjectNameConflict, projectStorageKey } from './projectStorage.js';
 
 test('getProjectStorageKeys only returns keys for the exact project name', () => {
@@ -10,14 +9,14 @@ test('getProjectStorageKeys only returns keys for the exact project name', () =>
     cost_A_unknownField: '"ignore"',
   };
 
-  assert.deepEqual(getProjectStorageKeys(storage, 'A').sort(), [
+  expect(getProjectStorageKeys(storage, 'A').sort()).toEqual([
     projectStorageKey('A', 'koujiName'),
     projectStorageKey('A', 'tileRows'),
   ].sort());
 });
 
 test('hasProjectNameConflict only rejects the same project name', () => {
-  assert.equal(hasProjectNameConflict(['A'], 'A'), true);
-  assert.equal(hasProjectNameConflict(['A'], 'A_B'), false);
-  assert.equal(hasProjectNameConflict(['A'], 'A', 'A'), false);
+  expect(hasProjectNameConflict(['A'], 'A')).toBe(true);
+  expect(hasProjectNameConflict(['A'], 'A_B')).toBe(false);
+  expect(hasProjectNameConflict(['A'], 'A', 'A')).toBe(false);
 });

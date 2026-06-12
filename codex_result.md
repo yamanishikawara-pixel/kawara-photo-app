@@ -1,20 +1,12 @@
-工程表機能の削除を完了しました。
+実装完了しました。
 
-変更内容:
-- `src/shared/scheduleUtils.ts`
-- `src/pages/SchedulePage.tsx`
-- `src/pages/ScheduleA4.tsx`
+追加・変更した内容:
+- [SchedulePage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/SchedulePage.tsx) を新規作成
+- [types.ts](/Users/yamanishikenta/kawara-photo-app/src/types.ts) に `Project.ganttTasks` を追加
+- [App.tsx](/Users/yamanishikenta/kawara-photo-app/src/App.tsx) に `/project/:id/schedule` ルートを追加
+- [HomePage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/HomePage.tsx) に「工程表」メニューを追加
+- 既存の `node:test` 形式テスト 2 件を Vitest 形式に修正し、`npx vitest run` が通る状態にしました
 
-上記3ファイルを削除しました。
-
-あわせて以下から工程表関連を除去しました。
-- `src/App.tsx`
-- `src/pages/HomePage.tsx`
-- `src/types.ts`
-- `src/pages/PdfExportPage.tsx`
-
-確認:
-- `rg -n "schedule|ScheduleA4|scheduleUtils" src` は一致なし
+確認結果:
 - `npm run build` 成功
-
-ビルド時に Vite の既存警告として chunk size と Firebase App Check import 警告は出ていますが、今回の削除に伴うエラーはありません。
+- `npx vitest run` 成功、`7 passed / 74 passed`
