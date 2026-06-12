@@ -59,37 +59,61 @@ export const holidayName = (date: Date) => HOLIDAYS[fmt(date)] || null;
 
 // ---------- 休日（日曜・祝日）を除いた営業日計算 ----------
 
+export interface WorkdayConfig {
+  saturdayOff: boolean;
+  customHolidays: string[]; // YYYY-MM-DD
+}
+
+export const DEFAULT_WORKDAY_CONFIG: WorkdayConfig = {
+  saturdayOff: false,
+  customHolidays: [],
+};
+
 /** 休工日かどうか（日曜 または 祝日）。休日判定はこの関数に一本化する。 */
-export const isOff = (date: Date) => date.getDay() === 0 || !!holidayName(date);
+export const isOff = (date: Date, config: WorkdayConfig = DEFAULT_WORKDAY_CONFIG) => {
+  const dow = date.getDay();
+  if (dow === 0) return true;
+  if (config.saturdayOff && dow === 6) return true;
+  if (holidayName(date)) return true;
+  return config.customHolidays.includes(fmt(date));
+};
 
 /** date 以降（date 含む）で最初の営業日 */
-export const nextWorkday = (date: Date) => {
+export const nextWorkday = (date: Date, config: WorkdayConfig = DEFAULT_WORKDAY_CONFIG) => {
   let d = new Date(date);
-  while (isOff(d)) d = addDays(d, 1);
+  while (isOff(d, config)) d = addDays(d, 1);
   return d;
 };
 
 /** date 以前（date 含む）で最後の営業日 */
-export const prevWorkday = (date: Date) => {
+export const prevWorkday = (date: Date, config: WorkdayConfig = DEFAULT_WORKDAY_CONFIG) => {
   let d = new Date(date);
-  while (isOff(d)) d = addDays(d, -1);
+  while (isOff(d, config)) d = addDays(d, -1);
   return d;
 };
 
 /** 開始日から実働 workDays 日分の日付リスト（休日はスキップ）。workDays は 1 以上を渡すこと。 */
-export const workdaySpan = (startDate: Date, workDays: number) => {
+export const workdaySpan = (
+  startDate: Date,
+  workDays: number,
+  config: WorkdayConfig = DEFAULT_WORKDAY_CONFIG
+) => {
   const out: Date[] = [];
   let d = new Date(startDate);
   while (out.length < workDays) {
-    if (!isOff(d)) out.push(new Date(d));
+    if (!isOff(d, config)) out.push(new Date(d));
     d = addDays(d, 1);
   }
   return out;
 };
 
 /** from〜to（両端含む）の実働日数 */
-export const countWorkdays = (from: Date, to: Date) => {
+export const countWorkdays = (
+  from: Date,
+  to: Date,
+  config: WorkdayConfig = DEFAULT_WORKDAY_CONFIG
+) => {
   let c = 0;
-  for (let d = new Date(from); d <= to; d = addDays(d, 1)) if (!isOff(d)) c++;
+  for (let d = new Date(from); d <= to; d = addDays(d, 1)) if (!isOff(d, config)) c++;
   return c;
 };

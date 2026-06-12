@@ -125,3 +125,34 @@ describe("countWorkdays（期間内の実働日数）", () => {
     expect(countWorkdays(parse("2026-06-14"), parse("2026-06-14"))).toBe(0);
   });
 });
+
+describe("WorkdayConfig（休工日設定）", () => {
+  const satOff = { saturdayOff: true, customHolidays: [] };
+
+  it("設定なし（デフォルト）では従来どおり土曜は営業日", () => {
+    expect(isOff(parse("2026-06-13"))).toBe(false);
+  });
+
+  it("土曜休み設定で土曜が休工日になる", () => {
+    expect(isOff(parse("2026-06-13"), satOff)).toBe(true);
+    expect(isOff(parse("2026-06-12"), satOff)).toBe(false); // 金曜は営業日のまま
+  });
+
+  it("土曜休み設定で workdaySpan が土日をまとめてスキップする", () => {
+    // 6/12(金) → 6/13(土)・6/14(日)スキップ → 6/15(月)
+    expect(workdaySpan(parse("2026-06-12"), 2, satOff).map(fmt))
+      .toEqual(["2026-06-12", "2026-06-15"]);
+  });
+
+  it("会社休業日（お盆）が休工日になる", () => {
+    const obon = { saturdayOff: false, customHolidays: ["2026-08-13", "2026-08-14"] };
+    expect(isOff(parse("2026-08-13"), obon)).toBe(true); // 木曜だが休業日
+    // 8/12(水) → 13・14休業 → 15(土)は営業 → 16(日)スキップ → 17(月)
+    expect(workdaySpan(parse("2026-08-12"), 3, obon).map(fmt))
+      .toEqual(["2026-08-12", "2026-08-15", "2026-08-17"]);
+  });
+
+  it("countWorkdays も設定を反映する", () => {
+    expect(countWorkdays(parse("2026-06-12"), parse("2026-06-15"), satOff)).toBe(2); // 金・月
+  });
+});

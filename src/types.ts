@@ -222,6 +222,7 @@ export interface Project {
 
   // ── 工程表（ガントチャート） ──────────────────────────────────
   ganttTasks?: import('./pages/SchedulePage').GanttTask[];
+  workdayConfig?: import('./utils/workdays').WorkdayConfig;
 
   // ── 施工保証 ────────────────────────────────────────────────
   warrantyYears?: string;

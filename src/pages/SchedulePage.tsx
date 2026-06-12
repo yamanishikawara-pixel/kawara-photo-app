@@ -11,6 +11,7 @@ import {
   fmt, parse, addDays, diffDays, WEEKDAYS,
   holidayName, isOff, nextWorkday, prevWorkday,
   workdaySpan, countWorkdays,
+  type WorkdayConfig, DEFAULT_WORKDAY_CONFIG,
   HOLIDAY_YEAR_MIN, HOLIDAY_YEAR_MAX,
 } from "../utils/workdays";
 
@@ -73,6 +74,9 @@ export default function SchedulePage() {
   const [isDragging, setIsDragging] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [undoStack, setUndoStack] = useState<GanttTask[][]>([]);
+  const [workdayConfig, setWorkdayConfig] = useState<WorkdayConfig>(DEFAULT_WORKDAY_CONFIG);
+  const [showWorkdaySettings, setShowWorkdaySettings] = useState(false);
+  const [newHoliday, setNewHoliday] = useState("");
   const rangeRef = useRef<{ start: Date; days: number } | null>(null);
 
   // ---------- Firestore連携 ----------
@@ -183,6 +187,16 @@ export default function SchedulePage() {
           setProjectName(data.projectName ?? "");
           setSiteAddress(data.projectLocation ?? "");
           setConstructionPeriod(data.constructionPeriod ?? "");
+          setWorkdayConfig(DEFAULT_WORKDAY_CONFIG);
+          const wc = data.workdayConfig;
+          if (
+            wc && typeof wc === "object" &&
+            typeof (wc as { saturdayOff?: unknown }).saturdayOff === "boolean" &&
+            Array.isArray((wc as { customHolidays?: unknown }).customHolidays) &&
+            (wc as { customHolidays: unknown[] }).customHolidays.every((d) => typeof d === "string")
+          ) {
+            setWorkdayConfig(wc as WorkdayConfig);
+          }
           const raw = (data.ganttTasks ?? []) as Partial<GanttTask>[];
           const loaded: GanttTask[] = raw
             .filter((t) => t && typeof t === "object")
@@ -265,6 +279,19 @@ export default function SchedulePage() {
     saveProjectField("projectLocation", value);
   };
 
+  const updateWorkdayConfig = (next: WorkdayConfig) => {
+    setWorkdayConfig(next);
+    userEditedTasksRef.current = true; // 工期再計算を許可（休日が変わるとspanが変わるため）
+    if (!id) return;
+    markPending("workdayConfig");
+    updateDoc(doc(db, "projects", id), { workdayConfig: next })
+      .then(() => { if (mountedRef.current) markDone("workdayConfig", true); })
+      .catch((err) => {
+        logFirebaseError(err, "休工日設定の保存");
+        if (mountedRef.current) markDone("workdayConfig", false);
+      });
+  };
+
   // ---------- 表示範囲（工程開始日〜工程終了日を月をまたいで連続表示） ----------
   const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
@@ -273,7 +300,7 @@ export default function SchedulePage() {
   let scheduleEndDate: Date | null = null;
   for (const t of tasks) {
     if (!t.start || t.duration <= 0) continue;
-    const span = workdaySpan(parse(t.start), t.duration);
+    const span = workdaySpan(parse(t.start), t.duration, workdayConfig);
     const s = span[0];
     const e = span[span.length - 1];
     if (!scheduleStartDate || s < scheduleStartDate) scheduleStartDate = s;
@@ -378,7 +405,7 @@ export default function SchedulePage() {
   const handleCellClick = (task: GanttTask, dayIdx: number) => {
     if (task.start) return; // 既にバーがある行はドラッグで操作
     const date = addDays(monthStart, dayIdx);
-    if (isOff(date)) return; // 日曜・祝日は休みのため開始不可
+    if (isOff(date, workdayConfig)) return; // 休工日のため開始不可
     pushUndo();
     updateTask(task.id, {
       start: fmt(date),
@@ -391,7 +418,7 @@ export default function SchedulePage() {
     e.stopPropagation();
     e.preventDefault();
     if (!gridRef.current || !task.start || task.duration <= 0) return;
-    const span = workdaySpan(parse(task.start), task.duration);
+    const span = workdaySpan(parse(task.start), task.duration, workdayConfig);
     dragRef.current = {
       taskId: task.id,
       mode,
@@ -422,7 +449,7 @@ export default function SchedulePage() {
         const delta = Math.round((e.clientX - d.startX) / pxPerDay);
         let ns = addDays(d.origStartDate, delta);
         if (ns < monthStart) ns = new Date(monthStart);
-        ns = nextWorkday(ns); // 休日には置けないので翌営業日へスナップ
+        ns = nextWorkday(ns, workdayConfig); // 休日には置けないので翌営業日へスナップ
         if (!d.undoPushed) {
           d.undoPushed = true;
           setUndoStack((s) => [...s.slice(-(UNDO_LIMIT - 1)), d.snapshot]);
@@ -433,7 +460,7 @@ export default function SchedulePage() {
         const dur =
           pointerDate < d.origStartDate
             ? 1
-            : Math.max(1, countWorkdays(d.origStartDate, pointerDate));
+            : Math.max(1, countWorkdays(d.origStartDate, pointerDate, workdayConfig));
         if (!d.undoPushed) {
           d.undoPushed = true;
           setUndoStack((s) => [...s.slice(-(UNDO_LIMIT - 1)), d.snapshot]);
@@ -444,9 +471,9 @@ export default function SchedulePage() {
         let ns =
           pointerDate > d.origEndDate
             ? new Date(d.origEndDate)
-            : nextWorkday(pointerDate);
-        if (ns > d.origEndDate) ns = prevWorkday(d.origEndDate);
-        const dur = Math.max(1, countWorkdays(ns, d.origEndDate));
+            : nextWorkday(pointerDate, workdayConfig);
+        if (ns > d.origEndDate) ns = prevWorkday(d.origEndDate, workdayConfig);
+        const dur = Math.max(1, countWorkdays(ns, d.origEndDate, workdayConfig));
         if (!d.undoPushed) {
           d.undoPushed = true;
           setUndoStack((s) => [...s.slice(-(UNDO_LIMIT - 1)), d.snapshot]);
@@ -454,7 +481,7 @@ export default function SchedulePage() {
         updateTask(d.taskId, { start: fmt(ns), duration: dur });
       }
     },
-    [daysInMonth, monthStart] // eslint-disable-line react-hooks/exhaustive-deps
+    [daysInMonth, monthStart, workdayConfig] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const endDrag = () => {
@@ -585,33 +612,34 @@ export default function SchedulePage() {
                 {Array.from({ length: days }, (_, i) => {
                   const d = addDays(start, i);
                   const dow = d.getDay();
+                  const off = isOff(d, workdayConfig);
+                  const isSat = d.getDay() === 6 && !off;
                   const hol = holidayName(d);
-                  const isRed = dow === 0 || hol; // 日曜・祝日
-                  const isSat = dow === 6;
+                  const isCustom = workdayConfig.customHolidays.includes(fmt(d));
                   return (
                     <div
                       key={i}
-                      title={hol || ""}
+                      title={hol || (isCustom ? "休工日" : "")}
                       className={`relative flex-1 flex flex-col items-center justify-end pb-1.5 text-center ${
-                        isRed ? "bg-red-50/80" : isSat ? "bg-blue-50/50" : ""
+                        off ? "bg-red-50/80" : isSat ? "bg-blue-50/50" : ""
                       }`}
                     >
                       <span
                         className={`text-[10px] ${
-                          isRed
+                          off
                             ? "text-red-500"
                             : isSat
                             ? "text-blue-400"
                             : "text-gray-400"
                         }`}
                       >
-                        {hol ? "祝" : WEEKDAYS[dow]}
+                        {hol ? "祝" : isCustom ? "休" : WEEKDAYS[dow]}
                       </span>
                       <span
                         className={`text-xs tabular-nums ${
                           i === chartTodayIdx
                             ? "w-5 h-5 flex items-center justify-center rounded-full bg-blue-500 text-white font-semibold"
-                            : isRed
+                            : off
                             ? "text-red-500 font-medium"
                             : isSat
                             ? "text-blue-500"
@@ -621,7 +649,7 @@ export default function SchedulePage() {
                         {d.getDate()}
                       </span>
                       {/* 日曜・祝日の赤ライン */}
-                      {isRed && (
+                      {off && (
                         <span className="absolute bottom-0 left-0.5 right-0.5 h-0.5 rounded-full bg-red-400" />
                       )}
                     </div>
@@ -636,7 +664,7 @@ export default function SchedulePage() {
                 let trueStartIdx: number | null = null;
                 let trueEndIdx: number | null = null;
                 if (t.start && t.duration > 0) {
-                  const span = workdaySpan(parse(t.start), t.duration);
+                  const span = workdaySpan(parse(t.start), t.duration, workdayConfig);
                   trueStartIdx = diffDays(span[0], start);
                   trueEndIdx = diffDays(span[span.length - 1], start);
                   span
@@ -663,21 +691,20 @@ export default function SchedulePage() {
                     <div className="absolute inset-0 flex">
                       {Array.from({ length: days }, (_, i) => {
                         const cd = addDays(start, i);
-                        const dow = cd.getDay();
-                        const isRed = dow === 0 || holidayName(cd);
-                        const isSat = dow === 6;
+                        const off = isOff(cd, workdayConfig);
+                        const isSat = cd.getDay() === 6 && !off;
                         return (
                           <div
                             key={i}
                             onClick={interactive ? () => handleCellClick(t, i) : undefined}
                             className={`flex-1 border-r border-gray-50 ${
-                              isRed
+                              off
                                 ? "bg-red-50/80"
                                 : isSat
                                 ? "bg-blue-50/50"
                                 : ""
                             } ${
-                              interactive && !t.start && !isRed
+                              interactive && !t.start && !off
                                 ? "cursor-pointer hover:bg-blue-50/60 active:bg-blue-100/60"
                                 : ""
                             }`}
@@ -854,12 +881,84 @@ export default function SchedulePage() {
             ＋ 工程を追加
           </button>
           <button
+            onClick={() => setShowWorkdaySettings((v) => !v)}
+            className="px-4 py-2 rounded-full bg-white text-gray-600 text-sm font-medium shadow-sm border border-gray-100 active:opacity-70"
+          >
+            休工日設定
+          </button>
+          <button
             onClick={() => window.print()}
             className="px-4 py-2 rounded-full bg-white text-blue-500 text-sm font-medium shadow-sm border border-gray-100 active:opacity-70"
           >
             印刷 / PDF出力
           </button>
         </header>
+
+        {showWorkdaySettings && (
+          <div className="no-print bg-white rounded-2xl shadow-sm border border-gray-100 px-5 py-4 mb-4">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <input
+                type="checkbox"
+                checked={workdayConfig.saturdayOff}
+                onChange={(e) =>
+                  updateWorkdayConfig({ ...workdayConfig, saturdayOff: e.target.checked })
+                }
+              />
+              土曜日を休工日にする
+            </label>
+
+            <div className="mt-3">
+              <div className="text-sm font-medium text-gray-700 mb-1.5">会社休業日</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="date"
+                  value={newHoliday}
+                  onChange={(e) => setNewHoliday(e.target.value)}
+                  className="text-sm border border-gray-200 rounded-lg px-2 py-1"
+                />
+                <button
+                  onClick={() => {
+                    if (!newHoliday || workdayConfig.customHolidays.includes(newHoliday)) return;
+                    const next = [...workdayConfig.customHolidays, newHoliday].sort();
+                    updateWorkdayConfig({ ...workdayConfig, customHolidays: next });
+                    setNewHoliday("");
+                  }}
+                  className="px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-sm font-medium active:opacity-70"
+                >
+                  追加
+                </button>
+              </div>
+              {workdayConfig.customHolidays.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {workdayConfig.customHolidays.map((d) => (
+                    <span
+                      key={d}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-100 text-xs text-gray-600"
+                    >
+                      {d}（{WEEKDAYS[parse(d).getDay()]}）
+                      <button
+                        onClick={() =>
+                          updateWorkdayConfig({
+                            ...workdayConfig,
+                            customHolidays: workdayConfig.customHolidays.filter((x) => x !== d),
+                          })
+                        }
+                        className="text-gray-400 hover:text-red-400"
+                        aria-label="削除"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <p className="mt-3 text-xs text-gray-400">
+              休工日はバーが自動的にスキップし、実働日数に含まれません。
+            </p>
+          </div>
+        )}
 
         {/* ===== 書類ヘッダー：工事件名・会社情報・ロゴ（印刷にも表示） ===== */}
         <div className="doc-header bg-white rounded-2xl shadow-sm border border-gray-100 px-5 py-4 mb-4 flex flex-wrap items-start gap-4">
