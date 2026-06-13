@@ -741,6 +741,9 @@ export default function PhotoPage() {
     // ループ内では state closure が古いままなので、累積をローカル変数で持つ。
     // これがないと、5枚×100MB のように同一バッチ内で上限を超過してアップロード成功してしまう。
     let virtualUsed = storageUsedBytes;
+    // アップロードに成功した写真だけを id 単位で記録し、最後に最新の photos へマージする。
+    // （バッチ処理中に他の編集で projectRef.current.photos が進んでいても上書きしないため）
+    const uploadedById = new Map<number, Photo>();
 
     for (let i = 0; i < files.length; i++) {
       if (bulkCancelRef.current) break; // キャンセルボタンが押された
@@ -782,6 +785,7 @@ export default function PhotoPage() {
         virtualUsed += compressedFile.size;
         setStorageUsedBytes(virtualUsed);
         newPhotos[targetIndex] = { ...newPhotos[targetIndex], image: url, shootingDate: newPhotos[targetIndex].shootingDate || todayStr };
+        uploadedById.set(newPhotos[targetIndex].id, newPhotos[targetIndex]);
         setProject((prev) => prev ? { ...prev, photos: [...newPhotos] } : null);
       } catch (error) {
         logFirebaseError(error, `写真一括アップロード(${i + 1}枚目)`);
@@ -791,8 +795,18 @@ export default function PhotoPage() {
       uploadedCount++;
       setBulkProgress(uploadedCount);
     }
-    if (newPhotos.some(p => p.image)) {
-      await commitPhotos(newPhotos);
+    if (uploadedById.size > 0) {
+      const current = projectRef.current ?? project;
+      const rebased = [...current.photos];
+      for (const [photoId, updated] of uploadedById) {
+        const idx = rebased.findIndex(p => p.id === photoId);
+        if (idx !== -1) {
+          rebased[idx] = { ...rebased[idx], image: updated.image, shootingDate: updated.shootingDate };
+        } else {
+          rebased.push(updated);
+        }
+      }
+      await commitPhotos(rebased);
     }
     setBulkUploading(false);
   };
