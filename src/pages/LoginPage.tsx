@@ -39,8 +39,11 @@ export default function LoginPage() {
       setResetMsg('リセットメールを送信しました。メールボックスをご確認ください。');
     } catch (err) {
       const code = (err as FirebaseError).code ?? '';
-      if (code === 'auth/user-not-found' || code === 'auth/invalid-email') {
-        setResetMsg('入力されたメールアドレスは登録されていません。');
+      if (code === 'auth/user-not-found') {
+        // ユーザー列挙を防ぐため、未登録でも送信成功と同じ表示にする
+        setResetMsg('リセットメールを送信しました。メールボックスをご確認ください。');
+      } else if (code === 'auth/invalid-email') {
+        setResetMsg('メールアドレスの形式が正しくありません。');
       } else {
         setResetMsg('送信に失敗しました。もう一度お試しください。');
       }
