@@ -210,7 +210,6 @@ export function CoverPage() {
     const next = !wizardMode;
     setWizardMode(next);
     setWizardStep(0);
-    localStorage.setItem('coverWizardMode', String(next));
   };
 
   // ── 添付PDFアップロード ──
@@ -643,7 +642,6 @@ export function CoverPage() {
                   onClick={() => {
                     if (isLast) {
                       setWizardMode(false);
-                      localStorage.setItem('coverWizardMode', 'false');
                     } else {
                       setWizardStep(s => s + 1);
                     }
