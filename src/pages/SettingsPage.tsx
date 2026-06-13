@@ -16,7 +16,7 @@ import { ref, uploadBytes, getDownloadURL, getMetadata, listAll } from 'firebase
 import { db, auth, storage } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
-import { formatBytes, storageUsageRatio, STORAGE_LIMIT_BYTES, trackUpload, storagePathFromUrl, deleteStorageFileWithAccounting } from '../shared/storageUtils';
+import { canUpload, formatBytes, storageUsageRatio, STORAGE_LIMIT_BYTES, trackUpload, storagePathFromUrl, deleteStorageFileWithAccounting } from '../shared/storageUtils';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import type { MaterialMaster, PhotoMaster, Project, WorkTypeTemplate } from '../types';
 import { ErrorMessage } from '../shared/ErrorMessage';
@@ -29,7 +29,6 @@ const DEFAULT_PROCESSES = [
   "着工前", "下地・下葺き", "防水ルーフィング施工", "瓦桟施工",
   "流れ壁板金", "平行壁板金", "確認", "棟金具設置", "緊結状況", "施工中", "完成"
 ];
-const WORK_TYPE_DRAFT_KEY = 'kawara_settings_workTypeTemplates_draft';
 
 // セクションカード
 function Section({ title, icon, accent = '#ff6b35', children }: {
@@ -179,8 +178,6 @@ export default function SettingsPage() {
   const [materialMaster, setMaterialMaster] = useState<MaterialMaster[]>([]);
   const [photoMaster, setPhotoMaster] = useState<PhotoMaster[]>([]);
   const [workTypeTemplates, setWorkTypeTemplates] = useState<WorkTypeTemplate[]>([]);
-  const [workTypeDraftRestored, setWorkTypeDraftRestored] = useState(false);
-  const workTypeLoadedRef = useRef(false);
   const [storageUsedBytes, setStorageUsedBytes] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -208,7 +205,6 @@ export default function SettingsPage() {
       if (user) {
         setUid(user.uid);
         const d = await getDoc(doc(db, 'users', user.uid));
-        let savedWorkTypeTemplates: WorkTypeTemplate[] = [];
         if (d.exists()) {
           const data = d.data();
           if (data.companyName) setCompanyName(data.companyName);
@@ -219,51 +215,24 @@ export default function SettingsPage() {
           if (Array.isArray(data.materialMaster)) setMaterialMaster(data.materialMaster);
           if (Array.isArray(data.photoMaster)) setPhotoMaster(data.photoMaster);
           if (Array.isArray(data.workTypeTemplates)) {
-            savedWorkTypeTemplates = data.workTypeTemplates;
-            setWorkTypeTemplates(savedWorkTypeTemplates);
+            setWorkTypeTemplates(data.workTypeTemplates);
           }
           if (typeof data.storageUsedBytes === 'number') setStorageUsedBytes(data.storageUsedBytes);
         }
-        try {
-          const draftRaw = localStorage.getItem(WORK_TYPE_DRAFT_KEY);
-          if (draftRaw) {
-            const draft = JSON.parse(draftRaw);
-            if (
-              Array.isArray(draft) &&
-              draft.length > 0 &&
-              JSON.stringify(draft) !== JSON.stringify(savedWorkTypeTemplates)
-            ) {
-              setWorkTypeTemplates(draft);
-              setWorkTypeDraftRestored(true);
-            }
-          }
-        } catch {
-          // 復元失敗時は無視（壊れたデータが残っているだけ）
-        }
       }
-      workTypeLoadedRef.current = true;
       setLoading(false);
     });
     return () => unsub();
   }, []);
 
-  useEffect(() => {
-    if (!workTypeLoadedRef.current) return;
-    try {
-      if (workTypeTemplates.length > 0) {
-        localStorage.setItem(WORK_TYPE_DRAFT_KEY, JSON.stringify(workTypeTemplates));
-      } else {
-        localStorage.removeItem(WORK_TYPE_DRAFT_KEY);
-      }
-    } catch {
-      // localStorageが使えない環境では無視
-    }
-  }, [workTypeTemplates]);
-
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!uid || !e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
     e.target.value = ''; // 同じファイルの再選択を可能にする
+    if (!canUpload(storageUsedBytes, file.size)) {
+      setError('ストレージ容量が上限（500MB）に達しています。不要なファイルを削除してください。');
+      return;
+    }
     setUploadingLogo(true);
     try {
       const storageRef = ref(storage, `logos/${uid}_${Date.now()}`);
@@ -294,8 +263,6 @@ export default function SettingsPage() {
       }, { merge: true });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-      try { localStorage.removeItem(WORK_TYPE_DRAFT_KEY); } catch { /* noop */ }
-      setWorkTypeDraftRestored(false);
     } catch (err) {
       logFirebaseError(err, '設定保存');
       setError(firebaseErrorMessage(err, '設定の保存'));
@@ -816,12 +783,6 @@ export default function SettingsPage() {
               「新築」「葺き替え」など工事種別ごとに、工程と説明文の組み合わせを順番どおり登録できます。
               「一括反映」を押すと、上の「工程」プルダウンをこの内容で上書きし、写真テンプレートマスタにも登録します。
             </p>
-            {workTypeDraftRestored && (
-              <div className="text-xs mb-4 p-3 rounded-xl flex items-center justify-between gap-3" style={{ background: 'rgba(59,130,246,0.10)', border: '1px solid rgba(59,130,246,0.3)', color: '#3b82f6' }}>
-                <span>前回保存されていなかった入力内容を復元しました。内容を確認して「保存」してください。</span>
-                <button onClick={() => setWorkTypeDraftRestored(false)} className="font-bold shrink-0">閉じる</button>
-              </div>
-            )}
             <div className="space-y-4 mb-4">
               {workTypeTemplates.map((template) => (
                 <div key={template.id} className="p-3 rounded-xl border space-y-3" style={{ background: '#12122a', borderColor: '#2e2e50' }}>
