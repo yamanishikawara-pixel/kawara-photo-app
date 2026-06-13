@@ -98,6 +98,11 @@ describe("workdaySpan（実働日リスト）", () => {
   it("実働1日なら1要素を返す", () => {
     expect(workdaySpan(parse("2026-06-12"), 1)).toHaveLength(1);
   });
+
+  it("workDaysが0以下なら空配列を返す", () => {
+    expect(workdaySpan(parse("2026-06-12"), 0)).toEqual([]);
+    expect(workdaySpan(parse("2026-06-12"), -1)).toEqual([]);
+  });
 });
 
 describe("countWorkdays（期間内の実働日数）", () => {

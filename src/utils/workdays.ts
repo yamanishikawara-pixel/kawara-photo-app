@@ -99,6 +99,7 @@ export const workdaySpan = (
   config: WorkdayConfig = DEFAULT_WORKDAY_CONFIG
 ) => {
   const out: Date[] = [];
+  if (workDays <= 0) return out;
   let d = new Date(startDate);
   while (out.length < workDays) {
     if (!isOff(d, config)) out.push(new Date(d));
