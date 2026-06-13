@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import type { Project, UserSettings } from '../types';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
@@ -52,6 +52,23 @@ export interface GanttTask {
   duration: number; // 実働日数
 }
 
+// Firestoreから取得したganttTasksを安全なGanttTask[]に正規化する
+function sanitizeTasks(raw: unknown): GanttTask[] {
+  const arr = (Array.isArray(raw) ? raw : []) as Partial<GanttTask>[];
+  return arr
+    .filter((t) => t && typeof t === "object")
+    .map((t) => ({
+      id: String(t.id ?? crypto.randomUUID()),
+      name: typeof t.name === "string" ? t.name : "",
+      assignee: typeof t.assignee === "string" ? t.assignee : "",
+      color: typeof t.color === "string" ? t.color : COLORS[0],
+      start: typeof t.start === "string" ? t.start : null,
+      duration: Number.isFinite(t.duration) && (t.duration as number) > 0
+        ? Math.floor(t.duration as number)
+        : 0,
+    }));
+}
+
 type DragMode = "move" | "resize-l" | "resize-r";
 interface DragState {
   taskId: string;
@@ -100,9 +117,10 @@ export default function SchedulePage() {
   const tasksDirtyRef = useRef(false);
   const pendingFieldsRef = useRef<Record<string, string>>({});
   const pendingSourcesRef = useRef<Set<string>>(new Set());
-  const idRef = useRef(id);
-  idRef.current = id;
   const userEditedTasksRef = useRef(false);
+  const isDraggingRef = useRef(false);
+  // 直前にonSnapshotで適用したtasksのJSON文字列（保存effectの書き戻し防止ガード用）
+  const lastAppliedTasksRef = useRef<string | null>(null);
 
   const gridRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -119,6 +137,9 @@ export default function SchedulePage() {
 
   // 変更「前」のスナップショットを積む
   const pushUndo = useCallback(() => {
+    // これから編集が入るため、保存effectのリモート書き戻し防止ガードを無効化する
+    // （編集後の値が偶然リモート適用直後の値と一致しても保存をスキップしないようにする）
+    lastAppliedTasksRef.current = null;
     setUndoStack((s) => [
       ...s.slice(-(UNDO_LIMIT - 1)),
       tasksRef.current.map((t) => ({ ...t })),
@@ -131,6 +152,9 @@ export default function SchedulePage() {
     const prev = s[s.length - 1];
     setUndoStack(s.slice(0, -1));
     userEditedTasksRef.current = true; // 工期同期・保存を発火させる
+    // Undoでtasksがリモート適用直後と同一値に戻る可能性があり、その場合も
+    // Firestore側が別の値を保持していれば保存して食い違いを解消する必要があるため破棄する
+    lastAppliedTasksRef.current = null;
     setTasks(prev);
   }, []);
 
@@ -142,22 +166,6 @@ export default function SchedulePage() {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (tasksDebounceRef.current) clearTimeout(tasksDebounceRef.current);
-      Object.values(fieldDebounceRef.current).forEach((t) => { if (t) clearTimeout(t); });
-      // 未保存分をフラッシュしてから離脱する
-      const pid = idRef.current;
-      if (pid && tasksLoadedRef.current) {
-        if (tasksDirtyRef.current) {
-          updateDoc(doc(db, "projects", pid), { ganttTasks: tasksRef.current })
-            .catch((err) => logFirebaseError(err, "工程表の保存"));
-        }
-        const pending = { ...pendingFieldsRef.current };
-        if (Object.keys(pending).length > 0) {
-          pendingFieldsRef.current = {};
-          updateDoc(doc(db, "projects", pid), pending)
-            .catch((err) => logFirebaseError(err, "工程表データの保存"));
-        }
-      }
     };
   }, []);
 
@@ -174,69 +182,112 @@ export default function SchedulePage() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // ---------- データロード ----------
+  // ---------- データロード & リアルタイム同期 ----------
   useEffect(() => {
     if (!id) return;
-    let aborted = false;
-    (async () => {
-      try {
-        const d = await getDoc(doc(db, "projects", id));
-        if (aborted || !mountedRef.current) return;
-        if (d.exists()) {
-          const data = d.data() as Project;
-          setProjectName(data.projectName ?? "");
-          setSiteAddress(data.projectLocation ?? "");
-          setConstructionPeriod(data.constructionPeriod ?? "");
-          setWorkdayConfig(DEFAULT_WORKDAY_CONFIG);
-          const wc = data.workdayConfig;
-          if (
-            wc && typeof wc === "object" &&
-            typeof (wc as { saturdayOff?: unknown }).saturdayOff === "boolean" &&
-            Array.isArray((wc as { customHolidays?: unknown }).customHolidays) &&
-            (wc as { customHolidays: unknown[] }).customHolidays.every((d) => typeof d === "string")
-          ) {
-            setWorkdayConfig(wc as WorkdayConfig);
+    tasksLoadedRef.current = false;
+
+    // ローカルに保存待ち（デバウンス未確定）の値がある間は、リモート値で上書きしない
+    const applyField = (
+      field: "projectName" | "projectLocation" | "constructionPeriod",
+      setter: (v: string) => void,
+      value: string
+    ) => {
+      if (field in pendingFieldsRef.current) return;
+      setter(value);
+    };
+
+    const unsubscribe = onSnapshot(
+      doc(db, "projects", id),
+      (snap) => {
+        if (!mountedRef.current) return;
+        if (snap.exists()) {
+          const data = snap.data() as Project;
+          applyField("projectName", setProjectName, data.projectName ?? "");
+          applyField("projectLocation", setSiteAddress, data.projectLocation ?? "");
+          applyField("constructionPeriod", setConstructionPeriod, data.constructionPeriod ?? "");
+
+          if (!pendingSourcesRef.current.has("workdayConfig")) {
+            const wc = data.workdayConfig;
+            const nextConfig =
+              wc && typeof wc === "object" &&
+              typeof (wc as { saturdayOff?: unknown }).saturdayOff === "boolean" &&
+              Array.isArray((wc as { customHolidays?: unknown }).customHolidays) &&
+              (wc as { customHolidays: unknown[] }).customHolidays.every((d) => typeof d === "string")
+                ? (wc as WorkdayConfig)
+                : DEFAULT_WORKDAY_CONFIG;
+            setWorkdayConfig((prev) =>
+              JSON.stringify(prev) === JSON.stringify(nextConfig) ? prev : nextConfig
+            );
           }
-          const raw = (data.ganttTasks ?? []) as Partial<GanttTask>[];
-          const loaded: GanttTask[] = raw
-            .filter((t) => t && typeof t === "object")
-            .map((t) => ({
-              id: String(t.id ?? crypto.randomUUID()),
-              name: typeof t.name === "string" ? t.name : "",
-              assignee: typeof t.assignee === "string" ? t.assignee : "",
-              color: typeof t.color === "string" ? t.color : COLORS[0],
-              start: typeof t.start === "string" ? t.start : null,
-              duration: Number.isFinite(t.duration) && (t.duration as number) > 0
-                ? Math.floor(t.duration as number)
-                : 0,
-            }));
-          setTasks(loaded);
+
+          // ドラッグ中・保存待ち中はリモートのtasksを取り込まない（編集中の上書き防止）
+          if (!isDraggingRef.current && !tasksDirtyRef.current) {
+            const loaded = sanitizeTasks(data.ganttTasks);
+            lastAppliedTasksRef.current = JSON.stringify(loaded);
+            setTasks(loaded);
+          }
         } else {
           setError("工程表データが見つかりません。");
         }
-        const user = auth.currentUser;
-        if (user) {
-          const s = await getDoc(doc(db, "users", user.uid));
-          if (aborted || !mountedRef.current) return;
-          if (s.exists()) setUserSettings(s.data() as UserSettings);
-        }
-      } catch (err) {
-        if (aborted || !mountedRef.current) return;
+        tasksLoadedRef.current = true;
+        setLoading(false);
+      },
+      (err) => {
+        if (!mountedRef.current) return;
         logFirebaseError(err, "工程表データの読み込み");
         setError(firebaseErrorMessage(err, "工程表データの読み込み"));
-      } finally {
-        if (!aborted && mountedRef.current) {
-          tasksLoadedRef.current = true;
-          setLoading(false);
-        }
+        tasksLoadedRef.current = true;
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      unsubscribe();
+      if (tasksDebounceRef.current) clearTimeout(tasksDebounceRef.current);
+      Object.values(fieldDebounceRef.current).forEach((t) => { if (t) clearTimeout(t); });
+      // 未保存分をフラッシュしてから離脱する
+      if (tasksDirtyRef.current) {
+        updateDoc(doc(db, "projects", id), { ganttTasks: tasksRef.current })
+          .catch((err) => logFirebaseError(err, "工程表の保存"));
+      }
+      tasksDirtyRef.current = false;
+      const pending = { ...pendingFieldsRef.current };
+      if (Object.keys(pending).length > 0) {
+        pendingFieldsRef.current = {};
+        updateDoc(doc(db, "projects", id), pending)
+          .catch((err) => logFirebaseError(err, "工程表データの保存"));
+      }
+      pendingSourcesRef.current.clear();
+      setUndoStack([]);
+      tasksLoadedRef.current = false;
+      setLoading(true);
+    };
+  }, [id]);
+
+  // ---------- ユーザー設定（会社ロゴ等）の読み込み ----------
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+    let aborted = false;
+    (async () => {
+      try {
+        const s = await getDoc(doc(db, "users", user.uid));
+        if (aborted || !mountedRef.current) return;
+        if (s.exists()) setUserSettings(s.data() as UserSettings);
+      } catch (err) {
+        if (aborted || !mountedRef.current) return;
+        logFirebaseError(err, "ユーザー設定の読み込み");
       }
     })();
     return () => { aborted = true; };
-  }, [id]);
+  }, []);
 
   // ---------- tasks 保存（デバウンス） ----------
   useEffect(() => {
     if (!id || !tasksLoadedRef.current || !userEditedTasksRef.current) return;
+    // リモートから受信した直後の値をそのまま書き戻さない
+    if (JSON.stringify(tasksRef.current) === lastAppliedTasksRef.current) return;
     tasksDirtyRef.current = true;
     markPending("tasks");
     if (tasksDebounceRef.current) clearTimeout(tasksDebounceRef.current);
@@ -317,6 +368,8 @@ export default function SchedulePage() {
   // 工程の期間が変わったら、表紙の工期欄にも自動反映する
   useEffect(() => {
     if (!tasksLoadedRef.current || !userEditedTasksRef.current) return;
+    // リモートから受信した直後の値から計算された工期を書き戻さない
+    if (JSON.stringify(tasksRef.current) === lastAppliedTasksRef.current) return;
     if (!computedPeriod || computedPeriod === constructionPeriod) return;
     setConstructionPeriod(computedPeriod);
     saveProjectField("constructionPeriod", computedPeriod);
@@ -443,6 +496,9 @@ export default function SchedulePage() {
       snapshot: tasksRef.current.map((t) => ({ ...t })),
       undoPushed: false,
     };
+    isDraggingRef.current = true;
+    // ドラッグもpushUndoと同様、これから編集が入るため保存effectのガードを無効化する
+    lastAppliedTasksRef.current = null;
     setIsDragging(true);
     e.currentTarget.setPointerCapture(e.pointerId);
   };
@@ -500,6 +556,7 @@ export default function SchedulePage() {
 
   const endDrag = () => {
     dragRef.current = null;
+    isDraggingRef.current = false;
     setIsDragging(false);
   };
 
