@@ -101,6 +101,7 @@ export default function App() {
           <Route path="/project/:id/before-after" element={<ProtectedRoute user={user}><BeforeAfterPage /></ProtectedRoute>} />
           <Route path="/project/:id/schedule" element={<ProtectedRoute user={user}><SchedulePage /></ProtectedRoute>} />
           <Route path="/budget/*" element={<ProtectedRoute user={user}><BudgetPage /></ProtectedRoute>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
     </BrowserRouter>
