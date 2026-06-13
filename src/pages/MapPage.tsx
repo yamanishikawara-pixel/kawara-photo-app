@@ -22,6 +22,9 @@ const DEFAULT_MAP_PART_NAMES = ['軒先', '袖', 'ケラバ', '谷', '棟', '隅
 
 type MapLayout = NonNullable<Project['mapLayouts']>[number];
 
+let _idCounter = 0;
+const nextNumericId = () => Date.now() + (++_idCounter);
+
 const Btn = ({ onClick, children, className = '' }: { onClick: () => void; children: React.ReactNode; className?: string }) => (
   <button
     type="button"
@@ -1016,7 +1019,7 @@ export default function MapPage() {
       if (width > 1 && height > 1) {
         const centerX = Math.min(whiteoutStart.x, whiteoutCurrent.x) + width / 2;
         const centerY = Math.min(whiteoutStart.y, whiteoutCurrent.y) + height / 2;
-        const newBox: WhiteoutBox = { id: Date.now(), x: centerX, y: centerY, width, height, mapIndex: currentMapIndex };
+        const newBox: WhiteoutBox = { id: nextNumericId(), x: centerX, y: centerY, width, height, mapIndex: currentMapIndex };
         const newBoxes = [...whiteoutBoxes, newBox];
         setWhiteoutBoxes(newBoxes);
         saveProjectMapData(mapPins, mapRows, mapDimensionLines, newBoxes, showLegendTable, mapTransforms, mapLayouts);
@@ -1047,9 +1050,9 @@ export default function MapPage() {
           let nextNum = 1;
           while (existingNums.has(nextNum)) nextNum++;
           const newLabel = String(nextNum);
-          const newPins: MapPinT[] = [...mapPins, { id: Date.now(), x, y, label: newLabel, type: 'circle', size: 1, rotation: 0, mapIndex: currentMapIndex, textRotation: -(mapRotations[currentMapIndex] || 0) }];
+          const newPins: MapPinT[] = [...mapPins, { id: nextNumericId(), x, y, label: newLabel, type: 'circle', size: 1, rotation: 0, mapIndex: currentMapIndex, textRotation: -(mapRotations[currentMapIndex] || 0) }];
           setMapPins(newPins);
-          const newRows: MapRow[] = [...mapRows, { id: Date.now(), symbol: newLabel, part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }];
+          const newRows: MapRow[] = [...mapRows, { id: nextNumericId(), symbol: newLabel, part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }];
           setMapRows(newRows);
           saveProjectMapData(newPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts);
 
@@ -1057,7 +1060,7 @@ export default function MapPage() {
           if (!drawingStartPoint) {
             setDrawingStartPoint({ x, y }); 
           } else {
-            const newLineId = Date.now();
+            const newLineId = nextNumericId();
             const newDimLines: DimensionLine[] = [...mapDimensionLines, {
               id: newLineId, start: drawingStartPoint, end: { x, y }, text: "", size: 2, color: activeColor, mapIndex: currentMapIndex, textRotation: -(mapRotations[currentMapIndex] || 0)
             }];
@@ -1659,7 +1662,7 @@ export default function MapPage() {
                   <div className="text-center py-8 text-sm font-bold" style={{ background: '#12122a', color: '#6b7280' }}>ピンを追加すると<br/>ここに行が追加されます</div>
           )}
         </div>
-              <button onClick={() => { const newRows = [...mapRows, { id: Date.now(), symbol: '', part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }]; setMapRows(newRows); saveProjectMapData(mapPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts); }} className="w-full font-black py-3 px-4 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-colors text-sm" style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }} onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')} onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}><Plus className="w-4 h-4"/> 行を手動追加</button>
+              <button onClick={() => { const newRows = [...mapRows, { id: nextNumericId(), symbol: '', part: '', photoNo: '', remarks: '', mapIndex: currentMapIndex }]; setMapRows(newRows); saveProjectMapData(mapPins, newRows, mapDimensionLines, whiteoutBoxes, showLegendTable, mapTransforms, mapLayouts); }} className="w-full font-black py-3 px-4 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-colors text-sm" style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }} onPointerEnter={e => (e.currentTarget.style.color = '#f0ede8')} onPointerLeave={e => (e.currentTarget.style.color = '#8b8ba8')}><Plus className="w-4 h-4"/> 行を手動追加</button>
       </div>
           )}
         </div>
