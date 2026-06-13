@@ -833,7 +833,8 @@ export default function PhotoPage() {
         await trackUpload(uid, compressedFile.size);
         setStorageUsedBytes((prev) => prev + compressedFile.size);
       }
-      const newPhotos = project.photos.map((p) => p.id === photoId ? { ...p, image: url, shootingDate: p.shootingDate || getTodayStr() } : p);
+      const current = projectRef.current ?? project;
+      const newPhotos = current.photos.map((p) => p.id === photoId ? { ...p, image: url, shootingDate: p.shootingDate || getTodayStr() } : p);
       await commitPhotos(newPhotos);
     } catch (err) {
       logFirebaseError(err, '写真アップロード');
