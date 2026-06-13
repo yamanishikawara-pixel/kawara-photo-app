@@ -417,6 +417,7 @@ export default function PdfExportPage() {
     });
     const total = needsConversion.length;
     for (let i = 0; i < total; i += IMG_BATCH_SIZE) {
+      if (!mountedRef.current) return;
       const batch = needsConversion.slice(i, i + IMG_BATCH_SIZE);
       progressSetter(`画像を最適化中... (${Math.min(i + IMG_BATCH_SIZE, total)}/${total})`);
       await Promise.all(batch.map(async (img) => {
@@ -431,10 +432,12 @@ export default function PdfExportPage() {
       }));
       await yieldToUI();
     }
+    if (!mountedRef.current) return;
     progressSetter('PDF生成中...');
     await new Promise<void>((resolve) => {
       requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 100)));
     });
+    if (!mountedRef.current) return;
     window.print();
   };
 
