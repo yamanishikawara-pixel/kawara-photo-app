@@ -155,6 +155,8 @@ export default function SchedulePage() {
     // Undoでtasksがリモート適用直後と同一値に戻る可能性があり、その場合も
     // Firestore側が別の値を保持していれば保存して食い違いを解消する必要があるため破棄する
     lastAppliedTasksRef.current = null;
+    // onSnapshotの取り込みガード（225行目）をsetTasksより前に閉じ、競合状態を防ぐ
+    tasksDirtyRef.current = true;
     setTasks(prev);
   }, []);
 
@@ -287,7 +289,11 @@ export default function SchedulePage() {
   useEffect(() => {
     if (!id || !tasksLoadedRef.current || !userEditedTasksRef.current) return;
     // リモートから受信した直後の値をそのまま書き戻さない
-    if (JSON.stringify(tasksRef.current) === lastAppliedTasksRef.current) return;
+    if (JSON.stringify(tasksRef.current) === lastAppliedTasksRef.current) {
+      // 変更操作側で先出しした tasksDirtyRef を、保存不要なno-opの場合は戻す
+      tasksDirtyRef.current = false;
+      return;
+    }
     tasksDirtyRef.current = true;
     markPending("tasks");
     if (tasksDebounceRef.current) clearTimeout(tasksDebounceRef.current);
@@ -428,12 +434,16 @@ export default function SchedulePage() {
 
   // ---------- タスク操作 ----------
   const updateTask = (taskId: string, patch: Partial<GanttTask>) => {
+    // onSnapshotの取り込みガード（225行目）をsetTasksより前に閉じ、競合状態を防ぐ
+    tasksDirtyRef.current = true;
     userEditedTasksRef.current = true;
     setTasks((ts) => ts.map((t) => (t.id === taskId ? { ...t, ...patch } : t)));
   };
 
   const addRow = () => {
     pushUndo();
+    // onSnapshotの取り込みガード（225行目）をsetTasksより前に閉じ、競合状態を防ぐ
+    tasksDirtyRef.current = true;
     userEditedTasksRef.current = true;
     setTasks((ts) => [
       ...ts,
@@ -450,6 +460,8 @@ export default function SchedulePage() {
 
   const removeRow = (taskId: string) => {
     pushUndo();
+    // onSnapshotの取り込みガード（225行目）をsetTasksより前に閉じ、競合状態を防ぐ
+    tasksDirtyRef.current = true;
     userEditedTasksRef.current = true;
     setTasks((ts) => ts.filter((t) => t.id !== taskId));
   };
@@ -460,6 +472,8 @@ export default function SchedulePage() {
     const to = idx + dir;
     if (idx < 0 || to < 0 || to >= tasksRef.current.length) return;
     pushUndo(); // 並べ替えもUndo対象
+    // onSnapshotの取り込みガード（225行目）をsetTasksより前に閉じ、競合状態を防ぐ
+    tasksDirtyRef.current = true;
     userEditedTasksRef.current = true;
     setTasks((ts) => {
       const next = [...ts];
