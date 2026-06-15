@@ -24,13 +24,13 @@ const SANS  = "'Noto Sans JP', sans-serif";
 
 // レイアウト定数を集約（ヘッダー等を変更する場合はここを触る）
 const LAYOUT = {
-  headerH: 60,
-  footerH: 52,
-  pagePadding: 32,
-  titleRowH: 26,
-  labelBarH: 22,
-  descRowH: 68,
-  itemGap: 8,
+  headerH: 40,
+  footerH: 32,
+  pagePadding: 44,
+  titleRowH: 20,
+  labelBarH: 16,
+  descRowH: 35,
+  itemGap: 5,
   photoGap: 3,
   sidePadding: 40,
 } as const;
@@ -64,7 +64,7 @@ const A4Page = React.memo(function A4Page({
 }: A4PageProps) {
   const { headerH, footerH, pagePadding, titleRowH, labelBarH, descRowH, itemGap, photoGap, sidePadding } = LAYOUT;
   const available = H - headerH - footerH - pagePadding;
-  const itemH = Math.floor(available / 2);
+  const itemH = Math.floor(available / 3);
   // タイトル + ラベルバー + 説明 + ギャップ×3 を引いた残りが写真領域
   const photoH = itemH - titleRowH - labelBarH - descRowH - itemGap * 3;
   const photoW = (W - sidePadding * 2 - photoGap) / 2;
@@ -97,21 +97,21 @@ const A4Page = React.memo(function A4Page({
 
       {/* 各箇所 */}
       {items.map((item, idx) => {
-        const num = pageIndex * 2 + idx + 1;
+        const num = pageIndex * 3 + idx + 1;
         const numLabel = '①②③④⑤⑥⑦⑧⑨⑩'[num - 1] ?? `${num}`;
         return (
           <div key={item.id} style={{
             height: itemH, flexShrink: 0,
-            borderBottom: idx === 0 ? '1.5px solid #e0e0e0' : 'none',
+            borderBottom: idx < items.length - 1 ? '1.5px solid #e0e0e0' : 'none',
             padding: `14px ${sidePadding}px 0`,
             display: 'flex', flexDirection: 'column', gap: itemGap,
             overflow: 'hidden',
           }}>
             {/* タイトル */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: titleRowH - itemGap, flexShrink: 0 }}>
-              <div style={{ width: 3, height: 16, background: '#e55a2b', borderRadius: 2, flexShrink: 0 }} />
+              <div style={{ width: 3, height: 13, background: '#e55a2b', borderRadius: 2, flexShrink: 0 }} />
               <div style={{
-                fontSize: 12, fontWeight: 700, color: '#111', letterSpacing: '0.08em',
+                fontSize: 11, fontWeight: 700, color: '#111', letterSpacing: '0.08em',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
                 {numLabel} {item.title || '工事箇所'}
@@ -120,8 +120,8 @@ const A4Page = React.memo(function A4Page({
 
             {/* ラベルバー */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: photoGap, flexShrink: 0 }}>
-              <div style={{ background: '#555', color: '#fff', textAlign: 'center', padding: '5px 0', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', fontFamily: SERIF }}>施　工　前</div>
-              <div style={{ background: '#2a7a4b', color: '#fff', textAlign: 'center', padding: '5px 0', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', fontFamily: SERIF }}>施　工　後</div>
+              <div style={{ background: '#555', color: '#fff', textAlign: 'center', padding: '3px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', fontFamily: SERIF }}>施　工　前</div>
+              <div style={{ background: '#2a7a4b', color: '#fff', textAlign: 'center', padding: '3px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', fontFamily: SERIF }}>施　工　後</div>
             </div>
 
             {/* 写真 */}
@@ -175,18 +175,18 @@ const A4Page = React.memo(function A4Page({
 
             {/* 説明 */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: photoGap, flex: 1, minHeight: 0 }}>
-              <div style={{ background: '#f4f4f4', padding: '8px 10px', borderTop: '2px solid #888', overflow: 'hidden' }}>
+              <div style={{ background: '#f4f4f4', padding: '4px 8px', borderTop: '2px solid #888', overflow: 'hidden' }}>
                 <div style={{
-                  fontSize: 9.5, color: '#444', lineHeight: 1.8, letterSpacing: '0.03em', whiteSpace: 'pre-wrap',
-                  display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                  fontSize: 8.5, color: '#444', lineHeight: 1.5, letterSpacing: '0.03em', whiteSpace: 'pre-wrap',
+                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                 }}>
                   {item.beforeDesc || '施工前の状況を記入してください。'}
                 </div>
               </div>
-              <div style={{ background: '#eef6f1', padding: '8px 10px', borderTop: '2px solid #2a7a4b', overflow: 'hidden' }}>
+              <div style={{ background: '#eef6f1', padding: '4px 8px', borderTop: '2px solid #2a7a4b', overflow: 'hidden' }}>
                 <div style={{
-                  fontSize: 9.5, color: '#1a4a2e', lineHeight: 1.8, letterSpacing: '0.03em', whiteSpace: 'pre-wrap',
-                  display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                  fontSize: 8.5, color: '#1a4a2e', lineHeight: 1.5, letterSpacing: '0.03em', whiteSpace: 'pre-wrap',
+                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                 }}>
                   {item.afterDesc || '施工後の状況を記入してください。'}
                 </div>
@@ -196,7 +196,9 @@ const A4Page = React.memo(function A4Page({
         );
       })}
 
-      {items.length < 2 && <div style={{ height: itemH, flexShrink: 0 }} />}
+      {Array.from({ length: Math.max(0, 3 - items.length) }).map((_, i) => (
+        <div key={`empty-${i}`} style={{ height: itemH, flexShrink: 0 }} />
+      ))}
 
       <div style={{ flex: 1 }} />
 
@@ -906,7 +908,7 @@ export function BeforeAfterPage() {
   // ── ページ分割（メモ化して無駄な再計算を抑制）──
   const pages = useMemo(() => {
     const p: BeforeAfterItem[][] = [];
-    for (let i = 0; i < items.length; i += 2) p.push(items.slice(i, i + 2));
+    for (let i = 0; i < items.length; i += 3) p.push(items.slice(i, i + 3));
     return p;
   }, [items]);
 
