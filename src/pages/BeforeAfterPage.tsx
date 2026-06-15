@@ -447,12 +447,10 @@ const ItemCard = React.memo(function ItemCard({
                 style={{ display: 'none' }}
                 disabled={isUp}
               />
-              {/* label のネストを解消(div + htmlFor 関連付け済みの label を別箇所に) */}
-              <label
-                htmlFor={inputId}
+              {/* 写真表示エリア(タップでは何もしない。赤丸モード時のみ丸の追加/選択解除) */}
+              <div
                 onClick={e => {
                   if (circleMode !== side || !img) return;
-                  e.preventDefault();
                   if (selectedCircleId !== null) { setSelectedCircleId(null); return; }
                   const rect = e.currentTarget.getBoundingClientRect();
                   const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
@@ -462,7 +460,7 @@ const ItemCard = React.memo(function ItemCard({
                 }}
                 style={{
                   display: 'flex',
-                  cursor: isUp ? 'wait' : (circleMode === side ? 'crosshair' : 'pointer'),
+                  cursor: isUp ? 'wait' : (circleMode === side ? 'crosshair' : 'default'),
                   height: 90, borderRadius: 8, overflow: 'hidden',
                   border: `1.5px dashed ${side === 'before' ? '#3d3d60' : '#1a5e38'}`,
                   background: side === 'before' ? '#12122a' : '#0f1f15',
@@ -521,6 +519,18 @@ const ItemCard = React.memo(function ItemCard({
                         }}
                       />
                     ))}
+                    <label
+                      htmlFor={inputId}
+                      onClick={e => e.stopPropagation()}
+                      style={{
+                        position: 'absolute', bottom: 4, right: 4,
+                        background: 'rgba(0,0,0,0.55)', border: 'none', borderRadius: 6,
+                        color: '#fff', cursor: isUp ? 'wait' : 'pointer', padding: '3px 6px',
+                        fontSize: 14, lineHeight: 1,
+                      }}
+                      title="写真を差し替え"
+                      aria-label="写真を差し替え"
+                    >📁</label>
                     {isUp && (
                       <div style={{
                         position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)',
@@ -532,12 +542,19 @@ const ItemCard = React.memo(function ItemCard({
                     )}
                   </>
                 ) : (
-                  <div style={{ textAlign: 'center' }}>
+                  <label
+                    htmlFor={inputId}
+                    style={{
+                      width: '100%', height: '100%',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                      cursor: isUp ? 'wait' : 'pointer', textAlign: 'center',
+                    }}
+                  >
                     <div style={{ fontSize: 22, marginBottom: 4, opacity: 0.4 }}>+</div>
                     <div style={{ fontSize: 9, color: '#4b5563' }}>タップして選択</div>
-                  </div>
+                  </label>
                 )}
-              </label>
+              </div>
             </div>
           );
         })}
