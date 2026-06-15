@@ -13,8 +13,9 @@ import {
   genId, storagePathFromUrl, isStorageUrl,
   deleteStorageFileWithAccounting,
 } from '../shared/storageUtils';
-import type { BeforeAfterItem } from '../types';
+import type { BeforeAfterItem, Circle } from '../types';
 import { getContractorName } from '../types';
+import { useDraggablePin, nextId } from '../shared/utils';
 
 // ── 定数 ────────────────────────────────────────────
 const W = 595, H = 842;
@@ -126,13 +127,13 @@ const A4Page = React.memo(function A4Page({
             {/* 写真 */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: photoGap, flexShrink: 0 }}>
               {[
-                { src: item.beforeImage, label: '施工前' },
-                { src: item.afterImage,  label: '施工後' },
+                { src: item.beforeImage, label: '施工前', circles: item.beforeCircles },
+                { src: item.afterImage,  label: '施工後', circles: item.afterCircles },
               ].map((ph, pi) => (
                 <div key={pi} style={{
                   width: photoW, height: photoH,
                   background: PHOTO_FIT === 'contain' ? '#f4f4f4' : '#ddd',
-                  overflow: 'hidden', flexShrink: 0,
+                  overflow: 'hidden', flexShrink: 0, position: 'relative',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
                   {ph.src ? (
@@ -153,6 +154,21 @@ const A4Page = React.memo(function A4Page({
                       </div>
                     </div>
                   )}
+                  {(ph.circles ?? []).map((circle) => {
+                    const size = Number(circle.size || 20);
+                    return (
+                      <div
+                        key={circle.id}
+                        className="absolute aspect-square rounded-full border-[3px] border-red-500 print:border-[2px]"
+                        style={{
+                          left: `${circle.x}%`,
+                          top: `${circle.y}%`,
+                          width: `${size}%`,
+                          transform: 'translate(-50%, -50%)',
+                        }}
+                      />
+                    );
+                  })}
                 </div>
               ))}
             </div>
@@ -161,7 +177,7 @@ const A4Page = React.memo(function A4Page({
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: photoGap, flex: 1, minHeight: 0 }}>
               <div style={{ background: '#f4f4f4', padding: '8px 10px', borderTop: '2px solid #888', overflow: 'hidden' }}>
                 <div style={{
-                  fontSize: 9.5, color: '#444', lineHeight: 1.8, letterSpacing: '0.03em',
+                  fontSize: 9.5, color: '#444', lineHeight: 1.8, letterSpacing: '0.03em', whiteSpace: 'pre-wrap',
                   display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                 }}>
                   {item.beforeDesc || '施工前の状況を記入してください。'}
@@ -169,7 +185,7 @@ const A4Page = React.memo(function A4Page({
               </div>
               <div style={{ background: '#eef6f1', padding: '8px 10px', borderTop: '2px solid #2a7a4b', overflow: 'hidden' }}>
                 <div style={{
-                  fontSize: 9.5, color: '#1a4a2e', lineHeight: 1.8, letterSpacing: '0.03em',
+                  fontSize: 9.5, color: '#1a4a2e', lineHeight: 1.8, letterSpacing: '0.03em', whiteSpace: 'pre-wrap',
                   display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                 }}>
                   {item.afterDesc || '施工後の状況を記入してください。'}
@@ -196,6 +212,34 @@ const A4Page = React.memo(function A4Page({
   );
 });
 
+// ── 赤丸マーカー（PhotoPageのPhotoCircleMarkerと同等・ドラッグで移動）──
+function BACircleMarker({ circle, isSelected, onSelect, onDragEnd }: {
+  circle: Circle;
+  isSelected: boolean;
+  onSelect: () => void;
+  onDragEnd: (x: number, y: number) => void;
+}) {
+  const { position, onMouseDown, onTouchStart, dragging, containerRef } = useDraggablePin(circle.x, circle.y, onDragEnd);
+  const size = Number(circle.size || 20);
+  return (
+    <div
+      ref={containerRef}
+      onMouseDown={(e) => { e.stopPropagation(); onSelect(); onMouseDown(e); }}
+      onTouchStart={(e) => { e.stopPropagation(); onSelect(); onTouchStart(e); }}
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        left: `${position.x}%`,
+        top: `${position.y}%`,
+        width: `${size}%`,
+        transform: 'translate(-50%, -50%)',
+        touchAction: 'none',
+        zIndex: isSelected ? 100 : (dragging ? 30 : 20),
+      }}
+      className={`absolute aspect-square rounded-full border-[3px] border-red-500 shadow-sm transition-all duration-75 ${dragging ? 'z-30 opacity-80' : 'cursor-pointer hover:bg-red-500/10'} ${isSelected && !dragging ? 'border-dashed bg-red-500/10' : ''}`}
+    />
+  );
+}
+
 // ── 入力フォームカード（1箇所分）─────────────────────
 interface ItemCardProps {
   item: BeforeAfterItem;
@@ -206,6 +250,7 @@ interface ItemCardProps {
   onDelete: () => void;
   onImageUpload: (side: 'before' | 'after', dataUrl: string) => void | Promise<void>;
   onError: (msg: string) => void;
+  onCirclesChange: (side: 'before' | 'after', circles: Circle[]) => void;
   onDragStart: (e: React.DragEvent) => void;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: () => void;
@@ -214,11 +259,13 @@ interface ItemCardProps {
 const ItemCard = React.memo(function ItemCard({
   item, index,
   uploadingBefore, uploadingAfter,
-  onChange, onDelete, onImageUpload, onError,
+  onChange, onDelete, onImageUpload, onError, onCirclesChange,
   onDragStart, onDragOver, onDrop,
 }: ItemCardProps) {
   const num = '①②③④⑤⑥⑦⑧⑨⑩'[index] ?? `${index + 1}`;
   const [draggable, setDraggable] = useState(false);
+  const [circleMode, setCircleMode] = useState<'before' | 'after' | null>(null);
+  const [selectedCircleId, setSelectedCircleId] = useState<number | null>(null);
 
   const fileInputIds = useMemo(() => ({
     before: `file-before-${item.id}`,
@@ -401,9 +448,19 @@ const ItemCard = React.memo(function ItemCard({
               {/* label のネストを解消(div + htmlFor 関連付け済みの label を別箇所に) */}
               <label
                 htmlFor={inputId}
+                onClick={e => {
+                  if (circleMode !== side || !img) return;
+                  e.preventDefault();
+                  if (selectedCircleId !== null) { setSelectedCircleId(null); return; }
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+                  const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+                  const circles = side === 'before' ? (item.beforeCircles ?? []) : (item.afterCircles ?? []);
+                  onCirclesChange(side, [...circles, { id: nextId(), x, y, size: 20 }]);
+                }}
                 style={{
                   display: 'flex',
-                  cursor: isUp ? 'wait' : 'pointer',
+                  cursor: isUp ? 'wait' : (circleMode === side ? 'crosshair' : 'pointer'),
                   height: 90, borderRadius: 8, overflow: 'hidden',
                   border: `1.5px dashed ${side === 'before' ? '#3d3d60' : '#1a5e38'}`,
                   background: side === 'before' ? '#12122a' : '#0f1f15',
@@ -432,6 +489,36 @@ const ItemCard = React.memo(function ItemCard({
                       title="90°回転"
                       aria-label="画像を90度回転"
                     >↻</button>
+                    <button
+                      type="button"
+                      onClick={e => {
+                        e.preventDefault(); e.stopPropagation();
+                        setCircleMode(prev => prev === side ? null : side);
+                        setSelectedCircleId(null);
+                      }}
+                      disabled={isUp}
+                      style={{
+                        position: 'absolute', top: 4, left: 4,
+                        background: circleMode === side ? '#ef4444' : 'rgba(0,0,0,0.55)',
+                        border: 'none', borderRadius: 6,
+                        color: '#fff', cursor: isUp ? 'wait' : 'pointer', padding: '3px 6px',
+                        fontSize: 11, fontWeight: 700, lineHeight: 1,
+                      }}
+                      title="赤丸を追加"
+                      aria-label="赤丸モード切替"
+                    >⭕</button>
+                    {(side === 'before' ? (item.beforeCircles ?? []) : (item.afterCircles ?? [])).map(circle => (
+                      <BACircleMarker
+                        key={circle.id}
+                        circle={circle}
+                        isSelected={circleMode === side && selectedCircleId === circle.id}
+                        onSelect={() => { setCircleMode(side); setSelectedCircleId(circle.id); }}
+                        onDragEnd={(x, y) => {
+                          const circles = side === 'before' ? (item.beforeCircles ?? []) : (item.afterCircles ?? []);
+                          onCirclesChange(side, circles.map(c => c.id === circle.id ? { ...c, x, y } : c));
+                        }}
+                      />
+                    ))}
                     {isUp && (
                       <div style={{
                         position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)',
@@ -453,6 +540,29 @@ const ItemCard = React.memo(function ItemCard({
           );
         })}
       </div>
+
+      {/* 赤丸サイズ調整・削除 */}
+      {circleMode && selectedCircleId !== null && (() => {
+        const circles = circleMode === 'before' ? (item.beforeCircles ?? []) : (item.afterCircles ?? []);
+        const sel = circles.find(c => c.id === selectedCircleId);
+        if (!sel) return null;
+        const size = Number(sel.size || 20);
+        const update = (newProps: Partial<Circle>) => {
+          onCirclesChange(circleMode, circles.map(c => c.id === selectedCircleId ? { ...c, ...newProps } : c));
+        };
+        const remove = () => {
+          onCirclesChange(circleMode, circles.filter(c => c.id !== selectedCircleId));
+          setSelectedCircleId(null);
+        };
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', borderRadius: 8, overflow: 'hidden', border: '1px solid #3d3d60', marginBottom: 12 }}>
+            <span style={{ flex: 1, textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#8b8ba8', padding: '0 8px' }}>赤丸サイズ</span>
+            <button type="button" onClick={() => update({ size: Math.min(80, Math.round(size + 5)) })} style={{ padding: '8px 14px', fontSize: 15, fontWeight: 700, color: '#f0ede8', background: 'transparent', border: 'none', borderLeft: '1px solid #3d3d60', cursor: 'pointer' }}>＋</button>
+            <button type="button" onClick={() => update({ size: Math.max(5, Math.round(size - 5)) })} style={{ padding: '8px 14px', fontSize: 15, fontWeight: 700, color: '#f0ede8', background: 'transparent', border: 'none', borderLeft: '1px solid #3d3d60', borderRight: '1px solid #3d3d60', cursor: 'pointer' }}>－</button>
+            <button type="button" onClick={remove} aria-label="赤丸を削除" style={{ padding: '8px 14px', color: '#ef4444', background: 'transparent', border: 'none', cursor: 'pointer' }}><Trash2 className="w-4 h-4" /></button>
+          </div>
+        );
+      })()}
 
       {/* 説明テキスト */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -617,6 +727,11 @@ export function BeforeAfterPage() {
 
   const updateItem = useCallback((idx: number, field: keyof BeforeAfterItem, value: string) => {
     setItems(prev => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
+    isDirty.current = true;
+  }, []);
+
+  const updateItemCircles = useCallback((idx: number, side: 'before' | 'after', circles: Circle[]) => {
+    setItems(prev => prev.map((it, i) => (i === idx ? { ...it, [side === 'before' ? 'beforeCircles' : 'afterCircles']: circles } : it)));
     isDirty.current = true;
   }, []);
 
@@ -894,6 +1009,7 @@ export function BeforeAfterPage() {
                 onDelete={() => deleteItem(idx)}
                 onImageUpload={(side, dataUrl) => uploadImage(item.id, side, dataUrl)}
                 onError={setError}
+                onCirclesChange={(side, circles) => updateItemCircles(idx, side, circles)}
                 onDragStart={handleDragStart(idx)}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop(idx)}

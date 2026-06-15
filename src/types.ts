@@ -152,6 +152,8 @@ export interface BeforeAfterItem {
   afterImage: string;
   beforeDesc: string;
   afterDesc: string;
+  beforeCircles?: Circle[];
+  afterCircles?: Circle[];
 }
 
 // ============================================================================
