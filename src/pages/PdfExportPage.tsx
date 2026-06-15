@@ -1448,16 +1448,29 @@ export default function PdfExportPage() {
 
                       {/* 写真エリア */}
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: isPrinting ? '1mm' : '3px', flexShrink: 0 }}>
-                        {[item.beforeImage, item.afterImage].map((src, pi) => (
-                          <div key={pi} style={{ width: '100%', height: isPrinting ? '65mm' : '289px', overflow: 'hidden', background: pi === 0 ? '#c8d0d8' : '#a8c4b2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {src ? (
-                              <img src={src} alt={pi === 0 ? '施工前' : '施工後'} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                        {[
+                          { src: item.beforeImage, circles: item.beforeCircles },
+                          { src: item.afterImage, circles: item.afterCircles },
+                        ].map((ph, pi) => (
+                          <div key={pi} style={{ width: '100%', height: isPrinting ? '65mm' : '289px', overflow: 'hidden', position: 'relative', background: pi === 0 ? '#c8d0d8' : '#a8c4b2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {ph.src ? (
+                              <img src={ph.src} alt={pi === 0 ? '施工前' : '施工後'} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                             ) : (
                               <div style={{ textAlign: 'center', opacity: 0.5 }}>
                                 <div style={{ fontSize: isPrinting ? '14pt' : '28px', marginBottom: 4 }}>📷</div>
                                 <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '6pt' : '9px', color: 'rgba(0,0,0,0.5)' }}>{pi === 0 ? '施工前' : '施工後'}</div>
                               </div>
                             )}
+                            {(ph.circles ?? []).map((circle) => {
+                              const size = Number(circle.size || 20);
+                              return (
+                                <div
+                                  key={circle.id}
+                                  className="absolute aspect-square rounded-full border-[3px] border-red-500 print:border-[2px]"
+                                  style={{ left: `${circle.x}%`, top: `${circle.y}%`, width: `${size}%`, transform: 'translate(-50%, -50%)' }}
+                                />
+                              );
+                            })}
                           </div>
                         ))}
                       </div>
@@ -1465,10 +1478,10 @@ export default function PdfExportPage() {
                       {/* 説明エリア */}
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: isPrinting ? '1mm' : '3px', flexShrink: 0 }}>
                         <div style={{ background: '#f4f4f4', padding: isPrinting ? '2mm 3mm' : '8px 10px', borderTop: `2px solid #888` }}>
-                          <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7pt' : '9.5px', color: '#444', lineHeight: 1.8, letterSpacing: '0.03em' }}>{item.beforeDesc || '施工前の状況を記入してください。'}</div>
+                          <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7pt' : '9.5px', color: '#444', lineHeight: 1.8, letterSpacing: '0.03em', whiteSpace: 'pre-wrap' }}>{item.beforeDesc || '施工前の状況を記入してください。'}</div>
                         </div>
                         <div style={{ background: '#eef6f1', padding: isPrinting ? '2mm 3mm' : '8px 10px', borderTop: `2px solid #2a7a4b` }}>
-                          <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7pt' : '9.5px', color: '#1a4a2e', lineHeight: 1.8, letterSpacing: '0.03em' }}>{item.afterDesc || '施工後の状況を記入してください。'}</div>
+                          <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '7pt' : '9.5px', color: '#1a4a2e', lineHeight: 1.8, letterSpacing: '0.03em', whiteSpace: 'pre-wrap' }}>{item.afterDesc || '施工後の状況を記入してください。'}</div>
                         </div>
                       </div>
                     </div>
