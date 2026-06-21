@@ -144,6 +144,18 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
     } catch(e) { showToast("保存エラー: " + e.message); }
   };
 
+  // トースト非表示のサイレント保存（画面遷移時にバックグラウンドで実行）
+  const saveQuiet = () => {
+    try {
+      const raw = { koujiName, koujiAddress, clientName, date, dateJoto, dateChakko, spec, kawaraShu, kawaraColor, hanbaKakuRate, insuranceRate, unchinTanka, yochiArea, targetGrossRate, estimatePrice, grossMode, taxMode, archived, tileRows, materialRows, expenseRows, biko, tileSupplier, houseMakerName, tileOrderSupplier, tileOrderDeliveryAddress, tileOrderDeliveryDate, tileOrderDeliveryTime, tileOrderNote, tileOrderMaterialRows, tileOrderTileRows, status, _updatedAt: new Date().toISOString() };
+      const projectData = JSON.parse(JSON.stringify(raw));
+      setDoc(doc(db, "cost_projects", activeProject), projectData)
+        .then(() => setDoc(doc(db, "cost_system", "meta"), { projectList }))
+        .then(() => window.localStorage.setItem(`cost_${activeProject}_localUpdatedAt`, new Date().toISOString()))
+        .catch(() => {}); // エラーは無視（fire-and-forget）
+    } catch {}
+  };
+
   const loadProjectFromCloud = async (silent = false) => {
     if (!silent) {
       const ok = await showConfirm("クラウドのデータで現在の入力を上書きしますか？");
@@ -157,6 +169,15 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
         if(metaRef.exists() && metaRef.data().projectList) setProjectList(metaRef.data().projectList);
         const docRef = await getDoc(doc(db, "cost_projects", activeProject));
         if(docRef.exists()) {
+            const d = docRef.data();
+            // サイレントロード時: ローカルの方が新しければ上書きしない
+            if (silent) {
+              const localTs = window.localStorage.getItem(`cost_${activeProject}_localUpdatedAt`);
+              const cloudTs = d._updatedAt;
+              if (localTs && cloudTs && new Date(localTs) >= new Date(cloudTs)) {
+                return; // ローカルが最新 → Firestoreの古いデータで上書きしない
+              }
+            }
             if (!silent) history.push("クラウド読込前に戻す", () => {
               setKoujiName(snap.koujiName); setKoujiAddress(snap.koujiAddress); setClientName(snap.clientName); setDate(snap.date);
               setDateJoto(snap.dateJoto); setDateChakko(snap.dateChakko); setSpec(snap.spec); setKawaraShu(snap.kawaraShu); setKawaraColor(snap.kawaraColor);
@@ -174,7 +195,6 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
               setTileOrderTileRows(snap.tileOrderTileRows);
               setStatus(snap.status);
             });
-            const d = docRef.data();
             setKoujiName(d.koujiName ?? ""); setKoujiAddress(d.koujiAddress ?? ""); setClientName(d.clientName ?? "");
             setDateJoto(d.dateJoto ?? ""); setDateChakko(d.dateChakko ?? ""); setSpec(d.spec ?? "引掛桟葺工法");
             setDate(d.date ?? today()); setKawaraShu(d.kawaraShu ?? "三州53版和型"); setKawaraColor(d.kawaraColor ?? "銀鱗");
@@ -336,7 +356,7 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
   useEffect(() => { history.clear(); }, [activeProject]); // eslint-disable-line react-hooks/exhaustive-deps
   // ── オートセーブ（入力画面・内容あり・ロード中以外・3秒デバウンス）──
   useEffect(() => {
-    if (mode !== "input" || isLoadingCloud || archived) return;
+    if ((mode !== "input" && mode !== "tile-purchase") || isLoadingCloud || archived) return;
     const hasContent = koujiName || tileRows.some(r => r.hinmei) || materialRows.some(r => r.hinmei) || expenseRows.some(r => r.hinmei);
     if (!hasContent) return;
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
@@ -591,7 +611,7 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
                     color:"#ecfdf5",fontSize:12,fontWeight:700,padding:"5px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
             ← 写真台帳
           </button>
-          <button onClick={()=>setMode("input")} style={{background:"#1e3a5a",border:"1px solid #2a5a8a",color:"#93c5fd",padding:"7px 16px",borderRadius:7,fontSize:13,cursor:"pointer",fontWeight:600}}>← 戻る</button>
+          <button onClick={()=>{ saveQuiet(); setMode("input"); }} style={{background:"#1e3a5a",border:"1px solid #2a5a8a",color:"#93c5fd",padding:"7px 16px",borderRadius:7,fontSize:13,cursor:"pointer",fontWeight:600}}>← 戻る</button>
           <div style={{marginLeft:"auto",display:"flex",gap:8}}>
             <button onClick={()=>window.print()} style={{background:"#1e3a5a",border:"1px solid #2a5a8a",color:"#93c5fd",padding:"7px 16px",borderRadius:7,fontSize:13,cursor:"pointer",fontWeight:600}}>🖨️ 印刷</button>
             <button onClick={handlePdfDownload} style={{background:"#0284c7",border:"none",color:"white",padding:"7px 16px",borderRadius:7,fontSize:13,cursor:"pointer",fontWeight:600}}>📥 PDF保存</button>
@@ -630,12 +650,12 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
     return (
       <div style={{background:"#1a1a2e",minHeight:"100vh",fontFamily:"'Noto Sans JP', sans-serif"}}>
         <div className="no-print" style={{background:"#0d1b2a",padding:"12px 20px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #2a4a6a",position:"sticky",top:0,zIndex:10}}>
-          <button onClick={() => goToPhoto(koujiName?.trim())}
+          <button onClick={() => { saveQuiet(); goToPhoto(koujiName?.trim()); }}
             style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:8,
                     color:"#ecfdf5",fontSize:12,fontWeight:700,padding:"5px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
             ← 写真台帳
           </button>
-          <button onClick={()=>setMode("input")} style={{background:"#1e3a5a",border:"1px solid #2a5a8a",color:"#93c5fd",padding:"7px 16px",borderRadius:7,fontSize:13,cursor:"pointer",fontWeight:600}}>← 戻る</button>
+          <button onClick={()=>{ saveQuiet(); setMode("input"); }} style={{background:"#1e3a5a",border:"1px solid #2a5a8a",color:"#93c5fd",padding:"7px 16px",borderRadius:7,fontSize:13,cursor:"pointer",fontWeight:600}}>← 戻る</button>
           <div style={{fontSize:14,fontWeight:700,color:"#fbbf24",marginLeft:4}}>🏠 瓦発注書</div>
           <div style={{marginLeft:"auto",display:"flex",gap:8}}>
             <button onClick={syncOrderFromBudget} style={{background:"#065f46",border:"1px solid #10b981",color:"#a7f3d0",padding:"7px 16px",borderRadius:7,fontSize:13,cursor:"pointer",fontWeight:600}}>↩ 予算から再反映</button>
