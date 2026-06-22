@@ -947,6 +947,7 @@ export function BeforeAfterPage() {
           .a4-preview-wrap { transform: none !important; margin: 0 !important; }
           .a4-page { page-break-after: always; box-shadow: none !important; }
           .a4-page:last-child { page-break-after: auto; }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
       `}</style>
 
