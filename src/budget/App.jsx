@@ -529,9 +529,9 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
 
   // ★カタログ適用ロジック
   const handleApplyCatalog = (cartItems) => {
-    if(catalogType === 'tile') { const snap = cloneRows(tileRows); history.push("カタログ適用（瓦）", () => setTileRows(snap)); const newRows = cartItems.map(it => ({ id: nanoid(), category: it.category||"", hinmei: it.hinmei, suryo: it.suryo, tani: it.tani||"枚", unitPrice: it.unitPrice, biko: "" })); setTileRows(r => [...r, ...newRows]); }
-    else if(catalogType === 'material') { const snap = cloneRows(materialRows); history.push("カタログ適用（副資材）", () => setMaterialRows(snap)); const newRows = cartItems.map(it => ({ id: nanoid(), hinmei: it.hinmei, suryo: it.suryo, tani: it.tani||"巻", costPrice: it.costPrice, biko: "" })); setMaterialRows(r => [...r, ...newRows]); }
-    else if(catalogType === 'expense') { const snap = cloneRows(expenseRows); history.push("カタログ適用（経費）", () => setExpenseRows(snap)); const newRows = cartItems.map(it => ({ id: nanoid(), hinmei: it.hinmei, suryo: it.suryo, tani: it.tani||"式", costPrice: it.costPrice ?? 0, biko: "", isLabor: it.isLabor })); setExpenseRows(r => [...r, ...newRows]); }
+    if(catalogType === 'tile') { const snap = cloneRows(tileRows); history.push("カタログ適用（瓦）", () => setTileRows(snap)); const newRows = cartItems.map(it => ({ id: nanoid(), category: it.category||"", hinmei: it.hinmei, suryo: it.suryo, tani: it.tani||"枚", unitPrice: it.unitPrice, biko: "" })); setTileRows(r => [...r.filter(x => x.hinmei), ...newRows]); }
+    else if(catalogType === 'material') { const snap = cloneRows(materialRows); history.push("カタログ適用（副資材）", () => setMaterialRows(snap)); const newRows = cartItems.map(it => ({ id: nanoid(), hinmei: it.hinmei, suryo: it.suryo, tani: it.tani||"巻", costPrice: it.costPrice, biko: "" })); setMaterialRows(r => [...r.filter(x => x.hinmei), ...newRows]); }
+    else if(catalogType === 'expense') { const snap = cloneRows(expenseRows); history.push("カタログ適用（経費）", () => setExpenseRows(snap)); const newRows = cartItems.map(it => ({ id: nanoid(), hinmei: it.hinmei, suryo: it.suryo, tani: it.tani||"式", costPrice: it.costPrice ?? 0, biko: "", isLabor: it.isLabor })); setExpenseRows(r => [...r.filter(x => x.hinmei), ...newRows]); }
     setCatalogType(null); showToast("リストの項目を追加しました！");
   };
 
