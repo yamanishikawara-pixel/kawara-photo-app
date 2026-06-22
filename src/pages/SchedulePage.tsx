@@ -660,7 +660,7 @@ export default function SchedulePage() {
                 {/* 行削除 */}
                 <button
                   onClick={() => removeRow(t.id)}
-                  className="no-print w-6 h-6 rounded-full text-gray-300 hover:text-red-400 hover:bg-red-50 text-sm leading-none opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                  className="no-print w-6 h-6 rounded-full text-gray-300 hover:text-red-400 hover:bg-red-50 text-sm leading-none"
                   aria-label="行を削除"
                 >
                   ×
