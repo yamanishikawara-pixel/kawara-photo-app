@@ -102,14 +102,14 @@ const A4Page = React.memo(function A4Page({
         return (
           <div key={item.id} style={{
             height: itemH, flexShrink: 0,
-            borderBottom: idx < items.length - 1 ? '1.5px solid #e0e0e0' : 'none',
+            borderBottom: idx < items.length - 1 ? '1px solid #e2e2e2' : 'none',
             padding: `14px ${sidePadding}px 0`,
             display: 'flex', flexDirection: 'column', gap: itemGap,
             overflow: 'hidden',
           }}>
             {/* タイトル */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: titleRowH - itemGap, flexShrink: 0 }}>
-              <div style={{ width: 3, height: 13, background: '#e55a2b', borderRadius: 2, flexShrink: 0 }} />
+              <div style={{ width: 3, height: 13, background: '#e8732e', borderRadius: 2, flexShrink: 0 }} />
               <div style={{
                 fontSize: 11, fontWeight: 700, color: '#111', letterSpacing: '0.08em',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -120,8 +120,8 @@ const A4Page = React.memo(function A4Page({
 
             {/* ラベルバー */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: photoGap, flexShrink: 0 }}>
-              <div style={{ background: '#555', color: '#fff', textAlign: 'center', padding: '3px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', fontFamily: SERIF }}>施　工　前</div>
-              <div style={{ background: '#2a7a4b', color: '#fff', textAlign: 'center', padding: '3px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', fontFamily: SERIF }}>施　工　後</div>
+              <div style={{ background: '#5b6b7a', color: '#fff', textAlign: 'center', padding: '3px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', fontFamily: SERIF }}>施　工　前</div>
+              <div style={{ background: '#1e9e63', color: '#fff', textAlign: 'center', padding: '3px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', fontFamily: SERIF }}>施　工　後</div>
             </div>
 
             {/* 写真 */}
@@ -146,7 +146,7 @@ const A4Page = React.memo(function A4Page({
                     <div style={{
                       width: '100%', height: '100%',
                       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
-                      background: pi === 0 ? '#c8d0d8' : '#a8c4b2',
+                      background: pi === 0 ? '#e8edf2' : '#dcf2e7',
                     }}>
                       <div style={{ fontSize: 28, opacity: 0.5 }}>📷</div>
                       <div style={{ fontSize: 9, color: 'rgba(0,0,0,0.4)', fontFamily: SANS, letterSpacing: '0.08em' }}>
@@ -159,12 +159,14 @@ const A4Page = React.memo(function A4Page({
                     return (
                       <div
                         key={circle.id}
-                        className="absolute aspect-square rounded-full border-[3px] border-red-500 print:border-[2px]"
+                        className="absolute aspect-square rounded-full"
                         style={{
                           left: `${circle.x}%`,
                           top: `${circle.y}%`,
                           width: `${size}%`,
                           transform: 'translate(-50%, -50%)',
+                          border: '3.5px solid #ff2d20',
+                          boxShadow: '0 0 0 1.5px #fff, inset 0 0 0 1.5px #fff',
                         }}
                       />
                     );
@@ -183,7 +185,7 @@ const A4Page = React.memo(function A4Page({
                   {item.beforeDesc || '施工前の状況を記入してください。'}
                 </div>
               </div>
-              <div style={{ background: '#eef6f1', padding: '4px 8px', borderTop: '2px solid #2a7a4b', overflow: 'hidden' }}>
+              <div style={{ background: '#eef6f1', padding: '4px 8px', borderTop: '2px solid #1e9e63', overflow: 'hidden' }}>
                 <div style={{
                   fontSize: 8.5, color: '#1a4a2e', lineHeight: 1.5, letterSpacing: '0.03em', whiteSpace: 'pre-wrap',
                   display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
@@ -234,10 +236,12 @@ function BACircleMarker({ circle, isSelected, onSelect, onDragEnd }: {
         top: `${position.y}%`,
         width: `${size}%`,
         transform: 'translate(-50%, -50%)',
+        border: '3.5px solid #ff2d20',
+        boxShadow: '0 0 0 1.5px #fff, inset 0 0 0 1.5px #fff',
         touchAction: 'none',
         zIndex: isSelected ? 100 : (dragging ? 30 : 20),
       }}
-      className={`absolute aspect-square rounded-full border-[3px] border-red-500 shadow-sm transition-all duration-75 ${dragging ? 'z-30 opacity-80' : 'cursor-pointer hover:bg-red-500/10'} ${isSelected && !dragging ? 'border-dashed bg-red-500/10' : ''}`}
+      className={`absolute aspect-square rounded-full transition-all duration-75 ${dragging ? 'z-30 opacity-80' : 'cursor-pointer hover:bg-red-500/10'} ${isSelected && !dragging ? 'border-dashed bg-red-500/10' : ''}`}
     />
   );
 }
