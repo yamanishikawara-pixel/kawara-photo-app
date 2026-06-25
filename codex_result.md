@@ -1,14 +1,18 @@
-実装は完了しています。変更対象は [src/pages/BeforeAfterPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/BeforeAfterPage.tsx) のみです。`photo-ledger.jsx` は未追跡のまま触っていません。
+[src/pages/BeforeAfterPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/BeforeAfterPage.tsx:996) の `.map()` 閉じカッコ欠落を指定どおり `))}` に修正しました。
 
 検証結果:
-- Phase 1 後: `npx tsc --noEmit` pass / `npx vitest run` 7 files, 92 tests pass
-- Phase 2 後: `npx tsc --noEmit` pass / `npx vitest run` 7 files, 92 tests pass
-- Phase 3 後: `npx tsc --noEmit` pass / `npx vitest run` 7 files, 92 tests pass
+- `npx tsc --noEmit` 通過
+- `npm run build` 通過
 
-コミットは作成できませんでした。Phase 1 のコミット時に以下で失敗し、`.git` 配下への書き込み自体も同じく拒否されました。
+コミットは試行しましたが、この実行環境から `.git` 配下へ書き込みできず失敗しました。
 
 ```text
 fatal: Unable to create '/Users/yamanishikenta/kawara-photo-app/.git/index.lock': Operation not permitted
 ```
 
-現状は `src/pages/BeforeAfterPage.tsx` が未ステージの変更として残っています。
+現在の変更は未コミットで残っています。コミットする場合のコマンドは以下です。
+
+```bash
+git add src/pages/BeforeAfterPage.tsx
+git commit -m "fix(before-after): map閉じカッコ欠落によるビルドエラーを修正"
+```
