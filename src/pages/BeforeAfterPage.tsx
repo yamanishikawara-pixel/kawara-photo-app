@@ -429,16 +429,31 @@ const ItemCard = React.memo(function ItemCard({
           const inputId = fileInputIds[side];
           return (
             <div key={side}>
-              <label
-                htmlFor={inputId}
-                style={{
-                  display: 'block', fontSize: 10,
-                  color: side === 'before' ? '#aaa' : '#4ade80',
-                  marginBottom: 5, letterSpacing: '0.08em', fontWeight: 600,
-                }}
-              >
-                {side === 'before' ? '📷 施工前' : '📷 施工後'}
-              </label>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+                <span style={{ fontSize: 10, color: side === 'before' ? '#aaa' : '#4ade80', letterSpacing: '0.08em', fontWeight: 600 }}>
+                  {side === 'before' ? '📷 施工前' : '📷 施工後'}
+                </span>
+                {img && (
+                  <button
+                    type="button"
+                    onClick={e => {
+                      e.preventDefault(); e.stopPropagation();
+                      setCircleMode(prev => prev === side ? null : side);
+                      setSelectedCircleId(null);
+                    }}
+                    disabled={isUp}
+                    style={{
+                      background: circleMode === side ? '#ef4444' : 'rgba(255,255,255,.1)',
+                      border: 'none', borderRadius: 6,
+                      color: circleMode === side ? '#fff' : '#cdd5de',
+                      cursor: isUp ? 'wait' : 'pointer',
+                      padding: '3px 8px', fontSize: 11, fontWeight: 700, lineHeight: 1,
+                    }}
+                    title="赤丸を追加"
+                    aria-label="赤丸モード切替"
+                  >⭕</button>
+                )}
+              </div>
               <input
                 id={inputId}
                 type="file"
@@ -461,8 +476,8 @@ const ItemCard = React.memo(function ItemCard({
                 style={{
                   display: 'flex',
                   cursor: isUp ? 'wait' : (circleMode === side ? 'crosshair' : 'default'),
-                  height: 90, borderRadius: 8, overflow: 'hidden',
-                  border: `1.5px dashed ${side === 'before' ? '#3d3d60' : '#1a5e38'}`,
+                  aspectRatio: '4/3', borderRadius: 8, overflow: 'hidden',
+                  border: circleMode === side ? '2px solid #ef4444' : `1.5px dashed ${side === 'before' ? '#3d3d60' : '#1a5e38'}`,
                   background: side === 'before' ? '#12122a' : '#0f1f15',
                   alignItems: 'center', justifyContent: 'center',
                   position: 'relative',
@@ -489,24 +504,6 @@ const ItemCard = React.memo(function ItemCard({
                       title="90°回転"
                       aria-label="画像を90度回転"
                     >↻</button>
-                    <button
-                      type="button"
-                      onClick={e => {
-                        e.preventDefault(); e.stopPropagation();
-                        setCircleMode(prev => prev === side ? null : side);
-                        setSelectedCircleId(null);
-                      }}
-                      disabled={isUp}
-                      style={{
-                        position: 'absolute', top: 4, left: 4,
-                        background: circleMode === side ? '#ef4444' : 'rgba(0,0,0,0.55)',
-                        border: 'none', borderRadius: 6,
-                        color: '#fff', cursor: isUp ? 'wait' : 'pointer', padding: '3px 6px',
-                        fontSize: 11, fontWeight: 700, lineHeight: 1,
-                      }}
-                      title="赤丸を追加"
-                      aria-label="赤丸モード切替"
-                    >⭕</button>
                     {(side === 'before' ? (item.beforeCircles ?? []) : (item.afterCircles ?? [])).map(circle => (
                       <BACircleMarker
                         key={circle.id}
@@ -576,8 +573,15 @@ const ItemCard = React.memo(function ItemCard({
         return (
           <div style={{ display: 'flex', alignItems: 'center', borderRadius: 8, overflow: 'hidden', border: '1px solid #3d3d60', marginBottom: 12 }}>
             <span style={{ flex: 1, textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#8b8ba8', padding: '0 8px' }}>赤丸サイズ</span>
-            <button type="button" onClick={() => update({ size: Math.min(80, Math.round(size + 5)) })} style={{ padding: '8px 14px', fontSize: 15, fontWeight: 700, color: '#f0ede8', background: 'transparent', border: 'none', borderLeft: '1px solid #3d3d60', cursor: 'pointer' }}>＋</button>
-            <button type="button" onClick={() => update({ size: Math.max(5, Math.round(size - 5)) })} style={{ padding: '8px 14px', fontSize: 15, fontWeight: 700, color: '#f0ede8', background: 'transparent', border: 'none', borderLeft: '1px solid #3d3d60', borderRight: '1px solid #3d3d60', cursor: 'pointer' }}>－</button>
+            <input
+              type="range"
+              min={5}
+              max={80}
+              step={5}
+              value={size}
+              onChange={e => update({ size: Number(e.target.value) })}
+              style={{ flex: 1, accentColor: '#ef4444', margin: '0 8px' }}
+            />
             <button type="button" onClick={remove} aria-label="赤丸を削除" style={{ padding: '8px 14px', color: '#ef4444', background: 'transparent', border: 'none', cursor: 'pointer' }}><Trash2 className="w-4 h-4" /></button>
           </div>
         );
@@ -629,6 +633,7 @@ export function BeforeAfterPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<'edit' | 'report'>('edit');
   const [projectName, setProjectName] = useState('');
   const [contractor, setContractor] = useState('');
   const [items, setItems] = useState<BeforeAfterItem[]>(() => [makeEmptyItem()]);
@@ -941,10 +946,13 @@ export function BeforeAfterPage() {
     <div className="min-h-screen font-sans" style={{ background: '#0f0f1a', color: '#f0ede8' }}>
       {/* 印刷時スタイル（window.print() / PDF 書き出し対応の土台）*/}
       <style>{`
+        .a4-print-only { display: none; }
         @media print {
           body { background: #fff !important; }
           .no-print { display: none !important; }
           .a4-preview-wrap { transform: none !important; margin: 0 !important; }
+          .a4-print-only { display: block !important; }
+          .a4-preview-wrap { display: none !important; }
           .a4-page { page-break-after: always; box-shadow: none !important; }
           .a4-page:last-child { page-break-after: auto; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -954,7 +962,7 @@ export function BeforeAfterPage() {
       <div className="max-w-screen-xl mx-auto px-4 sm:px-6 pt-4 pb-16">
 
         {/* ヘッダー */}
-        <div className="flex items-center justify-between py-5 no-print">
+        <div className="flex items-center justify-between py-5 no-print" style={{ gap: 8 }}>
           <button
             type="button"
             onClick={handleBack}
@@ -966,26 +974,64 @@ export function BeforeAfterPage() {
             <ArrowLeft className="w-4 h-4" />
             現場ホーム
           </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={uploading || saving}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold"
-            style={{
-              background: saved ? '#10b981' : '#ff6b35',
-              color: '#fff',
-              opacity: uploading || saving ? 0.7 : 1,
-              cursor: uploading || saving ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {uploading && (
-              <span style={{ fontSize: 11, color: '#fbbf24', marginRight: 8 }}>
-                画像アップロード中…
-              </span>
+
+          {/* 編集 / 報告書 切替 */}
+          <div style={{ display: 'flex', background: 'rgba(255,255,255,.08)', borderRadius: 11, padding: 3 }}>
+            {(['edit', 'report'] as const).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setView(k)}
+                style={{
+                  border: 'none', borderRadius: 9, padding: '7px 16px',
+                  fontSize: 13, fontWeight: 700,
+                  background: view === k ? '#fff' : 'transparent',
+                  color: view === k ? '#161b21' : '#aeb8c2',
+                  cursor: 'pointer',
+                  transition: 'background .15s, color .15s',
+                }}
+              >
+                {k === 'edit' ? '編集' : '報告書'}
+              </button>
             )}
-            <Save className="w-4 h-4" />
-            {saving ? '保存中…' : saved ? '保存済み ✓' : '保存'}
-          </button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {view === 'report' && (
+              <button
+                type="button"
+                onClick={() => window.print()}
+                style={{
+                  border: 'none', borderRadius: 8, padding: '8px 14px',
+                  fontSize: 13, fontWeight: 700,
+                  background: 'rgba(255,255,255,.12)', color: '#f0ede8',
+                  cursor: 'pointer',
+                }}
+              >
+                🖨 印刷/PDF
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={uploading || saving}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold"
+              style={{
+                background: saved ? '#10b981' : '#ff6b35',
+                color: '#fff',
+                opacity: uploading || saving ? 0.7 : 1,
+                cursor: uploading || saving ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {uploading && (
+                <span style={{ fontSize: 11, color: '#fbbf24', marginRight: 8 }}>
+                  画像アップロード中…
+                </span>
+              )}
+              <Save className="w-4 h-4" />
+              {saving ? '保存中…' : saved ? '保存済み ✓' : '保存'}
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -1008,16 +1054,9 @@ export function BeforeAfterPage() {
           </div>
         )}
 
-        <div className="mb-6 no-print">
-          <h1 className="text-xl font-bold">施工前後比較</h1>
-          <p className="text-sm mt-1" style={{ color: '#6b7280' }}>1ページに2箇所 / A4出力対応</p>
-        </div>
-
-        {/* 左右レイアウト */}
-        <div className="flex gap-8 items-start">
-
-          {/* 左:入力フォーム */}
-          <div className="w-full lg:w-96 shrink-0 flex flex-col gap-0 no-print">
+        {/* 編集ビュー */}
+        {view === 'edit' && (
+          <div className="w-full flex flex-col gap-0 no-print">
             {items.map((item, idx) => (
               <ItemCard
                 key={item.id}
@@ -1058,20 +1097,22 @@ export function BeforeAfterPage() {
               工事箇所を追加
             </button>
           </div>
+        )}
 
-          {/* 右:A4プレビュー */}
-          <div className="hidden lg:flex flex-col gap-6 flex-1 min-w-0 items-center">
+        {/* 報告書ビュー（＋印刷専用 hidden コンテナ） */}
+        {view === 'report' && (
+          <div className="flex flex-col gap-6 items-center">
             <div className="no-print" style={{ fontSize: 11, color: '#4b5563', letterSpacing: '0.1em' }}>
-              A4 プレビュー({pages.length}ページ)
+              A4 プレビュー（{pages.length}ページ）
             </div>
             {pages.map((pageItems, pi) => (
               <div
                 key={pi}
                 className="a4-preview-wrap"
                 style={{
-                  transform: 'scale(0.7)',
+                  transform: 'scale(0.85)',
                   transformOrigin: 'top center',
-                  marginBottom: `calc(${H}px * 0.7 - ${H}px)`,
+                  marginBottom: `calc(${H}px * 0.85 - ${H}px)`,
                 }}
               >
                 <A4Page
@@ -1084,6 +1125,20 @@ export function BeforeAfterPage() {
               </div>
             ))}
           </div>
+        )}
+
+        {/* 印刷専用コンテナ（編集ビュー表示中に Cmd+P された場合も正しく印刷されるよう常にDOMに存在） */}
+        <div className="a4-print-only">
+          {pages.map((pageItems, pi) => (
+            <A4Page
+              key={pi}
+              items={pageItems}
+              pageIndex={pi}
+              totalPages={pages.length}
+              projectName={projectName}
+              contractor={contractor}
+            />
+          ))}
         </div>
       </div>
     </div>
