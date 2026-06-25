@@ -993,7 +993,7 @@ export function BeforeAfterPage() {
               >
                 {k === 'edit' ? '編集' : '報告書'}
               </button>
-            )}
+            ))}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
