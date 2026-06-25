@@ -1,18 +1,13 @@
-[src/pages/BeforeAfterPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/BeforeAfterPage.tsx:996) の `.map()` 閉じカッコ欠落を指定どおり `))}` に修正しました。
+実装と検証は完了しました。変更は [src/pages/BeforeAfterPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/BeforeAfterPage.tsx) のみで、保存・アップロード・データ構造・赤丸座標ロジックには触れていません。
 
-検証結果:
-- `npx tsc --noEmit` 通過
-- `npm run build` 通過
+確認結果:
+- `npx tsc --noEmit` パス
+- `npm run build` パス
+- `print-color-adjust` 既存設定を確認済み
 
-コミットは試行しましたが、この実行環境から `.git` 配下へ書き込みできず失敗しました。
+コミットだけ失敗しました。`.git/index.lock` を作成できず、`.git` 配下への書き込みがこの環境で `Operation not permitted` になっています。
 
-```text
-fatal: Unable to create '/Users/yamanishikenta/kawara-photo-app/.git/index.lock': Operation not permitted
-```
-
-現在の変更は未コミットで残っています。コミットする場合のコマンドは以下です。
-
-```bash
-git add src/pages/BeforeAfterPage.tsx
-git commit -m "fix(before-after): map閉じカッコ欠落によるビルドエラーを修正"
+実行したコミットコマンド:
+```sh
+git add src/pages/BeforeAfterPage.tsx && git commit -m "feat(before-after): A4プレビューの配色を変更（白縁赤丸・ラベルバー・プレースホルダー）"
 ```
