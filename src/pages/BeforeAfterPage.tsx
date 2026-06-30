@@ -37,7 +37,7 @@ const LAYOUT = {
 
 // 画像圧縮設定
 const IMG_MAX_PX = 1600;   // A4印刷を見越して 800→1600 に拡大
-const IMG_QUALITY = 0.75;
+const IMG_QUALITY = 0.92;
 
 // プレビュー写真のフィット方式（屋根写真が切れるのが気になるなら 'contain' に変更）
 type PhotoFit = 'cover' | 'contain';
@@ -109,7 +109,7 @@ const A4Page = React.memo(function A4Page({
           }}>
             {/* タイトル */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: titleRowH - itemGap, flexShrink: 0 }}>
-              <div style={{ width: 3, height: 13, background: '#e8732e', borderRadius: 2, flexShrink: 0 }} />
+              <div style={{ width: 3, height: 13, background: '#c0492f', borderRadius: 2, flexShrink: 0 }} />
               <div style={{
                 fontSize: 11, fontWeight: 700, color: '#111', letterSpacing: '0.08em',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -120,8 +120,8 @@ const A4Page = React.memo(function A4Page({
 
             {/* ラベルバー */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: photoGap, flexShrink: 0 }}>
-              <div style={{ background: '#5b6b7a', color: '#fff', textAlign: 'center', padding: '3px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', fontFamily: SERIF }}>施　工　前</div>
-              <div style={{ background: '#1e9e63', color: '#fff', textAlign: 'center', padding: '3px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', fontFamily: SERIF }}>施　工　後</div>
+              <div style={{ background: '#4a5560', color: '#fff', textAlign: 'center', padding: '3px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', fontFamily: SERIF }}>施　工　前</div>
+              <div style={{ background: '#5a7d52', color: '#fff', textAlign: 'center', padding: '3px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', fontFamily: SERIF }}>施　工　後</div>
             </div>
 
             {/* 写真 */}
@@ -165,7 +165,7 @@ const A4Page = React.memo(function A4Page({
                           top: `${circle.y}%`,
                           width: `${size}%`,
                           transform: 'translate(-50%, -50%)',
-                          border: '3.5px solid #ff2d20',
+                          border: '3.5px solid #c0492f',
                           boxShadow: '0 0 0 1.5px #fff, inset 0 0 0 1.5px #fff',
                         }}
                       />

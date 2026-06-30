@@ -41,8 +41,8 @@ const SECTION_META: Record<SectionKey, { label: string; icon: string }> = {
 const APPENDIX_PAGE_LIMIT = 20;             // 添付PDFの取り込み最大ページ数
 const APPENDIX_RENDER_WIDTH = 794;          // A4 150DPI 相当
 const APPENDIX_RENDER_QUALITY = 0.92;
-const IMG_MAX_PRINT_PX = 1600;              // 印刷用圧縮の最大辺
-const IMG_PRINT_QUALITY = 0.92;
+const IMG_MAX_PRINT_PX = 2000;              // 印刷用圧縮の最大辺
+const IMG_PRINT_QUALITY = 0.90;
 const IMG_BATCH_SIZE = 2;                   // 画像最適化のバッチ並列度
 
 // ── 空行プレースホルダ生成（React 内で state として保持する）──
@@ -392,6 +392,8 @@ export default function PdfExportPage() {
         if (!ctx) { resolve(origSrc); return; }
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, width, height);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, width, height);
         const dataUrl = canvas.toDataURL('image/jpeg', IMG_PRINT_QUALITY);
         canvas.width = 0;

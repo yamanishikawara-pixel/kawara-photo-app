@@ -13,7 +13,7 @@ const DEFAULT_OPTIONS = {
   maxWidthOrHeight: 1920,
   useWebWorker: true,
   fileType: 'image/jpeg',
-  initialQuality: 0.8,
+  initialQuality: 0.85,
 };
 
 /**
