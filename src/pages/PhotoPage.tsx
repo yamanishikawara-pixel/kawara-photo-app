@@ -20,7 +20,7 @@ import {
 import type { DragEndEvent } from '@dnd-kit/core';
 import {
   SortableContext, arrayMove, useSortable,
-  verticalListSortingStrategy,
+  verticalListSortingStrategy, rectSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -304,7 +304,6 @@ export default function PhotoPage() {
     x: number;
     y: number;
   } | null>(null);
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [templateNameInput, setTemplateNameInput] = useState('');
 
   // ── デバウンス保存インフラ(C-5 対策) ─────────────────────────
@@ -340,7 +339,6 @@ export default function PhotoPage() {
       Object.values(debounceTimers.current).forEach((t) => { if (t) clearTimeout(t); });
       debounceTimers.current = {};
       if (saveStateTimer.current) clearTimeout(saveStateTimer.current);
-      if (longPressTimer.current) clearTimeout(longPressTimer.current); // C4: メモリリーク防止
       // 未書き込みのデータがあれば最後に1回だけ書く
       // (await できないので fire-and-forget。失敗時は次回ロードで整合)
       if (pendingPhotosRef.current && id) {
@@ -707,22 +705,8 @@ export default function PhotoPage() {
   };
 
   const handleGridPhotoClick = (photoId: number) => {
-    // W1: 長押しタイマーが動いている間にタップ完了した場合にキャンセル
-    if (longPressTimer.current) clearTimeout(longPressTimer.current);
     setLongPressMenu(null);
     setFullscreenPhotoId(photoId);
-  };
-
-  const handleLongPressStart = (photoId: number, index: number, e: React.PointerEvent) => {
-    longPressTimer.current = setTimeout(() => {
-      setLongPressMenu({ photoId, index, x: e.clientX, y: e.clientY });
-      // 振動フィードバック（対応端末）
-      if ('vibrate' in navigator) navigator.vibrate(30);
-    }, 500);
-  };
-
-  const handleLongPressEnd = () => {
-    if (longPressTimer.current) clearTimeout(longPressTimer.current);
   };
 
   const handleBulkUpload = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -1091,65 +1075,98 @@ export default function PhotoPage() {
 
         {/* ── グリッドビュー ── */}
         {viewMode === 'grid' && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2 mb-4">
-            {project.photos.map((photo, index) => (
-              <button
-                key={photo.id}
-                type="button"
-                onPointerDown={e => handleLongPressStart(photo.id, index, e)}
-                onPointerUp={handleLongPressEnd}
-                onPointerCancel={handleLongPressEnd}
-                onClick={() => handleGridPhotoClick(photo.id)}
-                className="relative rounded-xl overflow-hidden border transition-all active:scale-95"
-                style={{ background: '#1c1c30', borderColor: '#2e2e50', aspectRatio: '4/3' }}
-                onPointerEnter={e => (e.currentTarget.style.borderColor = '#ff6b35')}
-                onPointerLeave={e => (e.currentTarget.style.borderColor = '#2e2e50')}
-              >
-                {photo.image ? (
-                  <img
-                    src={proxyUrl(photo.image, `grid_${photo.id}`)}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                    decoding="async"
-                    alt=""
-                    style={{ transform: `rotate(${Number(photo.rotation || 0)}deg)` }}
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Camera className="w-8 h-8" style={{ color: '#2e2e50' }} />
-                  </div>
-                )}
-                {/* 写真番号バッジ */}
-                <div className="absolute top-1.5 left-1.5 w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black" style={{ background: '#ff6b35', color: '#fff' }}>
-                  {index + 1}
-                </div>
-                {/* 説明プレビュー */}
-                {(photo.description || photo.process) && (
-                  <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 text-xs font-bold truncate text-left" style={{ background: 'rgba(15,15,26,0.82)', color: '#f0ede8' }}>
-                    {photo.process || photo.description}
-                  </div>
-                )}
-                {/* 赤丸がある場合のインジケーター */}
-                {(photo.circles?.length ?? 0) > 0 && (
-                  <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black" style={{ background: '#ef4444', color: '#fff' }}>
-                    {photo.circles!.length}
-                  </div>
-                )}
-              </button>
-            ))}
-            {/* 写真追加ボタン */}
-            <button
-              type="button"
-              onClick={addPhotoSlot}
-              className="rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-colors active:scale-95"
-              style={{ borderColor: '#2e2e50', color: '#3d3d60', aspectRatio: '4/3' }}
-              onPointerEnter={e => { (e.currentTarget.style.borderColor = '#ff6b35'); (e.currentTarget.style.color = '#ff6b35'); }}
-              onPointerLeave={e => { (e.currentTarget.style.borderColor = '#2e2e50'); (e.currentTarget.style.color = '#3d3d60'); }}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={() => { if ('vibrate' in navigator) navigator.vibrate(30); }}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={project.photos.map(p => p.id)}
+              strategy={rectSortingStrategy}
             >
-              <Plus className="w-7 h-7" />
-              <span className="text-xs font-bold">追加</span>
-            </button>
-          </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2 mb-4">
+                {project.photos.map((photo, index) => (
+                  <SortablePhotoCard key={photo.id} id={photo.id}>
+                    {({ isDragging, dragHandleProps }) => (
+                      <button
+                        type="button"
+                        {...dragHandleProps}
+                        onClick={() => handleGridPhotoClick(photo.id)}
+                        className="relative w-full rounded-xl overflow-hidden border transition-all active:scale-95 touch-none"
+                        style={{
+                          background: '#1c1c30',
+                          borderColor: '#2e2e50',
+                          aspectRatio: '4/3',
+                          opacity: isDragging ? 0.5 : 1,
+                        }}
+                        onPointerEnter={e => (e.currentTarget.style.borderColor = '#ff6b35')}
+                        onPointerLeave={e => (e.currentTarget.style.borderColor = '#2e2e50')}
+                      >
+                        {photo.image ? (
+                          <img
+                            src={proxyUrl(photo.image, `grid_${photo.id}`)}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                            decoding="async"
+                            alt=""
+                            style={{ transform: `rotate(${Number(photo.rotation || 0)}deg)` }}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Camera className="w-8 h-8" style={{ color: '#2e2e50' }} />
+                          </div>
+                        )}
+                        {/* 写真番号バッジ */}
+                        <div className="absolute top-1.5 left-1.5 w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black" style={{ background: '#ff6b35', color: '#fff' }}>
+                          {index + 1}
+                        </div>
+                        {/* ⋮ メニューボタン（編集・複製・回転・削除） */}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onPointerDown={e => e.stopPropagation()}
+                          onClick={e => {
+                            e.stopPropagation();
+                            setLongPressMenu({ photoId: photo.id, index, x: e.clientX, y: e.clientY });
+                          }}
+                          className="absolute top-1.5 right-1.5 w-7 h-7 rounded-lg flex items-center justify-center text-sm font-black"
+                          style={{ background: 'rgba(15,15,26,0.7)', color: '#f0ede8' }}
+                          aria-label="メニューを開く"
+                        >
+                          ⋮
+                        </div>
+                        {/* 説明プレビュー */}
+                        {(photo.description || photo.process) && (
+                          <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 text-xs font-bold truncate text-left" style={{ background: 'rgba(15,15,26,0.82)', color: '#f0ede8' }}>
+                            {photo.process || photo.description}
+                          </div>
+                        )}
+                        {/* 赤丸がある場合のインジケーター（⋮ボタンと重ならないよう少し左に） */}
+                        {(photo.circles?.length ?? 0) > 0 && (
+                          <div className="absolute top-1.5 right-9 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black" style={{ background: '#ef4444', color: '#fff' }}>
+                            {photo.circles!.length}
+                          </div>
+                        )}
+                      </button>
+                    )}
+                  </SortablePhotoCard>
+                ))}
+                {/* 写真追加ボタン（並び替え対象外） */}
+                <button
+                  type="button"
+                  onClick={addPhotoSlot}
+                  className="rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-colors active:scale-95"
+                  style={{ borderColor: '#2e2e50', color: '#3d3d60', aspectRatio: '4/3' }}
+                  onPointerEnter={e => { (e.currentTarget.style.borderColor = '#ff6b35'); (e.currentTarget.style.color = '#ff6b35'); }}
+                  onPointerLeave={e => { (e.currentTarget.style.borderColor = '#2e2e50'); (e.currentTarget.style.color = '#3d3d60'); }}
+                >
+                  <Plus className="w-7 h-7" />
+                  <span className="text-xs font-bold">追加</span>
+                </button>
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
 
         {/* ── 写真カードリスト ── */}
