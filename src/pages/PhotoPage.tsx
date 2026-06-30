@@ -266,6 +266,8 @@ export default function PhotoPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [loadingId, setLoadingId] = useState<number | null>(null);
   const [bulkUploading, setBulkUploading] = useState(false);
+  const bulkUploadingRef = useRef(bulkUploading);
+  bulkUploadingRef.current = bulkUploading;
   const [bulkProgress, setBulkProgress] = useState(0);
   const [bulkTotal, setBulkTotal] = useState(0);
   const bulkCancelRef = useRef(false);
@@ -295,6 +297,8 @@ export default function PhotoPage() {
   const [confirmOverwritePhotoMaster, setConfirmOverwritePhotoMaster] = useState<{ name: string; photo: Photo } | null>(null);
   const [masterSaveSuccess, setMasterSaveSuccess] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const dragCounterRef = useRef(0);
   const [templateNameTarget, setTemplateNameTarget] = useState<Photo | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
   const [fullscreenPhotoId, setFullscreenPhotoId] = useState<number | null>(null);
@@ -355,6 +359,23 @@ export default function PhotoPage() {
   useEffect(() => {
     projectRef.current = project;
   }, [project]);
+
+  // 画像のクリップボードペースト対応
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (!e.clipboardData) return;
+      const files = Array.from(e.clipboardData.items)
+        .filter(item => item.kind === 'file' && item.type.startsWith('image/'))
+        .map(item => item.getAsFile())
+        .filter((f): f is File => f !== null);
+      if (files.length === 0) return;
+      e.preventDefault();
+      if (bulkUploadingRef.current) return;
+      void processFilesRef.current(files);
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, []);
 
   // uploadError の自動消去（8秒）
   useEffect(() => {
@@ -709,10 +730,8 @@ export default function PhotoPage() {
     setFullscreenPhotoId(photoId);
   };
 
-  const handleBulkUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+  const processFiles = async (files: File[]) => {
     if (!project || !id) return;
-    const files = Array.from(e.target.files as FileList);
-    e.target.value = ''; // 同じファイル群を再選択できるようリセット
     if (files.length === 0) return;
     cancelPendingPhotoDebounces();
     bulkCancelRef.current = false; // 前回キャンセルをリセット
@@ -793,6 +812,15 @@ export default function PhotoPage() {
       await commitPhotos(rebased);
     }
     setBulkUploading(false);
+  };
+
+  const processFilesRef = useRef(processFiles);
+  processFilesRef.current = processFiles;
+
+  const handleBulkUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files as FileList);
+    e.target.value = ''; // 同じファイル群を再選択できるようリセット
+    await processFiles(files);
   };
 
   const uploadPhoto = async (e: ChangeEvent<HTMLInputElement>, index: number) => {
@@ -917,7 +945,47 @@ export default function PhotoPage() {
       className="min-h-screen font-sans pb-40 select-none overflow-x-hidden"
       style={{ background: '#0f0f1a', color: '#f0ede8' }}
       onClick={() => { setSelectedCircleId(null); setSelectedDimensionLineId(null); }}
+      onDragEnter={e => {
+        if (!e.dataTransfer.types.includes('Files')) return;
+        e.preventDefault();
+        dragCounterRef.current += 1;
+        setIsDraggingOver(true);
+      }}
+      onDragOver={e => {
+        if (!e.dataTransfer.types.includes('Files')) return;
+        e.preventDefault();
+      }}
+      onDragLeave={e => {
+        if (!e.dataTransfer.types.includes('Files')) return;
+        e.preventDefault();
+        dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+        if (dragCounterRef.current === 0) setIsDraggingOver(false);
+      }}
+      onDrop={e => {
+        if (!e.dataTransfer.types.includes('Files')) return;
+        e.preventDefault();
+        dragCounterRef.current = 0;
+        setIsDraggingOver(false);
+        const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+        if (files.length === 0) return;
+        if (bulkUploading) { setUploadError('アップロード中です。完了をお待ちください。'); return; }
+        void processFiles(files);
+      }}
     >
+      {isDraggingOver && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none"
+          style={{ background: 'rgba(255,107,53,0.15)', backdropFilter: 'blur(2px)' }}
+        >
+          <div
+            className="px-8 py-6 rounded-2xl border-2 border-dashed flex flex-col items-center gap-3"
+            style={{ borderColor: '#ff6b35', background: '#1c1c30' }}
+          >
+            <UploadCloud className="w-10 h-10" style={{ color: '#ff6b35' }} />
+            <span className="font-black text-lg" style={{ color: '#f0ede8' }}>ここに写真をドロップ</span>
+          </div>
+        </div>
+      )}
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
 
         {/* ── 上部コントロールエリア ── */}

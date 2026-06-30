@@ -1,21 +1,26 @@
-実装は完了しています。変更は [src/pages/PhotoPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/PhotoPage.tsx:1076) のみです。
+実装は完了しました。変更は [src/pages/PhotoPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/PhotoPage.tsx:733) のみです。
 
-グリッドビューを `DndContext` + `SortableContext` + `SortablePhotoCard` 化し、`rectSortingStrategy` で長押しからスライド並び替えできるようにしました。長押しメニュー用 timer は削除し、メニューは各カード右上の `⋮` ボタンから開く形に移しています。追加ボタンは元の見た目を保つため、同じ grid 内に非 sortable 要素として残しました。
+対応内容:
+- 既存の一括アップロード処理を `processFiles(files: File[])` に共通化
+- 既存ファイル選択ボタンは `handleBulkUpload` 経由で従来どおり動作
+- 画面全体への画像ドラッグ＆ドロップ対応を追加
+- 画像クリップボードペースト対応を追加
+- ドラッグ中の「ここに写真をドロップ」オーバーレイを追加
 
-確認結果:
-- `npx tsc --noEmit` 通過
-- `npx vitest run` 通過、7 files / 92 tests
-- `npm run build` 通過
+検証:
+- `npx tsc --noEmit` パス
+- `npx vitest run` パス、7 files / 92 tests
+- `npm run build` パス
 
-コミットは試行しましたが、`.git/index.lock` を作成できず失敗しました。
+コミットだけ、この環境からは `.git` 配下への書き込みが拒否されて作成できませんでした。
 
-```text
+```txt
 fatal: Unable to create '/Users/yamanishikenta/kawara-photo-app/.git/index.lock': Operation not permitted
 ```
 
-作業ツリーには変更が残っています。権限がある通常のターミナルで以下を実行すれば、指定メッセージでコミットできます。
+作業ツリーには `src/pages/PhotoPage.tsx` の変更だけが残っています。コミットする場合のメッセージは指定どおりです。
 
 ```bash
 git add src/pages/PhotoPage.tsx
-git commit -m "feat(photo): グリッドビューで長押し→スライド並び替えに対応、メニューは⋮ボタンへ移動"
+git commit -m "feat(photo): 写真の一括アップロードにドラッグ&ドロップ・クリップボードペーストを追加"
 ```
