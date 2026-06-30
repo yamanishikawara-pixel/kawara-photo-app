@@ -24,7 +24,7 @@ const SANS  = "'Noto Sans JP', sans-serif";
 
 // レイアウト定数を集約（ヘッダー等を変更する場合はここを触る）
 const LAYOUT = {
-  headerH: 40,
+  headerH: 64,
   footerH: 32,
   pagePadding: 44,
   titleRowH: 20,
@@ -80,18 +80,36 @@ const A4Page = React.memo(function A4Page({
     >
       {/* ヘッダー */}
       <div style={{
-        height: headerH, borderBottom: '2px solid #1a1a1a', padding: `0 ${sidePadding}px`,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
+        height: headerH, borderBottom: '2px solid #1c1f22', flexShrink: 0,
+        display: 'flex', alignItems: 'stretch', padding: `0 ${sidePadding}px`, gap: 14,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {pageIndex === 0 && (
-            <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: '0.2em', fontFamily: SERIF, color: '#111' }}>
-              施工前後比較
+        {/* 左：赤錆の縦バー＋タイトル */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, paddingTop: 10, paddingBottom: 10 }}>
+          <div style={{ width: 5, alignSelf: 'stretch', background: '#c0492f', flexShrink: 0 }} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 8.5, letterSpacing: '0.25em', color: '#6b7178', fontWeight: 800 }}>
+              施工写真報告書
             </div>
-          )}
+            <div style={{
+              fontSize: 16, fontWeight: 900, letterSpacing: '0.02em', lineHeight: 1.2, marginTop: 2,
+              color: '#1c1f22', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {projectName || '工事名未設定'}
+            </div>
+          </div>
         </div>
-        <div style={{ fontSize: 10, color: '#aaa', letterSpacing: '0.15em' }}>
-          {pageIndex + 1} / {totalPages}
+        {/* 右：施工者（黒ブロックで締める） */}
+        <div style={{
+          background: '#1c1f22', color: '#f7f5f1', padding: '10px 16px',
+          display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'right',
+          minWidth: 150, flexShrink: 0, marginTop: 6, marginBottom: 6, borderRadius: 2,
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {contractor}
+          </div>
+          <div style={{ fontSize: 8.5, color: '#9aa3ac', marginTop: 2, letterSpacing: '0.1em' }}>
+            {pageIndex + 1} / {totalPages}
+          </div>
         </div>
       </div>
 
