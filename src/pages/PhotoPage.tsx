@@ -1159,9 +1159,8 @@ export default function PhotoPage() {
                     {({ isDragging, dragHandleProps }) => (
                       <button
                         type="button"
-                        {...dragHandleProps}
                         onClick={() => handleGridPhotoClick(photo.id)}
-                        className="relative w-full rounded-xl overflow-hidden border transition-all active:scale-95 touch-none"
+                        className="relative w-full rounded-xl overflow-hidden border transition-all active:scale-95"
                         style={{
                           background: '#1c1c30',
                           borderColor: '#2e2e50',
@@ -1185,8 +1184,13 @@ export default function PhotoPage() {
                             <Camera className="w-8 h-8" style={{ color: '#2e2e50' }} />
                           </div>
                         )}
-                        {/* 写真番号バッジ */}
-                        <div className="absolute top-1.5 left-1.5 w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black" style={{ background: '#ff6b35', color: '#fff' }}>
+                        {/* 写真番号バッジ（ドラッグハンドル兼用） */}
+                        <div
+                          {...dragHandleProps}
+                          className="absolute top-1.5 left-1.5 w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black touch-none cursor-grab active:cursor-grabbing"
+                          style={{ background: '#ff6b35', color: '#fff' }}
+                          title="長押しで並べ替え"
+                        >
                           {index + 1}
                         </div>
                         {/* ⋮ メニューボタン（編集・複製・回転・削除） */}
