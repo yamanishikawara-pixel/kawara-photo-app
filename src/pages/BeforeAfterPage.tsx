@@ -208,19 +208,19 @@ const A4Page = React.memo(function A4Page({
                 ))}
               </div>
 
-              {/* 説明（段階④で構造を変える予定のため、今はそのまま） */}
+              {/* 説明 */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: photoGap, flex: 1, minHeight: 0 }}>
-                <div style={{ background: '#f4f4f4', padding: '4px 8px', borderTop: '2px solid #888', overflow: 'hidden' }}>
+                <div style={{ borderLeft: '3px solid #4a5560', paddingLeft: 7, overflow: 'hidden' }}>
                   <div style={{
-                    fontSize: 8.5, color: '#444', lineHeight: 1.5, letterSpacing: '0.03em', whiteSpace: 'pre-wrap',
+                    fontSize: 8.5, color: '#33383d', lineHeight: 1.5, letterSpacing: '0.03em', whiteSpace: 'pre-wrap',
                     display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                   }}>
                     {item.beforeDesc || '施工前の状況を記入してください。'}
                   </div>
                 </div>
-                <div style={{ background: '#eef6f1', padding: '4px 8px', borderTop: '2px solid #1e9e63', overflow: 'hidden' }}>
+                <div style={{ borderLeft: '3px solid #5a7d52', paddingLeft: 7, overflow: 'hidden' }}>
                   <div style={{
-                    fontSize: 8.5, color: '#1a4a2e', lineHeight: 1.5, letterSpacing: '0.03em', whiteSpace: 'pre-wrap',
+                    fontSize: 8.5, color: '#33383d', lineHeight: 1.5, letterSpacing: '0.03em', whiteSpace: 'pre-wrap',
                     display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                   }}>
                     {item.afterDesc || '施工後の状況を記入してください。'}

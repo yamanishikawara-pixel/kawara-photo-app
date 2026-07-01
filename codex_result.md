@@ -1,12 +1,13 @@
-[BeforeAfterPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/BeforeAfterPage.tsx:65) の `A4Page` だけ変更しました。番号・箇所名を左サイドバー化し、`No.01` 形式へ変更、写真領域の計算も指定どおり更新しています。所見欄の構造、フッター、保存ロジック、`BACircleMarker` / `circleMode` 側は触っていません。
+[BeforeAfterPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/BeforeAfterPage.tsx:211) の `A4Page` 内、説明（所見）欄の2セルだけ変更しました。
+
+変更内容:
+- 背景色と `borderTop` を削除
+- 左3px色バーに変更
+- `paddingLeft: 7`
+- 文字色を `#33383d` に統一
+- テキスト本体の `whiteSpace` / `WebkitLineClamp` / `fontSize` / `letterSpacing` / `lineHeight` は維持
 
 検証:
-`npx tsc --noEmit` はパスしました。
+- `npx tsc --noEmit` パス
 
-コミットは作成できませんでした。`git add` 時に `.git/index.lock` を作れず、さらに `touch .git/codex-write-test` も `Operation not permitted` で拒否されるため、この環境から `.git` 配下へ書き込めません。作業ツリーには対象ファイルの変更が残っています。既存の `.agent/handoff.md` 変更は未変更のままです。
-
-コミットする場合のコマンド:
-```bash
-git add src/pages/BeforeAfterPage.tsx
-git commit -m "feat(before-after): 報告書を職人路線へ作り替え 段階3/5 番号サイドバー化（No.01形式）"
-```
+ただしコミットは作成できませんでした。`git add` / 代替インデックス方式のどちらも `.git` への書き込みが `Operation not permitted` で拒否されました。既存の未コミット変更 `.agent/handoff.md` は触っていません。
