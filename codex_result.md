@@ -1,19 +1,12 @@
-実装と確認は完了しました。
+[BeforeAfterPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/BeforeAfterPage.tsx:65) の `A4Page` だけ変更しました。番号・箇所名を左サイドバー化し、`No.01` 形式へ変更、写真領域の計算も指定どおり更新しています。所見欄の構造、フッター、保存ロジック、`BACircleMarker` / `circleMode` 側は触っていません。
 
-変更内容:
-- [src/pages/BeforeAfterPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/BeforeAfterPage.tsx:27) の `LAYOUT.headerH` を `40` から `64` に変更
-- [src/pages/BeforeAfterPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/BeforeAfterPage.tsx:81) の `A4Page` ヘッダーJSXのみ差し替え
-- 編集フォーム、保存ロジック、赤丸座標、選択/ドラッグ/サイズ/削除ロジックは未変更
-- `photoH` は既存式のまま、計算上 `148` でマイナスにならないことを確認
+検証:
+`npx tsc --noEmit` はパスしました。
 
-確認:
-- `npx tsc --noEmit` パス
-- `git diff --check -- src/pages/BeforeAfterPage.tsx` パス
+コミットは作成できませんでした。`git add` 時に `.git/index.lock` を作れず、さらに `touch .git/codex-write-test` も `Operation not permitted` で拒否されるため、この環境から `.git` 配下へ書き込めません。作業ツリーには対象ファイルの変更が残っています。既存の `.agent/handoff.md` 変更は未変更のままです。
 
-コミットだけ失敗しました。`.git` 配下へ書き込めず、`git add` が以下で止まっています。
-
-```text
-fatal: Unable to create '/Users/yamanishikenta/kawara-photo-app/.git/index.lock': Operation not permitted
+コミットする場合のコマンド:
+```bash
+git add src/pages/BeforeAfterPage.tsx
+git commit -m "feat(before-after): 報告書を職人路線へ作り替え 段階3/5 番号サイドバー化（No.01形式）"
 ```
-
-`.git/index.lock` は残っておらず、`.git` 自体への `touch` も `Operation not permitted` でした。現在の未コミット変更は、既存の `.agent/handoff.md` と今回の `src/pages/BeforeAfterPage.tsx` です。

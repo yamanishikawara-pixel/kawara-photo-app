@@ -62,12 +62,14 @@ interface A4PageProps {
 const A4Page = React.memo(function A4Page({
   items, pageIndex, totalPages, projectName, contractor,
 }: A4PageProps) {
-  const { headerH, footerH, pagePadding, titleRowH, labelBarH, descRowH, itemGap, photoGap, sidePadding } = LAYOUT;
+  const { headerH, footerH, pagePadding, labelBarH, descRowH, itemGap, photoGap, sidePadding } = LAYOUT;
+  // titleRowH はサイドバー化により右側コンテンツ列から除去。LAYOUT からは取り出さない（使わないため）
   const available = H - headerH - footerH - pagePadding;
   const itemH = Math.floor(available / 3);
-  // タイトル + ラベルバー + 説明 + ギャップ×3 を引いた残りが写真領域
-  const photoH = itemH - titleRowH - labelBarH - descRowH - itemGap * 3;
-  const photoW = (W - sidePadding * 2 - photoGap) / 2;
+  const numberColW = 110; // 番号サイドバーの幅
+  // タイトル行を左サイドバーに移したため、右側の写真高さが増える（labelBarH + descRowH + ギャップ×2 のみ引く）
+  const photoH = itemH - labelBarH - descRowH - itemGap * 2;
+  const photoW = (W - sidePadding * 2 - numberColW - photoGap) / 2;
 
   return (
     <div
@@ -116,99 +118,113 @@ const A4Page = React.memo(function A4Page({
       {/* 各箇所 */}
       {items.map((item, idx) => {
         const num = pageIndex * 3 + idx + 1;
-        const numLabel = '①②③④⑤⑥⑦⑧⑨⑩'[num - 1] ?? `${num}`;
         return (
           <div key={item.id} style={{
             height: itemH, flexShrink: 0,
             borderBottom: idx < items.length - 1 ? '1px solid #e2e2e2' : 'none',
-            padding: `14px ${sidePadding}px 0`,
-            display: 'flex', flexDirection: 'column', gap: itemGap,
-            overflow: 'hidden',
+            display: 'flex', overflow: 'hidden',
           }}>
-            {/* タイトル */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: titleRowH - itemGap, flexShrink: 0 }}>
-              <div style={{ width: 3, height: 13, background: '#c0492f', borderRadius: 2, flexShrink: 0 }} />
+            {/* 左サイドバー：大きな番号＋黒短線＋箇所名 */}
+            <div style={{
+              width: numberColW, flexShrink: 0,
+              padding: `14px 10px 14px ${sidePadding}px`,
+              display: 'flex', flexDirection: 'column',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
+                <span style={{ fontSize: 10, fontWeight: 900, color: '#c0492f', letterSpacing: '0.05em' }}>No.</span>
+                <span style={{ fontSize: 36, fontWeight: 900, color: '#c0492f', lineHeight: 0.9, letterSpacing: '-0.02em' }}>
+                  {String(num).padStart(2, '0')}
+                </span>
+              </div>
+              <div style={{ width: 24, height: 3, background: '#1c1f22', margin: '7px 0' }} />
               <div style={{
-                fontSize: 11, fontWeight: 700, color: '#111', letterSpacing: '0.08em',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                fontSize: 11, fontWeight: 900, lineHeight: 1.35, color: '#1c1f22',
+                overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical',
               }}>
-                {numLabel} {item.title || '工事箇所'}
+                {item.title || '工事箇所'}
               </div>
             </div>
 
-            {/* ラベルバー */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: photoGap, flexShrink: 0 }}>
-              <div style={{ background: '#4a5560', color: '#fff', textAlign: 'center', padding: '3px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', fontFamily: SERIF }}>施　工　前</div>
-              <div style={{ background: '#5a7d52', color: '#fff', textAlign: 'center', padding: '3px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', fontFamily: SERIF }}>施　工　後</div>
-            </div>
+            {/* 右コンテンツ：ラベルバー＋写真＋説明 */}
+            <div style={{
+              flex: 1, minWidth: 0,
+              paddingTop: 14, paddingRight: sidePadding,
+              display: 'flex', flexDirection: 'column', gap: itemGap, overflow: 'hidden',
+            }}>
+              {/* ラベルバー */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: photoGap, flexShrink: 0 }}>
+                <div style={{ background: '#4a5560', color: '#fff', textAlign: 'center', padding: '3px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', fontFamily: SERIF }}>施　工　前</div>
+                <div style={{ background: '#5a7d52', color: '#fff', textAlign: 'center', padding: '3px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', fontFamily: SERIF }}>施　工　後</div>
+              </div>
 
-            {/* 写真 */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: photoGap, flexShrink: 0 }}>
-              {[
-                { src: item.beforeImage, label: '施工前', circles: item.beforeCircles },
-                { src: item.afterImage,  label: '施工後', circles: item.afterCircles },
-              ].map((ph, pi) => (
-                <div key={pi} style={{
-                  width: photoW, height: photoH,
-                  background: PHOTO_FIT === 'contain' ? '#f4f4f4' : '#ddd',
-                  overflow: 'hidden', flexShrink: 0, position: 'relative',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  {ph.src ? (
-                    <img
-                      src={ph.src}
-                      alt={ph.label + '写真'}
-                      style={{ width: '100%', height: '100%', objectFit: PHOTO_FIT }}
-                    />
-                  ) : (
-                    <div style={{
-                      width: '100%', height: '100%',
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
-                      background: pi === 0 ? '#e8edf2' : '#dcf2e7',
-                    }}>
-                      <div style={{ fontSize: 28, opacity: 0.5 }}>📷</div>
-                      <div style={{ fontSize: 9, color: 'rgba(0,0,0,0.4)', fontFamily: SANS, letterSpacing: '0.08em' }}>
-                        {ph.label}
-                      </div>
-                    </div>
-                  )}
-                  {(ph.circles ?? []).map((circle) => {
-                    const size = Number(circle.size || 20);
-                    return (
-                      <div
-                        key={circle.id}
-                        className="absolute aspect-square rounded-full"
-                        style={{
-                          left: `${circle.x}%`,
-                          top: `${circle.y}%`,
-                          width: `${size}%`,
-                          transform: 'translate(-50%, -50%)',
-                          border: '3.5px solid #c0492f',
-                          boxShadow: '0 0 0 1.5px #fff, inset 0 0 0 1.5px #fff',
-                        }}
+              {/* 写真（position:relative は赤丸の基準として必須。変更禁止） */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: photoGap, flexShrink: 0 }}>
+                {[
+                  { src: item.beforeImage, label: '施工前', circles: item.beforeCircles },
+                  { src: item.afterImage,  label: '施工後', circles: item.afterCircles },
+                ].map((ph, pi) => (
+                  <div key={pi} style={{
+                    width: photoW, height: photoH,
+                    background: PHOTO_FIT === 'contain' ? '#f4f4f4' : '#ddd',
+                    overflow: 'hidden', flexShrink: 0, position: 'relative',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {ph.src ? (
+                      <img
+                        src={ph.src}
+                        alt={ph.label + '写真'}
+                        style={{ width: '100%', height: '100%', objectFit: PHOTO_FIT }}
                       />
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-
-            {/* 説明 */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: photoGap, flex: 1, minHeight: 0 }}>
-              <div style={{ background: '#f4f4f4', padding: '4px 8px', borderTop: '2px solid #888', overflow: 'hidden' }}>
-                <div style={{
-                  fontSize: 8.5, color: '#444', lineHeight: 1.5, letterSpacing: '0.03em', whiteSpace: 'pre-wrap',
-                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                }}>
-                  {item.beforeDesc || '施工前の状況を記入してください。'}
-                </div>
+                    ) : (
+                      <div style={{
+                        width: '100%', height: '100%',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        background: pi === 0 ? '#e8edf2' : '#dcf2e7',
+                      }}>
+                        <div style={{ fontSize: 28, opacity: 0.5 }}>📷</div>
+                        <div style={{ fontSize: 9, color: 'rgba(0,0,0,0.4)', fontFamily: SANS, letterSpacing: '0.08em' }}>
+                          {ph.label}
+                        </div>
+                      </div>
+                    )}
+                    {(ph.circles ?? []).map((circle) => {
+                      const size = Number(circle.size || 20);
+                      return (
+                        <div
+                          key={circle.id}
+                          className="absolute aspect-square rounded-full"
+                          style={{
+                            left: `${circle.x}%`,
+                            top: `${circle.y}%`,
+                            width: `${size}%`,
+                            transform: 'translate(-50%, -50%)',
+                            border: '3.5px solid #c0492f',
+                            boxShadow: '0 0 0 1.5px #fff, inset 0 0 0 1.5px #fff',
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
-              <div style={{ background: '#eef6f1', padding: '4px 8px', borderTop: '2px solid #1e9e63', overflow: 'hidden' }}>
-                <div style={{
-                  fontSize: 8.5, color: '#1a4a2e', lineHeight: 1.5, letterSpacing: '0.03em', whiteSpace: 'pre-wrap',
-                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                }}>
-                  {item.afterDesc || '施工後の状況を記入してください。'}
+
+              {/* 説明（段階④で構造を変える予定のため、今はそのまま） */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: photoGap, flex: 1, minHeight: 0 }}>
+                <div style={{ background: '#f4f4f4', padding: '4px 8px', borderTop: '2px solid #888', overflow: 'hidden' }}>
+                  <div style={{
+                    fontSize: 8.5, color: '#444', lineHeight: 1.5, letterSpacing: '0.03em', whiteSpace: 'pre-wrap',
+                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                  }}>
+                    {item.beforeDesc || '施工前の状況を記入してください。'}
+                  </div>
+                </div>
+                <div style={{ background: '#eef6f1', padding: '4px 8px', borderTop: '2px solid #1e9e63', overflow: 'hidden' }}>
+                  <div style={{
+                    fontSize: 8.5, color: '#1a4a2e', lineHeight: 1.5, letterSpacing: '0.03em', whiteSpace: 'pre-wrap',
+                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                  }}>
+                    {item.afterDesc || '施工後の状況を記入してください。'}
+                  </div>
                 </div>
               </div>
             </div>
