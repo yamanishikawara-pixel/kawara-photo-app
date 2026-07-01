@@ -100,16 +100,16 @@ const A4Page = React.memo(function A4Page({
             </div>
           </div>
         </div>
-        {/* 右：施工者（黒ブロックで締める） */}
+        {/* 右：施工者 */}
         <div style={{
-          background: '#1c1f22', color: '#f7f5f1', padding: '10px 16px',
+          padding: '10px 0',
           display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'right',
-          minWidth: 150, flexShrink: 0, marginTop: 6, marginBottom: 6, borderRadius: 2,
+          minWidth: 150, flexShrink: 0,
         }}>
-          <div style={{ fontSize: 12, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: '#1c1f22', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {contractor}
           </div>
-          <div style={{ fontSize: 8.5, color: '#9aa3ac', marginTop: 2, letterSpacing: '0.1em' }}>
+          <div style={{ fontSize: 8.5, color: '#6b7178', marginTop: 2, letterSpacing: '0.1em' }}>
             {pageIndex + 1} / {totalPages}
           </div>
         </div>
