@@ -240,11 +240,11 @@ const A4Page = React.memo(function A4Page({
 
       {/* フッター */}
       <div style={{
-        height: footerH, borderTop: '1px solid #e0e0e0', padding: `0 ${sidePadding}px`,
+        height: footerH, background: '#1c1f22', padding: `0 ${sidePadding}px`,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
       }}>
-        <div style={{ fontSize: 10, color: '#aaa', fontFamily: SERIF, letterSpacing: '0.1em' }}>{contractor}</div>
-        <div style={{ fontSize: 10, color: '#aaa', letterSpacing: '0.1em' }}>{projectName}</div>
+        <div style={{ fontSize: 9, color: '#b9bec4', fontFamily: SERIF, letterSpacing: '0.1em' }}>{contractor}</div>
+        <div style={{ fontSize: 9, color: '#b9bec4', letterSpacing: '0.1em' }}>{projectName}</div>
       </div>
     </div>
   );

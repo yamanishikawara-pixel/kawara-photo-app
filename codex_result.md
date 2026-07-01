@@ -1,13 +1,18 @@
-[BeforeAfterPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/BeforeAfterPage.tsx:211) の `A4Page` 内、説明（所見）欄の2セルだけ変更しました。
+[BeforeAfterPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/BeforeAfterPage.tsx:240) の `A4Page` フッターだけ変更しました。
 
-変更内容:
-- 背景色と `borderTop` を削除
-- 左3px色バーに変更
-- `paddingLeft: 7`
-- 文字色を `#33383d` に統一
-- テキスト本体の `whiteSpace` / `WebkitLineClamp` / `fontSize` / `letterSpacing` / `lineHeight` は維持
-
-検証:
+確認結果:
 - `npx tsc --noEmit` パス
+- `git diff --check -- src/pages/BeforeAfterPage.tsx` パス
 
-ただしコミットは作成できませんでした。`git add` / 代替インデックス方式のどちらも `.git` への書き込みが `Operation not permitted` で拒否されました。既存の未コミット変更 `.agent/handoff.md` は触っていません。
+コミットは環境側で `.git` 配下への書き込みが禁止されていて失敗しました。
+
+```text
+fatal: Unable to create '/Users/yamanishikenta/kawara-photo-app/.git/index.lock': Operation not permitted
+```
+
+作業ツリーには対象ファイルの変更が残っています。未関係の既存変更として `.agent/handoff.md` も残っています。コミットする場合は以下です。
+
+```bash
+git add src/pages/BeforeAfterPage.tsx
+git commit -m "feat(before-after): 報告書を職人路線へ作り替え 段階5/5 フッター（黒帯）— 全5段階完了"
+```
