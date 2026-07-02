@@ -843,7 +843,26 @@ export function BeforeAfterPage() {
         if (mountedRef.current) setError('ストレージ容量が不足しています。');
         return;
       }
-      const path = `users/${uid}/projects/${id}/beforeafter/${itemId}_${side}.jpg`;
+      let prevImageUrl = '';
+      setItems(prev => {
+        const found = prev.find(it => it.id === itemId);
+        if (found) {
+          prevImageUrl = side === 'before' ? found.beforeImage : found.afterImage;
+        }
+        return prev;
+      });
+      if (prevImageUrl && isStorageUrl(prevImageUrl)) {
+        const prevPath = storagePathFromUrl(prevImageUrl);
+        if (prevPath) {
+          if (sessionUploadedPaths.current.has(prevPath)) {
+            sessionUploadedPaths.current.delete(prevPath);
+            void deleteStorageFileWithAccounting(prevPath, uid);
+          } else {
+            pendingDeletePaths.current.push(prevPath);
+          }
+        }
+      }
+      const path = `users/${uid}/projects/${id}/beforeafter/${itemId}_${side}_${genId()}.jpg`;
       const storageRef = ref(storage, path);
       let downloadUrl = '';
       let lastErr: unknown;
@@ -859,7 +878,10 @@ export function BeforeAfterPage() {
       if (lastErr) throw lastErr;
       await trackUpload(uid, blob.size);
       sessionUploadedPaths.current.add(path);
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) {
+        void deleteStorageFileWithAccounting(path, uid);
+        return;
+      }
       // 並び替え直後でも id で参照するため stale にならない
       setItems(prev => prev.map(it =>
         it.id === itemId
@@ -894,7 +916,7 @@ export function BeforeAfterPage() {
         if (uid && beforeImage.startsWith('data:')) {
           try {
             const blob = await (await fetch(beforeImage)).blob();
-            const r = ref(storage, `users/${uid}/projects/${id}/beforeafter/${item.id}_before.jpg`);
+            const r = ref(storage, `users/${uid}/projects/${id}/beforeafter/${item.id}_before_${genId()}.jpg`);
             await uploadBytes(r, blob);
             await trackUpload(uid, blob.size);
             sessionUploadedPaths.current.add(r.fullPath);
@@ -907,7 +929,7 @@ export function BeforeAfterPage() {
         if (uid && afterImage.startsWith('data:')) {
           try {
             const blob = await (await fetch(afterImage)).blob();
-            const r = ref(storage, `users/${uid}/projects/${id}/beforeafter/${item.id}_after.jpg`);
+            const r = ref(storage, `users/${uid}/projects/${id}/beforeafter/${item.id}_after_${genId()}.jpg`);
             await uploadBytes(r, blob);
             await trackUpload(uid, blob.size);
             sessionUploadedPaths.current.add(r.fullPath);
