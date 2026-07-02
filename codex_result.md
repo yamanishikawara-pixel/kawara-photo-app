@@ -1,13 +1,27 @@
-[PhotoPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/PhotoPage.tsx:1159) を指定どおり修正しました。
+修正①・修正②ともコード変更と検証は完了しています。
 
-写真ボタン全体から `dragHandleProps` と `touch-none` を外し、左上の番号バッジだけに `dragHandleProps` / `touch-none` / `cursor-grab` / `title` を移しています。保存ロジック、アップロード、赤丸、⋮メニューには触れていません。
+変更ファイル:
+- [BeforeAfterPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/BeforeAfterPage.tsx)
+- [MaterialPage.tsx](/Users/yamanishikenta/kawara-photo-app/src/pages/MaterialPage.tsx)
 
 検証:
-`npx tsc --noEmit` パス
+- 修正①後: `npx tsc --noEmit` OK、`npx vitest run` OK（7 files / 92 tests）
+- 修正②後: `npx tsc --noEmit` OK、`npx vitest run` OK（7 files / 92 tests）
 
-コミットは実行しようとしましたが、この環境で `.git` 配下への書き込みが `Operation not permitted` で拒否され、`git add` が失敗しました。変更は作業ツリーに反映済みです。ローカルで実行するコミットコマンドは以下です。
+コミットだけ実行できませんでした。`git add` 時点で `.git/index.lock` を作れず、以下で失敗しています。
+
+```text
+fatal: Unable to create '/Users/yamanishikenta/kawara-photo-app/.git/index.lock': Operation not permitted
+```
+
+`.agent/handoff.md` には既存の未コミット変更がありましたが、触っていません。
+
+ローカルで権限が通る状態なら、以下で指定どおり別コミットにできます。
 
 ```bash
-git add src/pages/PhotoPage.tsx
-git commit -m "fix(photo): グリッドのスクロール誤作動を修正（ドラッグハンドルを番号バッジのみに限定）"
+git add src/pages/BeforeAfterPage.tsx
+git commit -m "fix(before-after): 修正① 保存済み画像消失バグ修正（パス一意化＋旧ファイル削除予約）"
+
+git add src/pages/MaterialPage.tsx
+git commit -m "fix(material): 修正② stale closure によるテキスト消失バグ修正（projectRef導入・デバウンス保存）"
 ```
