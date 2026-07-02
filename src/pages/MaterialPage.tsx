@@ -137,6 +137,32 @@ export default function MaterialPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // デバウンス保存インフラ（PhotoPage と同構造）
+  const DEBOUNCE_MS = 600;
+  const mountedRef = useRef(true);
+  const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout> | undefined>>({});
+  const pendingMaterialsRef = useRef<Material[] | null>(null);
+  const projectRef = useRef<Project | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      Object.values(debounceTimers.current).forEach(t => { if (t) clearTimeout(t); });
+      debounceTimers.current = {};
+      if (pendingMaterialsRef.current && id) {
+        const finalMaterials = pendingMaterialsRef.current;
+        pendingMaterialsRef.current = null;
+        void updateDoc(doc(db, 'projects', id), { materials: finalMaterials })
+          .catch(err => import.meta.env.DEV && console.warn('[MaterialPage] flush on unmount failed:', err));
+      }
+    };
+  }, [id]);
+
+  useEffect(() => {
+    projectRef.current = project;
+  }, [project]);
+
   // uploadError の自動消去（8秒）
   useEffect(() => {
     if (!uploadError) return;
@@ -149,6 +175,23 @@ export default function MaterialPage() {
     const t = window.setTimeout(() => setSaveError(null), 8000);
     return () => clearTimeout(t);
   }, [saveError]);
+
+  useEffect(() => {
+    const flush = () => {
+      const pending = pendingMaterialsRef.current;
+      if (!pending || !id) return;
+      pendingMaterialsRef.current = null;
+      void updateDoc(doc(db, 'projects', id), { materials: pending })
+        .catch(e => import.meta.env.DEV && console.warn('[MaterialPage] flush on hide failed:', e));
+    };
+    const onVisibility = () => { if (document.visibilityState === 'hidden') flush(); };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -166,8 +209,9 @@ export default function MaterialPage() {
 
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) return;
-      setUid(user.uid);
+      if (mountedRef.current) setUid(user.uid);
       const s = await getDoc(doc(db, 'users', user.uid));
+      if (!mountedRef.current) return;
       if (s.exists()) {
         const data = s.data();
         if (Array.isArray(data.materialMaster)) setMasters(data.materialMaster);
@@ -177,20 +221,54 @@ export default function MaterialPage() {
     return () => unsub();
   }, [id]);
 
-  const saveMaterials = async (newMaterials: Material[]) => {
-    if (!project || !id) return;
-    setProject((prev) => prev ? { ...prev, materials: newMaterials } : null);
-    try {
-      await updateDoc(doc(db, 'projects', id), { materials: newMaterials });
-    } catch (err) {
-      logFirebaseError(err, '材料保存');
-      setSaveError(firebaseErrorMessage(err, '材料の保存'));
-      // 保存失敗時は楽観的更新を元に戻す
-      setProject((prev) => prev ? { ...prev, materials: project.materials } : null);
+  const cancelPendingMaterialDebounces = () => {
+    Object.values(debounceTimers.current).forEach(t => { if (t) clearTimeout(t); });
+    debounceTimers.current = {};
+    pendingMaterialsRef.current = null;
+  };
+
+  const commitMaterials = async (
+    newMaterials: Material[],
+    options: { immediate?: boolean; debounceKey?: string } = {}
+  ): Promise<void> => {
+    const { immediate = true, debounceKey } = options;
+    if (!id) return;
+
+    if (mountedRef.current) {
+      setProject(prev => prev ? { ...prev, materials: newMaterials } : null);
+    }
+
+    if (immediate) {
+      cancelPendingMaterialDebounces();
+      try {
+        await updateDoc(doc(db, 'projects', id), { materials: newMaterials });
+      } catch (err) {
+        logFirebaseError(err, '材料保存');
+        if (mountedRef.current) setSaveError(firebaseErrorMessage(err, '材料の保存'));
+      }
+    } else {
+      pendingMaterialsRef.current = newMaterials;
+      const key = debounceKey ?? 'default';
+      const existing = debounceTimers.current[key];
+      if (existing) clearTimeout(existing);
+      debounceTimers.current[key] = setTimeout(async () => {
+        debounceTimers.current[key] = undefined;
+        const materialsToSave = pendingMaterialsRef.current ?? newMaterials;
+        try {
+          await updateDoc(doc(db, 'projects', id), { materials: materialsToSave });
+        } catch (err) {
+          logFirebaseError(err, '材料保存（デバウンス）');
+          if (mountedRef.current) setSaveError(firebaseErrorMessage(err, '材料の保存'));
+        }
+        if (pendingMaterialsRef.current === materialsToSave) {
+          pendingMaterialsRef.current = null;
+        }
+      }, DEBOUNCE_MS);
     }
   };
 
   const addMaterial = () => {
+    const currentMaterials = projectRef.current?.materials ?? [];
     const newMaterial: Material = {
       id: nextId(),
       image: null,
@@ -200,42 +278,54 @@ export default function MaterialPage() {
       remarks: '',
       rotation: 0,
     };
-    saveMaterials([...(project?.materials || []), newMaterial]);
+    void commitMaterials([...currentMaterials, newMaterial]);
   };
 
+  const TEXT_MATERIAL_FIELDS = new Set<keyof Material>(['name', 'manufacturer', 'specification', 'remarks']);
+
   const updateMaterial = (materialId: number, field: keyof Material, value: Material[keyof Material]) => {
-    const newMaterials = (project?.materials || []).map((m) =>
+    const currentMaterials = projectRef.current?.materials ?? [];
+    const newMaterials = currentMaterials.map((m) =>
       m.id === materialId ? { ...m, [field]: value } : m
     );
-    saveMaterials(newMaterials);
+    if (TEXT_MATERIAL_FIELDS.has(field)) {
+      void commitMaterials(newMaterials, {
+        immediate: false,
+        debounceKey: `${materialId}:${field}`,
+      });
+    } else {
+      void commitMaterials(newMaterials);
+    }
   };
 
   const applyMaster = (materialId: number, m: MaterialMaster) => {
-    const newMaterials = (project?.materials || []).map((mat) =>
+    const currentMaterials = projectRef.current?.materials ?? [];
+    const newMaterials = currentMaterials.map((mat) =>
       mat.id === materialId
         ? { ...mat, name: m.name, manufacturer: m.manufacturer, specification: m.specification, remarks: m.remarks }
         : mat
     );
-    saveMaterials(newMaterials);
+    void commitMaterials(newMaterials);
   };
 
   const removeMaterial = async (materialId: number) => {
-    const material = (project?.materials || []).find((m) => m.id === materialId);
+    const currentMaterials = projectRef.current?.materials ?? [];
+    const material = currentMaterials.find((m) => m.id === materialId);
     if (material?.image) {
       const bytes = await deleteStorageFileWithAccounting(material.image, uid ?? undefined);
-      if (bytes > 0) setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
+      if (bytes > 0 && mountedRef.current) setStorageUsedBytes((prev) => Math.max(0, prev - bytes));
     }
-    saveMaterials((project?.materials || []).filter((m) => m.id !== materialId));
+    void commitMaterials(currentMaterials.filter((m) => m.id !== materialId));
   };
 
   const moveMaterial = (index: number, direction: 'up' | 'down') => {
-    const newMaterials = [...(project?.materials || [])];
+    const currentMaterials = [...(projectRef.current?.materials ?? [])];
     if (direction === 'up' && index > 0) {
-      [newMaterials[index - 1], newMaterials[index]] = [newMaterials[index], newMaterials[index - 1]];
-    } else if (direction === 'down' && index < newMaterials.length - 1) {
-      [newMaterials[index], newMaterials[index + 1]] = [newMaterials[index + 1], newMaterials[index]];
+      [currentMaterials[index - 1], currentMaterials[index]] = [currentMaterials[index], currentMaterials[index - 1]];
+    } else if (direction === 'down' && index < currentMaterials.length - 1) {
+      [currentMaterials[index], currentMaterials[index + 1]] = [currentMaterials[index + 1], currentMaterials[index]];
     }
-    saveMaterials(newMaterials);
+    void commitMaterials(currentMaterials);
   };
 
   const saveToMaster = async (material: Material) => {
@@ -312,12 +402,18 @@ export default function MaterialPage() {
         await trackUpload(uid, compressed.size);
         setStorageUsedBytes((prev) => prev + compressed.size);
       }
-      updateMaterial(materialId, 'image', url);
+      const current = projectRef.current;
+      if (current && mountedRef.current) {
+        const newMaterials = current.materials.map(m =>
+          m.id === materialId ? { ...m, image: url } : m
+        );
+        void commitMaterials(newMaterials);
+      }
     } catch (err) {
       logFirebaseError(err, '材料画像アップロード');
       setUploadError(firebaseErrorMessage(err, '画像のアップロード'));
     } finally {
-      setUploadingId(null);
+      if (mountedRef.current) setUploadingId(null);
     }
   };
 
