@@ -762,6 +762,14 @@ export default function SettingsPage() {
                         className={inputCls}
                         style={{ ...inputStyle, background: '#1c1c30' }}
                       />
+                      <input
+                        type="text"
+                        placeholder="基準値（例: 100mm以上）"
+                        value={m.standard ?? ''}
+                        onChange={(e) => setPhotoMaster(prev => prev.map((item, i) => i === index ? { ...item, standard: e.target.value } : item))}
+                        className={inputCls}
+                        style={{ ...inputStyle, background: '#1c1c30' }}
+                      />
                       <textarea
                         placeholder="説明文"
                         rows={2}
@@ -784,7 +792,7 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
-            <AddButton onClick={() => setPhotoMaster(prev => [...prev, { id: nextId(), name: '', process: '', description: '' }])} label="テンプレートを追加" accent="#10b981" />
+            <AddButton onClick={() => setPhotoMaster(prev => [...prev, { id: nextId(), name: '', process: '', description: '', standard: '' }])} label="テンプレートを追加" accent="#10b981" />
           </Section>
 
           {/* 工事種別テンプレート */}
