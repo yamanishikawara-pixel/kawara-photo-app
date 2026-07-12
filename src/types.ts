@@ -35,6 +35,8 @@ export interface Photo {
   circles: Circle[];
   rotation?: number;
   dimensionLines?: DimensionLine[];
+  standard?: string;
+  actual?: string;
 }
 
 export interface Material {
