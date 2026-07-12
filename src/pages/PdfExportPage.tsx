@@ -88,16 +88,6 @@ function pickLongTextStyle(text: string | undefined | null): LongTextStyle {
   return                       { fontSize: '8.5px', lineHeight: '1.2',  isLong: true  };
 }
 
-/** 写真カード「工程」欄（1行ラベル）用：文字数に応じてフォントサイズを段階的に縮小する */
-function pickProcessLabelStyle(text: string | undefined | null): { fontSize: string } {
-  const len = (text ?? '').length;
-  if (len <= 13) return { fontSize: '13px' };
-  if (len <= 16) return { fontSize: '11px' };
-  if (len <= 20) return { fontSize: '9px' };
-  if (len <= 25) return { fontSize: '8px' };
-  return               { fontSize: '7px' };
-}
-
 
 
 export default function PdfExportPage() {
@@ -1396,33 +1386,36 @@ export default function PdfExportPage() {
                       </div>
                       {/* 情報欄（黄金比38.2%） */}
                       <div style={{ flex: 1, minWidth: 0, alignSelf: 'stretch', display: 'flex', flexDirection: 'column', fontSize: '13px', overflow: 'hidden' }}>
-                        <div className="flex flex-1 min-h-0 border-b border-gray-400 shrink-0 print:border-black"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">写真NO</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.photoNumber || '　'}</div></div>
-                        <div className="flex flex-1 min-h-0 border-b border-gray-400 shrink-0 print:border-black"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">撮影日</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.shootingDate || '　'}</div></div>
-                        {/* 「位置図」行は、PDF 出力に位置図セクションを含めるときだけ表示する。
-                            位置図を出力しない設定では、写真側の "位置図(参照先)" を示しても
-                            参照先がない (= 出力PDFに位置図ページが存在しない) ため意味がなくなる。
-                            非表示にすることで、他の行(写真NO/撮影日/工程/説明)が縦方向に均等
-                            配分され、説明欄が自然に広がる。 */}
-                        {sections.map && (
-                          <div className="flex flex-1 min-h-0 border-b border-gray-400 shrink-0 print:border-black"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">位置図</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden text-red-700 whitespace-nowrap">{p.locationMap || '　'}</div></div>
-                        )}
-                        <div className="flex flex-1 min-h-0 border-b border-gray-400 shrink-0 print:border-black"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">工程</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap" style={pickProcessLabelStyle(p.process)}>{p.process || '　'}</div></div>
-                        {/* 写真説明欄: 文字数に応じて段階的にフォントサイズを縮める。
-                            短文は現状維持、長文は 10px まで縮小。極端な長文は末尾切れ。 */}
-                        {(() => {
-                          const style = pickLongTextStyle(p.description);
-                          return (
-                            <div className="flex-[3] flex min-h-0">
-                              <div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">説明</div>
-                              <div
-                                className="p-2 flex-1 overflow-hidden font-bold flex items-start break-words whitespace-pre-wrap"
-                                style={{ fontSize: style.fontSize, lineHeight: style.lineHeight }}
-                              >
-                                {p.description || '　'}
-                              </div>
+                        {/* 工程名（2行折り返し） */}
+                        <div style={{ padding: isPrinting ? '2mm 3mm' : '8px 10px', borderBottom: '1px solid #d8d4cc' }}>
+                          <div style={{ fontSize: isPrinting ? '5pt' : '8px', color: '#6b7178', fontWeight: 800, letterSpacing: '.1em', fontFamily: JP_FONT }}>工程</div>
+                          <div style={{ fontSize: isPrinting ? '8pt' : '12.5px', fontWeight: 900, lineHeight: 1.25, marginTop: isPrinting ? '0.5mm' : '2px', wordBreak: 'break-word', fontFamily: JP_FONT, color: '#1c1f22', overflow: 'hidden', maxHeight: isPrinting ? '6.5mm' : '2.7em' }}>
+                            {p.process || '　'}
+                          </div>
+                        </div>
+                        {/* 撮影日 / 位置図 */}
+                        <div style={{ padding: isPrinting ? '1.5mm 3mm' : '6px 10px', borderBottom: '1px solid #d8d4cc' }}>
+                          <div style={{ fontSize: isPrinting ? '5.5pt' : '8.5px', color: '#6b7178', lineHeight: 1.4, fontFamily: JP_FONT }}>
+                            {p.shootingDate || '　'}
+                            {sections.map ? <span style={{ marginLeft: isPrinting ? '2mm' : '8px', color: '#c0492f' }}>/ {p.locationMap || '　'}</span> : null}
+                          </div>
+                        </div>
+                        {/* 写真 No. */}
+                        <div style={{ padding: isPrinting ? '1.5mm 3mm' : '6px 10px', borderBottom: '1px solid #d8d4cc' }}>
+                          <div style={{ fontSize: isPrinting ? '5pt' : '8px', color: '#6b7178', fontWeight: 800, letterSpacing: '.1em', fontFamily: JP_FONT }}>写真 No.</div>
+                          <div style={{ fontSize: isPrinting ? '7pt' : '10px', fontWeight: 900, color: '#1c1f22', marginTop: isPrinting ? '0.5mm' : '1px', fontFamily: JP_FONT }}>
+                            {p.photoNumber || '　'}
+                          </div>
+                        </div>
+                        {/* 所見（藍鼠バー） */}
+                        <div style={{ flex: 1, padding: isPrinting ? '2mm 3mm' : '8px 10px', minHeight: 0, overflow: 'hidden' }}>
+                          <div style={{ paddingLeft: isPrinting ? '3mm' : '8px', borderLeft: '3px solid #4a5560', height: '100%', overflow: 'hidden' }}>
+                            <div style={{ fontSize: isPrinting ? '5pt' : '8px', color: '#4a5560', fontWeight: 800, letterSpacing: '.05em', marginBottom: isPrinting ? '0.5mm' : '2px', fontFamily: JP_FONT }}>所見</div>
+                            <div style={{ fontSize: isPrinting ? '6pt' : '8.5px', color: '#33383d', lineHeight: 1.4, wordBreak: 'break-word', fontFamily: JP_FONT, whiteSpace: 'pre-wrap', overflow: 'hidden' }}>
+                              {p.description || '　'}
                             </div>
-                          );
-                        })()}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   );
