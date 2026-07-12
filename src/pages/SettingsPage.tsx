@@ -101,13 +101,15 @@ function SortableProcessRow({ id, index, value, onChange, onDelete }: {
   );
 }
 
-function SortableWorkTypeItemRow({ id, index, process, description, onChangeProcess, onChangeDescription, onDelete }: {
+function SortableWorkTypeItemRow({ id, index, process, description, standard, onChangeProcess, onChangeDescription, onChangeStandard, onDelete }: {
   id: string;
   index: number;
   process: string;
   description: string;
+  standard: string;
   onChangeProcess: (value: string) => void;
   onChangeDescription: (value: string) => void;
+  onChangeStandard: (value: string) => void;
   onDelete: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -137,6 +139,14 @@ function SortableWorkTypeItemRow({ id, index, process, description, onChangeProc
           placeholder="工程"
           value={process}
           onChange={(e) => onChangeProcess(e.target.value)}
+          className={inputCls}
+          style={{ ...inputStyle, background: '#12122a' }}
+        />
+        <input
+          type="text"
+          placeholder="基準値（例: 100mm以上）"
+          value={standard}
+          onChange={(e) => onChangeStandard(e.target.value)}
           className={inputCls}
           style={{ ...inputStyle, background: '#12122a' }}
         />
@@ -523,9 +533,9 @@ export default function SettingsPage() {
       validItems.forEach(item => {
         const existingIdx = next.findIndex(m => m.name === item.process);
         if (existingIdx !== -1) {
-          next[existingIdx] = { ...next[existingIdx], process: item.process, description: item.description };
+          next[existingIdx] = { ...next[existingIdx], process: item.process, description: item.description, standard: item.standard ?? '' };
         } else {
-          next.push({ id: nextId(), name: item.process, process: item.process, description: item.description });
+          next.push({ id: nextId(), name: item.process, process: item.process, description: item.description, standard: item.standard ?? '' });
         }
       });
       return next;
@@ -817,8 +827,10 @@ export default function SettingsPage() {
                               index={index}
                               process={item.process}
                               description={item.description}
+                              standard={item.standard ?? ''}
                               onChangeProcess={(value) => setWorkTypeTemplates(prev => prev.map(t => t.id === template.id ? { ...t, items: t.items.map((it, i) => i === index ? { ...it, process: value } : it) } : t))}
                               onChangeDescription={(value) => setWorkTypeTemplates(prev => prev.map(t => t.id === template.id ? { ...t, items: t.items.map((it, i) => i === index ? { ...it, description: value } : it) } : t))}
+                              onChangeStandard={(value) => setWorkTypeTemplates(prev => prev.map(t => t.id === template.id ? { ...t, items: t.items.map((it, i) => i === index ? { ...it, standard: value } : it) } : t))}
                               onDelete={() => setWorkTypeTemplates(prev => prev.map(t => t.id === template.id ? { ...t, items: t.items.filter((_, i) => i !== index) } : t))}
                             />
                           ))}
@@ -829,7 +841,7 @@ export default function SettingsPage() {
 
                   <div className="flex flex-wrap gap-2">
                     <AddButton
-                      onClick={() => setWorkTypeTemplates(prev => prev.map(t => t.id === template.id ? { ...t, items: [...t.items, { process: '', description: '' }] } : t))}
+                      onClick={() => setWorkTypeTemplates(prev => prev.map(t => t.id === template.id ? { ...t, items: [...t.items, { process: '', description: '', standard: '' }] } : t))}
                       label="行を追加"
                       accent="#3b82f6"
                     />
