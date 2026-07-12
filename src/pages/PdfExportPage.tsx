@@ -1292,9 +1292,9 @@ export default function PdfExportPage() {
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
                 {chunk.map((p, i) => {
                   return (
-                    <div key={i} style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', padding: isPrinting ? '2mm 3mm' : '6px 10px', gap: isPrinting ? '2mm' : '8px', borderBottom: i < chunk.length - 1 ? '1px solid #d8d4cc' : 'none' }}>
-                      {/* 写真（72%、4:3固定） */}
-                      <div style={{ flex: '0 0 72%', maxWidth: '72%', aspectRatio: '4 / 3', maxHeight: '95%', position: 'relative', overflow: 'hidden', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: '#f7f5f1' }}>
+                    <div key={i} style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'stretch', padding: isPrinting ? '2mm 3mm' : '6px 10px', gap: isPrinting ? '2mm' : '8px', borderBottom: i < chunk.length - 1 ? '1px solid #d8d4cc' : 'none' }}>
+                      {/* 写真（行の高さいっぱい・4:3で幅を決める） */}
+                      <div style={{ flexShrink: 0, alignSelf: 'stretch', aspectRatio: '4 / 3', position: 'relative', overflow: 'hidden', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f7f5f1' }}>
                         {p.image ? (
                           <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', transform: `rotate(${Number(p.rotation) || 0}deg)` }}>
                             <img
