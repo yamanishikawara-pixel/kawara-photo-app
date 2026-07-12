@@ -1306,8 +1306,15 @@ export default function PdfExportPage() {
                   const maxImgHeight = isRotated ? '120mm' : '78mm';
 
                   return (
-                    <div key={i} style={{ flex: 1, minHeight: 0 }} className="flex gap-2 p-1.5 border border-gray-500 bg-white print:border-black">
-                      <div className="w-[60%] h-full flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
+                    <div key={i} style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', padding: isPrinting ? '3mm 4mm' : '10px 16px', gap: isPrinting ? '3mm' : '12px', borderBottom: i < chunk.length - 1 ? '1px solid #d8d4cc' : 'none' }}>
+                      {/* No. バッジ */}
+                      <div style={{ flexShrink: 0, width: isPrinting ? '9mm' : '40px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <span style={{ fontSize: isPrinting ? '5pt' : '8px', fontWeight: 800, color: '#c0492f', letterSpacing: '.08em', fontFamily: JP_FONT }}>No.</span>
+                        <span style={{ fontSize: isPrinting ? '18pt' : '32px', fontWeight: 900, color: '#c0492f', lineHeight: 0.85, letterSpacing: '-.02em', fontFamily: JP_FONT }}>{p.photoNumber || '──'}</span>
+                        <div style={{ width: isPrinting ? '5mm' : '20px', height: isPrinting ? '0.75mm' : '3px', background: '#1c1f22', marginTop: isPrinting ? '1.5mm' : '6px' }} />
+                      </div>
+                      {/* 写真（黄金比61.8%、4:3固定） */}
+                      <div style={{ flex: '0 0 61.8%', maxWidth: '61.8%', aspectRatio: '4 / 3', maxHeight: '88%', position: 'relative', overflow: 'hidden', background: '#2a2d30', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #d8d4cc', flexShrink: 0 }}>
                         {p.image ? (
                           <div className="relative" style={{ display: 'inline-block', transform: `rotate(${Number(p.rotation) || 0}deg)` }}>
                             <img
@@ -1385,9 +1392,10 @@ export default function PdfExportPage() {
                               );
                             })}
                           </div>
-                        ) : <span className="font-bold text-gray-400">写真未登録</span>}
+                        ) : <span style={{ fontWeight: 700, color: 'rgba(255,255,255,0.35)', fontFamily: JP_FONT, fontSize: isPrinting ? '6pt' : '9px' }}>写真未登録</span>}
                       </div>
-                      <div className="w-[40%] h-full flex flex-col text-[13px] border border-gray-400 bg-white shrink-0 print:border-black">
+                      {/* 情報欄（黄金比38.2%） */}
+                      <div style={{ flex: 1, minWidth: 0, alignSelf: 'stretch', display: 'flex', flexDirection: 'column', fontSize: '13px', overflow: 'hidden' }}>
                         <div className="flex flex-1 min-h-0 border-b border-gray-400 shrink-0 print:border-black"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">写真NO</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.photoNumber || '　'}</div></div>
                         <div className="flex flex-1 min-h-0 border-b border-gray-400 shrink-0 print:border-black"><div className="w-20 font-bold flex items-center justify-center text-center bg-gray-100 border-r border-gray-400 leading-none print:bg-gray-50 print:border-black">撮影日</div><div className="px-2 py-1 flex-1 font-bold flex items-center overflow-hidden whitespace-nowrap">{p.shootingDate || '　'}</div></div>
                         {/* 「位置図」行は、PDF 出力に位置図セクションを含めるときだけ表示する。
