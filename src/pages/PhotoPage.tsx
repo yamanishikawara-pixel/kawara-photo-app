@@ -452,7 +452,7 @@ export default function PhotoPage() {
   const applyPhotoMaster = async (photoId: number, m: PhotoMaster) => {
     if (!project || !id) return;
     const newPhotos = project.photos.map((p) =>
-      p.id === photoId ? { ...p, process: m.process, description: m.description } : p
+      p.id === photoId ? { ...p, process: m.process, description: m.description, standard: m.standard ?? p.standard } : p
     );
     await commitPhotos(newPhotos);
   };
