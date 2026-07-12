@@ -1299,7 +1299,7 @@ export default function PdfExportPage() {
                       <div style={{ flexShrink: 0, alignSelf: 'stretch', aspectRatio: '4 / 3', position: 'relative', overflow: 'hidden', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f7f5f1' }}>
                         {p.image ? (
                           <div style={isPortrait
-                            ? { position: 'absolute', overflow: 'hidden', width: '75%', height: '75%', left: '50%', top: '50%', transform: `translate(-50%, -50%) rotate(${rot}deg)` }
+                            ? { position: 'absolute', overflow: 'hidden', width: '75%', height: '133.333%', left: '50%', top: '50%', transform: `translate(-50%, -50%) rotate(${rot}deg)` }
                             : { position: 'absolute', inset: 0, overflow: 'hidden', transform: `rotate(${rot}deg)` }
                           }>
                             <img
