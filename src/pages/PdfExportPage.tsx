@@ -1293,14 +1293,8 @@ export default function PdfExportPage() {
                 {chunk.map((p, i) => {
                   return (
                     <div key={i} style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', padding: isPrinting ? '2mm 3mm' : '6px 10px', gap: isPrinting ? '2mm' : '8px', borderBottom: i < chunk.length - 1 ? '1px solid #d8d4cc' : 'none' }}>
-                      {/* No. バッジ */}
-                      <div style={{ flexShrink: 0, width: isPrinting ? '9mm' : '40px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <span style={{ fontSize: isPrinting ? '5pt' : '8px', fontWeight: 800, color: '#c0492f', letterSpacing: '.08em', fontFamily: JP_FONT }}>No.</span>
-                        <span style={{ fontSize: isPrinting ? '18pt' : '32px', fontWeight: 900, color: '#c0492f', lineHeight: 0.85, letterSpacing: '-.02em', fontFamily: JP_FONT }}>{p.photoNumber || '──'}</span>
-                        <div style={{ width: isPrinting ? '5mm' : '20px', height: isPrinting ? '0.75mm' : '3px', background: '#1c1f22', marginTop: isPrinting ? '1.5mm' : '6px' }} />
-                      </div>
-                      {/* 写真（黄金比61.8%、4:3固定） */}
-                      <div style={{ flex: '0 0 65%', maxWidth: '65%', aspectRatio: '4 / 3', maxHeight: '95%', position: 'relative', overflow: 'hidden', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {/* 写真（72%、4:3固定） */}
+                      <div style={{ flex: '0 0 72%', maxWidth: '72%', aspectRatio: '4 / 3', maxHeight: '95%', position: 'relative', overflow: 'hidden', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: '#f7f5f1' }}>
                         {p.image ? (
                           <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', transform: `rotate(${Number(p.rotation) || 0}deg)` }}>
                             <img
@@ -1310,7 +1304,7 @@ export default function PdfExportPage() {
                               style={{
                                 width: '100%',
                                 height: '100%',
-                                objectFit: 'cover',
+                                objectFit: 'contain',
                               }}
                               alt=""
                             />
@@ -1379,6 +1373,11 @@ export default function PdfExportPage() {
                       </div>
                       {/* 情報欄（黄金比38.2%） */}
                       <div style={{ flex: 1, minWidth: 0, alignSelf: 'stretch', display: 'flex', flexDirection: 'column', fontSize: '13px', overflow: 'hidden' }}>
+                        {/* 写真No. */}
+                        <div style={{ padding: isPrinting ? '1mm 3mm' : '4px 10px', borderBottom: '1px solid #d8d4cc', display: 'flex', alignItems: 'baseline', gap: isPrinting ? '1.5mm' : '6px' }}>
+                          <span style={{ fontSize: isPrinting ? '5pt' : '8px', color: '#6b7178', fontWeight: 800, letterSpacing: '.08em', fontFamily: JP_FONT }}>写真 No.</span>
+                          <span style={{ fontSize: isPrinting ? '9pt' : '13px', fontWeight: 900, color: '#c0492f', letterSpacing: '-.01em', fontFamily: JP_FONT }}>{p.photoNumber || '──'}</span>
+                        </div>
                         {/* 工程名（2行折り返し） */}
                         <div style={{ padding: isPrinting ? '2mm 3mm' : '8px 10px', borderBottom: '1px solid #d8d4cc' }}>
                           <div style={{ fontSize: isPrinting ? '5pt' : '8px', color: '#6b7178', fontWeight: 800, letterSpacing: '.1em', fontFamily: JP_FONT }}>工程</div>
