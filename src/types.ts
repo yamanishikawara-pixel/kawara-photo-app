@@ -117,11 +117,13 @@ export interface PhotoMaster {
   name: string;        // テンプレート名（選択キー）
   process: string;     // 工程
   description: string; // 説明文
+  standard?: string;   // 基準値
 }
 
 export interface WorkTypeTemplateItem {
   process: string;
   description: string;
+  standard?: string;   // 基準値
 }
 
 export interface WorkTypeTemplate {
