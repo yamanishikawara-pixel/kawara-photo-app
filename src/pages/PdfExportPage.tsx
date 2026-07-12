@@ -1273,16 +1273,16 @@ export default function PdfExportPage() {
             <div className={`pdf-page w-full h-full flex flex-col text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: 0, background: '#f7f5f1', transform: isPrinting ? 'none' : `scale(${scale})` }}>
               {/* ── ヘッダー ── */}
               <div style={{ display: 'flex', alignItems: 'stretch', borderBottom: '2px solid #1c1f22', flexShrink: 0 }}>
-                <div style={{ flex: 1, padding: isPrinting ? '3mm 5mm' : '12px 18px', display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                <div style={{ flex: 1, padding: isPrinting ? '1.5mm 4mm' : '6px 14px', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                   <div style={{ width: isPrinting ? '1.5mm' : '6px', alignSelf: 'stretch', background: '#c0492f', flexShrink: 0 }} />
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: isPrinting ? '6pt' : '9px', letterSpacing: '.25em', color: '#6b7178', fontWeight: 800, fontFamily: JP_FONT }}>工事写真台帳</div>
-                    <div style={{ fontSize: isPrinting ? '11pt' : '17px', fontWeight: 900, lineHeight: 1.15, marginTop: 2, fontFamily: JP_FONT, color: '#1c1f22', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: isPrinting ? '5.5pt' : '8px', letterSpacing: '.25em', color: '#6b7178', fontWeight: 800, fontFamily: JP_FONT }}>工事写真台帳</div>
+                    <div style={{ fontSize: isPrinting ? '10pt' : '15px', fontWeight: 900, lineHeight: 1.15, marginTop: 1, fontFamily: JP_FONT, color: '#1c1f22', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {project?.projectName || '工事名未設定'}
                     </div>
                   </div>
                 </div>
-                <div style={{ padding: isPrinting ? '3mm 5mm' : '12px 18px', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                <div style={{ padding: isPrinting ? '1.5mm 4mm' : '6px 14px', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                   <div style={{ fontSize: isPrinting ? '8pt' : '12px', fontWeight: 800, color: '#1c1f22', fontFamily: JP_FONT }}>
                     {project ? getContractorName(project) : ''}
                   </div>
@@ -1291,12 +1291,8 @@ export default function PdfExportPage() {
               {/* ── 写真3行 ── */}
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
                 {chunk.map((p, i) => {
-                  const isRotated = (Number(p.rotation) || 0) % 180 !== 0;
-                  const maxImgWidth = isRotated ? '78mm' : '100%';
-                  const maxImgHeight = isRotated ? '120mm' : '78mm';
-
                   return (
-                    <div key={i} style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', padding: isPrinting ? '3mm 4mm' : '10px 16px', gap: isPrinting ? '3mm' : '12px', borderBottom: i < chunk.length - 1 ? '1px solid #d8d4cc' : 'none' }}>
+                    <div key={i} style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', padding: isPrinting ? '2mm 3mm' : '6px 10px', gap: isPrinting ? '2mm' : '8px', borderBottom: i < chunk.length - 1 ? '1px solid #d8d4cc' : 'none' }}>
                       {/* No. バッジ */}
                       <div style={{ flexShrink: 0, width: isPrinting ? '9mm' : '40px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         <span style={{ fontSize: isPrinting ? '5pt' : '8px', fontWeight: 800, color: '#c0492f', letterSpacing: '.08em', fontFamily: JP_FONT }}>No.</span>
@@ -1304,20 +1300,17 @@ export default function PdfExportPage() {
                         <div style={{ width: isPrinting ? '5mm' : '20px', height: isPrinting ? '0.75mm' : '3px', background: '#1c1f22', marginTop: isPrinting ? '1.5mm' : '6px' }} />
                       </div>
                       {/* 写真（黄金比61.8%、4:3固定） */}
-                      <div style={{ flex: '0 0 61.8%', maxWidth: '61.8%', aspectRatio: '4 / 3', maxHeight: '88%', position: 'relative', overflow: 'hidden', background: '#2a2d30', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #d8d4cc', flexShrink: 0 }}>
+                      <div style={{ flex: '0 0 65%', maxWidth: '65%', aspectRatio: '4 / 3', maxHeight: '95%', position: 'relative', overflow: 'hidden', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         {p.image ? (
-                          <div className="relative" style={{ display: 'inline-block', transform: `rotate(${Number(p.rotation) || 0}deg)` }}>
+                          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', transform: `rotate(${Number(p.rotation) || 0}deg)` }}>
                             <img
                               src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)}
                               data-original-src={p.image}
                               crossOrigin="anonymous"
                               style={{
-                                display: 'block',
-                                width: 'auto',
-                                height: 'auto',
-                                maxWidth: maxImgWidth,
-                                maxHeight: maxImgHeight,
-                                objectFit: 'contain',
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
                               }}
                               alt=""
                             />
