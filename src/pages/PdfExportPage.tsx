@@ -1279,16 +1279,34 @@ export default function PdfExportPage() {
         case 'photo': {
           if (!sections.photo) return [];
           return photoPages.map((chunk, pageIndex) => (
-          <div key={`photo-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-            <div className={`pdf-page w-full h-full flex flex-col bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '15mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
-              <div className="flex-1 w-full h-full flex flex-col justify-evenly p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black">
+          <div key={`photo-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px`, background: '#f7f5f1' }} className="pdf-page-wrapper relative shadow-md shrink-0">
+            <div className={`pdf-page w-full h-full flex flex-col text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: 0, background: '#f7f5f1', transform: isPrinting ? 'none' : `scale(${scale})` }}>
+              {/* ── ヘッダー ── */}
+              <div style={{ display: 'flex', alignItems: 'stretch', borderBottom: '2px solid #1c1f22', flexShrink: 0 }}>
+                <div style={{ flex: 1, padding: isPrinting ? '3mm 5mm' : '12px 18px', display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                  <div style={{ width: isPrinting ? '1.5mm' : '6px', alignSelf: 'stretch', background: '#c0492f', flexShrink: 0 }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: isPrinting ? '6pt' : '9px', letterSpacing: '.25em', color: '#6b7178', fontWeight: 800, fontFamily: JP_FONT }}>工事写真台帳</div>
+                    <div style={{ fontSize: isPrinting ? '11pt' : '17px', fontWeight: 900, lineHeight: 1.15, marginTop: 2, fontFamily: JP_FONT, color: '#1c1f22', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {project?.projectName || '工事名未設定'}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ padding: isPrinting ? '3mm 5mm' : '12px 18px', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                  <div style={{ fontSize: isPrinting ? '8pt' : '12px', fontWeight: 800, color: '#1c1f22', fontFamily: JP_FONT }}>
+                    {project ? getContractorName(project) : ''}
+                  </div>
+                </div>
+              </div>
+              {/* ── 写真3行 ── */}
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
                 {chunk.map((p, i) => {
                   const isRotated = (Number(p.rotation) || 0) % 180 !== 0;
                   const maxImgWidth = isRotated ? '78mm' : '100%';
                   const maxImgHeight = isRotated ? '120mm' : '78mm';
 
                   return (
-                    <div key={i} className="h-[30%] shrink-0 flex gap-2 p-1.5 rounded border border-gray-500 bg-white print:border-black">
+                    <div key={i} style={{ flex: 1, minHeight: 0 }} className="flex gap-2 p-1.5 border border-gray-500 bg-white print:border-black">
                       <div className="w-[60%] h-full flex items-center justify-center overflow-hidden relative border border-gray-400 bg-gray-50 shrink-0 print:bg-white print:border-gray-500">
                         {p.image ? (
                           <div className="relative" style={{ display: 'inline-block', transform: `rotate(${Number(p.rotation) || 0}deg)` }}>
@@ -1402,7 +1420,11 @@ export default function PdfExportPage() {
                   );
                 })}
               </div>
-              <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500 shrink-0">- {pageOffset('photo') + pageIndex + 1} / {totalPages} -</div>
+              {/* ── フッター ── */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: isPrinting ? '2mm 5mm' : '7px 18px', background: '#1c1f22', color: '#b9bec4', fontSize: isPrinting ? '6pt' : '8.5px', letterSpacing: '.08em', flexShrink: 0, fontFamily: JP_FONT }}>
+                <span>{project ? getContractorName(project) : ''}　{project?.projectName || ''}</span>
+                <span>{pageOffset('photo') + pageIndex + 1} / {totalPages}</span>
+              </div>
             </div>
           </div>
         ));}
