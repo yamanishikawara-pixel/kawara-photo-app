@@ -589,6 +589,7 @@ export default function PhotoPage() {
   // ── デバウンス保存(テキスト入力など連打されるフィールド用) ──
   const TEXT_FIELDS = new Set<keyof Photo>([
     'description', 'photoNumber', 'locationMap', 'process', 'shootingDate',
+    'standard', 'actual',
   ]);
 
   /**
@@ -1656,6 +1657,32 @@ export default function PhotoPage() {
                         />
                       </div>
 
+                      {/* 基準値・実測値 */}
+                      <div className="flex gap-3">
+                        <div className="flex-1 space-y-1">
+                          <label className="text-xs font-black uppercase tracking-widest px-1" style={{ color: '#6b7280' }}>基準値</label>
+                          <input
+                            type="text"
+                            className="w-full p-3 text-sm font-bold rounded-xl outline-none transition-all"
+                            style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }}
+                            value={photo.standard ?? ''}
+                            onChange={(e) => updatePhoto(photo.id, "standard", e.target.value)}
+                            placeholder="例: 100mm以上"
+                          />
+                        </div>
+                        <div className="flex-1 space-y-1">
+                          <label className="text-xs font-black uppercase tracking-widest px-1" style={{ color: '#6b7280' }}>実測値</label>
+                          <input
+                            type="text"
+                            className="w-full p-3 text-sm font-bold rounded-xl outline-none transition-all"
+                            style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }}
+                            value={photo.actual ?? ''}
+                            onChange={(e) => updatePhoto(photo.id, "actual", e.target.value)}
+                            placeholder="例: 120mm"
+                          />
+                        </div>
+                      </div>
+
                     </div>
                   </div>
                 </div>
@@ -2018,6 +2045,30 @@ export default function PhotoPage() {
                   placeholder="説明を入力..."
                   className="w-full px-3 py-2.5 rounded-xl text-sm font-bold outline-none resize-none"
                   style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }} />
+              </div>
+
+              {/* 基準値・実測値 */}
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="block text-xs font-bold mb-1" style={{ color: '#6b7280' }}>基準値</label>
+                  <input
+                    type="text"
+                    value={photo.standard ?? ''}
+                    onChange={e => updatePhoto(photo.id, 'standard', e.target.value)}
+                    placeholder="例: 100mm以上"
+                    className="w-full px-3 py-2.5 rounded-xl text-sm font-bold outline-none"
+                    style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }} />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs font-bold mb-1" style={{ color: '#6b7280' }}>実測値</label>
+                  <input
+                    type="text"
+                    value={photo.actual ?? ''}
+                    onChange={e => updatePhoto(photo.id, 'actual', e.target.value)}
+                    placeholder="例: 120mm"
+                    className="w-full px-3 py-2.5 rounded-xl text-sm font-bold outline-none"
+                    style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }} />
+                </div>
               </div>
             </div>
           </div>
