@@ -1295,11 +1295,11 @@ export default function PdfExportPage() {
                   const isPortrait = rot % 180 !== 0; // 90°/270° → 縦長表示
                   return (
                     <div key={i} style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'stretch', padding: isPrinting ? '2mm 3mm' : '6px 10px', gap: isPrinting ? '2mm' : '8px', borderBottom: i < chunk.length - 1 ? '1px solid #d8d4cc' : 'none' }}>
-                      {/* 写真（行の高さいっぱい・回転に応じてアスペクト比を切替） */}
-                      <div style={{ flexShrink: 0, alignSelf: 'stretch', aspectRatio: isPortrait ? '3 / 4' : '4 / 3', position: 'relative', overflow: 'hidden', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f7f5f1' }}>
+                      {/* 写真（行の高さいっぱい・常に4:3横長コンテナで統一） */}
+                      <div style={{ flexShrink: 0, alignSelf: 'stretch', aspectRatio: '4 / 3', position: 'relative', overflow: 'hidden', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f7f5f1' }}>
                         {p.image ? (
                           <div style={isPortrait
-                            ? { position: 'absolute', overflow: 'hidden', width: '133.333%', height: '75%', left: '50%', top: '50%', transform: `translate(-50%, -50%) rotate(${rot}deg)` }
+                            ? { position: 'absolute', overflow: 'hidden', width: '75%', height: '75%', left: '50%', top: '50%', transform: `translate(-50%, -50%) rotate(${rot}deg)` }
                             : { position: 'absolute', inset: 0, overflow: 'hidden', transform: `rotate(${rot}deg)` }
                           }>
                             <img
