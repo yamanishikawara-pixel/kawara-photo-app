@@ -1386,7 +1386,7 @@ export default function PdfExportPage() {
                         {/* 工程名（2行折り返し） */}
                         <div style={{ padding: isPrinting ? '2mm 3mm' : '8px 10px', borderBottom: '1px solid #d8d4cc' }}>
                           <div style={{ fontSize: isPrinting ? '5pt' : '8px', color: '#6b7178', fontWeight: 800, letterSpacing: '.1em', fontFamily: JP_FONT }}>工程</div>
-                          <div style={{ fontSize: isPrinting ? '8pt' : '12.5px', fontWeight: 900, lineHeight: 1.25, marginTop: isPrinting ? '0.5mm' : '2px', wordBreak: 'break-word', fontFamily: JP_FONT, color: '#1c1f22', overflow: 'hidden', maxHeight: isPrinting ? '6.5mm' : '2.7em' }}>
+                          <div style={{ fontSize: isPrinting ? '9pt' : '14px', fontWeight: 900, lineHeight: 1.25, marginTop: isPrinting ? '0.5mm' : '2px', wordBreak: 'break-word', fontFamily: JP_FONT, color: '#1c1f22', overflow: 'hidden', maxHeight: isPrinting ? '7.5mm' : '2.7em' }}>
                             {p.process || '　'}
                           </div>
                         </div>
