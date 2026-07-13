@@ -589,7 +589,7 @@ export default function PhotoPage() {
   // ── デバウンス保存(テキスト入力など連打されるフィールド用) ──
   const TEXT_FIELDS = new Set<keyof Photo>([
     'description', 'photoNumber', 'locationMap', 'process', 'shootingDate',
-    'standard', 'actual',
+    'standard', 'actual', 'checkItem',
   ]);
 
   /**
@@ -1631,6 +1631,19 @@ export default function PhotoPage() {
                         </select>
                       </div>
 
+                      {/* 確認事項 */}
+                      <div className="space-y-1">
+                        <label className="text-xs font-black uppercase tracking-widest px-1" style={{ color: '#6b7280' }}>確認事項</label>
+                        <input
+                          type="text"
+                          className="w-full p-3 text-sm font-bold rounded-xl outline-none transition-all"
+                          style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }}
+                          value={photo.checkItem ?? ''}
+                          onChange={(e) => updatePhoto(photo.id, 'checkItem', e.target.value)}
+                          placeholder="例: 重ね幅確認（タテ）"
+                        />
+                      </div>
+
                       {/* 説明文 */}
                       <div className="space-y-1.5 flex-1 flex flex-col">
                         <label className="text-xs font-black uppercase tracking-widest px-1" style={{ color: '#6b7280' }}>説明 / DESCRIPTION</label>
@@ -2031,6 +2044,18 @@ export default function PhotoPage() {
                   value={photo.process}
                   onChange={e => updatePhoto(photo.id, 'process', e.target.value)}
                   placeholder="例: 施工前"
+                  className="w-full px-3 py-2.5 rounded-xl text-sm font-bold outline-none"
+                  style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }} />
+              </div>
+
+              {/* 確認事項 */}
+              <div>
+                <label className="block text-xs font-bold mb-1" style={{ color: '#6b7280' }}>確認事項</label>
+                <input
+                  type="text"
+                  value={photo.checkItem ?? ''}
+                  onChange={e => updatePhoto(photo.id, 'checkItem', e.target.value)}
+                  placeholder="例: 重ね幅確認（タテ）"
                   className="w-full px-3 py-2.5 rounded-xl text-sm font-bold outline-none"
                   style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }} />
               </div>
