@@ -1390,6 +1390,15 @@ export default function PdfExportPage() {
                             {p.process || '　'}
                           </div>
                         </div>
+                        {/* 確認事項（値があるときのみ） */}
+                        {p.checkItem && (
+                          <div style={{ padding: isPrinting ? '1.5mm 3mm' : '6px 10px', borderBottom: '1px solid #d8d4cc' }}>
+                            <div style={{ fontSize: isPrinting ? '5pt' : '8px', color: '#6b7178', fontWeight: 800, letterSpacing: '.1em', fontFamily: JP_FONT }}>確認事項</div>
+                            <div style={{ fontSize: isPrinting ? '7pt' : '11px', fontWeight: 700, lineHeight: 1.3, marginTop: isPrinting ? '0.5mm' : '2px', wordBreak: 'break-word', fontFamily: JP_FONT, color: '#1c1f22' }}>
+                              {p.checkItem}
+                            </div>
+                          </div>
+                        )}
                         {/* 撮影日 / 位置図 */}
                         <div style={{ padding: isPrinting ? '1.5mm 3mm' : '6px 10px', borderBottom: '1px solid #d8d4cc' }}>
                           <div style={{ fontSize: isPrinting ? '5.5pt' : '8.5px', color: '#6b7178', lineHeight: 1.4, fontFamily: JP_FONT }}>
