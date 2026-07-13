@@ -1305,7 +1305,6 @@ export default function PdfExportPage() {
                             <img
                               src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)}
                               data-original-src={p.image}
-                              crossOrigin="anonymous"
                               style={{
                                 width: '100%',
                                 height: '100%',
