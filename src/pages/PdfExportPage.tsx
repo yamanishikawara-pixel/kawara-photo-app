@@ -1428,7 +1428,7 @@ export default function PdfExportPage() {
                         <div style={{ flex: 1, padding: isPrinting ? '2mm 3mm' : '8px 10px', minHeight: 0, overflow: 'hidden' }}>
                           <div style={{ paddingLeft: isPrinting ? '3mm' : '8px', borderLeft: '3px solid #4a5560', height: '100%', overflow: 'hidden' }}>
                             <div style={{ fontSize: isPrinting ? '5pt' : '8px', color: '#4a5560', fontWeight: 800, letterSpacing: '.05em', marginBottom: isPrinting ? '0.5mm' : '2px', fontFamily: JP_FONT }}>説明</div>
-                            <div style={{ fontSize: isPrinting ? '7.5pt' : '11px', color: '#33383d', lineHeight: 1.4, wordBreak: 'break-word', fontFamily: JP_FONT, whiteSpace: 'pre-wrap', overflow: 'hidden' }}>
+                            <div style={{ fontSize: isPrinting ? '8.9pt' : '13px', color: '#1c1f22', lineHeight: 1.7, fontWeight: 400, wordBreak: 'break-word', fontFamily: JP_FONT, whiteSpace: 'pre-wrap', overflow: 'hidden' }}>
                               {p.description || '　'}
                             </div>
                           </div>
