@@ -518,7 +518,7 @@ export default function SettingsPage() {
     )));
   };
 
-  const applyWorkTypeTemplate = (template: WorkTypeTemplate) => {
+  const applyWorkTypeTemplate = async (template: WorkTypeTemplate) => {
     const validItems = template.items.filter(item => item.process.trim() !== '');
     if (validItems.length === 0) return;
     const ok = window.confirm(
@@ -526,20 +526,31 @@ export default function SettingsPage() {
     );
     if (!ok) return;
 
-    setProcesses(validItems.map(item => item.process));
+    const newProcesses = validItems.map(item => item.process);
+    setProcesses(newProcesses);
 
-    setPhotoMaster(prev => {
-      const next = [...prev];
-      validItems.forEach(item => {
-        const existingIdx = next.findIndex(m => m.name === item.process);
-        if (existingIdx !== -1) {
-          next[existingIdx] = { ...next[existingIdx], process: item.process, description: item.description, standard: item.standard ?? '' };
-        } else {
-          next.push({ id: nextId(), name: item.process, process: item.process, description: item.description, standard: item.standard ?? '' });
-        }
-      });
-      return next;
+    const newPhotoMaster = [...photoMaster];
+    validItems.forEach(item => {
+      const existingIdx = newPhotoMaster.findIndex(m => m.name === item.process);
+      if (existingIdx !== -1) {
+        newPhotoMaster[existingIdx] = { ...newPhotoMaster[existingIdx], process: item.process, description: item.description, standard: item.standard ?? '' };
+      } else {
+        newPhotoMaster.push({ id: nextId(), name: item.process, process: item.process, description: item.description, standard: item.standard ?? '' });
+      }
     });
+    setPhotoMaster(newPhotoMaster);
+
+    if (uid) {
+      try {
+        await setDoc(doc(db, 'users', uid), {
+          customProcesses: newProcesses,
+          photoMaster: newPhotoMaster,
+        }, { merge: true });
+      } catch (err) {
+        logFirebaseError(err, '一括反映保存');
+        setError(firebaseErrorMessage(err, '一括反映の保存'));
+      }
+    }
   };
 
   const usageRatio = storageUsageRatio(storageUsedBytes);
