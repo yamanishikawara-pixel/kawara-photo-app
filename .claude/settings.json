@@ -10,7 +10,8 @@
       "Bash(grep -n \"addPhoto\\\\|const handleAdd\\\\|photos: \\\\[\\\\|setProject\\(prev => \\({ ...prev, photos\\\\|newPhoto\\\\|process:.*''\\\\|description:.*''\" src/pages/PhotoPage.tsx)",
       "Bash(git -C /Users/yamanishikenta/kawara-photo-app diff --stat)",
       "Bash(git -C /Users/yamanishikenta/kawara-photo-app diff)",
-      "Bash(firebase emulators:start --only firestore --project kawara-photo-app)"
+      "Bash(firebase emulators:start --only firestore --project kawara-photo-app)",
+      "Bash(git commit -m ' *)"
     ],
     "additionalDirectories": [
       "/Users/yamanishikenta/.codex"
