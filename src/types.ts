@@ -37,6 +37,7 @@ export interface Photo {
   dimensionLines?: DimensionLine[];
   standard?: string;
   actual?: string;
+  checkItem?: string;
 }
 
 export interface Material {
