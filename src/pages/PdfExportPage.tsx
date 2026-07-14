@@ -1291,14 +1291,17 @@ export default function PdfExportPage() {
               {/* ── 写真3行 ── */}
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
                 {chunk.map((p, i) => {
+                  // aspect-ratio CSS は Safari の flex アイテムで不安定なため、行高さから幅を明示計算
+                  const _numRows = chunk.length || 1;
+                  const photoW = isPrinting
+                    ? `${Math.min(((255 / _numRows) - 4) * (4 / 3), 147).toFixed(1)}mm`
+                    : `${Math.min(Math.round(((A4_HEIGHT_PX - 42) / _numRows - 12) * (4 / 3)), 556)}px`;
                   const rot = Number(p.rotation) || 0;
                   const isPortrait = rot % 180 !== 0; // 90°/270° → 縦長表示
                   return (
                     <div key={i} style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'stretch', padding: isPrinting ? '2mm 3mm' : '6px 10px', gap: isPrinting ? '2mm' : '8px', borderBottom: i < chunk.length - 1 ? '1px solid #d8d4cc' : 'none' }}>
-                      {/* 写真（行の高さいっぱい・常に4:3横長コンテナで統一） */}
-                      {/* Safari 15.0-15.3 の aspect-ratio × align-self:stretch バグ回避のため outer/inner 2層構造にする */}
-                      <div style={{ flexShrink: 0, alignSelf: 'stretch' }}>
-                      <div style={{ height: '100%', aspectRatio: '4 / 3', position: 'relative', overflow: 'hidden', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f7f5f1' }}>
+                      {/* 写真（行の高さいっぱい・4:3幅を行高さから明示指定） */}
+                      <div style={{ flexShrink: 0, alignSelf: 'stretch', width: photoW, position: 'relative', overflow: 'hidden', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f7f5f1' }}>
                         {p.image ? (
                           <div style={isPortrait
                             ? { position: 'absolute', overflow: 'hidden', width: '75%', height: '133.333%', left: '50%', top: '50%', transform: `translate(-50%, -50%) rotate(${rot}deg)` }
@@ -1376,7 +1379,6 @@ export default function PdfExportPage() {
                             })}
                           </div>
                         ) : <span style={{ fontWeight: 700, color: 'rgba(255,255,255,0.35)', fontFamily: JP_FONT, fontSize: isPrinting ? '6pt' : '9px' }}>写真未登録</span>}
-                      </div>
                       </div>
                       {/* 情報欄（黄金比38.2%） */}
                       <div style={{ flex: 1, minWidth: 0, alignSelf: 'stretch', display: 'flex', flexDirection: 'column', fontSize: '13px', overflow: 'hidden' }}>
