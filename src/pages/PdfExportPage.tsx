@@ -1291,15 +1291,18 @@ export default function PdfExportPage() {
               {/* ── 写真3行 ── */}
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
                 {chunk.map((p, i) => {
-                  // aspect-ratio / height:100% は Safari の flex アイテムで不安定なため
-                  // ページ高さから width・height を両方とも明示計算する
+                  // aspect-ratio / height:100% / right:0 bottom:0 はすべてSafariのflex内で不安定
+                  // → コンテナ・内側div・縦横を全て明示px/mmで指定する
                   const _numRows = chunk.length || 1;
                   const _innerH_px = Math.round((A4_HEIGHT_PX - 42) / _numRows - 12);
-                  const _innerH_mm = ((255 / _numRows) - 4);
+                  const _innerW_px = Math.min(Math.round(_innerH_px * (4 / 3)), 556);
+                  const _innerH_mm = (255 / _numRows) - 4;
+                  const _innerW_mm = Math.min(_innerH_mm * (4 / 3), 147);
                   const photoH = isPrinting ? `${_innerH_mm.toFixed(1)}mm` : `${_innerH_px}px`;
-                  const photoW = isPrinting
-                    ? `${Math.min(_innerH_mm * (4 / 3), 147).toFixed(1)}mm`
-                    : `${Math.min(Math.round(_innerH_px * (4 / 3)), 556)}px`;
+                  const photoW = isPrinting ? `${_innerW_mm.toFixed(1)}mm` : `${_innerW_px}px`;
+                  // 縦位置写真用の内側 div（H と W を入れ替えたサイズ、回転後にコンテナを埋める）
+                  const portW = isPrinting ? `${_innerH_mm.toFixed(1)}mm` : `${_innerH_px}px`;
+                  const portH = isPrinting ? `${_innerW_mm.toFixed(1)}mm` : `${_innerW_px}px`;
                   const rot = Number(p.rotation) || 0;
                   const isPortrait = rot % 180 !== 0; // 90°/270° → 縦長表示
                   return (
@@ -1308,8 +1311,8 @@ export default function PdfExportPage() {
                       <div style={{ flexShrink: 0, alignSelf: 'stretch', width: photoW, height: photoH, position: 'relative', overflow: 'hidden', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f7f5f1' }}>
                         {p.image ? (
                           <div style={isPortrait
-                            ? { position: 'absolute', overflow: 'hidden', width: '75%', height: '133.333%', left: '50%', top: '50%', transform: `translate(-50%, -50%) rotate(${rot}deg)` }
-                            : { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, overflow: 'hidden', transform: `rotate(${rot}deg)` }
+                            ? { position: 'absolute', overflow: 'hidden', width: portW, height: portH, left: '50%', top: '50%', transform: `translate(-50%, -50%) rotate(${rot}deg)` }
+                            : { position: 'absolute', top: 0, left: 0, width: photoW, height: photoH, overflow: 'hidden', transform: `rotate(${rot}deg)` }
                           }>
                             <img
                               src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)}
