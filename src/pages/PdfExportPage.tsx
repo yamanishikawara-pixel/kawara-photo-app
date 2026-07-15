@@ -1322,7 +1322,7 @@ export default function PdfExportPage() {
                                 height: '100%',
                                 objectFit: 'contain',
                               }}
-                              alt=""
+                              alt="📷"
                             />
 
                             {(p.circles ?? []).map((circle) => {
