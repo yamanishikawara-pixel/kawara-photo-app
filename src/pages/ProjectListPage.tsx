@@ -201,6 +201,8 @@ export function ProjectListPage() {
             locationMap: '',
             process: item.process,
             description: item.description,
+            standard: item.standard ?? '',
+            checkItem: item.checkItem ?? '',
             circles: [],
             dimensionLines: [],
           }))
