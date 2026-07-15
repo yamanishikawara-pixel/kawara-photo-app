@@ -1308,7 +1308,7 @@ export default function PdfExportPage() {
                   return (
                     <div key={i} style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'stretch', padding: isPrinting ? '2mm 3mm' : '6px 10px', gap: isPrinting ? '2mm' : '8px', borderBottom: i < chunk.length - 1 ? '1px solid #d8d4cc' : 'none' }}>
                       {/* 写真（width・height を明示指定してSafariでも絶対配置の子が正しく描画されるようにする） */}
-                      <div style={{ flexShrink: 0, alignSelf: 'stretch', width: photoW, height: photoH, position: 'relative', overflow: 'hidden', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f7f5f1' }}>
+                      <div style={{ flexShrink: 0, alignSelf: 'stretch', width: photoW, height: photoH, position: 'relative', overflow: 'hidden', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#ddd8d0' }}>
                         {p.image ? (
                           <div style={isPortrait
                             ? { position: 'absolute', overflow: 'hidden', width: portW, height: portH, left: '50%', top: '50%', transform: `translate(-50%, -50%) rotate(${rot}deg)` }
@@ -1317,6 +1317,8 @@ export default function PdfExportPage() {
                             <img
                               src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)}
                               data-original-src={p.image}
+                              loading="lazy"
+                              decoding="async"
                               style={{
                                 width: '100%',
                                 height: '100%',
@@ -1515,7 +1517,7 @@ export default function PdfExportPage() {
                         ].map((ph, pi) => (
                           <div key={pi} style={{ width: '100%', height: isPrinting ? '65mm' : '289px', overflow: 'hidden', position: 'relative', background: pi === 0 ? '#c8d0d8' : '#a8c4b2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             {ph.src ? (
-                              <img src={ph.src} alt={pi === 0 ? '施工前' : '施工後'} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                              <img src={ph.src} alt={pi === 0 ? '施工前' : '施工後'} crossOrigin="anonymous" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                             ) : (
                               <div style={{ textAlign: 'center', opacity: 0.5 }}>
                                 <div style={{ fontSize: isPrinting ? '14pt' : '28px', marginBottom: 4 }}>📷</div>
@@ -1586,6 +1588,8 @@ export default function PdfExportPage() {
                               src={proxyUrl(m.image, `material_${m.id}_${sessionId}`)}
                               data-original-src={m.image}
                               crossOrigin="anonymous"
+                              loading="lazy"
+                              decoding="async"
                               style={{
                                 display: 'block',
                                 width: 'auto',
