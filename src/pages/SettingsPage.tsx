@@ -101,15 +101,17 @@ function SortableProcessRow({ id, index, value, onChange, onDelete }: {
   );
 }
 
-function SortableWorkTypeItemRow({ id, index, process, description, standard, onChangeProcess, onChangeDescription, onChangeStandard, onDelete }: {
+function SortableWorkTypeItemRow({ id, index, process, description, standard, checkItem, onChangeProcess, onChangeDescription, onChangeStandard, onChangeCheckItem, onDelete }: {
   id: string;
   index: number;
   process: string;
   description: string;
   standard: string;
+  checkItem: string;
   onChangeProcess: (value: string) => void;
   onChangeDescription: (value: string) => void;
   onChangeStandard: (value: string) => void;
+  onChangeCheckItem: (value: string) => void;
   onDelete: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -147,6 +149,14 @@ function SortableWorkTypeItemRow({ id, index, process, description, standard, on
           placeholder="基準値（例: 100mm以上）"
           value={standard}
           onChange={(e) => onChangeStandard(e.target.value)}
+          className={inputCls}
+          style={{ ...inputStyle, background: '#12122a' }}
+        />
+        <input
+          type="text"
+          placeholder="確認事項（例: 重ね幅確認）"
+          value={checkItem}
+          onChange={(e) => onChangeCheckItem(e.target.value)}
           className={inputCls}
           style={{ ...inputStyle, background: '#12122a' }}
         />
@@ -533,9 +543,9 @@ export default function SettingsPage() {
     validItems.forEach(item => {
       const existingIdx = newPhotoMaster.findIndex(m => m.name === item.process);
       if (existingIdx !== -1) {
-        newPhotoMaster[existingIdx] = { ...newPhotoMaster[existingIdx], process: item.process, description: item.description, standard: item.standard ?? '' };
+        newPhotoMaster[existingIdx] = { ...newPhotoMaster[existingIdx], process: item.process, description: item.description, standard: item.standard ?? '', checkItem: item.checkItem ?? '' };
       } else {
-        newPhotoMaster.push({ id: nextId(), name: item.process, process: item.process, description: item.description, standard: item.standard ?? '' });
+        newPhotoMaster.push({ id: nextId(), name: item.process, process: item.process, description: item.description, standard: item.standard ?? '', checkItem: item.checkItem ?? '' });
       }
     });
     setPhotoMaster(newPhotoMaster);
@@ -781,6 +791,14 @@ export default function SettingsPage() {
                         className={inputCls}
                         style={{ ...inputStyle, background: '#1c1c30' }}
                       />
+                      <input
+                        type="text"
+                        placeholder="確認事項（例: 重ね幅確認）"
+                        value={m.checkItem ?? ''}
+                        onChange={(e) => setPhotoMaster(prev => prev.map((item, i) => i === index ? { ...item, checkItem: e.target.value } : item))}
+                        className={inputCls}
+                        style={{ ...inputStyle, background: '#1c1c30' }}
+                      />
                       <textarea
                         placeholder="説明文"
                         rows={2}
@@ -803,7 +821,7 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
-            <AddButton onClick={() => setPhotoMaster(prev => [...prev, { id: nextId(), name: '', process: '', description: '', standard: '' }])} label="テンプレートを追加" accent="#10b981" />
+            <AddButton onClick={() => setPhotoMaster(prev => [...prev, { id: nextId(), name: '', process: '', description: '', standard: '', checkItem: '' }])} label="テンプレートを追加" accent="#10b981" />
           </Section>
 
           {/* 工事種別テンプレート */}
@@ -847,9 +865,11 @@ export default function SettingsPage() {
                               process={item.process}
                               description={item.description}
                               standard={item.standard ?? ''}
+                              checkItem={item.checkItem ?? ''}
                               onChangeProcess={(value) => setWorkTypeTemplates(prev => prev.map(t => t.id === template.id ? { ...t, items: t.items.map((it, i) => i === index ? { ...it, process: value } : it) } : t))}
                               onChangeDescription={(value) => setWorkTypeTemplates(prev => prev.map(t => t.id === template.id ? { ...t, items: t.items.map((it, i) => i === index ? { ...it, description: value } : it) } : t))}
                               onChangeStandard={(value) => setWorkTypeTemplates(prev => prev.map(t => t.id === template.id ? { ...t, items: t.items.map((it, i) => i === index ? { ...it, standard: value } : it) } : t))}
+                              onChangeCheckItem={(value) => setWorkTypeTemplates(prev => prev.map(t => t.id === template.id ? { ...t, items: t.items.map((it, i) => i === index ? { ...it, checkItem: value } : it) } : t))}
                               onDelete={() => setWorkTypeTemplates(prev => prev.map(t => t.id === template.id ? { ...t, items: t.items.filter((_, i) => i !== index) } : t))}
                             />
                           ))}
@@ -860,7 +880,7 @@ export default function SettingsPage() {
 
                   <div className="flex flex-wrap gap-2">
                     <AddButton
-                      onClick={() => setWorkTypeTemplates(prev => prev.map(t => t.id === template.id ? { ...t, items: [...t.items, { process: '', description: '', standard: '' }] } : t))}
+                      onClick={() => setWorkTypeTemplates(prev => prev.map(t => t.id === template.id ? { ...t, items: [...t.items, { process: '', description: '', standard: '', checkItem: '' }] } : t))}
                       label="行を追加"
                       accent="#3b82f6"
                     />
