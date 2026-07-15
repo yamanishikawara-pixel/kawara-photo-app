@@ -119,12 +119,14 @@ export interface PhotoMaster {
   process: string;     // 工程
   description: string; // 説明文
   standard?: string;   // 基準値
+  checkItem?: string;  // 確認事項
 }
 
 export interface WorkTypeTemplateItem {
   process: string;
   description: string;
   standard?: string;   // 基準値
+  checkItem?: string;  // 確認事項
 }
 
 export interface WorkTypeTemplate {
