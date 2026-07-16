@@ -111,6 +111,7 @@ export interface MaterialMaster {
   manufacturer: string;
   specification: string;
   remarks: string;
+  image?: string | null;
 }
 
 export interface PhotoMaster {
@@ -133,6 +134,7 @@ export interface WorkTypeTemplate {
   id: number;
   name: string;
   items: WorkTypeTemplateItem[];
+  materialMasterIds?: number[];
 }
 
 export interface UserSettings {
