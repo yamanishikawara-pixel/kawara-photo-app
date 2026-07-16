@@ -1291,40 +1291,52 @@ export default function PdfExportPage() {
               {/* ── 写真3行 ── */}
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
                 {chunk.map((p, i) => {
-                  // aspect-ratio / height:100% / right:0 bottom:0 はすべてSafariのflex内で不安定
-                  // → コンテナ・内側div・縦横を全て明示px/mmで指定する
                   const _numRows = chunk.length || 1;
                   const _innerH_px = Math.round((A4_HEIGHT_PX - 42) / _numRows - 12);
                   const _innerW_px = Math.min(Math.round(_innerH_px * (4 / 3)), 556);
                   const _innerH_mm = (255 / _numRows) - 4;
                   const _innerW_mm = Math.min(_innerH_mm * (4 / 3), 147);
-                  const photoH = isPrinting ? `${_innerH_mm.toFixed(1)}mm` : `${_innerH_px}px`;
-                  const photoW = isPrinting ? `${_innerW_mm.toFixed(1)}mm` : `${_innerW_px}px`;
-                  // 縦位置写真用の内側 div（H と W を入れ替えたサイズ、回転後にコンテナを埋める）
-                  const portW = isPrinting ? `${_innerH_mm.toFixed(1)}mm` : `${_innerH_px}px`;
-                  const portH = isPrinting ? `${_innerW_mm.toFixed(1)}mm` : `${_innerW_px}px`;
                   const rot = Number(p.rotation) || 0;
-                  const isPortrait = rot % 180 !== 0; // 90°/270° → 縦長表示
+                  const isPortrait = rot % 180 !== 0;
+                  // 縦回転写真: maxWidth/maxHeight を入れ替えてコンテナに収める
+                  const imgMaxW = isPortrait
+                    ? (isPrinting ? `${_innerH_mm.toFixed(1)}mm` : `${_innerH_px}px`)
+                    : (isPrinting ? `${_innerW_mm.toFixed(1)}mm` : `${_innerW_px}px`);
+                  const imgMaxH = isPortrait
+                    ? (isPrinting ? `${_innerW_mm.toFixed(1)}mm` : `${_innerW_px}px`)
+                    : (isPrinting ? `${_innerH_mm.toFixed(1)}mm` : `${_innerH_px}px`);
                   return (
-                    <div key={i} style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'stretch', padding: isPrinting ? '2mm 3mm' : '6px 10px', gap: isPrinting ? '2mm' : '8px', borderBottom: i < chunk.length - 1 ? '1px solid #d8d4cc' : 'none' }}>
-                      {/* 写真（width・height を明示指定してSafariでも絶対配置の子が正しく描画されるようにする） */}
-                      <div style={{ flexShrink: 0, alignSelf: 'stretch', width: photoW, height: photoH, position: 'relative', overflow: 'hidden', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#ddd8d0' }}>
+                    <div
+                      key={i}
+                      className="shrink-0 flex items-stretch"
+                      style={{
+                        height: `${(100 / _numRows).toFixed(2)}%`,
+                        padding: isPrinting ? '2mm 3mm' : '6px 10px',
+                        gap: isPrinting ? '2mm' : '8px',
+                        borderBottom: i < chunk.length - 1 ? '1px solid #d8d4cc' : 'none',
+                      }}
+                    >
+                      {/* 写真コンテナ - Material と同じ Tailwind クラス構造 */}
+                      <div
+                        className="w-[70%] h-full flex items-center justify-center overflow-hidden relative shrink-0"
+                        style={{ borderRadius: 2, background: '#f7f5f1' }}
+                      >
                         {p.image ? (
-                          <div style={isPortrait
-                            ? { position: 'absolute', overflow: 'hidden', width: portW, height: portH, left: '50%', top: '50%', transform: `translate(-50%, -50%) rotate(${rot}deg)` }
-                            : { position: 'absolute', top: 0, left: 0, width: photoW, height: photoH, overflow: 'hidden', transform: `rotate(${rot}deg)` }
-                          }>
+                          <div className="relative" style={{ display: 'inline-block' }}>
                             <img
                               src={proxyUrl(p.image, `photo_${p.id}_${sessionId}`)}
                               data-original-src={p.image}
                               loading="lazy"
                               decoding="async"
                               style={{
-                                width: '100%',
-                                height: '100%',
-                                objectFit: 'contain',
+                                display: 'block',
+                                width: 'auto',
+                                height: 'auto',
+                                maxWidth: imgMaxW,
+                                maxHeight: imgMaxH,
+                                transform: `rotate(${rot}deg)`,
                               }}
-                              alt="📷"
+                              alt=""
                             />
 
                             {(p.circles ?? []).map((circle) => {
@@ -1387,7 +1399,7 @@ export default function PdfExportPage() {
                               );
                             })}
                           </div>
-                        ) : <span style={{ fontWeight: 700, color: 'rgba(255,255,255,0.35)', fontFamily: JP_FONT, fontSize: isPrinting ? '6pt' : '9px' }}>写真未登録</span>}
+                        ) : <span style={{ fontWeight: 700, color: 'rgba(0,0,0,0.2)', fontFamily: JP_FONT, fontSize: isPrinting ? '6pt' : '9px' }}>写真未登録</span>}
                       </div>
                       {/* 情報欄（黄金比38.2%） */}
                       <div style={{ flex: 1, minWidth: 0, alignSelf: 'stretch', display: 'flex', flexDirection: 'column', fontSize: '13px', overflow: 'hidden' }}>
