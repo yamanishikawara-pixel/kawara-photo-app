@@ -17,6 +17,7 @@ import { db, auth, storage } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { canUpload, formatBytes, storageUsageRatio, STORAGE_LIMIT_BYTES, trackUpload, storagePathFromUrl, deleteStorageFileWithAccounting } from '../shared/storageUtils';
+import { compressPhotoWithQuality } from '../shared/imageUtils';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import type { MaterialMaster, PhotoMaster, Project, WorkTypeTemplate } from '../types';
 import { ErrorMessage } from '../shared/ErrorMessage';
@@ -199,6 +200,7 @@ export default function SettingsPage() {
   const [photoMaster, setPhotoMaster] = useState<PhotoMaster[]>([]);
   const [workTypeTemplates, setWorkTypeTemplates] = useState<WorkTypeTemplate[]>([]);
   const [storageUsedBytes, setStorageUsedBytes] = useState(0);
+  const [uploadingMasterImageIds, setUploadingMasterImageIds] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
@@ -267,6 +269,44 @@ export default function SettingsPage() {
       if (mountedRef.current) setError(firebaseErrorMessage(err, 'ロゴのアップロード'));
     } finally {
       if (mountedRef.current) setUploadingLogo(false);
+    }
+  };
+
+  const handleMasterImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, masterId: number) => {
+    if (!uid || !e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!canUpload(storageUsedBytes, file.size)) {
+      setError('ストレージ容量が上限（500MB）に達しています。不要なファイルを削除してください。');
+      return;
+    }
+    setUploadingMasterImageIds(prev => new Set([...prev, masterId]));
+    try {
+      const compressed = await compressPhotoWithQuality(file);
+      const storageRef = ref(storage, `materialMaster/${uid}_${masterId}`);
+      await uploadBytes(storageRef, compressed);
+      const url = await getDownloadURL(storageRef);
+      await trackUpload(uid, compressed.size);
+      if (!mountedRef.current) return;
+      setStorageUsedBytes(prev => prev + compressed.size);
+      setMaterialMaster(prev => prev.map(m => m.id === masterId ? { ...m, image: url } : m));
+    } catch (err) {
+      logFirebaseError(err, 'マスタ画像アップロード');
+      if (mountedRef.current) setError(firebaseErrorMessage(err, 'マスタ画像のアップロード'));
+    } finally {
+      if (mountedRef.current) setUploadingMasterImageIds(prev => { const s = new Set(prev); s.delete(masterId); return s; });
+    }
+  };
+
+  const handleMasterImageDelete = async (masterId: number, imageUrl: string) => {
+    if (!uid) return;
+    try {
+      await deleteStorageFileWithAccounting(storagePathFromUrl(imageUrl) ?? imageUrl, uid);
+      if (!mountedRef.current) return;
+      setMaterialMaster(prev => prev.map(m => m.id === masterId ? { ...m, image: null } : m));
+    } catch (err) {
+      logFirebaseError(err, 'マスタ画像削除');
+      if (mountedRef.current) setError(firebaseErrorMessage(err, 'マスタ画像の削除'));
     }
   };
 
@@ -895,11 +935,58 @@ export default function SettingsPage() {
                       工程・写真テンプレートへ一括反映
                     </button>
                   </div>
+
+                  {/* 使用材料 */}
+                  <div className="mt-1 pt-3 border-t" style={{ borderColor: '#2e2e50' }}>
+                    <p className="text-xs font-bold mb-2" style={{ color: '#6b7280' }}>使用材料（新規物件作成時に一括登録）</p>
+                    {(template.materialMasterIds ?? []).length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {(template.materialMasterIds ?? []).map(mid => {
+                          const mat = materialMaster.find(m => m.id === mid);
+                          if (!mat) return null;
+                          return (
+                            <span key={mid} className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold" style={{ background: 'rgba(139,92,246,0.15)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.3)' }}>
+                              {mat.name}
+                              <button
+                                onClick={() => setWorkTypeTemplates(prev => prev.map(t => t.id === template.id ? { ...t, materialMasterIds: (t.materialMasterIds ?? []).filter(id => id !== mid) } : t))}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {materialMaster.length > 0 ? (
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const selectedId = Number(e.target.value);
+                          if (!selectedId) return;
+                          setWorkTypeTemplates(prev => prev.map(t => {
+                            if (t.id !== template.id) return t;
+                            const currentIds = t.materialMasterIds ?? [];
+                            if (currentIds.includes(selectedId)) return t;
+                            return { ...t, materialMasterIds: [...currentIds, selectedId] };
+                          }));
+                        }}
+                        className={inputCls}
+                        style={{ ...inputStyle, background: '#1c1c30' }}
+                      >
+                        <option value="">材料を選択して追加...</option>
+                        {materialMaster.filter(m => !(template.materialMasterIds ?? []).includes(m.id)).map(m => (
+                          <option key={m.id} value={m.id}>{m.name}{m.manufacturer ? ` (${m.manufacturer})` : ''}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <p className="text-xs" style={{ color: '#3d3d60' }}>※材料マスタに材料を登録すると、ここで選択できます</p>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
             <AddButton
-              onClick={() => setWorkTypeTemplates(prev => [...prev, { id: nextId(), name: '', items: [] }])}
+              onClick={() => setWorkTypeTemplates(prev => [...prev, { id: nextId(), name: '', items: [], materialMasterIds: [] }])}
               label="工事種別テンプレートを追加"
               accent="#3b82f6"
             />
@@ -913,6 +1000,38 @@ export default function SettingsPage() {
                 <div key={m.id} className="p-3 rounded-xl border space-y-2" style={{ background: '#12122a', borderColor: '#2e2e50' }}>
                   <div className="flex items-start gap-2">
                     <span className="text-xs font-bold w-4 mt-2.5 shrink-0" style={{ color: '#6b7280' }}>{index + 1}</span>
+                    {/* 画像サムネイル */}
+                    <div className="shrink-0">
+                      {m.image ? (
+                        <div className="relative w-16 h-16 rounded-lg overflow-hidden" style={{ background: '#0f0f1a', border: '1px solid #2e2e50' }}>
+                          <img src={m.image} alt="" className="w-full h-full object-cover" />
+                          <button
+                            onClick={() => handleMasterImageDelete(m.id, m.image!)}
+                            className="absolute top-0.5 right-0.5 rounded-full p-0.5"
+                            style={{ background: '#ef4444', color: '#fff' }}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <label
+                          className="w-16 h-16 flex flex-col items-center justify-center rounded-lg cursor-pointer border-2 border-dashed transition-colors"
+                          style={{ background: '#0f0f1a', borderColor: '#3d3d60' }}
+                          onPointerEnter={e => (e.currentTarget.style.borderColor = '#8b5cf6')}
+                          onPointerLeave={e => (e.currentTarget.style.borderColor = '#3d3d60')}
+                        >
+                          {uploadingMasterImageIds.has(m.id) ? (
+                            <span className="text-xs font-bold animate-pulse" style={{ color: '#8b5cf6' }}>...</span>
+                          ) : (
+                            <>
+                              <ImageIcon className="w-5 h-5 mb-0.5" style={{ color: '#3d3d60' }} />
+                              <span className="text-xs font-bold" style={{ color: '#6b7280' }}>画像</span>
+                            </>
+                          )}
+                          <input type="file" accept="image/*" className="hidden" onChange={(e) => handleMasterImageUpload(e, m.id)} disabled={uploadingMasterImageIds.has(m.id)} />
+                        </label>
+                      )}
+                    </div>
                     <div className="flex-1 space-y-2">
                       {[
                         { ph: '品名', key: 'name' as keyof MaterialMaster },
@@ -944,7 +1063,7 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
-            <AddButton onClick={() => setMaterialMaster(prev => [...prev, { id: nextId(), name: '', manufacturer: '', specification: '', remarks: '' }])} label="材料を追加" accent="#8b5cf6" />
+            <AddButton onClick={() => setMaterialMaster(prev => [...prev, { id: nextId(), name: '', manufacturer: '', specification: '', remarks: '', image: null }])} label="材料を追加" accent="#8b5cf6" />
           </Section>
 
           {/* 位置図 一括マイグレーション */}

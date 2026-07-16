@@ -6,7 +6,7 @@ import { ref, listAll, deleteObject, getMetadata } from 'firebase/storage';
 import { signOut } from 'firebase/auth';
 
 import { db, auth, storage } from '../firebase';
-import type { Project, WorkTypeTemplate } from '../types';
+import type { Material, MaterialMaster, Project, WorkTypeTemplate } from '../types';
 import { LoadingSpinner } from '../shared/LoadingSpinner';
 import { ErrorMessage } from '../shared/ErrorMessage';
 import { ConfirmModal } from '../shared/ConfirmModal';
@@ -100,6 +100,7 @@ export function ProjectListPage() {
   const [companyName, setCompanyName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [workTypeTemplates, setWorkTypeTemplates] = useState<WorkTypeTemplate[]>([]);
+  const [materialMaster, setMaterialMaster] = useState<MaterialMaster[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [selectedWorkTypeId, setSelectedWorkTypeId] = useState<number | null>(null);
@@ -139,6 +140,7 @@ export function ProjectListPage() {
           if (d.logoUrl) setLogoUrl(d.logoUrl);
           setStorageUsed(d.storageUsedBytes ?? 0);
           if (Array.isArray(d.workTypeTemplates)) setWorkTypeTemplates(d.workTypeTemplates);
+          if (Array.isArray(d.materialMaster)) setMaterialMaster(d.materialMaster);
         }
       } catch (err) {
         logFirebaseError(err, '現場一覧読込');
@@ -210,6 +212,20 @@ export function ProjectListPage() {
             { id: Date.now(), image: null, photoNumber: '1', shootingDate: '', locationMap: '', process: '', description: '', circles: [], dimensionLines: [] },
           ];
 
+      const templateMaterials: Material[] = (template?.materialMasterIds ?? []).flatMap((mid, i) => {
+        const master = materialMaster.find(m => m.id === mid);
+        if (!master) return [];
+        return [{
+          id: Date.now() + i,
+          image: master.image ?? null,
+          name: master.name,
+          manufacturer: master.manufacturer,
+          specification: master.specification,
+          remarks: master.remarks,
+          rotation: 0,
+        }];
+      });
+
       const docRef = await addDoc(collection(db, 'projects'), {
         userId: user.uid,
         projectName: newProjectName.trim() || '新規現場',
@@ -218,7 +234,7 @@ export function ProjectListPage() {
         contractorName: savedCompanyName || '',
         creationDate: new Date().toLocaleDateString('ja-JP'),
         photos,
-        materials: [],
+        materials: templateMaterials,
         mapUrls: [],
         mapRows: [{ id: 1, symbol: '', part: '本棟', relatedPhotoNumber: '' }],
         mapPins: [],
