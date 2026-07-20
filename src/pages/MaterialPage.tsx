@@ -302,7 +302,7 @@ export default function MaterialPage() {
     const currentMaterials = projectRef.current?.materials ?? [];
     const newMaterials = currentMaterials.map((mat) =>
       mat.id === materialId
-        ? { ...mat, name: m.name, manufacturer: m.manufacturer, specification: m.specification, remarks: m.remarks }
+        ? { ...mat, name: m.name, manufacturer: m.manufacturer, specification: m.specification, remarks: m.remarks, image: m.image ?? mat.image }
         : mat
     );
     void commitMaterials(newMaterials);
