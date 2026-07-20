@@ -1164,12 +1164,14 @@ export default function PdfExportPage() {
                       object-contain (新形式では完全一致、旧形式ではレターボックス)
                       で配置する。
 
-                      画像エリアを flex-1 にすると下に余白が出るため、コンテナの
-                      高さは aspectRatio で自動決定する。 */}
-                  <div
-                    className="relative overflow-hidden bg-gray-50 print:bg-white border border-gray-300 print:border-gray-500"
-                    style={{ width: '100%', aspectRatio: `${containerAspect}` }}
-                  >
+                      CSS aspect-ratio を flex 子要素に使うと Safari で高さ 0 になる
+                      実績があるため、padding-bottom ハックで aspect 比を維持する。
+                      ピン・SVG オーバーレイが % 座標でコンテナ全域にマップされるため
+                      img は width/height:100% を維持する（auto+max 方式は不可）。 */}
+                  <div style={{ width: '100%', position: 'relative', paddingBottom: `${(1 / containerAspect) * 100}%` }}>
+                    <div
+                      className="absolute inset-0 overflow-hidden bg-gray-50 print:bg-white border border-gray-300 print:border-gray-500"
+                    >
                     {u ? (
                       <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
                         <div style={{ position: 'absolute', inset: 0, transform: `translate(${transform.x}%, ${transform.y}%) scale(${transform.scale}) rotate(${totalRotation}deg)`, transformOrigin: 'center center' }}>
@@ -1177,6 +1179,8 @@ export default function PdfExportPage() {
                             src={proxyUrl(u, `map_${mapIndex}_${sessionId}`)}
                             data-original-src={u}
                             crossOrigin="anonymous"
+                            loading="lazy"
+                            decoding="async"
                             style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
                             alt=""
                           />
@@ -1188,6 +1192,7 @@ export default function PdfExportPage() {
                         <span className="font-bold text-gray-400">位置図未登録</span>
                       </div>
                     )}
+                    </div>
                   </div>
 
                   {/* 案1: 凡例テーブル。
