@@ -1133,8 +1133,8 @@ export default function PdfExportPage() {
           // PDF 出力では参照しない。
 
           return (
-            <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-              <div className={`pdf-page w-full h-full flex flex-col bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '15mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
+            <div key={`map-page-${mapIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+              <div className={`pdf-page w-full h-full flex flex-col bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '15mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
                 {/* 案1: 外周は薄い枠線(従来 3px → 1px)に変更し、上品さを優先。 */}
                 <div className="w-full h-full flex flex-col border border-gray-700 print:border-black p-4 print:p-2 min-h-0">
 
@@ -1274,8 +1274,8 @@ export default function PdfExportPage() {
         case 'photo': {
           if (!sections.photo) return [];
           return photoPages.map((chunk, pageIndex) => (
-          <div key={`photo-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px`, background: '#f7f5f1' }} className="pdf-page-wrapper relative shadow-md shrink-0">
-            <div className={`pdf-page w-full h-full flex flex-col text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: 0, background: '#f7f5f1', transform: isPrinting ? 'none' : `scale(${scale})` }}>
+          <div key={`photo-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px`, background: '#f7f5f1' }} className="pdf-page-wrapper relative shadow-md shrink-0">
+            <div className={`pdf-page w-full h-full flex flex-col text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: 0, background: '#f7f5f1', transform: isPrinting ? 'none' : `scale(${scale})` }}>
               {/* ── ヘッダー ── */}
               <div style={{ display: 'flex', alignItems: 'stretch', borderBottom: '2px solid #1c1f22', flexShrink: 0 }}>
                 <div style={{ flex: 1, padding: isPrinting ? '1.5mm 4mm' : '6px 14px', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
@@ -1299,8 +1299,10 @@ export default function PdfExportPage() {
                   const _numRows = 3; // photoPages は createEmptyPhoto で常に3行にパディング済み
                   const _innerH_px = Math.round((A4_HEIGHT_PX - 42) / _numRows - 12);
                   const _innerW_px = Math.min(Math.round(_innerH_px * (4 / 3)), 556);
-                  const _innerH_mm = (255 / _numRows) - 4;
-                  const _innerW_mm = Math.min(_innerH_mm * (4 / 3), 147);
+                  // mm値はpx値から派生させて一元管理（297mm / A4_HEIGHT_PX で変換）
+                  const PX_TO_MM = 297 / A4_HEIGHT_PX;
+                  const _innerH_mm = Math.round(_innerH_px * PX_TO_MM * 10) / 10;
+                  const _innerW_mm = Math.min(Math.round(_innerH_mm * (4 / 3) * 10) / 10, 147);
                   const rot = Number(p.rotation) || 0;
                   const isPortrait = rot % 180 !== 0;
                   // 縦回転写真: maxWidth/maxHeight を入れ替えてコンテナに収める
@@ -1489,9 +1491,9 @@ export default function PdfExportPage() {
         case 'beforeAfter': {
           if (!sections.beforeAfter) return [];
           return beforeAfterPages.map((chunk, pageIndex) => (
-            <div key={`ba-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+            <div key={`ba-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
               <div className={`pdf-page bg-white text-black overflow-hidden ${isPrinting ? '' : 'absolute top-0 left-0 origin-top-left'}`}
-                style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, transform: isPrinting ? 'none' : `scale(${scale})`, boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
+                style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, transform: isPrinting ? 'none' : `scale(${scale})`, boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
 
                 {/* ヘッダー */}
                 <div style={{ flexShrink: 0, borderBottom: `${isPrinting ? '1.5px' : '2px'} solid #1a1a1a`, padding: isPrinting ? '0 14mm' : '0 40px', height: isPrinting ? '21mm' : '60px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1588,8 +1590,8 @@ export default function PdfExportPage() {
         case 'material': {
           if (!sections.material) return [];
           return materialPages.map((chunk, pageIndex) => (
-          <div key={`material-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
-            <div className={`pdf-page w-full h-full flex flex-col bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `265mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '15mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
+          <div key={`material-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px` }} className="pdf-page-wrapper relative bg-white shadow-md shrink-0">
+            <div className={`pdf-page w-full h-full flex flex-col bg-white text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: isPrinting ? '8mm' : '15mm', transform: isPrinting ? 'none' : `scale(${scale})` }}>
               <h2 className="text-xl font-bold pb-1 mb-2 border-b-2 border-gray-800 shrink-0 print:border-black print:pb-0 print:mb-1">使用材料表</h2>
               <div className="flex-1 w-full h-full flex flex-col justify-evenly p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black">
                 {chunk.map((m, i) => {
