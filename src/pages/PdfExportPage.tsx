@@ -1296,7 +1296,7 @@ export default function PdfExportPage() {
               {/* ── 写真3行 ── */}
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
                 {chunk.map((p, i) => {
-                  const _numRows = chunk.length || 1;
+                  const _numRows = 3; // photoPages は createEmptyPhoto で常に3行にパディング済み
                   const _innerH_px = Math.round((A4_HEIGHT_PX - 42) / _numRows - 12);
                   const _innerW_px = Math.min(Math.round(_innerH_px * (4 / 3)), 556);
                   const _innerH_mm = (255 / _numRows) - 4;
@@ -1392,6 +1392,7 @@ export default function PdfExportPage() {
                                         color: color,
                                         backgroundColor: 'rgba(0, 0, 0, 0.4)',
                                         backdropFilter: 'blur(2px)',
+                                        WebkitBackdropFilter: 'blur(2px)',
                                         fontSize: `${dynamicFontSize}px`,
                                         transform: `translate(-50%, -50%) rotate(${line.textRotation ?? 0}deg)`
                                       }}
@@ -1613,7 +1614,6 @@ export default function PdfExportPage() {
                                 height: 'auto',
                                 maxWidth: maxImgWidth,
                                 maxHeight: maxImgHeight,
-                                objectFit: 'contain',
                                 transform: `rotate(${Number(m.rotation) || 0}deg)`
                               }}
                               alt=""
