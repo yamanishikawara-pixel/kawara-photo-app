@@ -39,8 +39,8 @@ const SECTION_META: Record<SectionKey, { label: string; icon: string }> = {
 
 // ── 定数 ─────────────────────────────────────────
 const APPENDIX_PAGE_LIMIT = 20;             // 添付PDFの取り込み最大ページ数
-const APPENDIX_RENDER_WIDTH = 794;          // A4 150DPI 相当
-const APPENDIX_RENDER_QUALITY = 0.92;
+const APPENDIX_RENDER_WIDTH = 1654;         // A4 200DPI 相当（210mm × 200/25.4 ≈ 1654px）
+const APPENDIX_RENDER_QUALITY = 0.95;
 const IMG_MAX_PRINT_PX = 2000;              // 印刷用圧縮の最大辺
 const IMG_PRINT_QUALITY = 0.90;
 const IMG_BATCH_SIZE = 2;                   // 画像最適化のバッチ並列度
