@@ -437,7 +437,7 @@ export default function PdfExportPage() {
     if (!project) return;
     // 写真セクションがONのとき、撮影日空の写真を事前チェック
     if (sections.photo) {
-      const emptyDatePhotos = project.photos.filter(p => p.image && !p.shootingDate);
+      const emptyDatePhotos = (project.photos ?? []).filter(p => p.image && !p.shootingDate);
       if (emptyDatePhotos.length > 0) {
         const nums = emptyDatePhotos.map(p => p.photoNumber || '?').join('・');
         const ok = window.confirm(
@@ -466,7 +466,7 @@ export default function PdfExportPage() {
   const handlePdfDownload = () => {
     if (!project) return;
     if (sections.photo) {
-      const emptyDatePhotos = project.photos.filter(p => p.image && !p.shootingDate);
+      const emptyDatePhotos = (project.photos ?? []).filter(p => p.image && !p.shootingDate);
       if (emptyDatePhotos.length > 0) {
         const nums = emptyDatePhotos.map(p => p.photoNumber || '?').join('・');
         const ok = window.confirm(
@@ -834,7 +834,7 @@ export default function PdfExportPage() {
                     const on = sections[key];
                     const showTruncateWarn = key === 'appendix' && appendixTruncated && on;
                     const emptyDateCount = key === 'photo' && on
-                      ? project.photos.filter(p => p.image && !p.shootingDate).length
+                      ? (project.photos ?? []).filter(p => p.image && !p.shootingDate).length
                       : 0;
                     return (
                       <div key={key} className="flex items-center gap-1.5">
