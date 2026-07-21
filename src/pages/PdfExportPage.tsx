@@ -629,7 +629,8 @@ export default function PdfExportPage() {
         .pdf-cover-page .cover-title       { font-family: 'Shippori Mincho', 'Noto Serif JP', serif !important; }
         .pdf-cover-page .cover-lbl         { font-family: 'Noto Sans JP', sans-serif !important; }
         .pdf-cover-page .cover-lbl span    { font-family: 'Noto Sans JP', sans-serif !important; }
-        .pdf-cover-page .cover-val         { font-family: 'Noto Serif JP', serif !important; }
+        .pdf-cover-page .cover-val,
+        .pdf-cover-page .cover-val *       { font-family: 'Noto Serif JP', serif !important; }
         .pdf-cover-page .cover-footer-name { font-family: 'Noto Serif JP', serif !important; }
         .pdf-cover-page .cover-pnum        { font-family: 'Noto Sans JP', sans-serif !important; }
 
