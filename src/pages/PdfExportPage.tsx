@@ -1358,7 +1358,7 @@ export default function PdfExportPage() {
                       style={{
                         height: `${(100 / _numRows).toFixed(2)}%`,
                         padding: isPrinting ? '1mm 3mm' : '6px 10px',
-                        gap: isPrinting ? '0.5mm' : '2px',
+                        gap: 0,
                         borderBottom: i < chunk.length - 1 ? '1px solid #d8d4cc' : 'none',
                       }}
                     >
@@ -1451,12 +1451,12 @@ export default function PdfExportPage() {
                       {/* 情報欄（黄金比38.2%） */}
                       <div style={{ flex: 1, minWidth: 0, alignSelf: 'stretch', display: 'flex', flexDirection: 'column', fontSize: '13px', overflow: 'hidden' }}>
                         {/* 写真No. */}
-                        <div style={{ padding: isPrinting ? '1mm 3mm 1mm 0.5mm' : '4px 10px 4px 2px', borderBottom: '1px solid #d8d4cc', display: 'flex', alignItems: 'baseline', gap: isPrinting ? '1.5mm' : '6px' }}>
+                        <div style={{ padding: isPrinting ? '1mm 3mm 1mm 0' : '4px 10px 4px 0', borderBottom: '1px solid #d8d4cc', display: 'flex', alignItems: 'baseline', gap: isPrinting ? '1.5mm' : '6px' }}>
                           <span style={{ fontSize: isPrinting ? '6pt' : '8px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.08em', fontFamily: JP_FONT }}>写真 No.</span>
                           <span style={{ fontSize: isPrinting ? '9pt' : '13px', fontWeight: 900, color: '#1c1f22', letterSpacing: '-.01em', fontFamily: JP_FONT }}>{p.photoNumber || '──'}</span>
                         </div>
                         {/* 工程名（2行折り返し） */}
-                        <div style={{ padding: isPrinting ? '2mm 3mm 2mm 0.5mm' : '8px 10px 8px 2px', borderBottom: '1px solid #d8d4cc' }}>
+                        <div style={{ padding: isPrinting ? '2mm 3mm 2mm 0' : '8px 10px 8px 0', borderBottom: '1px solid #d8d4cc' }}>
                           <div style={{ fontSize: isPrinting ? '6pt' : '8px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.1em', fontFamily: JP_FONT }}>＜工程＞</div>
                           <div style={{ fontSize: isPrinting ? '10pt' : '14px', fontWeight: 900, lineHeight: 1.25, marginTop: isPrinting ? '0.5mm' : '2px', wordBreak: 'break-word', fontFamily: JP_FONT, color: '#1c1f22', overflow: 'hidden', maxHeight: isPrinting ? '7.5mm' : '2.7em' }}>
                             {p.process || '　'}
@@ -1464,7 +1464,7 @@ export default function PdfExportPage() {
                         </div>
                         {/* 確認事項（値があるときのみ） */}
                         {p.checkItem && (
-                          <div style={{ padding: isPrinting ? '1.5mm 3mm 1.5mm 0.5mm' : '6px 10px 6px 2px', borderBottom: '1px solid #d8d4cc' }}>
+                          <div style={{ padding: isPrinting ? '1.5mm 3mm 1.5mm 0' : '6px 10px 6px 0', borderBottom: '1px solid #d8d4cc' }}>
                             <div style={{ fontSize: isPrinting ? '6pt' : '8px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.1em', fontFamily: JP_FONT }}>＜確認事項＞</div>
                             <div style={{ fontSize: isPrinting ? '10pt' : '14px', fontWeight: 900, lineHeight: 1.25, marginTop: isPrinting ? '0.5mm' : '2px', wordBreak: 'break-word', fontFamily: JP_FONT, color: '#1c1f22' }}>
                               {p.checkItem}
@@ -1472,7 +1472,7 @@ export default function PdfExportPage() {
                           </div>
                         )}
                         {/* 撮影日 / 位置図 */}
-                        <div style={{ padding: isPrinting ? '1.5mm 3mm 1.5mm 0.5mm' : '6px 10px 6px 2px', borderBottom: '1px solid #d8d4cc' }}>
+                        <div style={{ padding: isPrinting ? '1.5mm 3mm 1.5mm 0' : '6px 10px 6px 0', borderBottom: '1px solid #d8d4cc' }}>
                           <div style={{ fontSize: isPrinting ? '6pt' : '8.5px', color: '#1c1f22', lineHeight: 1.4, fontFamily: JP_FONT }}>
                             {p.shootingDate || '　'}
                           </div>
@@ -1484,7 +1484,7 @@ export default function PdfExportPage() {
                         </div>
                         {/* 基準値・実測値（standard または actual があるときのみ） */}
                         {(p.standard || p.actual) && (
-                          <div style={{ padding: isPrinting ? '1.5mm 3mm 1.5mm 0.5mm' : '6px 10px 6px 2px', borderBottom: '1px solid #d8d4cc' }}>
+                          <div style={{ padding: isPrinting ? '1.5mm 3mm 1.5mm 0' : '6px 10px 6px 0', borderBottom: '1px solid #d8d4cc' }}>
                             <div style={{ display: 'flex', gap: isPrinting ? '3.5mm' : '14px', alignItems: 'flex-end' }}>
                               {p.standard && (
                                 <div>
@@ -1506,7 +1506,7 @@ export default function PdfExportPage() {
                           </div>
                         )}
                         {/* 説明（藍鼠バー） */}
-                        <div style={{ flex: 1, padding: isPrinting ? '2mm 3mm 2mm 0.5mm' : '8px 10px 8px 2px', minHeight: 0, overflow: 'hidden' }}>
+                        <div style={{ flex: 1, padding: isPrinting ? '2mm 3mm 2mm 0' : '8px 10px 8px 0', minHeight: 0, overflow: 'hidden' }}>
                           <div style={{ overflow: 'hidden' }}>
                             <div style={{ fontSize: isPrinting ? '6pt' : '8px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.05em', marginBottom: isPrinting ? '0.5mm' : '2px', fontFamily: JP_FONT }}>＜説明・備考＞</div>
                             <div style={{ fontSize: isPrinting ? '9.5pt' : '13px', color: '#1c1f22', lineHeight: 1.7, fontWeight: 500, wordBreak: 'break-word', fontFamily: JP_FONT, whiteSpace: 'pre-wrap', overflow: 'hidden' }}>
