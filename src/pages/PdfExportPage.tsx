@@ -1497,7 +1497,7 @@ export default function PdfExportPage() {
                               {p.actual && (
                                 <div style={{ borderLeft: '3px solid #c0492f', paddingLeft: isPrinting ? '2.5mm' : '10px' }}>
                                   <div style={{ fontSize: isPrinting ? '6pt' : '8px', color: '#c0492f', fontWeight: 800, letterSpacing: '.1em', fontFamily: JP_FONT }}>実測値</div>
-                                  <div style={{ fontSize: isPrinting ? '14pt' : '20px', fontWeight: 900, color: '#c0492f', lineHeight: 1, fontFamily: JP_FONT }}>
+                                  <div style={{ fontSize: isPrinting ? '14pt' : '20px', fontWeight: 900, color: '#1c1f22', lineHeight: 1, fontFamily: JP_FONT }}>
                                     {p.actual}
                                   </div>
                                 </div>
