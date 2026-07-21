@@ -103,6 +103,9 @@ export function ProjectListPage() {
   const [materialMaster, setMaterialMaster] = useState<MaterialMaster[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectLocation, setNewProjectLocation] = useState('');
+  const [newConstructionPeriod, setNewConstructionPeriod] = useState('');
+  const [newContractorName, setNewContractorName] = useState('');
   const [selectedWorkTypeId, setSelectedWorkTypeId] = useState<number | null>(null);
   const [creatingProject, setCreatingProject] = useState(false);
   const [storageUsed, setStorageUsed] = useState(0);
@@ -179,6 +182,9 @@ export function ProjectListPage() {
 
   const openCreateModal = () => {
     setNewProjectName('');
+    setNewProjectLocation('');
+    setNewConstructionPeriod('');
+    setNewContractorName(companyName);
     setSelectedWorkTypeId(null);
     setShowCreateModal(true);
   };
@@ -229,9 +235,9 @@ export function ProjectListPage() {
       const docRef = await addDoc(collection(db, 'projects'), {
         userId: user.uid,
         projectName: newProjectName.trim() || '新規現場',
-        projectLocation: '',
-        constructionPeriod: '',
-        contractorName: savedCompanyName || '',
+        projectLocation: newProjectLocation.trim(),
+        constructionPeriod: newConstructionPeriod.trim(),
+        contractorName: newContractorName.trim() || savedCompanyName || '',
         creationDate: new Date().toLocaleDateString('ja-JP'),
         photos,
         materials: templateMaterials,
@@ -823,6 +829,36 @@ export function ProjectListPage() {
               value={newProjectName}
               onChange={e => setNewProjectName(e.target.value)}
               placeholder="例：○○邸新築工事"
+              className="w-full p-3 rounded-xl text-sm font-bold outline-none transition-colors mb-3"
+              style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }}
+            />
+
+            <label className="block text-xs font-bold mb-1.5" style={{ color: '#6b7280' }}>工事場所（任意）</label>
+            <input
+              type="text"
+              value={newProjectLocation}
+              onChange={e => setNewProjectLocation(e.target.value)}
+              placeholder="例：富山県魚津市○○1-2-3"
+              className="w-full p-3 rounded-xl text-sm font-bold outline-none transition-colors mb-3"
+              style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }}
+            />
+
+            <label className="block text-xs font-bold mb-1.5" style={{ color: '#6b7280' }}>工期（任意）</label>
+            <input
+              type="text"
+              value={newConstructionPeriod}
+              onChange={e => setNewConstructionPeriod(e.target.value)}
+              placeholder="例：令和○年○月○日〜令和○年○月○日"
+              className="w-full p-3 rounded-xl text-sm font-bold outline-none transition-colors mb-3"
+              style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }}
+            />
+
+            <label className="block text-xs font-bold mb-1.5" style={{ color: '#6b7280' }}>施工業者</label>
+            <input
+              type="text"
+              value={newContractorName}
+              onChange={e => setNewContractorName(e.target.value)}
+              placeholder="例：有限会社○○"
               className="w-full p-3 rounded-xl text-sm font-bold outline-none transition-colors mb-4"
               style={{ background: '#12122a', border: '1px solid #2e2e50', color: '#f0ede8' }}
             />
