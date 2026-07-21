@@ -1278,7 +1278,7 @@ export default function PdfExportPage() {
             <div className={`pdf-page w-full h-full flex flex-col text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: 0, background: '#f7f5f1', transform: isPrinting ? 'none' : `scale(${scale})` }}>
               {/* ── ヘッダー ── */}
               <div style={{ display: 'flex', alignItems: 'stretch', borderBottom: '2px solid #1c1f22', flexShrink: 0 }}>
-                <div style={{ flex: 1, padding: isPrinting ? '1.5mm 4mm' : '6px 14px', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                <div style={{ flex: 1, padding: isPrinting ? '5mm 4mm 1.5mm' : '6px 14px', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                   <div style={{ width: isPrinting ? '1.5mm' : '6px', alignSelf: 'stretch', background: '#c0492f', flexShrink: 0 }} />
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: isPrinting ? '5.5pt' : '8px', letterSpacing: '.25em', color: '#6b7178', fontWeight: 800, fontFamily: JP_FONT }}>工事写真台帳</div>
@@ -1318,7 +1318,7 @@ export default function PdfExportPage() {
                       className="shrink-0 flex items-stretch"
                       style={{
                         height: `${(100 / _numRows).toFixed(2)}%`,
-                        padding: isPrinting ? '2mm 3mm' : '6px 10px',
+                        padding: isPrinting ? '1mm 3mm' : '6px 10px',
                         gap: isPrinting ? '2mm' : '8px',
                         borderBottom: i < chunk.length - 1 ? '1px solid #d8d4cc' : 'none',
                       }}
