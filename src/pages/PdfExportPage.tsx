@@ -515,6 +515,7 @@ export default function PdfExportPage() {
       }
     }
     setIsCapturingForPdf(true);
+    setIsPrinting(true);
     setPdfProgress('準備中...');
     setTimeout(async () => {
       try {
