@@ -1703,7 +1703,7 @@ export default function PdfExportPage() {
             <div className={`pdf-page bg-white overflow-hidden ${isPrinting ? '' : 'absolute top-0 left-0 origin-top-left'}`}
               style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? 'auto' : `${A4_HEIGHT_PX}px`, transform: isPrinting ? 'none' : `scale(${scale})`, padding: 0 }}>
               <img src={src} alt={`添付資料 ${pageIndex + 1}`} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
-              <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-xs font-bold text-gray-500">
+              <div className="absolute bottom-[10mm] print:bottom-[5mm] right-[15mm] print:right-[8mm] text-xs font-bold text-black">
                 - {pageOffset('appendix') + pageIndex + 1} / {totalPages} -
               </div>
             </div>
