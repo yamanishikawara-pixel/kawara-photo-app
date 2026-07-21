@@ -255,9 +255,6 @@ export interface Project {
   coverTitle?: string;
   /** 表紙で非表示にするフィールドのキー一覧 */
   coverHiddenFields?: string[];
-  // shareToken は外部共有機能廃止に伴い非推奨。既存 Firestore ドキュメントには
-  // 残存する可能性があるが、新規書き込みは行わない。
-  shareToken?: string;
   isCompleted?: boolean;
 }
 

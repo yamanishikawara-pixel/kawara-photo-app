@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Plus, Trash2, Settings, Image as ImageIcon, X, Package, Camera, HardDrive, RefreshCw, Map, GripVertical } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, Settings, Image as ImageIcon, X, Package, Camera, HardDrive, RefreshCw, GripVertical } from 'lucide-react';
 import {
   DndContext, PointerSensor, TouchSensor, closestCenter,
   useSensor, useSensors,
@@ -21,7 +21,6 @@ import { compressPhotoWithQuality } from '../shared/imageUtils';
 import { firebaseErrorMessage, logFirebaseError } from '../shared/firebaseError';
 import type { MaterialMaster, PhotoMaster, Project, WorkTypeTemplate } from '../types';
 import { ErrorMessage } from '../shared/ErrorMessage';
-import { isLegacyMapCoord as isLegacyMap, migrateMapToImageAspect } from '../shared/mapCoords';
 
 let _idCounter = 0;
 const nextId = () => Date.now() + (++_idCounter);
@@ -204,8 +203,6 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
-  const [bulkMigrating, setBulkMigrating] = useState(false);
-  const [migrationResult, setMigrationResult] = useState<string | null>(null);
   const [orphanResult, setOrphanResult] = useState<string | null>(null);
   const [orphanPaths, setOrphanPaths] = useState<string[]>([]);
   const [deletingOrphans, setDeletingOrphans] = useState(false);
@@ -471,77 +468,6 @@ export default function SettingsPage() {
   };
 
   // 全現場の位置図座標を旧形式(194:120基準)から画像アスペクト基準に一括変換する
-  const handleBulkMigration = async () => {
-    if (!uid) return;
-    setBulkMigrating(true);
-    setMigrationResult(null);
-    setError(null);
-    let migratedCount = 0;
-    let skippedCount = 0;
-    let errorCount = 0;
-    try {
-      const snap = await getDocs(query(collection(db, 'projects'), where('userId', '==', uid)));
-
-      for (const docSnap of snap.docs) {
-        let project = docSnap.data() as Project;
-        const projectId = docSnap.id;
-        if (!project.mapUrls || project.mapUrls.length === 0) continue;
-
-        for (let mapIndex = 0; mapIndex < project.mapUrls.length; mapIndex++) {
-          if (!isLegacyMap(project.mapImageAspects, mapIndex)) {
-            skippedCount++;
-            continue;
-          }
-          const url = project.mapUrls[mapIndex];
-          if (!url) continue;
-
-          try {
-            // 画像を読み込んで自然アスペクト比を取得
-            const naturalAspect = await new Promise<number>((resolve, reject) => {
-              const img = new Image();
-              img.crossOrigin = 'anonymous';
-              img.onload = () => resolve(img.naturalWidth / img.naturalHeight);
-              img.onerror = () => reject(new Error('画像読み込み失敗'));
-              img.src = url;
-            });
-
-            const migrated = migrateMapToImageAspect(project, mapIndex, naturalAspect);
-
-            await updateDoc(doc(db, 'projects', projectId), {
-              mapPins: migrated.mapPins,
-              mapDimensionLines: migrated.mapDimensionLines,
-              mapLines: migrated.mapLines ?? [],
-              whiteoutBoxes: migrated.whiteoutBoxes,
-              mapImageAspects: migrated.mapImageAspects,
-            });
-
-            // 次のループイテレーション用にローカルも更新
-            project = {
-              ...project,
-              mapPins: migrated.mapPins,
-              mapDimensionLines: migrated.mapDimensionLines,
-              mapLines: migrated.mapLines ?? project.mapLines,
-              whiteoutBoxes: migrated.whiteoutBoxes,
-              mapImageAspects: migrated.mapImageAspects,
-            };
-            migratedCount++;
-          } catch (err) {
-            logFirebaseError(err, `マイグレーション(${projectId}, map:${mapIndex})`);
-            errorCount++;
-          }
-        }
-      }
-      if (!mountedRef.current) return;
-      setMigrationResult(
-        `完了: ${migratedCount}件移行 / ${skippedCount}件スキップ済み${errorCount > 0 ? ` / ${errorCount}件エラー` : ''}`
-      );
-    } catch (err) {
-      logFirebaseError(err, '一括マイグレーション');
-      if (mountedRef.current) setError(firebaseErrorMessage(err, '一括マイグレーション'));
-    } finally {
-      if (mountedRef.current) setBulkMigrating(false);
-    }
-  };
 
   const processSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -1066,28 +992,6 @@ export default function SettingsPage() {
             <AddButton onClick={() => setMaterialMaster(prev => [...prev, { id: nextId(), name: '', manufacturer: '', specification: '', remarks: '', image: null }])} label="材料を追加" accent="#8b5cf6" />
           </Section>
 
-          {/* 位置図 一括マイグレーション */}
-          <Section title="位置図 座標系アップグレード" icon={<Map className="w-4 h-4" />} accent="#10b981">
-            <p className="text-xs mb-4" style={{ color: '#6b7280' }}>
-              旧形式（固定コンテナ基準）の位置図ピン・寸法線を、画像の自然アスペクト基準に一括変換します。
-              変換済みの現場はスキップされます。通常は編集画面を開いた際に自動変換されますが、
-              このボタンで全現場を一度に変換できます。
-            </p>
-            <button
-              onClick={handleBulkMigration}
-              disabled={bulkMigrating}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-sm transition-all disabled:opacity-50"
-              style={{ background: '#0f2e25', color: bulkMigrating ? '#6b7280' : '#10b981', border: '1px solid #1a4a3a' }}
-              onPointerEnter={e => { if (!bulkMigrating) (e.currentTarget as HTMLButtonElement).style.borderColor = '#10b981'; }}
-              onPointerLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#1a4a3a'; }}
-            >
-              <Map className={`w-4 h-4 ${bulkMigrating ? 'animate-pulse' : ''}`} />
-              {bulkMigrating ? '変換中... しばらくお待ちください' : '全現場の位置図を一括アップグレード'}
-            </button>
-            {migrationResult && (
-              <p className="mt-3 text-xs font-bold" style={{ color: '#10b981' }}>{migrationResult}</p>
-            )}
-          </Section>
 
         </div>
       </div>
