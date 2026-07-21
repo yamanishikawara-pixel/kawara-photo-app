@@ -1457,7 +1457,7 @@ export default function PdfExportPage() {
                         </div>
                         {/* 工程名（2行折り返し） */}
                         <div style={{ padding: isPrinting ? '2mm 3mm' : '8px 10px', borderBottom: '1px solid #d8d4cc' }}>
-                          <div style={{ fontSize: isPrinting ? '6pt' : '8px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.1em', fontFamily: JP_FONT }}>工程</div>
+                          <div style={{ fontSize: isPrinting ? '6pt' : '8px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.1em', fontFamily: JP_FONT }}>＜工程＞</div>
                           <div style={{ fontSize: isPrinting ? '10pt' : '14px', fontWeight: 900, lineHeight: 1.25, marginTop: isPrinting ? '0.5mm' : '2px', wordBreak: 'break-word', fontFamily: JP_FONT, color: '#1c1f22', overflow: 'hidden', maxHeight: isPrinting ? '7.5mm' : '2.7em' }}>
                             {p.process || '　'}
                           </div>
@@ -1465,7 +1465,7 @@ export default function PdfExportPage() {
                         {/* 確認事項（値があるときのみ） */}
                         {p.checkItem && (
                           <div style={{ padding: isPrinting ? '1.5mm 3mm' : '6px 10px', borderBottom: '1px solid #d8d4cc' }}>
-                            <div style={{ fontSize: isPrinting ? '6pt' : '8px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.1em', fontFamily: JP_FONT }}>確認事項</div>
+                            <div style={{ fontSize: isPrinting ? '6pt' : '8px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.1em', fontFamily: JP_FONT }}>＜確認事項＞</div>
                             <div style={{ fontSize: isPrinting ? '10pt' : '14px', fontWeight: 900, lineHeight: 1.25, marginTop: isPrinting ? '0.5mm' : '2px', wordBreak: 'break-word', fontFamily: JP_FONT, color: '#1c1f22' }}>
                               {p.checkItem}
                             </div>
@@ -1507,8 +1507,8 @@ export default function PdfExportPage() {
                         )}
                         {/* 説明（藍鼠バー） */}
                         <div style={{ flex: 1, padding: isPrinting ? '2mm 3mm' : '8px 10px', minHeight: 0, overflow: 'hidden' }}>
-                          <div style={{ paddingLeft: isPrinting ? '3mm' : '8px', borderLeft: '3px solid #4a5560', height: '100%', overflow: 'hidden' }}>
-                            <div style={{ fontSize: isPrinting ? '6pt' : '8px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.05em', marginBottom: isPrinting ? '0.5mm' : '2px', fontFamily: JP_FONT }}>説明</div>
+                          <div style={{ height: '100%', overflow: 'hidden' }}>
+                            <div style={{ fontSize: isPrinting ? '6pt' : '8px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.05em', marginBottom: isPrinting ? '0.5mm' : '2px', fontFamily: JP_FONT }}>＜説明・備考＞</div>
                             <div style={{ fontSize: isPrinting ? '9.5pt' : '13px', color: '#1c1f22', lineHeight: 1.7, fontWeight: 500, wordBreak: 'break-word', fontFamily: JP_FONT, whiteSpace: 'pre-wrap', overflow: 'hidden' }}>
                               {p.description || '　'}
                             </div>
@@ -1520,8 +1520,8 @@ export default function PdfExportPage() {
                 })}
               </div>
               {/* ── フッター ── */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', padding: isPrinting ? '2mm 5mm' : '7px 18px', background: '#1c1f22', color: '#b9bec4', fontSize: isPrinting ? '6pt' : '8.5px', letterSpacing: '.08em', flexShrink: 0, fontFamily: JP_FONT }}>
-                <span>{pageOffset('photo') + pageIndex + 1} / {totalPages}</span>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', padding: isPrinting ? '1mm 5mm 5mm' : '4px 18px 12px', flexShrink: 0, fontFamily: JP_FONT }}>
+                <span style={{ fontSize: isPrinting ? '6pt' : '8.5px', color: '#aaa', letterSpacing: '.08em' }}>{pageOffset('photo') + pageIndex + 1} / {totalPages}</span>
               </div>
             </div>
           </div>
