@@ -1315,8 +1315,8 @@ export default function PdfExportPage() {
         case 'photo': {
           if (!sections.photo) return [];
           return photoPages.map((chunk, pageIndex) => (
-          <div key={`photo-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px`, background: '#f7f5f1' }} className="pdf-page-wrapper relative shadow-md shrink-0">
-            <div className={`pdf-page w-full h-full flex flex-col text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: 0, background: '#f7f5f1', transform: isPrinting ? 'none' : `scale(${scale})` }}>
+          <div key={`photo-page-${pageIndex}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX * scale}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX * scale}px`, background: '#ffffff' }} className="pdf-page-wrapper relative shadow-md shrink-0">
+            <div className={`pdf-page w-full h-full flex flex-col text-black ${isPrinting ? "" : "absolute top-0 left-0 origin-top-left"}`} style={{ width: isPrinting ? `210mm` : `${A4_WIDTH_PX}px`, height: isPrinting ? `297mm` : `${A4_HEIGHT_PX}px`, padding: 0, background: '#ffffff', transform: isPrinting ? 'none' : `scale(${scale})` }}>
               {/* ── ヘッダー ── */}
               <div style={{ display: 'flex', alignItems: 'stretch', borderBottom: '2px solid #1c1f22', flexShrink: 0 }}>
                 <div style={{ flex: 1, padding: isPrinting ? '5mm 4mm 1.5mm' : '6px 14px', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
@@ -1369,7 +1369,7 @@ export default function PdfExportPage() {
                       {/* 写真コンテナ - Material と同じ Tailwind クラス構造 */}
                       <div
                         className="w-[70%] h-full flex items-center justify-center overflow-hidden relative shrink-0"
-                        style={{ borderRadius: 2, background: '#f7f5f1' }}
+                        style={{ borderRadius: 2, background: '#ffffff' }}
                       >
                         {p.image ? (
                           <div className="relative" style={{ display: 'inline-block' }}>
