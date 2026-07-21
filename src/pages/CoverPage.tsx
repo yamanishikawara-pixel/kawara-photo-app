@@ -36,14 +36,6 @@ const BASIC_FIELDS: { label: string; key: keyof Project; placeholder: string }[]
   { label: '作成年月日', key: 'creationDate',       placeholder: '例:令和○年○月○日' },
 ];
 
-// ウィザードモードで使うフィールド順序
-const WIZARD_FIELDS: { label: string; key: keyof Project; placeholder: string; inputType?: string }[] = [
-  { label: '工事件名',   key: 'projectName',        placeholder: '例: ○○邸 外壁塗装工事' },
-  { label: '工事場所',   key: 'projectLocation',    placeholder: '例: 富山県魚津市○○1-2-3' },
-  { label: '工期',       key: 'constructionPeriod', placeholder: '例: 令和○年○月○日〜令和○年○月○日' },
-  { label: '施工業者',   key: 'contractorName',     placeholder: '例: 有限会社山西瓦店' },
-  { label: '作成年月日', key: 'creationDate',       placeholder: '例: 令和○年○月○日' },
-];
 
 const WARRANTY_FIELDS: { label: string; key: keyof Project; placeholder: string }[] = [
   { label: '保証期間(年数)', key: 'warrantyYears',     placeholder: '例:5年' },
@@ -59,8 +51,6 @@ export function CoverPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [coverTitle, setCoverTitle] = useState('');
   const [coverHiddenFields, setCoverHiddenFields] = useState<string[]>([]);
-  const [wizardMode, setWizardMode] = useState(false);
-  const [wizardStep, setWizardStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [savedKey, setSavedKey] = useState<string | null>(null);
@@ -205,12 +195,6 @@ export function CoverPage() {
       }
     }
   }, [id, coverHiddenFields]);
-
-  const toggleWizardMode = () => {
-    const next = !wizardMode;
-    setWizardMode(next);
-    setWizardStep(0);
-  };
 
   // ── 添付PDFアップロード ──
   const handleAppendixUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -492,25 +476,11 @@ export function CoverPage() {
         )}
 
         {/* ── ページタイトル ── */}
-        <div className="flex items-center justify-between gap-3 mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-1 h-7 rounded-full" style={{ background: ACCENT }} />
-            <h1 className="text-2xl font-bold break-words" style={{ color: '#f0ede8' }}>
-              表紙の入力
-            </h1>
-          </div>
-          <button
-            type="button"
-            onClick={toggleWizardMode}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition-all shrink-0"
-            style={{
-              background: wizardMode ? `${ACCENT}20` : '#12122a',
-              border: `1px solid ${wizardMode ? ACCENT : '#2e2e50'}`,
-              color: wizardMode ? ACCENT : '#6b7280',
-            }}
-          >
-            {wizardMode ? '📋 ウィザード' : '📋 ウィザード'}
-          </button>
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-1 h-7 rounded-full" style={{ background: ACCENT }} />
+          <h1 className="text-2xl font-bold break-words" style={{ color: '#f0ede8' }}>
+            表紙の入力
+          </h1>
         </div>
 
         {/* ── 表紙カスタマイズ ── */}
@@ -576,87 +546,7 @@ export function CoverPage() {
           </div>
         </div>
 
-        {/* ── ウィザードモード ── */}
-        {wizardMode && project && (() => {
-          const visibleFields = WIZARD_FIELDS.filter(f => !coverHiddenFields.includes(f.key as string));
-          if (visibleFields.length === 0) return null;
-          const step = Math.min(wizardStep, visibleFields.length - 1);
-          const field = visibleFields[step];
-          const isLast = step === visibleFields.length - 1;
-          const val = String(project[field.key] ?? '');
-          const isSaving = savingKey === field.key;
-          const isSaved = savedKey === field.key;
-
-          return (
-            <div className="rounded-2xl border overflow-hidden mb-4" style={{ background: '#1c1c30', borderColor: '#2e2e50' }}>
-              {/* プログレスバー */}
-              <div className="px-5 pt-4 pb-2">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold" style={{ color: '#8b8ba8' }}>{step + 1} / {visibleFields.length}</span>
-                  <span className="text-xs font-bold" style={{ color: ACCENT }}>{field.label}</span>
-                </div>
-                <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: '#12122a' }}>
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{ width: `${((step + 1) / visibleFields.length) * 100}%`, background: ACCENT }}
-                  />
-                </div>
-              </div>
-
-              {/* 入力フィールド */}
-              <div className="px-5 py-4">
-                <label className="block text-sm font-bold mb-2" style={{ color: '#f0ede8' }}>{field.label}</label>
-                <input
-                  key={field.key}
-                  type="text"
-                  value={val}
-                  placeholder={field.placeholder}
-                  autoFocus
-                  onChange={e => update(field.key, e.target.value)}
-                  className="w-full px-4 py-4 rounded-xl text-base font-medium transition-colors outline-none"
-                  style={{
-                    background: '#12122a',
-                    border: `1.5px solid ${isSaving ? '#f59e0b' : isSaved ? ACCENT : '#2e2e50'}`,
-                    color: '#f0ede8',
-                    fontSize: '16px',
-                  }}
-                />
-                {isSaving && <p className="text-xs mt-1 font-bold" style={{ color: '#f59e0b' }}>保存中...</p>}
-                {isSaved && !isSaving && <p className="text-xs mt-1 font-bold" style={{ color: ACCENT }}>✓ 保存しました</p>}
-              </div>
-
-              {/* ナビゲーション */}
-              <div className="px-5 pb-5 flex gap-3">
-                {step > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setWizardStep(s => s - 1)}
-                    className="flex-1 py-3 rounded-xl font-bold text-sm transition-colors"
-                    style={{ background: '#12122a', color: '#8b8ba8', border: '1px solid #2e2e50' }}
-                  >
-                    ← 戻る
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (isLast) {
-                      setWizardMode(false);
-                    } else {
-                      setWizardStep(s => s + 1);
-                    }
-                  }}
-                  className="flex-1 py-3 rounded-xl font-bold text-sm transition-all active:scale-95"
-                  style={{ background: ACCENT, color: '#fff', boxShadow: `0 0 16px ${ACCENT}44` }}
-                >
-                  {isLast ? '完了 ✓' : '次へ →'}
-                </button>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* ── 基本情報（ウィザードモードでも常に表示） ── */}
+        {/* ── 基本情報 ── */}
         <div
           className="rounded-2xl border overflow-hidden mb-4"
           style={{ background: '#1c1c30', borderColor: '#2e2e50' }}
