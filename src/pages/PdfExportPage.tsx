@@ -1335,6 +1335,8 @@ export default function PdfExportPage() {
               {/* ── 写真3行 ── */}
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
                 {chunk.map((p, i) => {
+                  // 画像も工程も説明もない空パディング行は非表示
+                  if (!p.image && !p.process && !p.description) return null;
                   const _numRows = 3; // photoPages は createEmptyPhoto で常に3行にパディング済み
                   const _innerH_px = Math.round((A4_HEIGHT_PX - 42) / _numRows - 12);
                   const _innerW_px = Math.min(Math.round(_innerH_px * (4 / 3)), 556);
