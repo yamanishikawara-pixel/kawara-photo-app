@@ -1456,7 +1456,7 @@ export default function PdfExportPage() {
                             <span style={{ fontSize: isPrinting ? '7.5pt' : '10px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.08em', fontFamily: JP_FONT }}>写真 No.</span>
                             <span style={{ fontSize: isPrinting ? '9pt' : '13px', fontWeight: 900, color: '#1c1f22', letterSpacing: '-.01em', fontFamily: JP_FONT }}>{p.photoNumber || '──'}</span>
                           </div>
-                          <span style={{ fontSize: isPrinting ? '6pt' : '8.5px', color: '#1c1f22', fontFamily: JP_FONT }}>{p.shootingDate || ''}</span>
+                          <span style={{ fontSize: isPrinting ? '6pt' : '8.5px', color: '#000', fontWeight: 700, fontFamily: JP_FONT }}>{p.shootingDate || ''}</span>
                         </div>
                         {/* 工程名（2行折り返し） */}
                         <div style={{ padding: isPrinting ? '2mm 3mm 2mm 0' : '8px 10px 8px 0', borderBottom: '1px solid #d8d4cc' }}>
