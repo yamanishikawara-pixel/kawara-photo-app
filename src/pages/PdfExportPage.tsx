@@ -1506,7 +1506,7 @@ export default function PdfExportPage() {
                           </div>
                         )}
                         {/* 説明（藍鼠バー） */}
-                        <div style={{ flex: 1, padding: isPrinting ? '2mm 3mm 2mm 1.5mm' : '8px 10px 8px 5px', minHeight: 0, overflow: 'hidden' }}>
+                        <div style={{ flex: 1, padding: isPrinting ? '2mm 3mm 2mm 1.5mm' : '8px 10px 8px 5px', minHeight: 0, overflow: 'hidden', borderBottom: '1px solid #d8d4cc' }}>
                           <div style={{ height: '100%', overflow: 'hidden' }}>
                             <div style={{ fontSize: isPrinting ? '6pt' : '8px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.05em', marginBottom: isPrinting ? '0.5mm' : '2px', fontFamily: JP_FONT }}>＜説明・備考＞</div>
                             <div style={{ fontSize: isPrinting ? '9.5pt' : '13px', color: '#1c1f22', lineHeight: 1.7, fontWeight: 500, wordBreak: 'break-word', fontFamily: JP_FONT, whiteSpace: 'pre-wrap', overflow: 'hidden' }}>
