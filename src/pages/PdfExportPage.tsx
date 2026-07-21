@@ -1029,6 +1029,27 @@ export default function PdfExportPage() {
               ))}
             </div>
 
+            {/* ③ 施工保証（入力がある場合のみ） */}
+            {(project.warrantyYears || project.warrantyStartDate || project.warrantyNote) && (
+              <div style={{
+                position: 'absolute',
+                left: isPrinting ? '15mm' : 60,
+                right: isPrinting ? '15mm' : 60,
+                bottom: isPrinting ? '28mm' : 112,
+                border: '1.5px solid #555',
+                borderRadius: 4,
+                padding: isPrinting ? '2mm 4mm' : '8px 14px',
+                background: '#fafafa',
+              }}>
+                <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', fontWeight: 'bold', color: '#333', marginBottom: isPrinting ? '1.5mm' : '5px' }}>■ 施工保証</div>
+                <div style={{ display: 'flex', gap: isPrinting ? '6mm' : '20px', flexWrap: 'wrap' }}>
+                  {project.warrantyYears && <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', color: '#444' }}><span style={{ color: '#888' }}>保証期間：</span>{project.warrantyYears}</div>}
+                  {project.warrantyStartDate && <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', color: '#444' }}><span style={{ color: '#888' }}>開始日：</span>{project.warrantyStartDate}</div>}
+                  {project.warrantyNote && <div style={{ fontFamily: JP_FONT, fontSize: isPrinting ? '8pt' : '11px', color: '#555', fontStyle: 'italic' }}>{project.warrantyNote}</div>}
+                </div>
+              </div>
+            )}
+
             {/* ④ フッター: 赤ロゴ＋社名（左）｜ページ番号（右） */}
             <div style={{
               position: 'absolute', left: 0, right: 0, bottom: 56,
