@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Camera, FileDown, MapPin, Wrench, ClipboardList, ChevronRight, ArrowLeftRight, Calculator, CalendarRange } from 'lucide-react';
+import { ArrowLeft, Camera, FileDown, MapPin, Wrench, ClipboardList, ChevronRight, ArrowLeftRight, CalendarRange } from 'lucide-react';
 
 import type { Project } from '../types';
 import { db } from '../firebase';
@@ -15,7 +15,6 @@ type MenuItem = {
   icon: typeof Camera;
   path: string;
   accent: string;
-  external?: boolean;
 };
 
 
@@ -69,14 +68,6 @@ const MENU_ITEMS: MenuItem[] = [
     icon: CalendarRange,
     path: 'schedule',
     accent: '#38bdf8',
-  },
-  {
-    title: '実行予算書',
-    subtitle: '原価・見積・粗利の管理',
-    icon: Calculator,
-    path: '__budget__',
-    accent: '#10b981',
-    external: true,
   },
 ];
 
@@ -183,15 +174,6 @@ export function HomePage() {
           {MENU_ITEMS.map((item) => {
             const Icon = item.icon;
             const handleClick = () => {
-              if (item.external && item.path === '__budget__') {
-                // 現場名と施工場所を渡して予算書アプリを開く
-                const name = project?.projectName?.trim();
-                const addr = (project?.projectLocation ?? '').trim();
-                let url = name ? `/budget?project=${encodeURIComponent(name)}` : '/budget';
-                if (addr) url += `&address=${encodeURIComponent(addr)}`;
-                navigate(url);
-                return;
-              }
               navigate(`/project/${id}/${item.path}`);
             };
             return (
@@ -220,9 +202,6 @@ export function HomePage() {
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-sm break-words" style={{ color: '#f0ede8' }}>
                     {item.title}
-                    {item.external && (
-                      <span className="ml-1.5 text-xs font-normal" style={{ color: '#6b7280' }}>↗</span>
-                    )}
                   </div>
                   <div className="text-xs mt-0.5 truncate" style={{ color: '#6b7280' }}>{item.subtitle}</div>
                 </div>
