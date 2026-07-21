@@ -1309,9 +1309,9 @@ export default function PdfExportPage() {
                   const imgMaxW = isPortrait
                     ? (isPrinting ? `${_innerH_mm.toFixed(1)}mm` : `${_innerH_px}px`)
                     : (isPrinting ? `${_innerW_mm.toFixed(1)}mm` : `${_innerW_px}px`);
-                  // CSSボックス高さがコンテナ高さを超えると overflow-hidden が CSS top を切り取り、
-                  // 回転後に原画像の「上部」が欠ける。portrait でも _innerH_mm に統一して防ぐ。
-                  const imgMaxH = isPrinting ? `${_innerH_mm.toFixed(1)}mm` : `${_innerH_px}px`;
+                  const imgMaxH = isPortrait
+                    ? (isPrinting ? `${_innerW_mm.toFixed(1)}mm` : `${_innerW_px}px`)
+                    : (isPrinting ? `${_innerH_mm.toFixed(1)}mm` : `${_innerH_px}px`);
                   return (
                     <div
                       key={i}
