@@ -207,6 +207,11 @@ export default function PdfExportPage() {
   useEffect(() => {
     const handleAfterPrint = () => {
       if (!mountedRef.current) return;
+      // 印刷前に eager に切り替えた img を lazy に戻す
+      document.querySelectorAll<HTMLImageElement>('.pdf-page img[data-was-lazy]').forEach((img) => {
+        img.loading = 'lazy';
+        img.removeAttribute('data-was-lazy');
+      });
       setIsPrinting(false);
       setPrintProgress('');
       setIsCapturingForPdf(false);  // 以前未対応 → キャンセル時に永久 disabled 状態になる致命バグ
@@ -402,8 +407,43 @@ export default function PdfExportPage() {
 
   // ── 印刷 / PDFダウンロード共通:window.print() で統一 ──
   const executePrint = async (progressSetter: (msg: string) => void) => {
-    const images = Array.from(document.querySelectorAll('.pdf-page img'));
-    const needsConversion = images.filter((img) => {
+    // ① 進捗表示（setState → re-render 発生）
+    progressSetter('画像を読み込んでいます...');
+    // re-render 完了を待つ（以降 window.print() まで setState なし）
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 150)));
+    });
+    if (!mountedRef.current) return;
+
+    // ② lazy 画像を eager に切り替えてロードを強制（DOM 直接操作、setState なし）
+    const pdfImgs = Array.from(document.querySelectorAll<HTMLImageElement>('.pdf-page img'));
+    pdfImgs.forEach((img) => {
+      if (img.loading === 'lazy') {
+        img.setAttribute('data-was-lazy', 'true');
+        img.loading = 'eager';
+      }
+      // 未ロードの img は src を再セットしてフェッチをトリガー
+      if (!img.complete || img.naturalWidth === 0) {
+        const src = img.getAttribute('data-original-src') || img.src;
+        if (src && !src.startsWith('data:')) {
+          img.src = src;
+        }
+      }
+    });
+    await Promise.all(
+      pdfImgs.map((img) => {
+        if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+        if (typeof img.decode === 'function') return img.decode().catch(() => {});
+        return new Promise<void>((resolve) => {
+          img.addEventListener('load', () => resolve(), { once: true });
+          img.addEventListener('error', () => resolve(), { once: true });
+        });
+      })
+    );
+    if (!mountedRef.current) return;
+
+    // ③ canvas 変換（data URL 化）。setState なし → re-render なし → data URL が印刷まで保持される
+    const needsConversion = pdfImgs.filter((img) => {
       const src = img.getAttribute('data-original-src') || img.getAttribute('src');
       return src && !src.startsWith('data:');
     });
@@ -411,25 +451,24 @@ export default function PdfExportPage() {
     for (let i = 0; i < total; i += IMG_BATCH_SIZE) {
       if (!mountedRef.current) return;
       const batch = needsConversion.slice(i, i + IMG_BATCH_SIZE);
-      progressSetter(`画像を最適化中... (${Math.min(i + IMG_BATCH_SIZE, total)}/${total})`);
-      await Promise.all(batch.map(async (img) => {
-        try {
-          const dataUrl = await optimizeImageForPrint(img as HTMLImageElement);
-          img.setAttribute('src', dataUrl);
-          // crossorigin 属性は残す(再印刷時にも CORS 要件を保つため)
-          // data-original-src も残す(再印刷時は元URLから再取得できる)
-        } catch (e) {
-          if (import.meta.env.DEV) console.warn('[PdfExport] 画像最適化失敗:', e);
-        }
-      }));
+      await Promise.all(
+        batch.map(async (img) => {
+          try {
+            const dataUrl = await optimizeImageForPrint(img as HTMLImageElement);
+            img.setAttribute('src', dataUrl);
+          } catch (e) {
+            if (import.meta.env.DEV) console.warn('[PdfExport] 画像最適化失敗:', e);
+          }
+        })
+      );
       await yieldToUI();
     }
     if (!mountedRef.current) return;
-    progressSetter('PDF生成中...');
+
+    // ④ 印刷（data URL がそのまま使われる）
     await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 100)));
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
     });
-    if (!mountedRef.current) return;
     window.print();
   };
 
