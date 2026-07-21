@@ -1325,7 +1325,7 @@ export default function PdfExportPage() {
                     >
                       {/* 写真コンテナ - Material と同じ Tailwind クラス構造 */}
                       <div
-                        className="w-[65%] h-full flex items-center justify-center overflow-hidden relative shrink-0"
+                        className="w-[60%] h-full flex items-center justify-center overflow-hidden relative shrink-0"
                         style={{ borderRadius: 2, background: '#f7f5f1' }}
                       >
                         {p.image ? (
@@ -1414,7 +1414,7 @@ export default function PdfExportPage() {
                         {/* 写真No. */}
                         <div style={{ padding: isPrinting ? '1mm 3mm' : '4px 10px', borderBottom: '1px solid #d8d4cc', display: 'flex', alignItems: 'baseline', gap: isPrinting ? '1.5mm' : '6px' }}>
                           <span style={{ fontSize: isPrinting ? '6pt' : '8px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.08em', fontFamily: JP_FONT }}>写真 No.</span>
-                          <span style={{ fontSize: isPrinting ? '9pt' : '13px', fontWeight: 900, color: '#c0492f', letterSpacing: '-.01em', fontFamily: JP_FONT }}>{p.photoNumber || '──'}</span>
+                          <span style={{ fontSize: isPrinting ? '9pt' : '13px', fontWeight: 900, color: '#1c1f22', letterSpacing: '-.01em', fontFamily: JP_FONT }}>{p.photoNumber || '──'}</span>
                         </div>
                         {/* 工程名（2行折り返し） */}
                         <div style={{ padding: isPrinting ? '2mm 3mm' : '8px 10px', borderBottom: '1px solid #d8d4cc' }}>
@@ -1438,7 +1438,7 @@ export default function PdfExportPage() {
                             {p.shootingDate || '　'}
                           </div>
                           {sections.map && p.locationMap ? (
-                            <div style={{ fontSize: isPrinting ? '6pt' : '8.5px', color: '#c0492f', lineHeight: 1.4, fontFamily: JP_FONT, marginTop: isPrinting ? '0.5mm' : '1px' }}>
+                            <div style={{ fontSize: isPrinting ? '6pt' : '8.5px', color: '#1c1f22', lineHeight: 1.4, fontFamily: JP_FONT, marginTop: isPrinting ? '0.5mm' : '1px' }}>
                               {p.locationMap}
                             </div>
                           ) : null}
@@ -1456,8 +1456,8 @@ export default function PdfExportPage() {
                                 </div>
                               )}
                               {p.actual && (
-                                <div style={{ borderLeft: '3px solid #c0492f', paddingLeft: isPrinting ? '2.5mm' : '10px' }}>
-                                  <div style={{ fontSize: isPrinting ? '6pt' : '8px', color: '#c0492f', fontWeight: 800, letterSpacing: '.1em', fontFamily: JP_FONT }}>実測値</div>
+                                <div style={{ borderLeft: '3px solid #1c1f22', paddingLeft: isPrinting ? '2.5mm' : '10px' }}>
+                                  <div style={{ fontSize: isPrinting ? '6pt' : '8px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.1em', fontFamily: JP_FONT }}>実測値</div>
                                   <div style={{ fontSize: isPrinting ? '14pt' : '20px', fontWeight: 900, color: '#1c1f22', lineHeight: 1, fontFamily: JP_FONT }}>
                                     {p.actual}
                                   </div>
