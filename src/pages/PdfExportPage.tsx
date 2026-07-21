@@ -1460,7 +1460,7 @@ export default function PdfExportPage() {
                         </div>
                         {/* 工程名（2行折り返し） */}
                         <div style={{ padding: isPrinting ? '2mm 3mm 2mm 0' : '8px 10px 8px 0', borderBottom: '1px solid #d8d4cc' }}>
-                          <div style={{ fontSize: isPrinting ? '6pt' : '8px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.1em', fontFamily: JP_FONT }}>＜工程＞</div>
+                          <div style={{ fontSize: isPrinting ? '7.5pt' : '10px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.1em', fontFamily: JP_FONT }}>＜工程＞</div>
                           <div style={{ fontSize: isPrinting ? '10pt' : '14px', fontWeight: 900, lineHeight: 1.25, marginTop: isPrinting ? '0.5mm' : '2px', wordBreak: 'break-word', fontFamily: JP_FONT, color: '#1c1f22', overflow: 'hidden', maxHeight: isPrinting ? '7.5mm' : '2.7em' }}>
                             {p.process || '　'}
                           </div>
@@ -1468,7 +1468,7 @@ export default function PdfExportPage() {
                         {/* 確認事項（値があるときのみ） */}
                         {p.checkItem && (
                           <div style={{ padding: isPrinting ? '1.5mm 3mm 1.5mm 0' : '6px 10px 6px 0', borderBottom: '1px solid #d8d4cc' }}>
-                            <div style={{ fontSize: isPrinting ? '6pt' : '8px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.1em', fontFamily: JP_FONT }}>＜確認事項＞</div>
+                            <div style={{ fontSize: isPrinting ? '7.5pt' : '10px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.1em', fontFamily: JP_FONT }}>＜確認事項＞</div>
                             <div style={{ fontSize: isPrinting ? '10pt' : '14px', fontWeight: 900, lineHeight: 1.25, marginTop: isPrinting ? '0.5mm' : '2px', wordBreak: 'break-word', fontFamily: JP_FONT, color: '#1c1f22' }}>
                               {p.checkItem}
                             </div>
@@ -1508,7 +1508,7 @@ export default function PdfExportPage() {
                         {/* 説明（藍鼠バー） */}
                         <div style={{ flex: 1, padding: isPrinting ? '2mm 3mm 2mm 0' : '8px 10px 8px 0', minHeight: 0, overflow: 'hidden' }}>
                           <div style={{ overflow: 'hidden' }}>
-                            <div style={{ fontSize: isPrinting ? '6pt' : '8px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.05em', marginBottom: isPrinting ? '0.5mm' : '2px', fontFamily: JP_FONT }}>＜説明・備考＞</div>
+                            <div style={{ fontSize: isPrinting ? '7.5pt' : '10px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.05em', marginBottom: isPrinting ? '0.5mm' : '2px', fontFamily: JP_FONT }}>＜説明・備考＞</div>
                             <div style={{ fontSize: isPrinting ? '9.5pt' : '13px', color: '#1c1f22', lineHeight: 1.7, fontWeight: 500, wordBreak: 'break-word', fontFamily: JP_FONT, whiteSpace: 'pre-wrap', overflow: 'hidden' }}>
                               {p.description || '　'}
                             </div>
