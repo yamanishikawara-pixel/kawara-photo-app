@@ -1453,7 +1453,7 @@ export default function PdfExportPage() {
                         {/* 写真No. + 撮影日（均等配置） */}
                         <div style={{ padding: isPrinting ? '1mm 3mm 1mm 0' : '4px 10px 4px 0', borderBottom: '1px solid #d8d4cc', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: isPrinting ? '1.5mm' : '6px' }}>
-                            <span style={{ fontSize: isPrinting ? '6pt' : '8px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.08em', fontFamily: JP_FONT }}>写真 No.</span>
+                            <span style={{ fontSize: isPrinting ? '7.5pt' : '10px', color: '#1c1f22', fontWeight: 800, letterSpacing: '.08em', fontFamily: JP_FONT }}>写真 No.</span>
                             <span style={{ fontSize: isPrinting ? '9pt' : '13px', fontWeight: 900, color: '#1c1f22', letterSpacing: '-.01em', fontFamily: JP_FONT }}>{p.photoNumber || '──'}</span>
                           </div>
                           <span style={{ fontSize: isPrinting ? '6pt' : '8.5px', color: '#1c1f22', fontFamily: JP_FONT }}>{p.shootingDate || ''}</span>
