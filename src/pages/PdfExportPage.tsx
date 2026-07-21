@@ -1639,8 +1639,8 @@ export default function PdfExportPage() {
               <h2 className="text-xl font-bold pb-1 mb-2 border-b-2 border-gray-800 shrink-0 print:border-black print:pb-0 print:mb-1">使用材料表</h2>
               <div className="flex-1 w-full h-full flex flex-col justify-evenly p-1.5 border-[3px] border-gray-800 bg-white min-h-0 overflow-hidden print:border-black">
                 {chunk.map((m, i) => {
-                  // 画像も入力データもない空パディング行は非表示
-                  if (!m.image && !m.name && !m.manufacturer && !m.specification && !m.remarks) return null;
+                  // 写真未登録の行は非表示
+                  if (!m.image) return null;
                   const isRotated = (Number(m.rotation) || 0) % 180 !== 0;
                   const maxImgWidth = isRotated ? '78mm' : '100%';
                   const maxImgHeight = isRotated ? '120mm' : '78mm';
