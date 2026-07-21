@@ -1325,7 +1325,7 @@ export default function PdfExportPage() {
                     >
                       {/* 写真コンテナ - Material と同じ Tailwind クラス構造 */}
                       <div
-                        className="w-[60%] h-full flex items-center justify-center overflow-hidden relative shrink-0"
+                        className="w-[70%] h-full flex items-center justify-center overflow-hidden relative shrink-0"
                         style={{ borderRadius: 2, background: '#f7f5f1' }}
                       >
                         {p.image ? (
