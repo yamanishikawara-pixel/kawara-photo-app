@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Trash2, LogOut, Settings, CheckCircle2, Circle, HardHat, Database, AlertTriangle, Calculator, Camera, ChevronRight, X } from 'lucide-react';
+import { Plus, Trash2, LogOut, Settings, CheckCircle2, Circle, HardHat, Database, AlertTriangle, Calculator, Camera, ChevronRight, X, CalendarDays } from 'lucide-react';
 import { collection, addDoc, deleteDoc, doc, getDoc, getDocs, query, where, orderBy, updateDoc, increment } from 'firebase/firestore';
 import { ref, listAll, deleteObject, getMetadata } from 'firebase/storage';
 import { signOut } from 'firebase/auth';
@@ -542,6 +542,25 @@ export function ProjectListPage() {
                 全現場一覧 <ChevronRight className="w-3 h-3" />
               </div>
             </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/calendar')}
+            className="col-span-2 flex items-center justify-between gap-4 px-5 py-4 rounded-2xl border transition-all active:scale-95"
+            style={{ background: '#1c1c30', borderColor: '#2e2e50' }}
+            onPointerEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#c0492f'; }}
+            onPointerLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#2e2e50'; }}
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(192,73,47,0.15)' }}>
+                <CalendarDays className="w-6 h-6" style={{ color: '#c0492f' }} />
+              </div>
+              <div className="text-left">
+                <div className="font-black text-sm" style={{ color: '#f0ede8' }}>スケジュール</div>
+                <div className="text-xs mt-0.5" style={{ color: '#6b7280' }}>月間カレンダー・予定管理</div>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 shrink-0" style={{ color: '#6b7280' }} />
           </button>
         </div>
 

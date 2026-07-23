@@ -18,6 +18,7 @@ const CoverPage = lazy(() => import('./pages/CoverPage').then(module => ({ defau
 const BeforeAfterPage = lazy(() => import('./pages/BeforeAfterPage').then(m => ({ default: m.BeforeAfterPage })));
 const SchedulePage = lazy(() => import('./pages/SchedulePage'));
 const BudgetPage = lazy(() => import('./pages/BudgetPage'));
+const CalendarPage = lazy(() => import('./pages/CalendarPage'));
 
 
 
@@ -100,6 +101,7 @@ export default function App() {
           <Route path="/project/:id/pdf" element={<ProtectedRoute user={user}><PdfExportPage /></ProtectedRoute>} />
           <Route path="/project/:id/before-after" element={<ProtectedRoute user={user}><BeforeAfterPage /></ProtectedRoute>} />
           <Route path="/project/:id/schedule" element={<ProtectedRoute user={user}><SchedulePage /></ProtectedRoute>} />
+          <Route path="/calendar" element={<ProtectedRoute user={user}><CalendarPage /></ProtectedRoute>} />
           <Route path="/budget/*" element={<ProtectedRoute user={user}><BudgetPage /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
