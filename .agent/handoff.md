@@ -14,26 +14,189 @@
 
 ## いま進行中のこと（1行で）
 
-PdfExportPage 工事写真台帳セクション（case 'photo'）の外観リデザイン — 計画策定済み、段階①待ち
+スケジュール管理機能（CalendarPage）— 全5段階完了・デプロイ済み（2026-07-23）
 
 ---
 
 ## 相談役 → Claude Code への依頼
 
 ```
-kobetsu-ledger.jsx（プロジェクトルート）を設計図として、
-PdfExportPage の工事写真台帳セクション（case 'photo'）の見た目を作り替える。
+schedule-mock.jsx（プロジェクトルート）を設計図として、
+スケジュール管理機能（月間カレンダー＋予定管理）を実装する。
 
-制約：
-- ロジック非干渉（ページ分割・画像最適化・ZIP・印刷処理・Firestore・rotationロジック触らない）
-- 型拡張なし。Photo型の既存フィールドのみ使用:
-    photoNumber / shootingDate / locationMap / process / description
-- description は「所見」として 藍鼠(#4a5560) 左バー付きで表示
-- 基準値・実測値スロットは今回作らない（将来チケット）
-- UI・入力フォーム側は対象外
-
-以下の計画（段階①〜③）で進めること。承認済み。
+以下の計画（段階①〜⑤）で進めること。承認後1段階ずつ実装。
 ```
+
+---
+
+## 実装計画（スケジュール管理機能）
+
+設計図: `schedule-mock.jsx`（プロジェクトルート）  
+ルート: `/calendar`（プロジェクト横断の月間カレンダー）  
+※ 既存 `/project/:id/schedule`（ガントチャート）とは別機能・別ルート
+
+---
+
+### 1. データ構造
+
+#### 予定の種類（ScheduleEventType）
+**格納先**: `users/{uid}` ドキュメントの `scheduleEventTypes` フィールド（配列）
+
+理由: 既存 `UserSettings` の `customProcesses` と同じパターン。カレンダー表示時に `users/{uid}` を 1 read するだけで取得でき、追加コストゼロ。
+
+```typescript
+interface ScheduleEventType {
+  id: string;     // ランダムID（Date.now().toString(36) 等）
+  label: string;  // "新築上棟"
+  color: string;  // "#c0492f"
+  order: number;  // 表示順
+}
+// UserSettings に追加: scheduleEventTypes?: ScheduleEventType[]
+```
+
+デフォルト種類（初回表示時に未設定ならクライアント側で補完）:
+- 新築上棟 `#c0492f` / 新築工事 `#4a5560` / 修理 `#5a7d52` / 打ち合わせ `#b8860b` / その他 `#6b7178`
+
+#### 予定（ScheduleEvent）
+**格納先**: `scheduleEvents/{eventId}` トップレベルコレクション
+
+理由: `projects` と同じパターン（`userId` フィールドで所有者を判定）。月単位クエリのために `yearMonth` フィールドを持たせ、複合インデックスで絞り込む。
+
+```typescript
+interface ScheduleEvent {
+  id?: string;         // Firestore doc ID（クライアント側保持用）
+  userId: string;      // = auth.uid
+  yearMonth: string;   // "2026-07"（月クエリのキー）
+  date: string;        // "2026-07-13"
+  title: string;
+  typeId: string;      // ScheduleEventType.id への参照
+  time?: string;       // "08:00"（省略可）
+  projectId?: string;  // Firestore project doc ID（任意の物件紐付け）
+  projectName?: string;// 物件名のデノーマライズコピー（遷移ボタン表示用）
+  createdAt: string;   // ISO 文字列
+}
+```
+
+`projectName` を event に持たせる理由: event 表示時に projects を再読みしなくて済む（read コスト削減）。
+
+#### Firestoreインデックス
+`firestore.indexes.json` を新規作成:
+```json
+{
+  "indexes": [{
+    "collectionGroup": "scheduleEvents",
+    "queryScope": "COLLECTION",
+    "fields": [
+      { "fieldPath": "userId", "order": "ASCENDING" },
+      { "fieldPath": "yearMonth", "order": "ASCENDING" }
+    ]
+  }],
+  "fieldOverrides": []
+}
+```
+
+---
+
+### 2. コスト設計
+
+**月を開いたときの Firestore read 数:**
+| 操作 | reads |
+|------|-------|
+| `users/{uid}` 1回（scheduleEventTypes 含む） | 1 |
+| `scheduleEvents` where userId+yearMonth 一致 | N（その月の予定件数） |
+| **合計** | **1 + N** |
+
+月100件でも 101 reads。月12回開いても 1,200 reads/年 → ほぼコストゼロ。
+
+**リスナー方式の選択: `getDocs`（1回読み切り）を採用**  
+理由: 予定はリアルタイム更新不要（複数端末同時更新のユースケースが薄い）。`onSnapshot` は画面を開いている間ずっと接続コストがかかるため避ける。月切替・予定追加後は手動 refetch（`getDocs` 再呼び出し）。
+
+**物件リストの取得（予定追加モーダル内）:**  
+`projectId` 紐付けモーダルを開いたタイミングで 1回だけ `getDocs(query(collection(db,"projects"), where("userId","==",uid)))` → 物件名一覧を表示。モーダル外では読まない。
+
+---
+
+### 3. セキュリティ
+
+既存 `projects` ルールを完全に踏襲（コレクション名だけ変える）:
+```
+match /scheduleEvents/{eventId} {
+  allow read, update, delete: if request.auth != null
+    && request.auth.uid == resource.data.userId;
+  allow create: if request.auth != null
+    && request.auth.uid == request.resource.data.userId;
+}
+```
+
+event types は `users/{uid}` フィールド → 既存ルール `allow read, write: if request.auth.uid == userId` が自動カバー。  
+Firestore ルール変更は `scheduleEvents` の 1 ブロック追加のみ。既存コレクション（projects/users/cost_*）のルールは無変更。
+
+---
+
+### 4. 段階分け（5ステップ）
+
+#### 段階①: 型定義・Firestoreルール・インデックス（コード変更なし、インフラのみ）
+- `src/types.ts`: `ScheduleEvent`, `ScheduleEventType` を追加、`UserSettings` に `scheduleEventTypes?` を追加
+- `firestore.rules`: `scheduleEvents` ブロックを追加
+- `firestore.indexes.json`: 新規作成（上記インデックス）
+- `firebase.json`: `"firestore"` キーに `"indexes": "firestore.indexes.json"` を追記
+- `firebase deploy --only firestore:rules,firestore:indexes` でデプロイ
+- `npx tsc --noEmit` エラー0件確認
+- **コミット**: `feat(calendar): 段階① 型定義・Firestoreルール・インデックス`
+
+#### 段階②: CalendarPage 骨格（表示のみ、CRUD なし）
+- `src/pages/CalendarPage.tsx` 新規作成
+  - `users/{uid}` から scheduleEventTypes を取得（なければデフォルト種類を使用）
+  - `scheduleEvents` から当月分を getDocs で取得
+  - モックに忠実な UI: ヘッダー（年月＋月切替）・フィルタバー・月間グリッド・選択日リスト
+  - 予定のドット＋件数表示（2件超は「+N件」）
+- `App.tsx`: `/calendar` ルートを追加（lazy + ProtectedRoute）
+- `ProjectListPage.tsx`: ヘッダー右に「カレンダー」ボタン追加
+- tsc・vitest 確認
+- **コミット**: `feat(calendar): 段階② CalendarPage 骨格（表示のみ）`
+
+#### 段階③: 予定の追加・編集・削除
+- CalendarPage 内に AddEventModal（インラインコンポーネント）
+  - フィールド: 種類（typeId）・タイトル・日付・時刻（任意）・物件紐付け（任意）
+  - 物件紐付け: モーダルを開いたとき 1回だけ getDocs で projects 一覧取得、ドロップダウン表示
+  - 保存: `addDoc(collection(db,"scheduleEvents"), {..., yearMonth, userId})` → 当月 refetch
+  - 編集: 既存 event をフォームに反映 → `updateDoc`
+  - 削除: `deleteDoc` → refetch
+- tsc・vitest 確認
+- **コミット**: `feat(calendar): 段階③ 予定 CRUD（追加・編集・削除）`
+
+#### 段階④: 予定の種類管理
+- 「＋ 種類を追加」ボタン → TypeManageModal
+  - ラベル・カラーピッカー（6色プリセット＋自由入力）で追加
+  - 編集・削除も可
+  - 保存: `updateDoc(doc(db,"users",uid), { scheduleEventTypes: [...] })`
+- tsc・vitest 確認
+- **コミット**: `feat(calendar): 段階④ 予定種類の追加・編集・削除`
+
+#### 段階⑤: 物件紐付けボタン → 台帳・工程表への遷移
+- 選択日リストで `event.projectId` があるとき「📁 {event.projectName} の台帳・工程表を開く →」ボタン表示
+- タップ → `navigate(\`/project/${event.projectId}\`)` でホームメニューへ遷移
+  （台帳・工程表の選択はホームメニューに任せる）
+- tsc・vitest 確認
+- **コミット**: `feat(calendar): 段階⑤ 物件遷移ボタン`
+
+---
+
+### 5. 既存機能への影響
+
+| 変更ファイル | 変更内容 | 既存への影響 |
+|---|---|---|
+| `src/types.ts` | 新型追加・UserSettings に optional フィールド追加のみ | なし（optional なので既存コードが壊れない） |
+| `firestore.rules` | `scheduleEvents` ブロック 1つ追加 | 既存コレクションのルールは無変更 |
+| `firestore.indexes.json` | 新規ファイル作成 | 既存インデックスなし・影響なし |
+| `firebase.json` | indexes キー追記 | hosting/rules 設定は無変更 |
+| `App.tsx` | `/calendar` ルート 1行追加 | 既存ルートに手を触れない |
+| `ProjectListPage.tsx` | カレンダー入口ボタン追加のみ | 現場作成・一覧ロジックは無変更 |
+| `src/pages/CalendarPage.tsx` | 新規ファイル | 影響なし |
+
+**SchedulePage（ガントチャート）は一切変更しない。**  
+`/project/:id/schedule` = プロジェクト内ガントチャート（現行）  
+`/calendar` = プロジェクト横断の月間スケジュール（新規）
 
 ---
 
@@ -177,6 +340,17 @@ PdfExportPage の工事写真台帳セクション（case 'photo'）の見た目
 
 ---
 
+### 工程表（SchedulePage）会社ロゴ削除・備考欄追加 — 完了・デプロイ済み
+
+- 実施内容（3コミット）：
+  1. `src/types.ts` に `scheduleRemarks?: string` を追加（`ganttTasks` / `workdayConfig` と同じ場所）
+  2. `src/pages/SchedulePage.tsx` — 会社ロゴ img 削除、`scheduleRemarks` state 追加・`saveProjectField` 型拡張・`applyField` で onSnapshot に乗せ・textarea UI 追加（600ms デバウンス保存）
+  3. 同ファイル — 印刷反映：空のとき外側 div に `no-print` を付与してブロックごと非表示、印刷時は `print-only` div で `white-space: pre-wrap` 表示
+- コミット：`8400f19`（型定義）、`949000c`（入力欄）、`0bb6b3c`（印刷反映）
+- `npx tsc --noEmit` エラー 0件 / `npx vitest run` 7 files 92 tests 全パス（各コミット前確認済み）
+- デプロイ：済み（`firebase deploy --only hosting`、2026-07-23）
+- ユーザー実機確認：(2)入力・保存OK、(3)表示・印刷OK、ロゴ消滅OK
+
 ## ユーザーの実機確認メモ
 
 （ユーザーが実際に触って気づいたことをここにメモ。相談役・Claude Code 両方が読む）
@@ -187,8 +361,10 @@ PdfExportPage の工事写真台帳セクション（case 'photo'）の見た目
 
 - [x] BeforeAfterPage 報告書デザイン 全5段階完了・デプロイ済み（2026-07-01）
 - [x] 写真台帳グリッドのスクロール誤作動修正（ドラッグハンドルを番号バッジのみに限定）（2026-07-01）
-- [ ] **PdfExportPage 工事写真台帳 リデザイン**（段階①〜③、上記計画参照）— 段階① 着手待ち
-- [ ] 基準値・実測値の型拡張＋入力欄＋台帳強調表示（将来チケット、今回スコープ外）
+- [x] **工程表（SchedulePage）会社ロゴ削除・備考欄追加** — 完了・デプロイ済み（2026-07-23）
+- [x] **スケジュール管理（CalendarPage）段階①〜⑤** — 完了・デプロイ済み（2026-07-23）
+- [ ] **PdfExportPage 工事写真台帳 リデザイン**（段階①〜③）— 一時保留（スケジュール管理を優先）
+- [ ] 基準値・実測値の型拡張＋入力欄＋台帳強調表示（将来チケット）
 - [ ] バックアップフォルダ src.backup-20260513（Desktop に移動済み）を数日見なければ削除
 
 ---
