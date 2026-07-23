@@ -234,6 +234,8 @@ export interface Project {
   // ── 工程表（ガントチャート） ──────────────────────────────────
   ganttTasks?: import('./pages/SchedulePage').GanttTask[];
   workdayConfig?: import('./utils/workdays').WorkdayConfig;
+  /** 工程表全体の備考（表の最下部に表示・印刷） */
+  scheduleRemarks?: string;
 
   // ── 施工保証 ────────────────────────────────────────────────
   warrantyYears?: string;
