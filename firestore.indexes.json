@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "scheduleEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "yearMonth", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

@@ -35,5 +35,13 @@ service cloud.firestore {
       allow read, write: if isStaff();
     }
 
+    // スケジュール予定: オーナーのみ読み書き可（projects と同じパターン）
+    match /scheduleEvents/{eventId} {
+      allow read, update, delete: if request.auth != null
+        && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.userId;
+    }
+
   }
 }

@@ -148,6 +148,33 @@ export interface UserSettings {
   photoMaster?: PhotoMaster[];
   workTypeTemplates?: WorkTypeTemplate[];
   storageUsedBytes?: number;
+  scheduleEventTypes?: ScheduleEventType[];
+}
+
+// ============================================================================
+// Schedule (Calendar)
+// ============================================================================
+
+/** ユーザーが自由に追加・編集できる予定の種類 */
+export interface ScheduleEventType {
+  id: string;     // ランダムID
+  label: string;  // "新築上棟"
+  color: string;  // "#c0492f"
+  order: number;  // 表示順
+}
+
+/** スケジュール予定（scheduleEvents コレクションの1ドキュメント） */
+export interface ScheduleEvent {
+  id?: string;          // Firestore doc ID（クライアント保持用）
+  userId: string;
+  yearMonth: string;    // "YYYY-MM"（月クエリのキー）
+  date: string;         // "YYYY-MM-DD"
+  title: string;
+  typeId: string;       // ScheduleEventType.id への参照
+  time?: string;        // "HH:MM"（省略可）
+  projectId?: string;   // Firestore project doc ID（任意の物件紐付け）
+  projectName?: string; // 物件名のデノーマライズコピー（遷移ボタン表示用）
+  createdAt: string;    // ISO 文字列
 }
 
 // ============================================================================
