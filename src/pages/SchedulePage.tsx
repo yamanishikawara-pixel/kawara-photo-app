@@ -94,6 +94,7 @@ export default function SchedulePage() {
   const [workdayConfig, setWorkdayConfig] = useState<WorkdayConfig>(DEFAULT_WORKDAY_CONFIG);
   const [showWorkdaySettings, setShowWorkdaySettings] = useState(false);
   const [newHoliday, setNewHoliday] = useState("");
+  const [scheduleRemarks, setScheduleRemarks] = useState("");
   const rangeRef = useRef<{ start: Date; days: number } | null>(null);
 
   // ---------- Firestore連携 ----------
@@ -191,7 +192,7 @@ export default function SchedulePage() {
 
     // ローカルに保存待ち（デバウンス未確定）の値がある間は、リモート値で上書きしない
     const applyField = (
-      field: "projectName" | "projectLocation" | "constructionPeriod",
+      field: "projectName" | "projectLocation" | "constructionPeriod" | "scheduleRemarks",
       setter: (v: string) => void,
       value: string
     ) => {
@@ -208,6 +209,7 @@ export default function SchedulePage() {
           applyField("projectName", setProjectName, data.projectName ?? "");
           applyField("projectLocation", setSiteAddress, data.projectLocation ?? "");
           applyField("constructionPeriod", setConstructionPeriod, data.constructionPeriod ?? "");
+          applyField("scheduleRemarks", setScheduleRemarks, data.scheduleRemarks ?? "");
 
           if (!pendingSourcesRef.current.has("workdayConfig")) {
             const wc = data.workdayConfig;
@@ -311,7 +313,7 @@ export default function SchedulePage() {
   }, [tasks, id, markPending, markDone]);
 
   // ---------- 工事件名・現場住所・工期 保存（デバウンス） ----------
-  const saveProjectField = useCallback((field: "projectName" | "projectLocation" | "constructionPeriod", value: string) => {
+  const saveProjectField = useCallback((field: "projectName" | "projectLocation" | "constructionPeriod" | "scheduleRemarks", value: string) => {
     if (!id) return;
     pendingFieldsRef.current[field] = value;
     markPending(field);
@@ -334,6 +336,10 @@ export default function SchedulePage() {
   const handleSiteAddressChange = (value: string) => {
     setSiteAddress(value);
     saveProjectField("projectLocation", value);
+  };
+  const handleScheduleRemarksChange = (value: string) => {
+    setScheduleRemarks(value);
+    saveProjectField("scheduleRemarks", value);
   };
 
   const updateWorkdayConfig = (next: WorkdayConfig) => {
@@ -1095,15 +1101,8 @@ export default function SchedulePage() {
             </div>
           </div>
 
-          {/* 会社ロゴ + 自社情報（設定画面の情報を表示） */}
+          {/* 自社情報（設定画面の情報を表示） */}
           <div className="flex items-end gap-4 ml-auto self-end">
-            {userSettings?.logoUrl && (
-              <img
-                src={userSettings.logoUrl}
-                alt="会社ロゴ"
-                className="h-14 max-w-[160px] object-contain shrink-0"
-              />
-            )}
             <div className="text-right">
               <div className="w-52 sm:w-64 text-sm font-semibold truncate">
                 {userSettings?.companyName || ""}
@@ -1136,6 +1135,18 @@ export default function SchedulePage() {
             </div>
           )}
           </div>
+
+        {/* 備考欄 */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-5 py-4 mt-4">
+          <div className="text-[10px] tracking-widest text-gray-400 font-medium mb-1">備考</div>
+          <textarea
+            value={scheduleRemarks}
+            onChange={(e) => handleScheduleRemarksChange(e.target.value)}
+            className="w-full text-sm text-gray-700 bg-transparent resize-none outline-none"
+            rows={3}
+            placeholder="備考を入力"
+          />
+        </div>
 
         {/* 操作ヒント */}
         <p className="no-print mt-4 text-xs text-gray-400 leading-relaxed">
