@@ -1137,15 +1137,23 @@ export default function SchedulePage() {
           </div>
 
         {/* 備考欄 */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-5 py-4 mt-4">
+        <div className={`bg-white rounded-2xl shadow-sm border border-gray-100 px-5 py-4 mt-4${!scheduleRemarks.trim() ? " no-print" : ""}`}>
           <div className="text-[10px] tracking-widest text-gray-400 font-medium mb-1">備考</div>
+          {/* 画面: 入力テキストエリア */}
           <textarea
             value={scheduleRemarks}
             onChange={(e) => handleScheduleRemarksChange(e.target.value)}
-            className="w-full text-sm text-gray-700 bg-transparent resize-none outline-none"
+            className="no-print w-full text-sm text-gray-700 bg-transparent resize-none outline-none"
             rows={3}
             placeholder="備考を入力"
           />
+          {/* 印刷: 改行対応テキスト */}
+          <div
+            className="print-only text-sm text-gray-700"
+            style={{ whiteSpace: "pre-wrap" }}
+          >
+            {scheduleRemarks}
+          </div>
         </div>
 
         {/* 操作ヒント */}
