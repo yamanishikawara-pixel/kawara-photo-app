@@ -473,9 +473,12 @@ export default function CalendarPage() {
                   </div>
                   <div style={{ fontSize: 15, fontWeight: 900, color: C.ink, marginTop: 4 }}>{e.title}</div>
                   {e.projectId && e.projectName && (
-                    <div style={{ marginTop: 6, fontSize: 11, fontWeight: 800, color: C.ainezu }}>
+                    <button className="cal-btn"
+                      onClick={ev => { ev.stopPropagation(); navigate(`/project/${e.projectId}`); }}
+                      style={{ marginTop: 6, fontSize: 11, fontWeight: 800, color: C.ainezu,
+                        background: '#e7e3da', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
                       📁 {e.projectName} の台帳・工程表を開く →
-                    </div>
+                    </button>
                   )}
                 </div>
                 <div style={{ fontSize: 11, color: C.kawara, flexShrink: 0 }}>編集</div>
