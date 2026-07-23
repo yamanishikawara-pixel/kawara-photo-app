@@ -1,7 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import {
+  collection, getDocs, addDoc, updateDoc, deleteDoc,
+  query, where, doc, getDoc,
+} from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import type { ScheduleEvent, ScheduleEventType, UserSettings } from '../types';
 
@@ -35,6 +38,19 @@ function toDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// ── モーダル用フォーム初期値 ──────────────────────────────────────────────────
+interface FormState {
+  title: string;
+  typeId: string;
+  date: string;
+  time: string;
+  projectId: string;
+  projectName: string;
+}
+const emptyForm = (date: string, defaultTypeId: string): FormState => ({
+  title: '', typeId: defaultTypeId, date, time: '', projectId: '', projectName: '',
+});
+
 // ── コンポーネント ────────────────────────────────────────────────────────────
 export default function CalendarPage() {
   const navigate = useNavigate();
@@ -49,8 +65,19 @@ export default function CalendarPage() {
   const [filter, setFilter]           = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(today);
   const [loading, setLoading]         = useState(true);
+  const [refreshKey, setRefreshKey]   = useState(0);
 
-  // 予定の種類をユーザー設定から読み込む
+  // モーダル
+  const [modalMode, setModalMode]     = useState<'add' | 'edit' | null>(null);
+  const [editingEvent, setEditingEvent] = useState<ScheduleEvent | null>(null);
+  const [form, setForm]               = useState<FormState>(emptyForm(today, DEFAULT_TYPES[0].id));
+  const [saving, setSaving]           = useState(false);
+
+  // 物件一覧（モーダル用・初回のみ読み込み）
+  const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
+
+  // ── ユーザー設定から予定種類を読み込む ──────────────────────────────────
   useEffect(() => {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
@@ -63,8 +90,8 @@ export default function CalendarPage() {
     }).catch(() => {});
   }, []);
 
-  // 当月の予定を読み込む（月が変わるたびに再取得）
-  useEffect(() => {
+  // ── 当月の予定を読み込む ─────────────────────────────────────────────────
+  const fetchEvents = useCallback(() => {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
     setLoading(true);
@@ -84,9 +111,25 @@ export default function CalendarPage() {
       .finally(() => setLoading(false));
   }, [currentDate]);
 
+  useEffect(() => { fetchEvents(); }, [fetchEvents, refreshKey]);
+
+  // ── 物件一覧を読み込む（モーダル初回オープン時のみ） ─────────────────────
+  const loadProjects = useCallback(() => {
+    if (projectsLoaded) return;
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const q = query(collection(db, 'projects'), where('userId', '==', uid));
+    getDocs(q).then(snap => {
+      const list = snap.docs.map(d => ({ id: d.id, name: (d.data() as { projectName?: string }).projectName ?? '' }));
+      list.sort((a, b) => a.name.localeCompare(b.name));
+      setProjects(list);
+      setProjectsLoaded(true);
+    }).catch(() => {});
+  }, [projectsLoaded]);
+
   // ── カレンダー計算 ───────────────────────────────────────────────────────
   const year    = currentDate.getFullYear();
-  const month   = currentDate.getMonth(); // 0-indexed
+  const month   = currentDate.getMonth();
   const firstDow = new Date(year, month, 1).getDay();
   const numDays  = new Date(year, month + 1, 0).getDate();
 
@@ -116,9 +159,89 @@ export default function CalendarPage() {
     setSelectedDate(toDateStr(d));
   };
 
-  // ── 選択日のヘッダー表示用 ───────────────────────────────────────────────
   const [selYear, selMonth, selDay] = selectedDate.split('-').map(Number);
   const selDow = new Date(selYear, selMonth - 1, selDay).getDay();
+
+  // ── モーダル操作 ─────────────────────────────────────────────────────────
+  const openAdd = () => {
+    loadProjects();
+    setForm(emptyForm(selectedDate, eventTypes[0]?.id ?? ''));
+    setEditingEvent(null);
+    setModalMode('add');
+  };
+
+  const openEdit = (e: ScheduleEvent) => {
+    loadProjects();
+    setForm({
+      title: e.title,
+      typeId: e.typeId,
+      date: e.date,
+      time: e.time ?? '',
+      projectId: e.projectId ?? '',
+      projectName: e.projectName ?? '',
+    });
+    setEditingEvent(e);
+    setModalMode('edit');
+  };
+
+  const closeModal = () => {
+    setModalMode(null);
+    setEditingEvent(null);
+  };
+
+  const handleProjectChange = (id: string) => {
+    const p = projects.find(p => p.id === id);
+    setForm(f => ({ ...f, projectId: id, projectName: p?.name ?? '' }));
+  };
+
+  // ── 保存 ─────────────────────────────────────────────────────────────────
+  const handleSave = async () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !form.title.trim() || !form.typeId || !form.date) return;
+    setSaving(true);
+    try {
+      const yearMonth = form.date.slice(0, 7);
+      const payload: Omit<ScheduleEvent, 'id'> = {
+        userId: uid,
+        yearMonth,
+        date: form.date,
+        title: form.title.trim(),
+        typeId: form.typeId,
+        createdAt: editingEvent?.createdAt ?? new Date().toISOString(),
+        ...(form.time     ? { time: form.time }                           : {}),
+        ...(form.projectId ? { projectId: form.projectId, projectName: form.projectName } : {}),
+      };
+      if (modalMode === 'add') {
+        await addDoc(collection(db, 'scheduleEvents'), payload);
+      } else if (editingEvent?.id) {
+        await updateDoc(doc(db, 'scheduleEvents', editingEvent.id), payload);
+      }
+      // 保存した日付が当月でない場合は当月に切り替える
+      const savedMonth = new Date(form.date.slice(0, 7) + '-01');
+      if (toYearMonth(savedMonth) !== toYearMonth(currentDate)) {
+        setCurrentDate(new Date(savedMonth.getFullYear(), savedMonth.getMonth(), 1));
+      }
+      setSelectedDate(form.date);
+      setRefreshKey(k => k + 1);
+      closeModal();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── 削除 ─────────────────────────────────────────────────────────────────
+  const handleDelete = async () => {
+    if (!editingEvent?.id) return;
+    if (!window.confirm('この予定を削除しますか？')) return;
+    setSaving(true);
+    try {
+      await deleteDoc(doc(db, 'scheduleEvents', editingEvent.id));
+      setRefreshKey(k => k + 1);
+      closeModal();
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // ── 描画 ─────────────────────────────────────────────────────────────────
   return (
@@ -127,10 +250,23 @@ export default function CalendarPage() {
       fontFamily: '"Hiragino Sans","Hiragino Kaku Gothic ProN",-apple-system,sans-serif',
     }}>
       <style>{`
-        .cal-btn { font-family: inherit; cursor: pointer; border: none; background: transparent; padding: 0; }
+        .cal-btn  { font-family: inherit; cursor: pointer; border: none; background: transparent; padding: 0; }
         .cal-cell { font-family: inherit; background: transparent; text-align: left; }
         .cal-cell:active { opacity: .7; }
         .cal-filter:active { opacity: .8; }
+        .cal-input {
+          width: 100%; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14);
+          border-radius: 8px; color: #f0ede8; font-size: 15px; padding: 10px 12px;
+          font-family: inherit; outline: none; box-sizing: border-box;
+        }
+        .cal-input:focus { border-color: #c0492f; }
+        .cal-select {
+          width: 100%; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14);
+          border-radius: 8px; color: #f0ede8; font-size: 15px; padding: 10px 12px;
+          font-family: inherit; outline: none; appearance: none; box-sizing: border-box;
+        }
+        .cal-select:focus { border-color: #c0492f; }
+        .cal-select option { background: #1c1f22; color: #f0ede8; }
       `}</style>
 
       {/* ── ヘッダー ── */}
@@ -158,10 +294,9 @@ export default function CalendarPage() {
               color: '#9aa3ac' }}>
             <ChevronRight size={18} />
           </button>
-          {/* 段階③で有効化 */}
-          <button className="cal-btn"
+          <button className="cal-btn" onClick={openAdd}
             style={{ background: C.rust, color: '#fff', borderRadius: 8,
-              padding: '8px 14px', fontSize: 13, fontWeight: 800, opacity: .5, cursor: 'default' }}>
+              padding: '8px 14px', fontSize: 13, fontWeight: 800 }}>
             ＋ 予定追加
           </button>
         </div>
@@ -192,7 +327,6 @@ export default function CalendarPage() {
 
       {/* ── 月間カレンダー ── */}
       <div style={{ margin: '10px 12px', background: C.paper, borderRadius: 10, overflow: 'hidden' }}>
-        {/* 曜日ヘッダー */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)',
           borderBottom: `2px solid ${C.ink}` }}>
           {DAYS.map((d, i) => (
@@ -202,10 +336,9 @@ export default function CalendarPage() {
             </div>
           ))}
         </div>
-        {/* 日付グリッド */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
           {cells.map((d, i) => {
-            const col = i % 7;
+            const col     = i % 7;
             const dateStr = d ? dateStrOf(d) : '';
             const evs     = d ? eventsOfDate(dateStr) : [];
             const isSel   = dateStr === selectedDate;
@@ -226,8 +359,7 @@ export default function CalendarPage() {
                   <>
                     <div style={{ fontSize: 12, fontWeight: 800,
                       color: col === 0 ? C.rust : col === 6 ? C.ainezu : C.ink,
-                      textDecoration: isToday ? 'underline' : 'none',
-                      textUnderlineOffset: 2 }}>
+                      textDecoration: isToday ? 'underline' : 'none', textUnderlineOffset: 2 }}>
                       {d}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2 }}>
@@ -256,30 +388,24 @@ export default function CalendarPage() {
       {/* ── 選択日の予定リスト ── */}
       <div style={{ margin: '0 12px' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '6px 2px' }}>
-          <span style={{ fontSize: 20, fontWeight: 900, color: C.paper }}>
-            {selMonth}/{selDay}
-          </span>
-          <span style={{ fontSize: 12, color: '#9aa3ac', fontWeight: 700 }}>
-            ({DAYS[selDow]}) の予定
-          </span>
+          <span style={{ fontSize: 20, fontWeight: 900, color: C.paper }}>{selMonth}/{selDay}</span>
+          <span style={{ fontSize: 12, color: '#9aa3ac', fontWeight: 700 }}>({DAYS[selDow]}) の予定</span>
         </div>
 
         {loading ? (
           <div style={{ background: 'rgba(255,255,255,.05)', borderRadius: 10, padding: 18,
-            textAlign: 'center', color: '#9aa3ac', fontSize: 13 }}>
-            読込中...
-          </div>
+            textAlign: 'center', color: '#9aa3ac', fontSize: 13 }}>読込中...</div>
         ) : selectedEvents.length === 0 ? (
           <div style={{ background: 'rgba(255,255,255,.05)', borderRadius: 10, padding: 18,
-            textAlign: 'center', color: '#9aa3ac', fontSize: 13 }}>
-            予定なし
-          </div>
+            textAlign: 'center', color: '#9aa3ac', fontSize: 13 }}>予定なし</div>
         ) : (
           selectedEvents.map((e, i) => {
             const t = typeOf(e.typeId);
             return (
-              <div key={e.id ?? i} style={{ background: C.paper, borderRadius: 10,
-                padding: '12px 14px', marginBottom: 8, display: 'flex', gap: 12, alignItems: 'center' }}>
+              <button key={e.id ?? i} className="cal-btn" onClick={() => openEdit(e)}
+                style={{ width: '100%', display: 'flex', gap: 12, alignItems: 'center',
+                  background: C.paper, borderRadius: 10, padding: '12px 14px', marginBottom: 8,
+                  textAlign: 'left' }}>
                 <div style={{ width: 5, alignSelf: 'stretch', background: t.color, borderRadius: 3, flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -287,27 +413,126 @@ export default function CalendarPage() {
                       background: t.color, borderRadius: 4, padding: '2px 8px' }}>
                       {t.label}
                     </span>
-                    {e.time && (
-                      <span style={{ fontSize: 12, color: C.kawara, fontWeight: 700 }}>{e.time}</span>
-                    )}
+                    {e.time && <span style={{ fontSize: 12, color: C.kawara, fontWeight: 700 }}>{e.time}</span>}
                   </div>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: C.ink, marginTop: 4 }}>
-                    {e.title}
-                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: C.ink, marginTop: 4 }}>{e.title}</div>
                   {e.projectId && e.projectName && (
-                    <button className="cal-btn"
-                      onClick={() => navigate(`/project/${e.projectId}`)}
-                      style={{ marginTop: 6, fontSize: 11, fontWeight: 800, color: C.ainezu,
-                        background: '#e7e3da', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
+                    <div style={{ marginTop: 6, fontSize: 11, fontWeight: 800, color: C.ainezu }}>
                       📁 {e.projectName} の台帳・工程表を開く →
-                    </button>
+                    </div>
                   )}
                 </div>
-              </div>
+                <div style={{ fontSize: 11, color: C.kawara, flexShrink: 0 }}>編集</div>
+              </button>
             );
           })
         )}
       </div>
+
+      {/* ── 予定追加・編集モーダル ── */}
+      {modalMode && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50,
+          display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}
+          onClick={e => { if (e.target === e.currentTarget) closeModal(); }}>
+          {/* 背景 */}
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.6)' }} onClick={closeModal} />
+          {/* パネル */}
+          <div style={{ position: 'relative', background: C.ink, borderRadius: '16px 16px 0 0',
+            maxHeight: '90vh', overflowY: 'auto', padding: '20px 16px 40px' }}>
+            {/* タイトルバー */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <div style={{ fontSize: 16, fontWeight: 900, color: C.paper }}>
+                {modalMode === 'add' ? '予定を追加' : '予定を編集'}
+              </div>
+              <button className="cal-btn" onClick={closeModal}
+                style={{ color: '#9aa3ac', display: 'flex', alignItems: 'center' }}>
+                <X size={22} />
+              </button>
+            </div>
+
+            {/* 種類 */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: '#9aa3ac',
+                letterSpacing: '.1em', marginBottom: 8 }}>種類 *</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {eventTypes.map(t => (
+                  <button key={t.id} className="cal-btn"
+                    onClick={() => setForm(f => ({ ...f, typeId: t.id }))}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, borderRadius: 20,
+                      padding: '6px 14px', fontSize: 12, fontWeight: 800,
+                      background: form.typeId === t.id ? t.color : 'rgba(255,255,255,.08)',
+                      color: form.typeId === t.id ? '#fff' : '#c9ced4',
+                      border: form.typeId === t.id ? 'none' : '1px solid rgba(255,255,255,.1)' }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 4, background: t.color, display: 'inline-block' }} />
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* タイトル */}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: '#9aa3ac',
+                letterSpacing: '.1em', marginBottom: 6 }}>タイトル *</div>
+              <input className="cal-input" type="text" placeholder="例：山田様邸 上棟"
+                value={form.title}
+                onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+            </div>
+
+            {/* 日付・時刻 */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#9aa3ac',
+                  letterSpacing: '.1em', marginBottom: 6 }}>日付 *</div>
+                <input className="cal-input" type="date"
+                  value={form.date}
+                  onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#9aa3ac',
+                  letterSpacing: '.1em', marginBottom: 6 }}>時刻（任意）</div>
+                <input className="cal-input" type="time"
+                  value={form.time}
+                  onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
+              </div>
+            </div>
+
+            {/* 物件 */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: '#9aa3ac',
+                letterSpacing: '.1em', marginBottom: 6 }}>物件（任意）</div>
+              <select className="cal-select"
+                value={form.projectId}
+                onChange={e => handleProjectChange(e.target.value)}>
+                <option value="">紐付けなし</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* ボタン行 */}
+            <div style={{ display: 'flex', gap: 10 }}>
+              {modalMode === 'edit' && (
+                <button className="cal-btn" onClick={handleDelete} disabled={saving}
+                  style={{ flex: '0 0 auto', padding: '13px 18px', borderRadius: 10,
+                    background: 'rgba(192,73,47,.18)', color: '#f87171',
+                    fontSize: 14, fontWeight: 800, border: '1px solid rgba(192,73,47,.35)' }}>
+                  削除
+                </button>
+              )}
+              <button className="cal-btn" onClick={handleSave}
+                disabled={saving || !form.title.trim() || !form.typeId || !form.date}
+                style={{ flex: 1, padding: '13px 0', borderRadius: 10,
+                  background: (saving || !form.title.trim() || !form.typeId || !form.date)
+                    ? 'rgba(192,73,47,.4)' : C.rust,
+                  color: '#fff', fontSize: 14, fontWeight: 900 }}>
+                {saving ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
