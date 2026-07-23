@@ -29,6 +29,11 @@ const DEFAULT_TYPES: ScheduleEventType[] = [
   { id: 'sonota',    label: 'その他',     color: '#6b7178', order: 4 },
 ];
 
+const TYPE_COLOR_PRESETS = [
+  '#c0492f', '#4a5560', '#5a7d52', '#b8860b',
+  '#6b7178', '#1e6a9e', '#7c3aed', '#b45309',
+];
+
 // ── ヘルパー ──────────────────────────────────────────────────────────────────
 function toYearMonth(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -76,6 +81,11 @@ export default function CalendarPage() {
   // 物件一覧（モーダル用・初回のみ読み込み）
   const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
   const [projectsLoaded, setProjectsLoaded] = useState(false);
+
+  // 種類管理モーダル
+  const [typeModalOpen, setTypeModalOpen] = useState(false);
+  const [typeForm, setTypeForm] = useState({ id: '', label: '', color: TYPE_COLOR_PRESETS[0], isEditing: false });
+  const [typeSaving, setTypeSaving] = useState(false);
 
   // ── ユーザー設定から予定種類を読み込む ──────────────────────────────────
   useEffect(() => {
@@ -243,6 +253,54 @@ export default function CalendarPage() {
     }
   };
 
+  // ── 種類管理 ─────────────────────────────────────────────────────────────
+  const resetTypeForm = () =>
+    setTypeForm({ id: '', label: '', color: TYPE_COLOR_PRESETS[0], isEditing: false });
+
+  const openTypeModal = () => { resetTypeForm(); setTypeModalOpen(true); };
+
+  const startEditType = (t: ScheduleEventType) =>
+    setTypeForm({ id: t.id, label: t.label, color: t.color, isEditing: true });
+
+  const handleSaveType = async () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !typeForm.label.trim()) return;
+    setTypeSaving(true);
+    try {
+      let updated: ScheduleEventType[];
+      if (typeForm.isEditing) {
+        updated = eventTypes.map(t =>
+          t.id === typeForm.id ? { ...t, label: typeForm.label.trim(), color: typeForm.color } : t
+        );
+      } else {
+        const newType: ScheduleEventType = {
+          id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+          label: typeForm.label.trim(),
+          color: typeForm.color,
+          order: eventTypes.length,
+        };
+        updated = [...eventTypes, newType];
+      }
+      await updateDoc(doc(db, 'users', uid), { scheduleEventTypes: updated });
+      setEventTypes(updated);
+      resetTypeForm();
+    } finally {
+      setTypeSaving(false);
+    }
+  };
+
+  const handleDeleteType = async (typeId: string) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    if (!window.confirm('この種類を削除しますか？\n（この種類の予定の色はグレーになります）')) return;
+    const updated = eventTypes
+      .filter(t => t.id !== typeId)
+      .map((t, i) => ({ ...t, order: i }));
+    await updateDoc(doc(db, 'users', uid), { scheduleEventTypes: updated });
+    setEventTypes(updated);
+    if (typeForm.id === typeId) resetTypeForm();
+  };
+
   // ── 描画 ─────────────────────────────────────────────────────────────────
   return (
     <div style={{
@@ -316,11 +374,9 @@ export default function CalendarPage() {
             {t.label}
           </button>
         ))}
-        {/* 段階④で有効化 */}
-        <button className="cal-btn"
+        <button className="cal-btn cal-filter" onClick={openTypeModal}
           style={{ borderRadius: 20, padding: '5px 12px', fontSize: 11.5, fontWeight: 800,
-            background: 'rgba(255,255,255,.08)', color: '#9aa3ac', whiteSpace: 'nowrap',
-            opacity: .5, cursor: 'default' }}>
+            background: 'rgba(255,255,255,.08)', color: '#9aa3ac', whiteSpace: 'nowrap' }}>
           ＋ 種類を追加
         </button>
       </div>
@@ -529,6 +585,89 @@ export default function CalendarPage() {
                   color: '#fff', fontSize: 14, fontWeight: 900 }}>
                 {saving ? '保存中...' : '保存'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── 種類管理モーダル ── */}
+      {typeModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50,
+          display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.6)' }}
+            onClick={() => { setTypeModalOpen(false); resetTypeForm(); }} />
+          <div style={{ position: 'relative', background: C.ink, borderRadius: '16px 16px 0 0',
+            maxHeight: '85vh', overflowY: 'auto', padding: '20px 16px 40px' }}>
+            {/* タイトルバー */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <div style={{ fontSize: 16, fontWeight: 900, color: C.paper }}>予定の種類</div>
+              <button className="cal-btn" onClick={() => { setTypeModalOpen(false); resetTypeForm(); }}
+                style={{ color: '#9aa3ac', display: 'flex', alignItems: 'center' }}>
+                <X size={22} />
+              </button>
+            </div>
+
+            {/* 種類リスト */}
+            {eventTypes.map(t => (
+              <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 12px', borderRadius: 10, marginBottom: 6,
+                background: typeForm.isEditing && typeForm.id === t.id
+                  ? 'rgba(192,73,47,.12)' : 'rgba(255,255,255,.05)' }}>
+                <span style={{ width: 12, height: 12, borderRadius: 6, background: t.color, flexShrink: 0 }} />
+                <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: C.paper }}>{t.label}</span>
+                <button className="cal-btn" onClick={() => startEditType(t)}
+                  style={{ fontSize: 11, fontWeight: 800, color: C.ainezu, padding: '4px 10px',
+                    background: 'rgba(74,85,96,.25)', borderRadius: 6 }}>
+                  編集
+                </button>
+                <button className="cal-btn" onClick={() => handleDeleteType(t.id)}
+                  style={{ fontSize: 11, fontWeight: 800, color: '#f87171', padding: '4px 10px',
+                    background: 'rgba(192,73,47,.15)', borderRadius: 6 }}>
+                  削除
+                </button>
+              </div>
+            ))}
+
+            {/* 追加・編集フォーム */}
+            <div style={{ marginTop: 18, paddingTop: 16,
+              borderTop: '1px solid rgba(255,255,255,.1)' }}>
+              <div style={{ fontSize: 12, fontWeight: 900, color: '#9aa3ac',
+                letterSpacing: '.05em', marginBottom: 10 }}>
+                {typeForm.isEditing ? `「${typeForm.label || '…'}」を編集` : '新しい種類を追加'}
+              </div>
+              <input className="cal-input" type="text" placeholder="種類名（例：新築上棟）"
+                value={typeForm.label}
+                onChange={e => setTypeForm(f => ({ ...f, label: e.target.value }))}
+                style={{ marginBottom: 12 }} />
+              {/* カラープリセット */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                {TYPE_COLOR_PRESETS.map(c => (
+                  <button key={c} className="cal-btn"
+                    onClick={() => setTypeForm(f => ({ ...f, color: c }))}>
+                    <span style={{ display: 'block', width: 30, height: 30, borderRadius: 15,
+                      background: c, outline: typeForm.color === c ? '3px solid #fff' : 'none',
+                      outlineOffset: 2 }} />
+                  </button>
+                ))}
+              </div>
+              {/* ボタン行 */}
+              <div style={{ display: 'flex', gap: 8 }}>
+                {typeForm.isEditing && (
+                  <button className="cal-btn" onClick={resetTypeForm}
+                    style={{ flex: '0 0 auto', padding: '11px 16px', borderRadius: 10,
+                      background: 'rgba(255,255,255,.06)', color: '#9aa3ac',
+                      fontSize: 13, fontWeight: 800 }}>
+                    キャンセル
+                  </button>
+                )}
+                <button className="cal-btn" onClick={handleSaveType}
+                  disabled={typeSaving || !typeForm.label.trim()}
+                  style={{ flex: 1, padding: '11px 0', borderRadius: 10,
+                    fontSize: 13, fontWeight: 900, color: '#fff',
+                    background: (typeSaving || !typeForm.label.trim())
+                      ? 'rgba(192,73,47,.4)' : C.rust }}>
+                  {typeSaving ? '保存中...' : typeForm.isEditing ? '更新' : '追加'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
