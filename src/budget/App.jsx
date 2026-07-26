@@ -84,6 +84,7 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
   const [expenseRows, setExpenseRows]   = useLocalStorage(pk("expenseRows"), [newExpenseRow(),newExpenseRow()]);
   const [biko, setBiko]                 = useLocalStorage(pk("biko"), "");
   const [tileOrderSupplier, setTileOrderSupplier] = useLocalStorage(pk("tileOrderSupplier"), "");
+  const [tileOrderDate, setTileOrderDate] = useLocalStorage(pk("tileOrderDate"), "");
   const [tileOrderDeliveryAddress, setTileOrderDeliveryAddress] = useLocalStorage(pk("tileOrderDeliveryAddress"), "");
   const [tileOrderDeliveryDate, setTileOrderDeliveryDate] = useLocalStorage(pk("tileOrderDeliveryDate"), "");
   const [tileOrderDeliveryTime, setTileOrderDeliveryTime] = useLocalStorage(pk("tileOrderDeliveryTime"), "");
@@ -134,7 +135,7 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
   const saveProjectToCloud = async () => {
     try {
         showToast("クラウドへ保存中...");
-        const raw = { koujiName, koujiAddress, clientName, date, dateJoto, dateChakko, spec, kawaraShu, kawaraColor, hanbaKakuRate, insuranceRate, unchinTanka, yochiArea, targetGrossRate, estimatePrice, grossMode, taxMode, archived, tileRows, materialRows, expenseRows, biko, tileSupplier, houseMakerName, tileOrderSupplier, tileOrderDeliveryAddress, tileOrderDeliveryDate, tileOrderDeliveryTime, tileOrderNote, tileOrderMaterialRows, tileOrderTileRows, status, _updatedAt: new Date().toISOString() };
+        const raw = { koujiName, koujiAddress, clientName, date, dateJoto, dateChakko, spec, kawaraShu, kawaraColor, hanbaKakuRate, insuranceRate, unchinTanka, yochiArea, targetGrossRate, estimatePrice, grossMode, taxMode, archived, tileRows, materialRows, expenseRows, biko, tileSupplier, houseMakerName, tileOrderSupplier, tileOrderDate, tileOrderDeliveryAddress, tileOrderDeliveryDate, tileOrderDeliveryTime, tileOrderNote, tileOrderMaterialRows, tileOrderTileRows, status, _updatedAt: new Date().toISOString() };
         // Firestore は undefined 不可のため JSON往復でサニタイズ
         const projectData = JSON.parse(JSON.stringify(raw));
         await setDoc(doc(db, "cost_projects", activeProject), projectData);
@@ -147,7 +148,7 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
   // トースト非表示のサイレント保存（画面遷移時にバックグラウンドで実行）
   const saveQuiet = () => {
     try {
-      const raw = { koujiName, koujiAddress, clientName, date, dateJoto, dateChakko, spec, kawaraShu, kawaraColor, hanbaKakuRate, insuranceRate, unchinTanka, yochiArea, targetGrossRate, estimatePrice, grossMode, taxMode, archived, tileRows, materialRows, expenseRows, biko, tileSupplier, houseMakerName, tileOrderSupplier, tileOrderDeliveryAddress, tileOrderDeliveryDate, tileOrderDeliveryTime, tileOrderNote, tileOrderMaterialRows, tileOrderTileRows, status, _updatedAt: new Date().toISOString() };
+      const raw = { koujiName, koujiAddress, clientName, date, dateJoto, dateChakko, spec, kawaraShu, kawaraColor, hanbaKakuRate, insuranceRate, unchinTanka, yochiArea, targetGrossRate, estimatePrice, grossMode, taxMode, archived, tileRows, materialRows, expenseRows, biko, tileSupplier, houseMakerName, tileOrderSupplier, tileOrderDate, tileOrderDeliveryAddress, tileOrderDeliveryDate, tileOrderDeliveryTime, tileOrderNote, tileOrderMaterialRows, tileOrderTileRows, status, _updatedAt: new Date().toISOString() };
       const projectData = JSON.parse(JSON.stringify(raw));
       setDoc(doc(db, "cost_projects", activeProject), projectData)
         .then(() => setDoc(doc(db, "cost_system", "meta"), { projectList }))
@@ -161,7 +162,7 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
       const ok = await showConfirm("クラウドのデータで現在の入力を上書きしますか？");
       if (!ok) return;
     }
-    const snap = { koujiName, koujiAddress, clientName, date, dateJoto, dateChakko, spec, kawaraShu, kawaraColor, hanbaKakuRate, insuranceRate, unchinTanka, yochiArea, targetGrossRate, estimatePrice, grossMode, taxMode, archived, tileRows, materialRows, expenseRows, biko, tileSupplier, houseMakerName, tileOrderSupplier, tileOrderDeliveryAddress, tileOrderDeliveryDate, tileOrderDeliveryTime, tileOrderNote, tileOrderMaterialRows, tileOrderTileRows, status };
+    const snap = { koujiName, koujiAddress, clientName, date, dateJoto, dateChakko, spec, kawaraShu, kawaraColor, hanbaKakuRate, insuranceRate, unchinTanka, yochiArea, targetGrossRate, estimatePrice, grossMode, taxMode, archived, tileRows, materialRows, expenseRows, biko, tileSupplier, houseMakerName, tileOrderSupplier, tileOrderDate, tileOrderDeliveryAddress, tileOrderDeliveryDate, tileOrderDeliveryTime, tileOrderNote, tileOrderMaterialRows, tileOrderTileRows, status };
     try {
         setIsLoadingCloud(true);
         if (!silent) showToast("クラウドから読込中...");
@@ -187,6 +188,7 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
               setTileSupplier(snap.tileSupplier);
               setHouseMakerName(snap.houseMakerName);
               setTileOrderSupplier(snap.tileOrderSupplier);
+              setTileOrderDate(snap.tileOrderDate);
               setTileOrderDeliveryAddress(snap.tileOrderDeliveryAddress);
               setTileOrderDeliveryDate(snap.tileOrderDeliveryDate);
               setTileOrderDeliveryTime(snap.tileOrderDeliveryTime);
@@ -206,6 +208,7 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
             setTileSupplier(d.tileSupplier ?? "");
             setHouseMakerName(d.houseMakerName ?? "");
             setTileOrderSupplier(d.tileOrderSupplier ?? "");
+            setTileOrderDate(d.tileOrderDate ?? "");
             setTileOrderDeliveryAddress(d.tileOrderDeliveryAddress ?? "");
             setTileOrderDeliveryDate(d.tileOrderDeliveryDate ?? "");
             setTileOrderDeliveryTime(d.tileOrderDeliveryTime ?? "");
@@ -369,7 +372,7 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
     autoSaveTimerRef.current = setTimeout(async () => {
       setAutoSaveStatus("saving");
       try {
-        const raw = { koujiName, koujiAddress, clientName, date, dateJoto, dateChakko, spec, kawaraShu, kawaraColor, hanbaKakuRate, insuranceRate, unchinTanka, yochiArea, targetGrossRate, estimatePrice, grossMode, taxMode, archived, tileRows, materialRows, expenseRows, biko, tileSupplier, houseMakerName, tileOrderSupplier, tileOrderDeliveryAddress, tileOrderDeliveryDate, tileOrderDeliveryTime, tileOrderNote, tileOrderMaterialRows, tileOrderTileRows, status, _updatedAt: new Date().toISOString() };
+        const raw = { koujiName, koujiAddress, clientName, date, dateJoto, dateChakko, spec, kawaraShu, kawaraColor, hanbaKakuRate, insuranceRate, unchinTanka, yochiArea, targetGrossRate, estimatePrice, grossMode, taxMode, archived, tileRows, materialRows, expenseRows, biko, tileSupplier, houseMakerName, tileOrderSupplier, tileOrderDate, tileOrderDeliveryAddress, tileOrderDeliveryDate, tileOrderDeliveryTime, tileOrderNote, tileOrderMaterialRows, tileOrderTileRows, status, _updatedAt: new Date().toISOString() };
         await setDoc(doc(db, "cost_projects", activeProject), JSON.parse(JSON.stringify(raw)));
         // プロジェクト一覧もFirestoreに保存（削除・新規作成が正しく反映されるように）
         await setDoc(doc(db, "cost_system", "meta"), { projectList });
@@ -379,7 +382,7 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
       } catch { setAutoSaveStatus("error"); }
     }, 3000);
     return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current); };
-  }, [mode, isLoadingCloud, archived, activeProject, koujiName, koujiAddress, clientName, date, dateJoto, dateChakko, spec, kawaraShu, kawaraColor, hanbaKakuRate, insuranceRate, unchinTanka, yochiArea, targetGrossRate, estimatePrice, grossMode, taxMode, tileRows, materialRows, expenseRows, biko, tileSupplier, houseMakerName, tileOrderSupplier, tileOrderDeliveryAddress, tileOrderDeliveryDate, tileOrderDeliveryTime, tileOrderNote, tileOrderMaterialRows, tileOrderTileRows, status]);
+  }, [mode, isLoadingCloud, archived, activeProject, koujiName, koujiAddress, clientName, date, dateJoto, dateChakko, spec, kawaraShu, kawaraColor, hanbaKakuRate, insuranceRate, unchinTanka, yochiArea, targetGrossRate, estimatePrice, grossMode, taxMode, tileRows, materialRows, expenseRows, biko, tileSupplier, houseMakerName, tileOrderSupplier, tileOrderDate, tileOrderDeliveryAddress, tileOrderDeliveryDate, tileOrderDeliveryTime, tileOrderNote, tileOrderMaterialRows, tileOrderTileRows, status]);
 
   useEffect(() => {
     if (mode !== "input") return;
@@ -693,6 +696,10 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
                 />
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                <label style={{fontSize:11,color:"#7aadcf",fontWeight:600}}>発注日</label>
+                <input type="date" style={I} value={tileOrderDate} onChange={e=>setTileOrderDate(e.target.value)} />
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:4}}>
                 <label style={{fontSize:11,color:"#7aadcf",fontWeight:600}}>配達日</label>
                 <input type="date" style={I} value={tileOrderDeliveryDate} onChange={e=>setTileOrderDeliveryDate(e.target.value)} />
               </div>
@@ -860,6 +867,7 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
               deliveryTime={tileOrderDeliveryTime}
               note={tileOrderNote}
               companyInfo={masterCompanyInfo}
+              orderDate={tileOrderDate}
             />
           </div>
         </div>

@@ -16,9 +16,12 @@ export function TilePurchaseOrderSheet({
   deliveryTime,
   note,
   companyInfo,
+  orderDate: orderDateProp,
 }) {
-  const today = new Date();
-  const orderDate = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
+  const todayObj = new Date();
+  const orderDate = orderDateProp
+    ? (() => { const [y, m, d] = orderDateProp.split('-'); return `${y}年${parseInt(m, 10)}月${parseInt(d, 10)}日`; })()
+    : `${todayObj.getFullYear()}年${todayObj.getMonth() + 1}月${todayObj.getDate()}日`;
   const printRows = (tileRows || []).filter(r => r.hinmei && Number(r.suryo) > 0);
   const printMatRows = (materialRows || []).filter(r => r.hinmei && Number(r.suryo) > 0);
 

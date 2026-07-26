@@ -29,6 +29,7 @@ export const PROJECT_FIELDS = [
   "houseMakerName",
   "tileSupplier",
   "tileOrderSupplier",
+  "tileOrderDate",
   "tileOrderDeliveryAddress",
   "tileOrderDeliveryDate",
   "tileOrderDeliveryTime",
