@@ -36,7 +36,7 @@ export function calculateBudget({
   });
 
   const unchinTotal = Math.ceil(totalTilePieces * (Number(unchinTanka) || 0));
-  const welfareCost = Math.ceil(laborTargetTotal * (Number(insuranceRate) / 100));
+  const welfareCost = Math.ceil(laborTargetTotal * ((Number(insuranceRate) || 0) / 100));
   const totalCost = tileSub + matSub + expSub + welfareCost + unchinTotal;
 
   return { totalCost, tileSub, matSub, expSub, welfareCost, unchinTotal, totalTilePieces };
