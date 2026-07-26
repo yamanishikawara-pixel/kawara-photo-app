@@ -101,6 +101,7 @@ export function ProjectsScreen({ projectList, setProjectList, activeProject, set
     // localStorage から削除
     const keys = getProjectStorageKeys(window.localStorage, slug);
     keys.forEach(k => window.localStorage.removeItem(k));
+    window.localStorage.removeItem(`cost_${slug}_localUpdatedAt`);
     const newList = projectList.filter(p => p !== slug);
     setProjectList(newList.length > 0 ? newList : []);
     // Firestore からも削除（復活防止）
