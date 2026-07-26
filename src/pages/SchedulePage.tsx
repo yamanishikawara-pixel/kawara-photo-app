@@ -319,9 +319,13 @@ export default function SchedulePage() {
     markPending(field);
     if (fieldDebounceRef.current[field]) clearTimeout(fieldDebounceRef.current[field]);
     fieldDebounceRef.current[field] = setTimeout(() => {
-      delete pendingFieldsRef.current[field];
       updateDoc(doc(db, "projects", id), { [field]: value })
-        .then(() => { if (mountedRef.current) markDone(field, true); })
+        .then(() => {
+          if (pendingFieldsRef.current[field] === value) {
+            delete pendingFieldsRef.current[field];
+          }
+          if (mountedRef.current) markDone(field, true);
+        })
         .catch((err) => {
           logFirebaseError(err, "工程表データの保存");
           if (mountedRef.current) markDone(field, false);
