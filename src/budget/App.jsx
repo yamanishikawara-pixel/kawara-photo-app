@@ -258,6 +258,10 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
         const snap = await getDoc(doc(db, "cost_master", "settings"));
         if (!snap.exists()) return;
         const d = snap.data();
+        // ローカルの方が新しければ上書きしない（loadProjectFromCloud と同じガード方式）
+        const localTs = window.localStorage.getItem('global_master_localUpdatedAt');
+        const cloudTs = d._updatedAt;
+        if (localTs && cloudTs && new Date(localTs) >= new Date(cloudTs)) return;
         if (d.masterMats)        setMasterMats(d.masterMats);
         if (d.masterDiscounts)   setMasterDiscounts(d.masterDiscounts);
         if (d.masterStdPrices)   setMasterStdPrices(d.masterStdPrices);
@@ -265,6 +269,7 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
         if (d.masterSupplierMap) setMasterSupplierMap(d.masterSupplierMap);
         if (d.masterCompanyInfo) setMasterCompanyInfo(d.masterCompanyInfo);
         if (d.masterHouseMakers) setMasterHouseMakers(d.masterHouseMakers);
+        if (cloudTs) window.localStorage.setItem('global_master_localUpdatedAt', cloudTs);
       } catch { /* 失敗時はローカルのまま継続 */ }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

@@ -45,7 +45,9 @@ export function MasterSettings({ masterMats, setMasterMats, masterDiscounts, set
     const saveMasterToCloud = async () => {
         try {
             showToast("クラウドへ保存中...");
-            await setDoc(doc(db, "cost_master", "settings"), { masterMats, masterDiscounts, masterStdPrices, masterSuppliers, masterSupplierMap, masterCompanyInfo, masterHouseMakers, masterMatCategories });
+            const masterTs = new Date().toISOString();
+            await setDoc(doc(db, "cost_master", "settings"), { masterMats, masterDiscounts, masterStdPrices, masterSuppliers, masterSupplierMap, masterCompanyInfo, masterHouseMakers, masterMatCategories, _updatedAt: masterTs });
+            window.localStorage.setItem('global_master_localUpdatedAt', masterTs);
             showToast("☁️ クラウドにマスターデータを保存しました！");
         } catch(e) { showToast("保存エラー: " + e.message); }
     };
