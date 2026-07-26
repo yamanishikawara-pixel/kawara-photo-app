@@ -262,13 +262,14 @@ export default function App({ onNavigateToPhoto, projectAddress }) {
         const localTs = window.localStorage.getItem('global_master_localUpdatedAt');
         const cloudTs = d._updatedAt;
         if (localTs && cloudTs && new Date(localTs) >= new Date(cloudTs)) return;
-        if (d.masterMats)        setMasterMats(d.masterMats);
-        if (d.masterDiscounts)   setMasterDiscounts(d.masterDiscounts);
-        if (d.masterStdPrices)   setMasterStdPrices(d.masterStdPrices);
-        if (d.masterSuppliers)   setMasterSuppliers(d.masterSuppliers);
-        if (d.masterSupplierMap) setMasterSupplierMap(d.masterSupplierMap);
-        if (d.masterCompanyInfo) setMasterCompanyInfo(d.masterCompanyInfo);
-        if (d.masterHouseMakers) setMasterHouseMakers(d.masterHouseMakers);
+        if (d.masterMats)          setMasterMats(d.masterMats);
+        if (d.masterDiscounts)     setMasterDiscounts(d.masterDiscounts);
+        if (d.masterStdPrices)     setMasterStdPrices(d.masterStdPrices);
+        if (d.masterSuppliers)     setMasterSuppliers(d.masterSuppliers);
+        if (d.masterSupplierMap)   setMasterSupplierMap(d.masterSupplierMap);
+        if (d.masterCompanyInfo)   setMasterCompanyInfo(d.masterCompanyInfo);
+        if (d.masterHouseMakers)   setMasterHouseMakers(d.masterHouseMakers);
+        if (d.masterMatCategories) setMasterMatCategories(d.masterMatCategories);
         if (cloudTs) window.localStorage.setItem('global_master_localUpdatedAt', cloudTs);
       } catch { /* 失敗時はローカルのまま継続 */ }
     })();
