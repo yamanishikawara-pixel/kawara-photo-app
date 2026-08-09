@@ -297,7 +297,7 @@ export function MasterSettings({ masterMats, setMasterMats, masterDiscounts, set
                                 </select>
                                 <input placeholder="品名" value={newMatName} onChange={e=>setNewMatName(e.target.value)} style={{...I, flex:1, minWidth:120, padding:"6px 10px"}} />
                                 <input type="text" inputMode="decimal" placeholder="単価" value={newMatVal} onChange={e=>setNewMatVal(e.target.value)} style={{...I, width:80, padding:"6px 10px", textAlign:"right"}} />
-                                <button onClick={()=>{ const trimmed = newMatName.trim(); if(trimmed) { addMaterial(trimmed, newMatVal, newMatCat || "その他"); setNewMatName(""); setNewMatVal(""); } }} style={{background:"#10b981", border:"none", borderRadius:4, color:"#fff", padding:"6px 14px", cursor:"pointer", fontWeight:700, fontSize:12}}>追加</button>
+                                <button onClick={()=>{ const trimmed = newMatName.trim(); if(!trimmed) { showToast("品名を入力してください"); return; } addMaterial(trimmed, newMatVal, newMatCat || "その他"); setNewMatName(""); setNewMatVal(""); }} style={{background:"#10b981", border:"none", borderRadius:4, color:"#fff", padding:"6px 14px", cursor:"pointer", fontWeight:700, fontSize:12}}>追加</button>
                             </div>
                         </Card>
                     </div>
